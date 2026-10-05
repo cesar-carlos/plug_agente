@@ -1,0 +1,121 @@
+{
+  "revision": "ea1e04f03a8cf1f2d5f3790697e8bc62ba130f89",
+  "results": [
+    {
+      "driver": "sql_server",
+      "mode": "async",
+      "exit_code": 0,
+      "scenarios": [
+        {
+          "label": "workerCount=1",
+          "duration_ms": 238.563,
+          "encoding": "rowMajor",
+          "fallbacks": 0
+        },
+        {
+          "label": "workerCount=4",
+          "duration_ms": 317.225,
+          "encoding": "rowMajor",
+          "fallbacks": 0
+        },
+        {
+          "label": "workerCount=4 columnar",
+          "duration_ms": 334.364,
+          "encoding": "columnar",
+          "fallbacks": 0
+        },
+        {
+          "label": "workerCount=4 columnar compressed",
+          "duration_ms": 241.178,
+          "encoding": "columnarCompressed",
+          "fallbacks": 0
+        },
+        {
+          "label": "native pool",
+          "duration_ms": 290.919,
+          "encoding": "rowMajor",
+          "fallbacks": 0
+        },
+        {
+          "label": "prepared reuse",
+          "duration_ms": 113.291,
+          "encoding": "rowMajor",
+          "fallbacks": 0
+        }
+      ]
+    },
+    {
+      "driver": "sql_server",
+      "mode": "streaming",
+      "exit_code": 3,
+      "scenarios": [
+        {
+          "label": "streamQueryBuffer",
+          "rows_per_second": 1566477.3839827687
+        },
+        {
+          "label": "streamQueryBatched",
+          "rows_per_second": 396432.1110009911
+        }
+      ]
+    },
+    {
+      "driver": "sql_anywhere",
+      "mode": "async",
+      "exit_code": 3,
+      "scenarios": [
+        {
+          "label": "workerCount=1",
+          "duration_ms": 106.323,
+          "encoding": "rowMajor",
+          "fallbacks": 0
+        },
+        {
+          "label": "workerCount=4",
+          "duration_ms": 111.915,
+          "encoding": "rowMajor",
+          "fallbacks": 0
+        },
+        {
+          "label": "workerCount=4 columnar",
+          "duration_ms": 108.641,
+          "encoding": "columnar",
+          "fallbacks": 0
+        },
+        {
+          "label": "workerCount=4 columnar compressed",
+          "duration_ms": 102.339,
+          "encoding": "columnarCompressed",
+          "fallbacks": 0
+        },
+        {
+          "label": "native pool",
+          "duration_ms": 183.666,
+          "encoding": "rowMajor",
+          "fallbacks": 0
+        },
+        {
+          "label": "prepared reuse",
+          "duration_ms": 260.089,
+          "encoding": "rowMajor",
+          "fallbacks": 0
+        }
+      ]
+    },
+    {
+      "driver": "sql_anywhere",
+      "mode": "streaming",
+      "exit_code": 3,
+      "scenarios": [
+        {
+          "label": "streamQueryBuffer",
+          "rows_per_second": 548546.352166758
+        },
+        {
+          "label": "streamQueryBatched",
+          "rows_per_second": 595193.8099843762
+        }
+      ]
+    }
+  ]
+}

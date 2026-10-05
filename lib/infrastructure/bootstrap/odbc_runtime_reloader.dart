@@ -9,6 +9,7 @@ import 'package:plug_agente/domain/repositories/i_connection_pool.dart';
 import 'package:plug_agente/domain/repositories/i_database_gateway.dart';
 import 'package:plug_agente/domain/repositories/i_odbc_application_runtime_reset_port.dart';
 import 'package:plug_agente/domain/repositories/i_odbc_connection_settings.dart';
+import 'package:plug_agente/domain/repositories/i_odbc_pending_discards_wait_port.dart';
 import 'package:plug_agente/domain/repositories/i_odbc_runtime_reload_teardown_port.dart';
 import 'package:plug_agente/domain/repositories/i_odbc_runtime_reloader.dart';
 import 'package:plug_agente/domain/repositories/i_sql_investigation_collector.dart';
@@ -61,7 +62,15 @@ final class OdbcRuntimeReloader implements IOdbcRuntimeReloader {
       await _teardownPort.disconnectHubTransport();
 
       if (_getIt.isRegistered<IConnectionPool>()) {
-        await _getIt<IConnectionPool>().closeAll();
+        if (_getIt.isRegistered<IDatabaseGateway>()) {
+          final gateway = _getIt<IDatabaseGateway>();
+          if (gateway is IOdbcPendingDiscardsWaitPort) {
+            (await (gateway as IOdbcPendingDiscardsWaitPort).waitForPendingDiscards(
+              timeout: const Duration(seconds: 30),
+            )).getOrThrow();
+          }
+        }
+        (await _getIt<IConnectionPool>().closeAll()).getOrThrow();
       }
 
       if (_getIt.isRegistered<OdbcEventBridge>()) {

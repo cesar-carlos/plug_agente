@@ -42,8 +42,14 @@ jobs:
           channel: stable
           cache: true
 
+      - name: Install native build dependencies
+        if: runner.os == 'Linux'
+        run: sudo apt-get update -qq && sudo apt-get install -y unixodbc-dev
+
       - name: Install dependencies
-        run: flutter pub get
+        run: |
+          flutter pub get
+          python tool/odbc/build_pinned_native.py
 
       - name: Analyze application
         shell: bash
@@ -84,8 +90,14 @@ jobs:
           channel: stable
           cache: true
 
+      - name: Install native build dependencies
+        if: runner.os == 'Linux'
+        run: sudo apt-get update -qq && sudo apt-get install -y unixodbc-dev
+
       - name: Install dependencies
-        run: flutter pub get
+        run: |
+          flutter pub get
+          python tool/odbc/build_pinned_native.py
 
       # Live ODBC/Hub E2E tests use tags live|slow|perf and are local-only
       # (see docs/testing/e2e_setup.md). CI must not run them on GitHub runners.
@@ -126,9 +138,13 @@ jobs:
         with:
           channel: stable
           cache: true
+      - name: Install native build dependencies
+        run: sudo apt-get update -qq && sudo apt-get install -y unixodbc-dev
+
       - name: Agent contract and production codec fixtures
         run: |
           flutter pub get
+          python tool/odbc/build_pinned_native.py
           flutter test test/docs/openrpc_contract_test.dart test/docs/communication test/infrastructure/external_services/transport/hub_inbound_catalog_codec_test.dart
       - name: Set up Node
         uses: actions/setup-node@v6
@@ -161,8 +177,14 @@ jobs:
           channel: stable
           cache: true
 
+      - name: Install native build dependencies
+        if: runner.os == 'Linux'
+        run: sudo apt-get update -qq && sudo apt-get install -y unixodbc-dev
+
       - name: Install dependencies
-        run: flutter pub get
+        run: |
+          flutter pub get
+          python tool/odbc/build_pinned_native.py
 
       - name: Agent actions production preflight
         run: dart run tool/agent_actions/preflight_agent_actions_production.dart
@@ -188,8 +210,14 @@ jobs:
           channel: stable
           cache: true
 
+      - name: Install native build dependencies
+        if: runner.os == 'Linux'
+        run: sudo apt-get update -qq && sudo apt-get install -y unixodbc-dev
+
       - name: Install dependencies
-        run: flutter pub get
+        run: |
+          flutter pub get
+          python tool/odbc/build_pinned_native.py
 
       - name: Verify Drift generated sources are current
         shell: bash
@@ -237,6 +265,8 @@ jobs:
           python3 -m unittest \
             tool.tests.test_run_benchmark_suite \
             tool.tests.test_transport_comparison \
+            tool.tests.test_streaming_tuning \
+            tool.tests.test_build_pinned_native \
             tool.tests.test_odbc_benchmark_runner \
             tool.tests.test_odbc_benchmark_gate \
             tool.tests.test_compare_benchmark_summary \
@@ -258,11 +288,23 @@ jobs:
           channel: stable
           cache: true
 
+      - name: Install native build dependencies
+        if: runner.os == 'Linux'
+        run: sudo apt-get update -qq && sudo apt-get install -y unixodbc-dev
+
       - name: Install dependencies
-        run: flutter pub get
+        run: |
+          flutter pub get
+          python tool/odbc/build_pinned_native.py
+
+      - name: Build pinned native engine
+        run: python tool/odbc/build_pinned_native.py --github-env "$env:GITHUB_ENV"
 
       - name: Build Windows debug bundle
         run: flutter build windows --debug
+
+      - name: Verify pinned native engine in the bundle
+        run: python tool/odbc/build_pinned_native.py --verify-bundle build/windows/x64/runner/Debug
 
       - name: Smoke native update helper
         shell: pwsh
@@ -372,16 +414,23 @@ jobs:
         with:
           python-version: "3.11"
 
+      - name: Install native build dependencies
+        if: runner.os == 'Linux'
+        run: sudo apt-get update -qq && sudo apt-get install -y unixodbc-dev
+
       - name: Install dependencies
-        run: flutter pub get
+        run: |
+          flutter pub get
+          python tool/odbc/build_pinned_native.py
 
       - name: Qualify transport with identical-code control and both revision orders
         shell: bash
         run: |
           set -euo pipefail
           mkdir -p artifacts/benchmark
-          python tool/benchmarks/run_transport_comparison.py \
+          python tool/benchmarks/prepare_transport_comparison.py \
             --base-dir transport-base \
+            --hosted-baseline-revision f15b33653593a6eed367fdc8ba98e80540dfe771 \
             --output-dir artifacts/benchmark/transport \
             2>&1 | tee artifacts/benchmark/transport-comparison.log
 

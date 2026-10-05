@@ -15,6 +15,7 @@ import 'package:plug_agente/core/services/i_tray_service.dart';
 import 'package:plug_agente/domain/repositories/i_connection_pool.dart';
 import 'package:plug_agente/domain/repositories/i_database_gateway.dart';
 import 'package:plug_agente/domain/repositories/i_elevated_action_execution_canceller.dart';
+import 'package:plug_agente/domain/repositories/i_odbc_pending_discards_wait_port.dart';
 import 'package:plug_agente/domain/repositories/i_odbc_streaming_session_cache.dart';
 
 /// Runs the post-hub teardown steps for application shutdown.
@@ -165,7 +166,25 @@ final class AppShutdownSequence {
     if (!_getIt.isRegistered<IConnectionPool>()) {
       return;
     }
-    await _getIt<IConnectionPool>().closeAll();
+    if (_getIt.isRegistered<IDatabaseGateway>()) {
+      final gateway = _getIt<IDatabaseGateway>();
+      if (gateway is IOdbcPendingDiscardsWaitPort) {
+        final cleanup = await (gateway as IOdbcPendingDiscardsWaitPort).waitForPendingDiscards(
+          timeout: const Duration(seconds: 30),
+        );
+        if (cleanup.isError()) {
+          developer.log(
+            'Pending connection cleanup was not confirmed during shutdown',
+            name: 'app_shutdown_sequence',
+            level: 900,
+          );
+        }
+      }
+    }
+    final closed = await _getIt<IConnectionPool>().closeAll();
+    if (closed.isError()) {
+      developer.log('Native pool shutdown was not confirmed', name: 'app_shutdown_sequence', level: 900);
+    }
   }
 
   Future<void> _disposeInfrastructureResources() async {

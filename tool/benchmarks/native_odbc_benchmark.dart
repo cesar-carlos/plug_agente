@@ -46,7 +46,7 @@ Future<void> main(List<String> args) async {
         'workload': 'deterministic_8000_rows_v1',
         'rows': OdbcBenchmarkFixture.rowCount,
         'warmup': 1,
-        'repeats': 3,
+        'repeats': _positiveEnv('ODBC_BENCH_REPEATS', 9),
         'scenarios': results,
       }),
     );
@@ -71,7 +71,7 @@ Future<List<Map<String, Object>>> _streaming(NativeOdbcConnection native, int co
   final fetch = _positiveEnv('ODBC_STREAM_BENCH_FETCH_SIZE', 1000);
   final buffer = _positiveEnv('ODBC_STREAM_BENCH_CHUNK_SIZE', 1024 * 1024);
   final samples = <String, List<Map<String, Object>>>{'streamQueryBuffer': [], 'streamQueryBatched': []};
-  for (var repetition = -1; repetition < 3; repetition++) {
+  for (var repetition = -1; repetition < _positiveEnv('ODBC_BENCH_REPEATS', 9); repetition++) {
     final labels = repetition.isEven ? samples.keys.toList() : samples.keys.toList().reversed;
     for (final label in labels) {
       final rows = <List<dynamic>>[];
@@ -158,7 +158,7 @@ Future<List<Map<String, Object>>> _async(String dsn, String sql) async {
 
       final samples = <Map<String, Object>>[];
       var validationFailed = false;
-      for (var repetition = -1; repetition < 3; repetition++) {
+      for (var repetition = -1; repetition < _positiveEnv('ODBC_BENCH_REPEATS', 9); repetition++) {
         final timer = Stopwatch()..start();
         final results = <Uint8List>[];
         // Four in-flight requests for the pool, and one for prepared reuse.

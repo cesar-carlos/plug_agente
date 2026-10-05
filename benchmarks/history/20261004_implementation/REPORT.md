@@ -106,3 +106,11 @@ Perfil final da candidata: 1.286 amostras na isolate principal. json_payload_siz
 - drivers-v2/: matriz nativa e reproducer do decoder; live/: testes de banco; logs de validação na raiz.
 
 Controle do stress na revisão base: **fail**, exit 1. Os mesmos dois cenários falharam por conexão ativa restante (1). Falha já presente na base; causa pendente. Veja base-stress-control.log.
+
+## Complemento de 2026-10-05
+
+As correções do decoder, a causa do saldo residual do pool e a validação posterior
+estão no [relatório de correções](../20261005_performance_corrections/REPORT.md).
+O coletor de heap anterior retinha os próprios relatórios de alocação; os números
+de heap acima ficam preservados como históricos e não fundamentam aprovação ou
+regressão do produto. O novo diagnóstico v2 separa esses perfis dos checkpoints.

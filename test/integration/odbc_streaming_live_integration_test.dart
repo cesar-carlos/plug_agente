@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:odbc_fast/odbc_fast.dart' as odbc;
 import 'package:plug_agente/infrastructure/external_services/odbc_streaming_gateway.dart';
@@ -81,29 +83,43 @@ void main() async {
         expect(longQueryValid, isTrue, reason: 'Long query not configured');
 
         final query = longRunningQuery!;
+        final firstChunk = Completer<void>();
+        final releaseConsumer = Completer<void>();
+        var deliveredChunks = 0;
         final execution = gateway.executeQueryStream(
           query,
           connectionString!,
-          (_) async {},
+          (_) async {
+            deliveredChunks++;
+            if (!firstChunk.isCompleted) firstChunk.complete();
+            await releaseConsumer.future;
+          },
           fetchSize: 50,
         );
 
-        const waitForActive = Duration(seconds: 15);
-        final deadline = DateTime.now().add(waitForActive);
-        while (!gateway.hasActiveStream && DateTime.now().isBefore(deadline)) {
-          await Future<void>.delayed(const Duration(milliseconds: 50));
+        // Synchronize with a live cursor instead of polling a potentially short
+        // query. Backpressure keeps the connection active until cancellation.
+        try {
+          await Future.any([
+            firstChunk.future,
+            execution.then((result) {
+              if (!firstChunk.isCompleted) {
+                throw StateError('Streaming ended before its first chunk (success=${result.isSuccess()})');
+              }
+            }),
+          ]).timeout(const Duration(seconds: 15));
+          expect(gateway.hasActiveStream, isTrue);
+          final cancellation = gateway.cancelActiveStream();
+          releaseConsumer.complete();
+          expect((await cancellation).isSuccess(), isTrue);
+        } finally {
+          if (!releaseConsumer.isCompleted) releaseConsumer.complete();
         }
-        expect(
-          gateway.hasActiveStream,
-          isTrue,
-          reason: 'Streaming did not become active before cancel (check DSN, long query, or connect latency)',
-        );
-
-        final cancelResult = await gateway.cancelActiveStream();
-        expect(cancelResult.isSuccess(), isTrue);
 
         final result = await execution.timeout(const Duration(seconds: 20));
         expect(result.isError(), isTrue);
+        expect(deliveredChunks, 1);
+        expect(gateway.hasActiveStream, isFalse);
       },
       skip: !connectionStringValid || !longQueryValid
           ? 'Defina um DSN e ODBC_INTEGRATION_LONG_QUERY* (query longa) no .env'

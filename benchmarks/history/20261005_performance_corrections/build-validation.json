@@ -1,0 +1,27 @@
+[
+  {
+    "name": "core-gate-clean",
+    "exit_code": 0,
+    "seconds": 382.2031028000056
+  },
+  {
+    "name": "windows-release-build",
+    "exit_code": 0,
+    "seconds": 118.71746299997903
+  },
+  {
+    "name": "native-install-check-final",
+    "exit_code": 0,
+    "seconds": 1.9052972999634221
+  },
+  {
+    "name": "native-updater-ctest-final",
+    "exit_code": 0,
+    "seconds": 0.1378264999948442
+  },
+  {
+    "name": "installer-syntax-final",
+    "exit_code": 0,
+    "seconds": 1.3143434000085108
+  }
+]

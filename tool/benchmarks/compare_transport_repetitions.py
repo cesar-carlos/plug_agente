@@ -69,8 +69,10 @@ def compare(base, candidate):
     if heap_available and candidate["heap_growth_bytes"] > base["heap_growth_bytes"] * 1.1:
         failures.append("Heap growth exceeds 110% of base")
     pending = [] if heap_available else ["Dart heap growth"]
+    if heap_available and base['heap_growth_bytes'] == 0:
+        pending.append('Zero heap baseline requires repeated retention diagnostics')
     return {
-        "status": "fail" if failures else ("inconclusive" if pending else "pass"),
+        "status": "inconclusive" if pending else ("fail" if failures else "pass"),
         "scenarios": scenarios,
         "throughput_ratio": throughput_ratio,
         "rss_peak_bytes": {"base": base["rss_peak_bytes"], "candidate": candidate["rss_peak_bytes"]},
@@ -100,7 +102,7 @@ def main():
         print(failure)
     if report["pending_metrics"]:
         print("Not fully validated: " + ", ".join(report["pending_metrics"]))
-    return 1 if report["failures"] else (2 if report["pending_metrics"] else 0)
+    return {"pass": 0, "fail": 1, "inconclusive": 2}[report['status']]
 
 
 if __name__ == "__main__":

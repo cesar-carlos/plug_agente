@@ -191,7 +191,7 @@ def build_suite_plans() -> list[dict[str, Any]]:
     ]
 
     if odbc_dsn_configured():
-        odbc_root = resolve_dart_odbc_fast_root()
+        odbc_root = resolve_dart_odbc_fast_root(prepare_native=False)
         if odbc_root is None:
             plans.extend(
                 [
@@ -494,6 +494,7 @@ def run_transport_json_tool(log_path: Path) -> dict[str, Any]:
 
 
 def run_odbc_suite(suite_id: str, package_root: Path, log_path: Path) -> dict[str, Any]:
+    package_root = resolve_dart_odbc_fast_root() or package_root
     runner = run_odbc_async_benchmark if suite_id == "odbc_async" else run_odbc_streaming_benchmark
     exit_code, metrics, output = runner(package_root=package_root, log_path=log_path)
     if suite_id == "odbc_streaming":
@@ -502,6 +503,8 @@ def run_odbc_suite(suite_id: str, package_root: Path, log_path: Path) -> dict[st
     metrics.update(package_metrics)
     comparison_identity = _odbc_fast_comparison_identity(package_root)
     comparison_identity["driver_family"] = resolve_benchmark_driver_family()
+    native_report = extract_json_object_from_output(output)
+    comparison_identity['sample_repeats'] = str(native_report.get('repeats', 'unknown'))
     if suite_id == "odbc_streaming":
         comparison_identity["benchmark_profile"] = "native_streaming_v2"
         for key in (
@@ -538,6 +541,12 @@ def _odbc_fast_package_metrics(package_root: Path) -> dict[str, str]:
         if match is not None:
             metadata["package_version"] = match.group(1)
 
+    manifest = package_root.parent / 'manifest.json'
+    if package_root.name == 'source' and manifest.is_file():
+        provenance = json.loads(manifest.read_text(encoding='utf-8'))
+        metadata['package_revision'] = provenance['revision']
+        metadata['native_sha256'] = provenance['sha256']
+        return metadata
     try:
         revision = subprocess.run(
             ["git", "rev-parse", "--short=12", "HEAD"],
@@ -561,7 +570,7 @@ def _odbc_fast_comparison_identity(package_root: Path | None) -> dict[str, str]:
 
     metadata = _odbc_fast_package_metrics(package_root)
     identity = {"package_source": "odbc_fast"}
-    for key in ("package_version", "package_revision"):
+    for key in ("package_version", "package_revision", "native_sha256"):
         value = metadata.get(key)
         if value is not None:
             identity[key] = value

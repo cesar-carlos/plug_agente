@@ -1,0 +1,36 @@
+{
+  "machine": {
+    "platform": "Windows-11-10.0.26300-SP0",
+    "machine": "AMD64",
+    "processor": "Intel64 Family 6 Model 170 Stepping 4, GenuineIntel",
+    "python_version": "3.13.14",
+    "dart_version": "Dart SDK version: 3.13.4 (stable) (Tue Sep 15 01:01:15 2026 -0700) on \"windows_x64\"",
+    "flutter_version": "Flutter 3.47.5 \u2022 channel stable \u2022 https://github.com/flutter/flutter.git\nFramework \u2022 revision 6a19cca564 (3 weeks ago) \u2022 2026-09-17 14:13:22 -0400\nEngine \u2022 hash ab598368592da0064197e2bc15c7f5b0a2c6bb1f (revision af7e796e16) (18 days ago) \u2022 2026-09-16 18:35:09.000Z\nTools \u2022 Dart 3.13.4 \u2022 DevTools 2.60.0",
+    "dependencies_sha256": "7451e384964630ab97f130643729a010303c22b5665982e1b54a514bdea1f12c",
+    "host_fingerprint": "cfdd16ebf9efdf7d0398c6297f2875e10dfd9dd1209f02961c71c93c96c39d98"
+  },
+  "source": {
+    "commit_sha": "bc3835070267f8d859c484125e273e2c28c6341e",
+    "source_sha256": "448ea2c9ba79795a4fe67350096441b5a91dea89ac2b5fa48ac6acd80cedf601"
+  },
+  "native": {
+    "revision": "7a96d3bac0c7d104802bd24a4ffd4c606f80f756",
+    "path": "D:\\Developer\\plug_database\\plug_agente\\build\\odbc-native\\7a96d3bac0c7d104802bd24a4ffd4c606f80f756\\odbc_engine.dll",
+    "sha256": "933c6e6b0c4c2200566c4412d28ce4bd69dd459f7b39f4ed3a76c833189dc512"
+  },
+  "drivers": {
+    "sql_server": {
+      "status": "inconclusive",
+      "control_stable": false,
+      "eligible": [],
+      "recommendation": null
+    },
+    "sql_anywhere": {
+      "status": "inconclusive",
+      "control_stable": false,
+      "eligible": [],
+      "recommendation": null
+    }
+  },
+  "interrupted": false
+}

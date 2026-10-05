@@ -21,6 +21,8 @@ from pathlib import Path
 from typing import List, Optional, Sequence
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(PROJECT_ROOT))
+from tool.odbc.build_pinned_native import build_pinned_native, verify_native_bundle
 INSTALLER_DIR = PROJECT_ROOT / "installer"
 BUILD_DIR = PROJECT_ROOT / "build" / "windows" / "x64" / "runner" / "Release"
 SETUP_ISS = INSTALLER_DIR / "setup.iss"
@@ -317,6 +319,8 @@ def parse_args() -> argparse.Namespace:
 def main() -> None:
     args = parse_args()
     ensure_signing_matches_runtime()
+    run(["flutter", "pub", "get"])
+    os.environ['ODBC_FAST_NATIVE_LIBRARY'] = str(build_pinned_native(PROJECT_ROOT))
 
     step = 1
     if args.sync_version:
@@ -354,6 +358,9 @@ def main() -> None:
     if not BUILD_DIR.exists():
         raise SystemExit(f"Erro: pasta de build nao encontrada: {BUILD_DIR}")
     verify_bundled_vc_runtime()
+    native = Path(os.environ['ODBC_FAST_NATIVE_LIBRARY'])
+    verify_native_bundle(BUILD_DIR, native)
+    shutil.copy2(native.parent / 'manifest.json', BUILD_DIR / 'data/odbc_native_manifest.json')
 
     step += 1
     print(f"\n{step}. Build elevated action runner helper...", flush=True)

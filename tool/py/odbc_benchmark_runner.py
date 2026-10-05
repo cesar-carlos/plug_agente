@@ -6,7 +6,7 @@ import time
 from pathlib import Path
 from typing import Mapping
 
-from tool.py.benchmark_common import parse_odbc_benchmark_metrics, valid_native_benchmark_report
+from tool.py.benchmark_common import parse_odbc_benchmark_metrics, valid_native_benchmark_report, extract_json_object_from_output
 from tool.py.odbc_benchmark_gate import (
     enforce_async_benchmark_gates,
     enforce_streaming_benchmark_gates,
@@ -97,9 +97,9 @@ def run_odbc_async_benchmark(
     metrics = parse_odbc_benchmark_metrics(output)
     metrics["wall_ms"] = wall_ms
     if exit_code == 0:
-        if not valid_native_benchmark_report(output, 'async'):
+        if not valid_native_benchmark_report(output, 'async') or extract_json_object_from_output(output).get('repeats') != 9:
             return 2, metrics, output
-        gate_exit = enforce_async_benchmark_gates(output)
+        gate_exit = enforce_async_benchmark_gates(output, environment=benchmark_environment)
         if gate_exit != 0:
             return gate_exit, metrics, output
     if exit_code == 0:
@@ -140,13 +140,13 @@ def run_odbc_streaming_benchmark(
 
         stream_metrics = parse_odbc_streaming_benchmark_metrics(output)
         metrics.update(stream_metrics)
-        if not valid_native_benchmark_report(output, 'streaming'):
+        if not valid_native_benchmark_report(output, 'streaming') or extract_json_object_from_output(output).get('repeats') != 9:
             return 2, metrics, output
         if any(stream_metrics.get(f"{label}.rows", 0) <= 0 for label in ("streamQueryBuffer", "streamQueryBatched")):
             return 2, metrics, output
         if stream_metrics['streamQueryBuffer.rows'] != stream_metrics['streamQueryBatched.rows']:
             return 2, metrics, output
-        gate_exit = enforce_streaming_benchmark_gates(output)
+        gate_exit = enforce_streaming_benchmark_gates(output, environment=benchmark_environment)
         if gate_exit != 0:
             return gate_exit, metrics, output
     return exit_code, metrics, output

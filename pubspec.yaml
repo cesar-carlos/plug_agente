@@ -111,7 +111,10 @@ dependencies:
 
   # HTTP Client
   dio: ^5.11.1
-  odbc_fast: ^5.0.0
+  odbc_fast:
+    git:
+      url: https://github.com/cesar-carlos/dart_odbc_fast.git
+      ref: ea1e04f03a8cf1f2d5f3790697e8bc62ba130f89
   google_fonts: ^8.2.1
   timezone: ^0.11.1
 
@@ -190,3 +193,8 @@ flutter_launcher_icons:
     icon_size: 256
   android: false
   ios: false
+
+hooks:
+  user_defines:
+    odbc_fast:
+      native_library_directory: build/odbc-native/pinned/

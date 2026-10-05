@@ -130,6 +130,26 @@ def collect_dependency_versions(root: Path) -> dict[str, str]:
     return versions
 
 
+def collect_dependency_provenance(root: Path) -> dict[str, str]:
+    """Compare the entire lock entry, including source, hash and Git revision."""
+    entries: dict[str, str] = {}
+    package = None
+    lines: list[str] = []
+    for line in (root / 'pubspec.lock').read_text(encoding='utf-8').splitlines():
+        if line.startswith('  ') and not line.startswith('    ') and line.endswith(':'):
+            if package:
+                entries[package] = '\n'.join(lines)
+            package, lines = line.strip().removesuffix(':'), []
+        elif package and line.startswith('    '):
+            lines.append(line.strip())
+        elif package and line and not line.startswith(' '):
+            entries[package] = '\n'.join(lines)
+            package = None
+    if package:
+        entries[package] = '\n'.join(lines)
+    return entries
+
+
 def collect_machine_metadata() -> dict[str, str]:
     metadata = {
         "platform": platform.platform(),
@@ -186,11 +206,26 @@ def collect_env_flags() -> dict[str, Any]:
     return flags
 
 
-def resolve_dart_odbc_fast_root() -> Path | None:
+def resolve_dart_odbc_fast_root(*, prepare_native: bool = True) -> Path | None:
     candidates: list[Path] = []
     env_root = os.environ.get("DART_ODBC_FAST_ROOT", "").strip()
     if env_root:
         candidates.append(Path(env_root))
+    lock = PROJECT_ROOT / 'pubspec.lock'
+    if lock.exists():
+        block = re.search(r'^  odbc_fast:\n(.*?)(?=^  \w|^sdks:)', lock.read_text(encoding='utf-8'), re.M | re.S)
+        if block and 'source: git' in block[1]:
+            if not prepare_native:
+                revision = re.search(r'resolved-ref: ["\']?([0-9a-f]{40})', block[1])
+                if not revision:
+                    raise ValueError('A full native Git revision is required')
+                return PROJECT_ROOT / 'build/odbc-native' / revision[1] / 'source'
+            from tool.odbc.build_pinned_native import build_pinned_native
+            # Benchmarks may create .dart_tool files. Run the exported workspace
+            # source, never the read-only checkout inside the global Pub cache.
+            binary = build_pinned_native(PROJECT_ROOT)
+            os.environ['ODBC_FAST_NATIVE_LIBRARY'] = str(binary)
+            return binary.parent / 'source'
     locked_version = _resolve_locked_odbc_fast_version()
     if locked_version:
         candidates.extend(_published_odbc_fast_candidates(locked_version))
@@ -498,7 +533,8 @@ def valid_native_benchmark_report(output: str, mode: str) -> bool:
     payload = extract_json_object_from_output(output)
     if not payload or payload.get('benchmark') != f'native_odbc_{mode}' or payload.get('harness_version') != 2:
         return False
-    if payload.get('workload') != 'deterministic_8000_rows_v1' or payload.get('rows') != 8000 or payload.get('warmup') != 1 or payload.get('repeats') != 3:
+    repeats = payload.get('repeats')
+    if payload.get('workload') != 'deterministic_8000_rows_v1' or payload.get('rows') != 8000 or payload.get('warmup') != 1 or repeats not in (3, 9):
         return False
     expected = {'streamQueryBuffer', 'streamQueryBatched'} if mode == 'streaming' else {
         'workerCount=1', 'workerCount=4', 'workerCount=4 columnar',
@@ -510,7 +546,7 @@ def valid_native_benchmark_report(output: str, mode: str) -> bool:
         return False
     for row in rows:
         samples = row.get('samples')
-        if not isinstance(samples, list) or len(samples) != 3:
+        if not isinstance(samples, list) or len(samples) != repeats:
             return False
         for sample in [row, *samples]:
             if not isinstance(sample, dict) or sample.get('rows') != 8000:

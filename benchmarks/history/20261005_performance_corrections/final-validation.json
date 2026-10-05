@@ -1,0 +1,72 @@
+[
+  {
+    "name": "targeted-final",
+    "exit_code": 0,
+    "seconds": 10.417239199974574
+  },
+  {
+    "name": "vm-diagnostics-v2",
+    "exit_code": 0,
+    "seconds": 7.73049450002145
+  },
+  {
+    "name": "isolated-final-pub-get",
+    "exit_code": 0,
+    "seconds": 3.369084300007671
+  },
+  {
+    "name": "sql_server-sdk-lifecycle-final",
+    "exit_code": 0,
+    "seconds": 7.87406890001148
+  },
+  {
+    "name": "sql_server-integration-final",
+    "exit_code": 0,
+    "seconds": 36.41049669997301
+  },
+  {
+    "name": "sql_anywhere-sdk-lifecycle-final",
+    "exit_code": 0,
+    "seconds": 4.303592199983541
+  },
+  {
+    "name": "sql_anywhere-integration-final",
+    "exit_code": 0,
+    "seconds": 19.966425999999046
+  },
+  {
+    "name": "mapper-warm-control-1",
+    "exit_code": 0,
+    "seconds": 6.363109800033271
+  },
+  {
+    "name": "mapper-warm-control-2",
+    "exit_code": 0,
+    "seconds": 5.978775800031144
+  },
+  {
+    "name": "mapper-warm-base-forward",
+    "exit_code": 0,
+    "seconds": 6.663793499988969
+  },
+  {
+    "name": "mapper-warm-candidate-forward",
+    "exit_code": 0,
+    "seconds": 3.6563470999826677
+  },
+  {
+    "name": "mapper-warm-candidate-reverse",
+    "exit_code": 0,
+    "seconds": 3.6186298999818973
+  },
+  {
+    "name": "mapper-warm-base-reverse",
+    "exit_code": 0,
+    "seconds": 6.53329410002334
+  },
+  {
+    "name": "core-gate-final",
+    "exit_code": 1,
+    "seconds": 262.9613720999914
+  }
+]

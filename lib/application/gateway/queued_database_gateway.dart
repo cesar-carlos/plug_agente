@@ -7,13 +7,14 @@ import 'package:plug_agente/domain/entities/query_request.dart';
 import 'package:plug_agente/domain/entities/query_response.dart';
 import 'package:plug_agente/domain/entities/sql_command.dart';
 import 'package:plug_agente/domain/repositories/i_database_gateway.dart';
+import 'package:plug_agente/domain/repositories/i_odbc_pending_discards_wait_port.dart';
 import 'package:result_dart/result_dart.dart';
 
 /// Wraps a database gateway with a bounded SQL execution queue.
 ///
 /// Routes `executeQuery` and `executeBatch` through the queue to prevent
 /// pool overload. Non-SQL operations bypass the queue.
-class QueuedDatabaseGateway implements IDatabaseGateway {
+class QueuedDatabaseGateway implements IDatabaseGateway, IOdbcPendingDiscardsWaitPort {
   QueuedDatabaseGateway({
     required IDatabaseGateway delegate,
     required SqlExecutionQueue queue,
@@ -31,6 +32,15 @@ class QueuedDatabaseGateway implements IDatabaseGateway {
 
   /// Inner gateway wrapped by the SQL execution queue.
   IDatabaseGateway get delegate => _delegate;
+
+  @override
+  Future<Result<void>> waitForPendingDiscards({required Duration timeout}) {
+    final gateway = _delegate;
+    if (gateway is IOdbcPendingDiscardsWaitPort) {
+      return (gateway as IOdbcPendingDiscardsWaitPort).waitForPendingDiscards(timeout: timeout);
+    }
+    return Future.value(const Success(unit));
+  }
 
   /// Queue size for monitoring.
   int get queueSize => _queue.queueSize;

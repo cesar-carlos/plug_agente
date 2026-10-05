@@ -7,6 +7,8 @@ import 'package:plug_agente/application/gateway/queued_database_gateway.dart';
 import 'package:plug_agente/application/queue/sql_execution_queue.dart';
 import 'package:plug_agente/domain/entities/sql_command.dart';
 import 'package:plug_agente/domain/protocol/protocol.dart';
+import 'package:plug_agente/infrastructure/pool/adaptive_odbc_connection_pool.dart';
+import 'package:plug_agente/infrastructure/pool/odbc_native_connection_pool.dart';
 
 import '../helpers/e2e_env.dart';
 import '../helpers/odbc_dml_stress_id_ranges.dart';
@@ -202,6 +204,21 @@ void main() async {
         }
 
         final active = await h.connectionPool.getActiveCount();
+        if (h.connectionPool is AdaptiveOdbcConnectionPool
+                ? (h.connectionPool as AdaptiveOdbcConnectionPool).nativeBulkInsertPool
+                : h.connectionPool
+            case final OdbcNativeConnectionPool pool) {
+          final diagnostics = (await pool.captureFreshDiagnostics()).getOrThrow();
+          _stressLog('fresh lifecycle: ${jsonEncode(diagnostics)}');
+          expect(diagnostics['native_owned_connection_count'], 0);
+          expect(diagnostics['native_pending_return_count'], 0);
+          for (final state in diagnostics['pools']! as List<Map<String, Object?>>) {
+            expect(state['active_connections'], 0);
+            expect(state['checked_out_count'], 0);
+            expect(state['checkout_pending'], false);
+            expect(state['release_pending'], false);
+          }
+        }
         expect(active.isSuccess(), isTrue, reason: '$active');
         expect(active.getOrThrow(), 0);
 
@@ -318,6 +335,21 @@ void main() async {
 
           sw.stop();
           final active = await h.connectionPool.getActiveCount();
+          if (h.connectionPool is AdaptiveOdbcConnectionPool
+                  ? (h.connectionPool as AdaptiveOdbcConnectionPool).nativeBulkInsertPool
+                  : h.connectionPool
+              case final OdbcNativeConnectionPool pool) {
+            final diagnostics = (await pool.captureFreshDiagnostics()).getOrThrow();
+            _stressLog('fresh lifecycle: ${jsonEncode(diagnostics)}');
+            expect(diagnostics['native_owned_connection_count'], 0);
+            expect(diagnostics['native_pending_return_count'], 0);
+            for (final state in diagnostics['pools']! as List<Map<String, Object?>>) {
+              expect(state['active_connections'], 0);
+              expect(state['checked_out_count'], 0);
+              expect(state['checkout_pending'], false);
+              expect(state['release_pending'], false);
+            }
+          }
           expect(active.isSuccess(), isTrue, reason: '$active');
           expect(active.getOrThrow(), 0);
 

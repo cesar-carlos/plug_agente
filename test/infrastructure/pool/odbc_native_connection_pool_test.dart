@@ -313,6 +313,10 @@ void main() {
 
       expect(result.isError(), isTrue);
       expect(metrics.poolReleaseFailureCount, 1);
+      expect(pool.getHealthDiagnostics()['native_pending_return_count'], 0);
+      expect(pool.getHealthDiagnostics()['native_unconfirmed_connection_count'], 1);
+      expect(pool.getHealthDiagnostics()['native_owned_connection_count'], 1);
+      expect((await pool.release('cid')).isError(), isTrue);
       verify(() => mockService.poolReleaseConnection('cid')).called(1);
     });
 

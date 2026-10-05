@@ -1,0 +1,228 @@
+[
+  {
+    "name": "isolated-pub-get",
+    "exit_code": 0,
+    "seconds": 3.143320799979847
+  },
+  {
+    "name": "mapper-base-pub-get",
+    "exit_code": 0,
+    "seconds": 3.043044899997767
+  },
+  {
+    "name": "mapper-control-1",
+    "exit_code": 0,
+    "seconds": 7.977275000012014
+  },
+  {
+    "name": "mapper-control-2",
+    "exit_code": 0,
+    "seconds": 3.3086468999972567
+  },
+  {
+    "name": "mapper-base-forward",
+    "exit_code": 0,
+    "seconds": 3.4167376999976113
+  },
+  {
+    "name": "mapper-candidate-forward",
+    "exit_code": 0,
+    "seconds": 5.996611199981999
+  },
+  {
+    "name": "mapper-candidate-reverse",
+    "exit_code": 0,
+    "seconds": 2.673890600039158
+  },
+  {
+    "name": "mapper-base-reverse",
+    "exit_code": 0,
+    "seconds": 3.218410400033463
+  },
+  {
+    "name": "transport-qualified",
+    "exit_code": 2,
+    "seconds": 4511.8565568000195
+  },
+  {
+    "name": "baseline-pub-get",
+    "exit_code": 0,
+    "seconds": 2.4273672999697737
+  },
+  {
+    "name": "baseline-sql-server-stress",
+    "exit_code": 1,
+    "seconds": 7.9923485000035726
+  },
+  {
+    "name": "sql_server-async",
+    "exit_code": 0,
+    "seconds": 41.074542100017425
+  },
+  {
+    "name": "sql_server-async-gate",
+    "exit_code": 0
+  },
+  {
+    "name": "sql_server-streaming",
+    "exit_code": 0,
+    "seconds": 3.3199651000322774
+  },
+  {
+    "name": "sql_server-streaming-gate",
+    "exit_code": 0
+  },
+  {
+    "name": "sql_server-stress-1",
+    "exit_code": 0,
+    "seconds": 24.12760349997552
+  },
+  {
+    "name": "sql_server-stress-2",
+    "exit_code": 0,
+    "seconds": 6.875364199979231
+  },
+  {
+    "name": "sql_server-stress-3",
+    "exit_code": 0,
+    "seconds": 6.805673099996056
+  },
+  {
+    "name": "sql_server-stress-4",
+    "exit_code": 0,
+    "seconds": 7.229394100024365
+  },
+  {
+    "name": "sql_server-stress-5",
+    "exit_code": 0,
+    "seconds": 7.314901700010523
+  },
+  {
+    "name": "sql_server-stress-6",
+    "exit_code": 0,
+    "seconds": 7.083336399984546
+  },
+  {
+    "name": "sql_server-stress-7",
+    "exit_code": 0,
+    "seconds": 6.778926600003615
+  },
+  {
+    "name": "sql_server-stress-8",
+    "exit_code": 0,
+    "seconds": 6.801361799996812
+  },
+  {
+    "name": "sql_server-stress-9",
+    "exit_code": 0,
+    "seconds": 7.30078799999319
+  },
+  {
+    "name": "sql_server-stress-10",
+    "exit_code": 0,
+    "seconds": 7.049265699984971
+  },
+  {
+    "name": "sql_server-integration",
+    "exit_code": 1,
+    "seconds": 27.967888000013772
+  },
+  {
+    "name": "sql_anywhere-async",
+    "exit_code": 0,
+    "seconds": 37.73133450001478
+  },
+  {
+    "name": "sql_anywhere-async-gate",
+    "exit_code": 0
+  },
+  {
+    "name": "sql_anywhere-streaming",
+    "exit_code": 0,
+    "seconds": 4.165094900003169
+  },
+  {
+    "name": "sql_anywhere-streaming-gate",
+    "exit_code": 0
+  },
+  {
+    "name": "sql_anywhere-stress-1",
+    "exit_code": 0,
+    "seconds": 8.972922800050583
+  },
+  {
+    "name": "sql_anywhere-stress-2",
+    "exit_code": 0,
+    "seconds": 7.025719899975229
+  },
+  {
+    "name": "sql_anywhere-stress-3",
+    "exit_code": 0,
+    "seconds": 7.144474699976854
+  },
+  {
+    "name": "sql_anywhere-stress-4",
+    "exit_code": 0,
+    "seconds": 6.877587400027551
+  },
+  {
+    "name": "sql_anywhere-stress-5",
+    "exit_code": 0,
+    "seconds": 7.436460199998692
+  },
+  {
+    "name": "sql_anywhere-stress-6",
+    "exit_code": 0,
+    "seconds": 7.015484199975617
+  },
+  {
+    "name": "sql_anywhere-stress-7",
+    "exit_code": 0,
+    "seconds": 7.048069899959955
+  },
+  {
+    "name": "sql_anywhere-stress-8",
+    "exit_code": 0,
+    "seconds": 6.950411800004076
+  },
+  {
+    "name": "sql_anywhere-stress-9",
+    "exit_code": 0,
+    "seconds": 7.4928860000218265
+  },
+  {
+    "name": "sql_anywhere-stress-10",
+    "exit_code": 0,
+    "seconds": 6.992515599995386
+  },
+  {
+    "name": "sql_anywhere-integration",
+    "exit_code": 0,
+    "seconds": 16.05639310000697
+  },
+  {
+    "name": "migration-live",
+    "exit_code": 0,
+    "seconds": 7.549418100039475
+  },
+  {
+    "name": "odbc-runtime",
+    "exit_code": 0,
+    "seconds": 11.796584700001404
+  },
+  {
+    "name": "python-validation",
+    "exit_code": 1,
+    "seconds": 11.407990799983963
+  },
+  {
+    "name": "installer-syntax",
+    "exit_code": 0,
+    "seconds": 1.189182100002654
+  },
+  {
+    "name": "workflow-validation",
+    "exit_code": 0,
+    "seconds": 0.08010490000015125
+  }
+]

@@ -12,6 +12,7 @@ for _entry in (str(_ROOT), str(_TOOL_DIR)):
         sys.path.insert(0, _entry)
 
 import argparse
+import os
 import json
 import re
 import shutil
@@ -300,16 +301,30 @@ def run_early_checks(args: argparse.Namespace, version_short: str) -> None:
 
 
 def run_optional_checks(args: argparse.Namespace) -> None:
+    def check(command: list[str], artifact: str) -> None:
+        print(f"Running {' '.join(command)}", flush=True)
+        result = run(command, check=False)
+        directory = PROJECT_ROOT / 'build/release-preflight'
+        directory.mkdir(parents=True, exist_ok=True)
+        (directory / f'{artifact}.log').write_text(result.stdout or '', encoding='utf-8')
+        if result.returncode:
+            raise subprocess.CalledProcessError(result.returncode, command, result.stdout)
+        print(f'Passed {artifact}; evidence: build/release-preflight/{artifact}.log', flush=True)
+
+    if args.tests or args.tests_ci:
+        from tool.odbc.build_pinned_native import build_pinned_native
+        run(['flutter', 'pub', 'get'])
+        os.environ['ODBC_FAST_NATIVE_LIBRARY'] = str(build_pinned_native(PROJECT_ROOT))
     if args.analyze:
-        run(["flutter", "analyze"])
+        check(["flutter", "analyze"], 'analyze')
     if args.tests:
-        run(["flutter", "test"])
+        check(["flutter", "test"], 'tests')
     if args.tests_ci:
-        run(["flutter", "test", "--exclude-tags", "live || slow || perf"])
+        check(["flutter", "test", "--exclude-tags", "live || slow || perf"], 'tests-ci')
     if args.architecture:
-        run(["flutter", "test", "test/architecture/layer_boundaries_test.dart"])
+        check(["flutter", "test", "test/architecture/layer_boundaries_test.dart"], 'architecture')
     if args.appcast_tooling:
-        run(
+        check(
             [
                 "python",
                 "-m",
@@ -322,7 +337,8 @@ def run_optional_checks(args: argparse.Namespace) -> None:
                 "tool.updater.test_verify_release",
                 "tool.updater.test_installer",
                 "-v",
-            ]
+            ],
+            'appcast-tooling',
         )
         ensure_appcast_signing_tests_not_skipped()
 

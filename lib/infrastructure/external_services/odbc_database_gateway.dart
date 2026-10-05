@@ -19,6 +19,7 @@ import 'package:plug_agente/domain/repositories/i_connection_pool.dart';
 import 'package:plug_agente/domain/repositories/i_database_gateway.dart';
 import 'package:plug_agente/domain/repositories/i_odbc_connection_circuit_breaker.dart';
 import 'package:plug_agente/domain/repositories/i_odbc_connection_settings.dart';
+import 'package:plug_agente/domain/repositories/i_odbc_pending_discards_wait_port.dart';
 import 'package:plug_agente/domain/repositories/i_pool_discard_inflight_diagnostics.dart';
 import 'package:plug_agente/domain/repositories/i_query_config_source.dart';
 import 'package:plug_agente/domain/repositories/i_retry_manager.dart';
@@ -65,7 +66,12 @@ import 'package:uuid/uuid.dart';
 /// - Built-in error handling with Result types
 /// - Connection pooling for reduced overhead
 /// - Performance metrics collection
-class OdbcDatabaseGateway implements IDatabaseGateway, IPoolDiscardInflightDiagnostics, IOdbcConnectionCircuitBreaker {
+class OdbcDatabaseGateway
+    implements
+        IDatabaseGateway,
+        IPoolDiscardInflightDiagnostics,
+        IOdbcConnectionCircuitBreaker,
+        IOdbcPendingDiscardsWaitPort {
   OdbcDatabaseGateway(
     this._configSource,
     this._connectionStringSource,
@@ -213,6 +219,10 @@ class OdbcDatabaseGateway implements IDatabaseGateway, IPoolDiscardInflightDiagn
 
   @override
   Future<void> reconcilePoolDiscardInflight() => _connectionManager.reconcilePoolDiscardInflight();
+
+  @override
+  Future<Result<void>> waitForPendingDiscards({required Duration timeout}) =>
+      _connectionManager.waitForPendingDiscards(timeout: timeout);
 
   final OdbcService _service;
   final IQueryConfigSource _configSource;

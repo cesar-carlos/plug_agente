@@ -437,6 +437,7 @@ class OdbcNativeConnectionPool
       return const Success(unit);
     }
     _unconfirmedConnections.add(connectionId);
+    _returns.remove(connectionId);
     _quarantinedConnectionStrings.add(owner);
     _metrics?.recordPoolReleaseFailure();
     return Failure(
@@ -782,11 +783,31 @@ class OdbcNativeConnectionPool
       'native_skip_reason': null,
       'lease_active_count': 0,
       'native_active_count': _activeAcquireCount,
+      'native_owned_connection_count': _connectionOwners.length,
+      'native_pending_return_count': _returns.length,
       'native_unconfirmed_connection_count': _unconfirmedConnections.length,
       'native_quarantined_pool_count': _quarantinedConnectionStrings.length,
       'native_quarantine_recovery_scheduled': _quarantineRetryTimers.length,
       'native_quarantine_slow_recovery': _slowQuarantineRecoveryLogged.length,
     };
+  }
+
+  /// Captures native state without the health cache, for lifecycle diagnostics.
+  Future<Result<Map<String, Object?>>> captureFreshDiagnostics() async {
+    final pools = <Map<String, Object?>>[];
+    for (final poolId in _pools.values.toList(growable: false)) {
+      final result = await _service.poolGetStateDetailed(poolId);
+      if (result.isError()) {
+        return Failure(
+          OdbcFailureMapper.mapPoolError(
+            result.exceptionOrNull()!,
+            operation: 'pool_capture_diagnostics',
+          ),
+        );
+      }
+      pools.add({'pool_id': poolId, ...result.getOrThrow()});
+    }
+    return Success({...getHealthDiagnostics(), 'pools': pools});
   }
 
   Future<Result<PoolState>> _cachedPoolState(int poolId) async {

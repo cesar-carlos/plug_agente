@@ -1,0 +1,38 @@
+[
+  {
+    "name": "sql_server-async-final",
+    "exit_code": 0,
+    "seconds": 40.74061610002536
+  },
+  {
+    "name": "sql_server-async-final-gate",
+    "exit_code": 0
+  },
+  {
+    "name": "sql_server-streaming-final",
+    "exit_code": 0,
+    "seconds": 3.1292341999942437
+  },
+  {
+    "name": "sql_server-streaming-final-gate",
+    "exit_code": 3
+  },
+  {
+    "name": "sql_anywhere-async-final",
+    "exit_code": 0,
+    "seconds": 35.235722100012936
+  },
+  {
+    "name": "sql_anywhere-async-final-gate",
+    "exit_code": 3
+  },
+  {
+    "name": "sql_anywhere-streaming-final",
+    "exit_code": 0,
+    "seconds": 3.6283919000416063
+  },
+  {
+    "name": "sql_anywhere-streaming-final-gate",
+    "exit_code": 3
+  }
+]

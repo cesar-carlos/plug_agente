@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:get_it/get_it.dart';
 import 'package:mocktail/mocktail.dart';
@@ -44,6 +46,9 @@ void main() {
       shutdownEvents.add('dispose_sql_queue');
       return const Success(unit);
     });
+    when(
+      () => queuedGateway.waitForPendingDiscards(timeout: const Duration(seconds: 30)),
+    ).thenAnswer((_) async => const Success(unit));
     when(() => streamingCache.drainCachedSessions()).thenAnswer((_) async {
       shutdownEvents.add('drain_streaming_cache');
       return const Success(unit);
@@ -79,6 +84,28 @@ void main() {
     verifyInOrder([
       () => queuedGateway.disposeGracefully(),
       () => streamingCache.drainCachedSessions(),
+      () => connectionPool.closeAll(),
+    ]);
+  });
+
+  test('waits for known discards before closing the pool', () async {
+    final completion = Completer<Result<void>>();
+    when(
+      () => queuedGateway.waitForPendingDiscards(timeout: const Duration(seconds: 30)),
+    ).thenAnswer((_) => completion.future);
+    final shutdown = AppShutdownSequence(getIt).run(
+      runEarlyShutdownCoordinator: () async {},
+      dispatchAppCloseAgentActions: () async {},
+      applyOnAppExitPolicies: () async {},
+      shutdownOdbcWorker: () {},
+      resetShutdownStateForTesting: () {},
+    );
+    await Future<void>.delayed(Duration.zero);
+    verifyNever(() => connectionPool.closeAll());
+    completion.complete(const Success(unit));
+    await shutdown;
+    verifyInOrder([
+      () => queuedGateway.waitForPendingDiscards(timeout: const Duration(seconds: 30)),
       () => connectionPool.closeAll(),
     ]);
   });

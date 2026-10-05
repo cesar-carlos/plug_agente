@@ -88,6 +88,20 @@ flutter test test/integration/windows_startup_registry_live_e2e_test.dart
 
 ## Executar
 
+Prepare a biblioteca nativa da revisao Git fixada antes de executar Flutter.
+O build usa Rust 1.93.0 e o compilador C/C++ da plataforma (MSVC no Windows;
+`unixodbc-dev` no Linux). Nenhum arquivo do cache global do Pub e alterado:
+
+```bash
+flutter pub get
+python tool/odbc/build_pinned_native.py
+```
+
+O artefato e seu manifesto ficam em `build/odbc-native/<revisao>/`. O hook
+Flutter consome a copia verificada em `build/odbc-native/pinned/`, configurada
+por `hooks.user_defines` no pubspec. Reexecute o comando apos trocar a revisao.
+O gate de release e o build do instalador fazem essa preparacao automaticamente.
+
 ```bash
 # Suite rapida: exclui testes marcados como live/slow/perf
 flutter test --exclude-tags "live || slow || perf"

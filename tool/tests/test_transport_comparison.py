@@ -2,7 +2,14 @@ import copy
 import unittest
 
 from tool.benchmarks.compare_transport_repetitions import compare
-from tool.benchmarks.run_transport_comparison import qualify
+from tool.benchmarks.run_transport_comparison import qualify, run_measurement
+from tool.benchmarks.measurement_guard import MeasurementGuard, validate_dependency_change, native_identity, file_set_identity
+from unittest.mock import patch
+from tool.py.benchmark_common import collect_dependency_provenance
+from pathlib import Path
+import tempfile
+import json
+import subprocess
 
 
 def report():
@@ -21,6 +28,46 @@ def report():
 
 
 class TransportComparisonTests(unittest.TestCase):
+    def test_harness_change_invalidates_the_measurement_identity(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / 'harness.dart').write_text('measure real workload')
+            before = file_set_identity(root, ('harness.dart',))
+            (root / 'harness.dart').write_text('skip real workload')
+            self.assertNotEqual(before, file_set_identity(root, ('harness.dart',)))
+
+    def test_legacy_reference_can_already_be_at_the_staged_path(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            binary = root / 'native/target/release/engine.dll'
+            binary.parent.mkdir(parents=True)
+            binary.write_bytes(b'reference artifact')
+            output = root / 'results'
+            output.mkdir()
+            (output / 'control.json').write_text(json.dumps({'complete': True}))
+            with patch('tool.benchmarks.run_transport_comparison.subprocess.run', return_value=subprocess.CompletedProcess([], 0)):
+                self.assertEqual(run_measurement(root, output, 'control', native_library=binary, legacy=True), {'complete': True})
+            self.assertEqual(binary.read_bytes(), b'reference artifact')
+            self.assertEqual((root / 'build/odbc-native/pinned/engine.dll').read_bytes(), binary.read_bytes())
+
+    def test_wakefulness_restores_the_previous_execution_state(self):
+        from unittest.mock import MagicMock
+        kernel = MagicMock()
+        kernel.kernel32.SetThreadExecutionState.return_value = 0x80000001
+        with patch('tool.benchmarks.measurement_guard.os.name', 'nt'), patch('ctypes.windll', kernel, create=True):
+            with MeasurementGuard() as guard:
+                guard.largest_gap_seconds = 61
+                self.assertTrue(guard.interrupted)
+            self.assertEqual(kernel.kernel32.SetThreadExecutionState.call_args_list[-1].args, (0x80000001,))
+    def test_same_version_from_a_different_source_is_detected(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            lock = root / 'pubspec.lock'
+            lock.write_text('packages:\n  meta:\n    source: hosted\n    version: "1"\nsdks:\n')
+            a = collect_dependency_provenance(root)
+            lock.write_text('packages:\n  meta:\n    source: git\n    version: "1"\nsdks:\n')
+            with self.assertRaises(ValueError):
+                validate_dependency_change(a, collect_dependency_provenance(root), allow_odbc=True)
     def test_complete_identical_reports_pass(self):
         self.assertEqual(compare(report(), report())['status'], 'pass')
 
@@ -32,9 +79,26 @@ class TransportComparisonTests(unittest.TestCase):
     def test_measured_zero_heap_growth_obeys_the_existing_limit(self):
         base, candidate = report(), report()
         base['heap_growth_bytes'] = candidate['heap_growth_bytes'] = 0
-        self.assertEqual(compare(base, candidate)['status'], 'pass')
+        self.assertEqual(compare(base, candidate)['status'], 'inconclusive')
         candidate['heap_growth_bytes'] = 1
-        self.assertEqual(compare(base, candidate)['status'], 'fail')
+        result = compare(base, candidate)
+        self.assertEqual(result['status'], 'inconclusive')
+        self.assertIn('Heap growth exceeds 110% of base', result['failures'])
+
+    def test_only_explicit_odbc_dependency_change_is_allowed(self):
+        validate_dependency_change({'odbc_fast': '5'}, {'odbc_fast': 'git:abc'}, allow_odbc=True)
+        with self.assertRaises(ValueError):
+            validate_dependency_change({'odbc_fast': '5'}, {'odbc_fast': 'git:abc'}, allow_odbc=False)
+        with self.assertRaises(ValueError):
+            validate_dependency_change({'meta': '1'}, {'meta': '2'}, allow_odbc=True)
+
+    def test_native_provenance_requires_revision_and_hashes_binary(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / 'native.dll'
+            path.write_bytes(b'engine')
+            self.assertEqual(len(native_identity(path, 'a' * 40)['sha256']), 64)
+            with self.assertRaises(ValueError):
+                native_identity(path, 'main')
 
     def test_each_existing_limit_is_preserved(self):
         for field in ('latency', 'throughput', 'heap'):

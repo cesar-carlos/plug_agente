@@ -904,10 +904,11 @@ packages:
   odbc_fast:
     dependency: "direct main"
     description:
-      name: odbc_fast
-      sha256: ad7b8a83120f4edc59e8aa88a61340ce25c1d37ac76551298b8d5414226716f7
-      url: "https://pub.dev"
-    source: hosted
+      path: "."
+      ref: ea1e04f03a8cf1f2d5f3790697e8bc62ba130f89
+      resolved-ref: ea1e04f03a8cf1f2d5f3790697e8bc62ba130f89
+      url: "https://github.com/cesar-carlos/dart_odbc_fast.git"
+    source: git
     version: "5.0.0"
   opentelemetry:
     dependency: transitive

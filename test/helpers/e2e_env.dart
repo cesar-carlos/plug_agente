@@ -433,14 +433,16 @@ class E2EEnv {
   static String? get odbcLongQuery {
     final conn = odbcConnectionStringAny;
     if (conn == null) return null;
-    if (conn == odbcConnectionString) {
-      return _get('ODBC_INTEGRATION_LONG_QUERY_SQL_ANYWHERE') ?? _get('ODBC_INTEGRATION_LONG_QUERY');
-    }
+    // Matrix runners may alias a named DSN into the generic DSN. Prefer the
+    // specific bank before treating the generic setting as SQL Anywhere.
     if (conn == odbcSqlServerConnectionString) {
       return _get('ODBC_INTEGRATION_LONG_QUERY_SQL_SERVER') ?? _get('ODBC_INTEGRATION_LONG_QUERY');
     }
     if (conn == odbcPostgresqlConnectionString) {
       return _get('ODBC_INTEGRATION_LONG_QUERY_POSTGRESQL') ?? _get('ODBC_INTEGRATION_LONG_QUERY');
+    }
+    if (conn == odbcConnectionString) {
+      return _get('ODBC_INTEGRATION_LONG_QUERY_SQL_ANYWHERE') ?? _get('ODBC_INTEGRATION_LONG_QUERY');
     }
     return _get('ODBC_INTEGRATION_LONG_QUERY');
   }

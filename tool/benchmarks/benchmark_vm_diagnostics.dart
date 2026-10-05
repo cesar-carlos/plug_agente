@@ -28,18 +28,31 @@ Future<Map<String, Object?>> captureBenchmarkDiagnostics(
       for (final entry in groups.entries) {
         final isolate = entry.value;
         final id = isolate.id!;
-        final allocation = await service.getAllocationProfile(id, gc: true, reset: reset);
+        // Rich profiles retain thousands of maps. Keep them outside the heap
+        // checkpoints so the observer's own report is not measured as growth.
+        if (recordAllocations) {
+          final allocation = await service.getAllocationProfile(id, gc: true, reset: reset);
+          allocations[isolate.name ?? id] = allocation.toJson();
+        } else {
+          await service.getAllocationProfile(id, gc: true, reset: reset);
+        }
         final usage = await service.getIsolateGroupMemoryUsage(entry.key);
         heap += usage.heapUsage!;
         memory[isolate.name ?? entry.key] = usage.toJson();
-        if (recordAllocations) allocations[isolate.name ?? id] = allocation.toJson();
       }
       return {'heap_used_bytes': heap, 'memory_by_group': memory, 'allocations': allocations};
     }
 
+    // Warm VM-service serialization before measuring the application heap.
+    await checkpoint(reset: false);
     final before = await checkpoint(reset: true);
     await workload();
     final after = await checkpoint(reset: false);
+    final retentionCycles = <Map<String, Object?>>[];
+    for (var cycle = 0; cycle < 5; cycle++) {
+      await workload();
+      retentionCycles.add(await checkpoint(reset: false));
+    }
     await checkpoint(reset: true);
     await service.setFlag('profiler', 'true');
     await service.setVMTimelineFlags(['GC', 'Dart', 'Embedder']);
@@ -54,11 +67,12 @@ Future<Map<String, Object?>> captureBenchmarkDiagnostics(
     }
     final timeline = (await service.getVMTimeline()).toJson();
     return {
-      'diagnostics_version': 1,
+      'diagnostics_version': 2,
       'heap_growth_bytes': max(0, (after['heap_used_bytes']! as int) - (before['heap_used_bytes']! as int)),
       'rss_bytes': ProcessInfo.currentRss,
       'before': before,
       'after': after,
+      'retention_cycles': retentionCycles,
       'allocation_profile': allocationProfile,
       'cpu_samples': cpu,
       'timeline': timeline,

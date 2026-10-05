@@ -26,10 +26,39 @@ from tool.benchmarks.run_benchmark_suite import (
     run_transport_json_tool,
     complete_suite_metrics,
     required_metric_keys,
+    _odbc_fast_package_metrics,
+    _odbc_fast_comparison_identity,
 )
 
 
 class RunBenchmarkSuiteTests(unittest.TestCase):
+    def test_exported_native_source_uses_its_manifest_not_parent_git_commit(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            source = root / 'source'
+            source.mkdir()
+            (source / 'pubspec.yaml').write_text('version: 5.0.0\n')
+            provenance = {'revision': 'a' * 40, 'sha256': 'b' * 64}
+            (root / 'manifest.json').write_text(json.dumps(provenance))
+            with patch('tool.benchmarks.run_benchmark_suite.subprocess.run') as git:
+                self.assertEqual(_odbc_fast_package_metrics(source)['package_revision'], provenance['revision'])
+                self.assertEqual(_odbc_fast_comparison_identity(source)['native_sha256'], provenance['sha256'])
+                git.assert_not_called()
+
+    def test_dry_run_never_builds_a_native_library(self) -> None:
+        with patch('tool.odbc.build_pinned_native.build_pinned_native') as build:
+            with patch.dict('os.environ', {}, clear=True):
+                self.assertEqual(main(['--dry-run']), 0)
+            build.assert_not_called()
+
+    def test_nine_native_samples_are_required_when_nine_repeats_are_declared(self) -> None:
+        sample = {'rows': 8000, 'elapsed_ms': 1.25, 'chunks': 8, 'fetch_size': 1000, 'chunk_size': 1048576, 'rows_per_second': 6400000}
+        payload = {'benchmark': 'native_odbc_streaming', 'harness_version': 2, 'workload': 'deterministic_8000_rows_v1', 'rows': 8000, 'warmup': 1, 'repeats': 9,
+                   'scenarios': [{'scenario': name, **sample, 'samples': [sample.copy() for _ in range(9)]} for name in ('streamQueryBuffer', 'streamQueryBatched')]}
+        self.assertTrue(valid_native_benchmark_report(json.dumps(payload), 'streaming'))
+        payload['scenarios'][0]['samples'].pop()
+        self.assertFalse(valid_native_benchmark_report(json.dumps(payload), 'streaming'))
+
     def test_native_gate_exit_code_is_preserved_and_artifacts_are_written(self) -> None:
         module = 'tool.benchmarks.run_benchmark_suite'
         with tempfile.TemporaryDirectory() as temporary:

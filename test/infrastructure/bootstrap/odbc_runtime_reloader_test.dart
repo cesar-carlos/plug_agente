@@ -106,6 +106,9 @@ void main() {
         teardownEvents.add('close_pool');
         return const Success(unit);
       });
+      when(
+        () => queuedGateway.waitForPendingDiscards(timeout: const Duration(seconds: 30)),
+      ).thenAnswer((_) async => const Success(unit));
       when(() => investigationCollector.clear()).thenAnswer((_) {
         teardownEvents.add('clear_investigation');
       });
@@ -169,6 +172,15 @@ void main() {
       );
       expect(actionQueue.isDisposed, isTrue);
       expect(teardownEvents, contains('dispose_sql_queue'));
+    });
+
+    test('does not reset a runtime whose pending cleanup is unconfirmed', () async {
+      when(
+        () => queuedGateway.waitForPendingDiscards(timeout: const Duration(seconds: 30)),
+      ).thenAnswer((_) async => Failure(Exception('cleanup unconfirmed')));
+      expect(await reloader.reload(), isFalse);
+      verifyNever(() => connectionPool.closeAll());
+      verifyNever(() => applicationResetPort.resetForOdbcRuntimeReload());
     });
   });
 }

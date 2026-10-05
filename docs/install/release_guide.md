@@ -116,7 +116,14 @@ python tool/release/release_preflight.py --version 1.2.7 --allow-dirty --check-i
   --feed-public-key "$AUTO_UPDATE_FEED_PUBLIC_KEY"
 ```
 
-O `installer/build_installer.py` executa:
+O `installer/build_installer.py` compila `odbc_fast` a partir da revisao Git fixa do `pubspec.lock`
+em uma copia dentro de `build/`, usando Rust 1.93.0 e MSVC. O hook recebe o
+artefato por `hooks.user_defines`, sem alterar o cache do Pub. Antes de
+empacotar, o script exige que a DLL presente no bundle tenha o mesmo SHA-256
+da biblioteca compilada. O manifesto da revisao, compilador e hashes e copiado
+para `data/odbc_native_manifest.json` no bundle.
+
+O script tambem executa:
 
 1. Recusa o build se `AUTO_UPDATE_REQUIRE_VALID_SIGNATURE` resolver para
    `true` (default quando ausente) sem assinatura configurada; para build local

@@ -200,7 +200,14 @@ class OdbcE2eRpcHarness {
   }
 
   Future<void> shutdown() async {
-    await connectionPool.closeAll();
-    locator.shutdown();
+    try {
+      if (gateway case final OdbcDatabaseGateway odbcGateway) {
+        final cleanup = await odbcGateway.waitForPendingDiscards(timeout: const Duration(seconds: 30));
+        cleanup.getOrThrow();
+      }
+      (await connectionPool.closeAll()).getOrThrow();
+    } finally {
+      locator.shutdown();
+    }
   }
 }

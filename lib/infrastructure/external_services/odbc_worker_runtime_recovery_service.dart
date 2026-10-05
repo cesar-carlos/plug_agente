@@ -2,6 +2,7 @@ import 'dart:developer' as developer;
 
 import 'package:plug_agente/domain/repositories/i_connection_pool.dart';
 import 'package:plug_agente/domain/repositories/i_odbc_connection_circuit_breaker.dart';
+import 'package:plug_agente/domain/repositories/i_odbc_pending_discards_wait_port.dart';
 import 'package:plug_agente/domain/repositories/i_odbc_worker_runtime_recovery_port.dart';
 import 'package:plug_agente/domain/repositories/i_sql_execution_idle_wait_port.dart';
 import 'package:plug_agente/infrastructure/external_services/odbc_in_flight_execution_registry.dart';
@@ -60,6 +61,20 @@ final class OdbcWorkerRuntimeRecoveryService implements IOdbcWorkerRuntimeRecove
     _metrics?.recordOdbcWorkerRecoveryInvalidation();
 
     await _waitForInFlightSqlWorkers();
+
+    final gateway = _databaseGateway;
+    if (gateway is IOdbcPendingDiscardsWaitPort) {
+      final cleanup = await (gateway as IOdbcPendingDiscardsWaitPort).waitForPendingDiscards(
+        timeout: const Duration(seconds: 30),
+      );
+      if (cleanup.isError()) {
+        developer.log(
+          'Pending cleanup remains unconfirmed during explicit worker recovery',
+          name: _logName,
+          level: 900,
+        );
+      }
+    }
 
     await _streamingGatewayConcrete?.invalidateAfterWorkerRecovery();
     _inFlightExecutionRegistry.clearAll();

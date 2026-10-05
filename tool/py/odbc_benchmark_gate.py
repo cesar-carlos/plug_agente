@@ -6,6 +6,7 @@ import math
 import re
 import sys
 from dataclasses import dataclass
+from typing import Mapping
 
 _ASYNC_SCENARIO_RE = re.compile(
     r"^(?P<label>.+?): (?P<ms>[0-9.]+) ms,.*?encoding=(?P<encoding>[A-Za-z]+),"
@@ -98,16 +99,16 @@ def parse_streaming_benchmark_scenarios(output: str) -> list[StreamingBenchmarkS
     return scenarios
 
 
-def _benchmark_gates_enabled() -> bool:
-    return os.environ.get("BENCHMARK_ENFORCE_ODBC_GATES", "").strip().lower() in {
+def _benchmark_gates_enabled(environment: Mapping[str, str]) -> bool:
+    return environment.get("BENCHMARK_ENFORCE_ODBC_GATES", "").strip().lower() in {
         "1",
         "true",
         "yes",
     }
 
 
-def _read_positive_float_env(name: str, *, default: float | None = None, allow_zero: bool = False) -> float | None:
-    raw = os.environ.get(name, "").strip()
+def _read_positive_float_env(name: str, *, environment: Mapping[str, str], default: float | None = None, allow_zero: bool = False) -> float | None:
+    raw = environment.get(name, "").strip()
     if not raw:
         return default
     try:
@@ -139,9 +140,10 @@ def _columnar_speedup(row_major_ms: float, encoding_ms: float) -> float:
     return row_major_ms / encoding_ms
 
 
-def enforce_async_benchmark_gates(output: str) -> int:
+def enforce_async_benchmark_gates(output: str, *, environment: Mapping[str, str] | None = None) -> int:
+    environment = os.environ if environment is None else environment
     scenarios = parse_async_benchmark_scenarios(output)
-    gates_enabled = _benchmark_gates_enabled()
+    gates_enabled = _benchmark_gates_enabled(environment)
 
     if not scenarios:
         if gates_enabled:
@@ -153,8 +155,8 @@ def enforce_async_benchmark_gates(output: str) -> int:
         return 0
 
     max_fallbacks = 0
-    if gates_enabled or os.environ.get("BENCHMARK_ODBC_FALLBACKS_MAX", "").strip() != "":
-        maximum = _read_positive_float_env("BENCHMARK_ODBC_FALLBACKS_MAX", default=0.0, allow_zero=True) or 0.0
+    if gates_enabled or environment.get("BENCHMARK_ODBC_FALLBACKS_MAX", "").strip() != "":
+        maximum = _read_positive_float_env("BENCHMARK_ODBC_FALLBACKS_MAX", environment=environment, default=0.0, allow_zero=True) or 0.0
         if not maximum.is_integer():
             raise SystemExit(2)
         max_fallbacks = int(maximum)
@@ -171,7 +173,7 @@ def enforce_async_benchmark_gates(output: str) -> int:
         return 3
 
     default_min_speedup = 1.30 if gates_enabled else None
-    min_speedup = _read_positive_float_env("BENCHMARK_COLUMNAR_MIN_SPEEDUP", default=default_min_speedup)
+    min_speedup = _read_positive_float_env("BENCHMARK_COLUMNAR_MIN_SPEEDUP", environment=environment, default=default_min_speedup)
     if min_speedup is None:
         return 0
 
@@ -246,13 +248,14 @@ def enforce_async_benchmark_gates(output: str) -> int:
     return 0
 
 
-def enforce_streaming_benchmark_gates(output: str) -> int:
+def enforce_streaming_benchmark_gates(output: str, *, environment: Mapping[str, str] | None = None) -> int:
+    environment = os.environ if environment is None else environment
     scenarios = parse_streaming_benchmark_scenarios(output)
     by_label = {scenario.label: scenario for scenario in scenarios}
 
-    gates_enabled = _benchmark_gates_enabled()
+    gates_enabled = _benchmark_gates_enabled(environment)
     default_min_speedup = 2.0 if gates_enabled else None
-    min_speedup = _read_positive_float_env("BENCHMARK_STREAMING_MIN_SPEEDUP", default=default_min_speedup)
+    min_speedup = _read_positive_float_env("BENCHMARK_STREAMING_MIN_SPEEDUP", environment=environment, default=default_min_speedup)
     if min_speedup is None:
         return 0
 

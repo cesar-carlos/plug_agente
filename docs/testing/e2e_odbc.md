@@ -351,3 +351,50 @@ report p50/p95/p99, throughput, memory and resource/prepare/queue metrics. Repea
 variation above 10%. Require >=10% gain, <=5% tail latency regression and <=10%
 peak memory regression to change tuning defaults. Safety fixes are evaluated
 separately. Run benchmarks without concurrent suites.
+
+### Qualificacao de desempenho e diagnostico do pool
+
+Compile primeiro a revisao Git fixa de `odbc_fast` com
+`python tool/odbc/build_pinned_native.py`. O build fica no workspace;
+o cache global do Pub nao e alterado manualmente. O hook Dart recebe o
+diretorio da DLL por `hooks.user_defines` no `pubspec.yaml`. O empacotamento
+verifica o SHA-256 do binario no bundle.
+
+O comparador `tool/benchmarks/run_transport_comparison.py` exige um checkout
+isolado para `--base-dir`. Para um arquivo extraido de `git archive`, informe
+tambem `--base-revision bc383507`. Uma mudanca intencional da biblioteca exige
+`--allow-odbc-change`, `--base-odbc-revision`, `--candidate-odbc-revision`,
+`--base-native-library` e `--candidate-native-library`, com SHAs completos e
+binarios das respectivas revisoes. Diferencas em outras dependencias bloqueiam
+a comparacao. `prepare_transport_comparison.py` compila os dois binarios; use
+`--baseline-repository` para reaproveitar um repositorio nativo local existente.
+
+As execucoes sao seriais: controle com codigo identico, referencia/candidata e
+candidata/referencia, com aquecimento e nove repeticoes. O controle e avaliado
+nas duas direcoes. Interrupcao por suspensao, mudanca de fontes/binarios,
+controle instavel ou heap zero sem evidencia suficiente produzem resultado
+inconclusivo (exit 2). Falha conclusiva sai com 1; aprovacao sai com 0. Os limites
+continuam p95 +5%, throughput -15% e crescimento de heap +10%. Snapshots de heap
+apos GC em cinco ciclos adicionais ficam separados dos cronometros de aprovacao.
+Os runners nativos exigem nove amostras completas para qualificacao. Relatorios
+antigos de tres amostras podem ser lidos como historico, mas ficam inconclusivos
+no runner atual. O harness Dart tambem e conferido por SHA-256 antes/depois.
+
+Para os bancos configurados no `.env`, o tuning compara 1.000/2.000/4.000/8.000
+linhas por lote e buffers de 64 KiB/256 KiB/1 MiB:
+
+```powershell
+python tool/benchmarks/run_streaming_tuning.py --output-dir build/benchmark-tuning
+```
+
+Usa consultas de 1.000, 8.000 e 50.000 linhas, textos longos, nulos e binarios,
+verifica os dados e a conexao apos cancelamento. Uma recomendacao exige ganho
+mediano >=10%, primeira resposta p95 <=+5% e RSS maximo <=+10%; desempates usam
+o menor lote/buffer. O runner publica recomendacoes, sem alterar os defaults.
+O gate existente de streaming 2x continua independente dessa qualificacao.
+
+`dart run tool/odbc/stress_pool_lifecycle.dart` usa `ODBC_TEST_DSN` do ambiente
+do processo. Executa dez rodadas, correlaciona aquisicoes/devolucoes por IDs
+internos e exige contagens Dart/nativas zero apos devolucoes confirmadas.
+O relatorio nao inclui credenciais nem connection strings. Execute uma vez
+por banco, serialmente e fora das medicoes de desempenho.

@@ -1,0 +1,181 @@
+{
+  "source": {
+    "commit_sha": "bc3835070267f8d859c484125e273e2c28c6341e",
+    "source_sha256": "0e4844410ed0c41df217f80c662001fb54246c6f753360a685d4e26104e99a2e"
+  },
+  "native": {
+    "revision": "ea1e04f03a8cf1f2d5f3790697e8bc62ba130f89",
+    "sha256": "c072e4693d8ffdea8b024841c80f3247f403cd329e09991200a816233cb87aff",
+    "cargo_lock_sha256": "baac5b4c66854fce0ce1766723e5d3898902284d1289209d3fc62dc6b0ce4293",
+    "locked_dependencies": true,
+    "rustc": "rustc 1.93.0 (254b59607 2026-01-19)"
+  },
+  "machine": {
+    "platform": "Windows-11-10.0.26300-SP0",
+    "machine": "AMD64",
+    "processor": "Intel64 Family 6 Model 170 Stepping 4, GenuineIntel",
+    "python_version": "3.13.14",
+    "dart_version": "Dart SDK version: 3.13.4 (stable) (Tue Sep 15 01:01:15 2026 -0700) on \"windows_x64\"",
+    "flutter_version": "Flutter 3.47.5 \u2022 channel stable \u2022 https://github.com/flutter/flutter.git\nFramework \u2022 revision 6a19cca564 (3 weeks ago) \u2022 2026-09-17 14:13:22 -0400\nEngine \u2022 hash ab598368592da0064197e2bc15c7f5b0a2c6bb1f (revision af7e796e16) (19 days ago) \u2022 2026-09-16 18:35:09.000Z\nTools \u2022 Dart 3.13.4 \u2022 DevTools 2.60.0",
+    "dependencies_sha256": "7451e384964630ab97f130643729a010303c22b5665982e1b54a514bdea1f12c",
+    "host_fingerprint": "cfdd16ebf9efdf7d0398c6297f2875e10dfd9dd1209f02961c71c93c96c39d98"
+  },
+  "benchmark_environment": {
+    "odbc_test_dsn_configured": true,
+    "odbc_driver_family": "SQL Anywhere",
+    "odbc_pool_size": 32,
+    "odbc_async_worker_count": 32,
+    "odbc_async_max_pending_requests": 256,
+    "run_live_api_tests": true
+  },
+  "offline_gate": [
+    {
+      "name": "core-gate-clean",
+      "exit_code": 0,
+      "seconds": 382.2031028000056
+    },
+    {
+      "name": "windows-release-build",
+      "exit_code": 0,
+      "seconds": 118.71746299997903
+    },
+    {
+      "name": "native-install-check-final",
+      "exit_code": 0,
+      "seconds": 1.9052972999634221
+    },
+    {
+      "name": "native-updater-ctest-final",
+      "exit_code": 0,
+      "seconds": 0.1378264999948442
+    },
+    {
+      "name": "installer-syntax-final",
+      "exit_code": 0,
+      "seconds": 1.3143434000085108
+    }
+  ],
+  "functional": [
+    {
+      "name": "targeted-final",
+      "exit_code": 0,
+      "seconds": 10.417239199974574
+    },
+    {
+      "name": "vm-diagnostics-v2",
+      "exit_code": 0,
+      "seconds": 7.73049450002145
+    },
+    {
+      "name": "isolated-final-pub-get",
+      "exit_code": 0,
+      "seconds": 3.369084300007671
+    },
+    {
+      "name": "sql_server-sdk-lifecycle-final",
+      "exit_code": 0,
+      "seconds": 7.87406890001148
+    },
+    {
+      "name": "sql_server-integration-final",
+      "exit_code": 0,
+      "seconds": 36.41049669997301
+    },
+    {
+      "name": "sql_anywhere-sdk-lifecycle-final",
+      "exit_code": 0,
+      "seconds": 4.303592199983541
+    },
+    {
+      "name": "sql_anywhere-integration-final",
+      "exit_code": 0,
+      "seconds": 19.966425999999046
+    },
+    {
+      "name": "mapper-warm-control-1",
+      "exit_code": 0,
+      "seconds": 6.363109800033271
+    },
+    {
+      "name": "mapper-warm-control-2",
+      "exit_code": 0,
+      "seconds": 5.978775800031144
+    },
+    {
+      "name": "mapper-warm-base-forward",
+      "exit_code": 0,
+      "seconds": 6.663793499988969
+    },
+    {
+      "name": "mapper-warm-candidate-forward",
+      "exit_code": 0,
+      "seconds": 3.6563470999826677
+    },
+    {
+      "name": "mapper-warm-candidate-reverse",
+      "exit_code": 0,
+      "seconds": 3.6186298999818973
+    },
+    {
+      "name": "mapper-warm-base-reverse",
+      "exit_code": 0,
+      "seconds": 6.53329410002334
+    },
+    {
+      "name": "core-gate-final",
+      "exit_code": 1,
+      "seconds": 262.9613720999914
+    }
+  ],
+  "native_benchmarks": [
+    {
+      "name": "sql_server-async-final",
+      "exit_code": 0,
+      "seconds": 40.74061610002536
+    },
+    {
+      "name": "sql_server-async-final-gate",
+      "exit_code": 0
+    },
+    {
+      "name": "sql_server-streaming-final",
+      "exit_code": 0,
+      "seconds": 3.1292341999942437
+    },
+    {
+      "name": "sql_server-streaming-final-gate",
+      "exit_code": 3
+    },
+    {
+      "name": "sql_anywhere-async-final",
+      "exit_code": 0,
+      "seconds": 35.235722100012936
+    },
+    {
+      "name": "sql_anywhere-async-final-gate",
+      "exit_code": 3
+    },
+    {
+      "name": "sql_anywhere-streaming-final",
+      "exit_code": 0,
+      "seconds": 3.6283919000416063
+    },
+    {
+      "name": "sql_anywhere-streaming-final-gate",
+      "exit_code": 3
+    }
+  ],
+  "windows_matrix": {
+    "status": "pending",
+    "available_disposable_runners": 0,
+    "systems": [
+      "server2016",
+      "server2019",
+      "server2022",
+      "server2025",
+      "windows10",
+      "windows11"
+    ]
+  },
+  "evidence_archive_sha256": "5e96c95e4001b71e38147a5d7eb8c5c2b81baca6f920eda97870a10f09990d31"
+}

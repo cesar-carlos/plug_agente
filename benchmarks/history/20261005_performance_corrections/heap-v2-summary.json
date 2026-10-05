@@ -1,0 +1,114 @@
+{
+  "machine": {
+    "platform": "Windows-11-10.0.26300-SP0",
+    "machine": "AMD64",
+    "processor": "Intel64 Family 6 Model 170 Stepping 4, GenuineIntel",
+    "python_version": "3.13.14",
+    "dart_version": "Dart SDK version: 3.13.4 (stable) (Tue Sep 15 01:01:15 2026 -0700) on \"windows_x64\"",
+    "flutter_version": "Flutter 3.47.5 \u2022 channel stable \u2022 https://github.com/flutter/flutter.git\nFramework \u2022 revision 6a19cca564 (3 weeks ago) \u2022 2026-09-17 14:13:22 -0400\nEngine \u2022 hash ab598368592da0064197e2bc15c7f5b0a2c6bb1f (revision af7e796e16) (19 days ago) \u2022 2026-09-16 18:35:09.000Z\nTools \u2022 Dart 3.13.4 \u2022 DevTools 2.60.0",
+    "dependencies_sha256": "7451e384964630ab97f130643729a010303c22b5665982e1b54a514bdea1f12c",
+    "host_fingerprint": "cfdd16ebf9efdf7d0398c6297f2875e10dfd9dd1209f02961c71c93c96c39d98"
+  },
+  "baseline": {
+    "commit_sha": "bc3835070267f8d859c484125e273e2c28c6341e",
+    "source_sha256": "3f7a551d6e5425866fbea48e514d7d729e068026313da03efed1b5f4846743ab"
+  },
+  "candidate": {
+    "commit_sha": "bc3835070267f8d859c484125e273e2c28c6341e",
+    "source_sha256": "0e4844410ed0c41df217f80c662001fb54246c6f753360a685d4e26104e99a2e"
+  },
+  "native": {
+    "revision": "ea1e04f03a8cf1f2d5f3790697e8bc62ba130f89",
+    "path": "D:\\Developer\\plug_database\\plug_agente\\build\\odbc-native\\ea1e04f03a8cf1f2d5f3790697e8bc62ba130f89\\odbc_engine.dll",
+    "sha256": "c072e4693d8ffdea8b024841c80f3247f403cd329e09991200a816233cb87aff"
+  },
+  "baseline_native": {
+    "revision": "f15b33653593a6eed367fdc8ba98e80540dfe771",
+    "path": "D:\\Developer\\plug_database\\plug_agente\\build\\performance-corrections\\base\\native\\target\\release\\odbc_engine.dll",
+    "sha256": "329f1e90398c6a9d124bcc8f57b5f0f79f4f3049f0884745eb03c0c292d7348a"
+  },
+  "runs": {
+    "control-1": {
+      "seconds": 409.0333318999619,
+      "heap_growth_bytes": 2394032,
+      "post_gc_heap_bytes": [
+        97720480,
+        100114512,
+        103746624,
+        100869152,
+        99071792,
+        100939904,
+        100942384
+      ],
+      "rss_bytes": 400953344,
+      "cpu_isolates": [
+        "main",
+        "_transportWorkerMain"
+      ]
+    },
+    "control-2": {
+      "seconds": 415.3882776000537,
+      "heap_growth_bytes": 0,
+      "post_gc_heap_bytes": [
+        103531680,
+        98897248,
+        100818208,
+        100869696,
+        99072736,
+        100810192,
+        97451744
+      ],
+      "rss_bytes": 312627200,
+      "cpu_isolates": [
+        "main",
+        "_transportWorkerMain"
+      ]
+    },
+    "base": {
+      "seconds": 402.4187523999717,
+      "heap_growth_bytes": 4281600,
+      "post_gc_heap_bytes": [
+        99535008,
+        103816608,
+        100815792,
+        103799808,
+        103863552,
+        99084992,
+        103880864
+      ],
+      "rss_bytes": 412856320,
+      "cpu_isolates": [
+        "main",
+        "_transportWorkerMain"
+      ]
+    },
+    "candidate": {
+      "seconds": 436.5396139000077,
+      "heap_growth_bytes": 686704,
+      "post_gc_heap_bytes": [
+        99884864,
+        100571568,
+        103748624,
+        99028336,
+        99072896,
+        100938208,
+        99159216
+      ],
+      "rss_bytes": 325820416,
+      "cpu_isolates": [
+        "main",
+        "_transportWorkerMain"
+      ]
+    }
+  },
+  "source_unchanged": true,
+  "baseline_unchanged": true,
+  "native_unchanged": true,
+  "interrupted": false,
+  "largest_heartbeat_gap_seconds": 1.062387099955231,
+  "harness_sha256": "724632315ad9f2c9580e8376e18310deb2c5e6664b64755532a549115f6e1f17",
+  "harnesses_identical": true,
+  "baseline_native_unchanged": true,
+  "status": "inconclusive",
+  "reason": "Identical-code controls have zero versus positive initial growth; retention cycles are non-monotonic. No matching final transport timing qualification."
+}

@@ -1,0 +1,1652 @@
+{
+  "status": "inconclusive",
+  "reason": "Identical-code reverse control is unstable or incomplete",
+  "control": {
+    "status": "fail",
+    "scenarios": [
+      {
+        "case": "small_sql_repetitive",
+        "compression": "none",
+        "signed": false,
+        "send_p95_us": {
+          "base": 82,
+          "candidate": 71,
+          "limit": 86.10000000000001
+        },
+        "receive_p95_us": {
+          "base": 47,
+          "candidate": 46,
+          "limit": 49.35
+        }
+      },
+      {
+        "case": "small_sql_repetitive",
+        "compression": "none",
+        "signed": true,
+        "send_p95_us": {
+          "base": 133,
+          "candidate": 123,
+          "limit": 139.65
+        },
+        "receive_p95_us": {
+          "base": 67,
+          "candidate": 63,
+          "limit": 70.35000000000001
+        }
+      },
+      {
+        "case": "small_sql_repetitive",
+        "compression": "auto",
+        "signed": false,
+        "send_p95_us": {
+          "base": 302,
+          "candidate": 325,
+          "limit": 317.1
+        },
+        "receive_p95_us": {
+          "base": 72,
+          "candidate": 108,
+          "limit": 75.60000000000001
+        }
+      },
+      {
+        "case": "small_sql_repetitive",
+        "compression": "auto",
+        "signed": true,
+        "send_p95_us": {
+          "base": 273,
+          "candidate": 290,
+          "limit": 286.65000000000003
+        },
+        "receive_p95_us": {
+          "base": 156,
+          "candidate": 136,
+          "limit": 163.8
+        }
+      },
+      {
+        "case": "small_sql_repetitive",
+        "compression": "gzip",
+        "signed": false,
+        "send_p95_us": {
+          "base": 379,
+          "candidate": 351,
+          "limit": 397.95
+        },
+        "receive_p95_us": {
+          "base": 137,
+          "candidate": 105,
+          "limit": 143.85
+        }
+      },
+      {
+        "case": "small_sql_repetitive",
+        "compression": "gzip",
+        "signed": true,
+        "send_p95_us": {
+          "base": 277,
+          "candidate": 274,
+          "limit": 290.85
+        },
+        "receive_p95_us": {
+          "base": 141,
+          "candidate": 140,
+          "limit": 148.05
+        }
+      },
+      {
+        "case": "large_sql_low_compressibility",
+        "compression": "none",
+        "signed": false,
+        "send_p95_us": {
+          "base": 11169,
+          "candidate": 10645,
+          "limit": 11727.45
+        },
+        "receive_p95_us": {
+          "base": 12517,
+          "candidate": 10571,
+          "limit": 13142.85
+        }
+      },
+      {
+        "case": "large_sql_low_compressibility",
+        "compression": "none",
+        "signed": true,
+        "send_p95_us": {
+          "base": 10391,
+          "candidate": 11434,
+          "limit": 10910.550000000001
+        },
+        "receive_p95_us": {
+          "base": 9087,
+          "candidate": 8598,
+          "limit": 9541.35
+        }
+      },
+      {
+        "case": "large_sql_low_compressibility",
+        "compression": "auto",
+        "signed": false,
+        "send_p95_us": {
+          "base": 16944,
+          "candidate": 15736,
+          "limit": 17791.2
+        },
+        "receive_p95_us": {
+          "base": 12751,
+          "candidate": 10663,
+          "limit": 13388.550000000001
+        }
+      },
+      {
+        "case": "large_sql_low_compressibility",
+        "compression": "auto",
+        "signed": true,
+        "send_p95_us": {
+          "base": 16562,
+          "candidate": 17153,
+          "limit": 17390.100000000002
+        },
+        "receive_p95_us": {
+          "base": 9103,
+          "candidate": 7982,
+          "limit": 9558.15
+        }
+      },
+      {
+        "case": "large_sql_low_compressibility",
+        "compression": "gzip",
+        "signed": false,
+        "send_p95_us": {
+          "base": 17402,
+          "candidate": 15751,
+          "limit": 18272.100000000002
+        },
+        "receive_p95_us": {
+          "base": 12008,
+          "candidate": 10597,
+          "limit": 12608.4
+        }
+      },
+      {
+        "case": "large_sql_low_compressibility",
+        "compression": "gzip",
+        "signed": true,
+        "send_p95_us": {
+          "base": 16568,
+          "candidate": 17352,
+          "limit": 17396.4
+        },
+        "receive_p95_us": {
+          "base": 8521,
+          "candidate": 9157,
+          "limit": 8947.050000000001
+        }
+      },
+      {
+        "case": "large_incompressible_blob",
+        "compression": "none",
+        "signed": false,
+        "send_p95_us": {
+          "base": 12242,
+          "candidate": 12492,
+          "limit": 12854.1
+        },
+        "receive_p95_us": {
+          "base": 3487,
+          "candidate": 3841,
+          "limit": 3661.3500000000004
+        }
+      },
+      {
+        "case": "large_incompressible_blob",
+        "compression": "none",
+        "signed": true,
+        "send_p95_us": {
+          "base": 11898,
+          "candidate": 10934,
+          "limit": 12492.9
+        },
+        "receive_p95_us": {
+          "base": 3621,
+          "candidate": 3457,
+          "limit": 3802.05
+        }
+      },
+      {
+        "case": "large_incompressible_blob",
+        "compression": "auto",
+        "signed": false,
+        "send_p95_us": {
+          "base": 34895,
+          "candidate": 35122,
+          "limit": 36639.75
+        },
+        "receive_p95_us": {
+          "base": 12768,
+          "candidate": 11767,
+          "limit": 13406.400000000001
+        }
+      },
+      {
+        "case": "large_incompressible_blob",
+        "compression": "auto",
+        "signed": true,
+        "send_p95_us": {
+          "base": 33244,
+          "candidate": 33408,
+          "limit": 34906.200000000004
+        },
+        "receive_p95_us": {
+          "base": 9960,
+          "candidate": 9623,
+          "limit": 10458.0
+        }
+      },
+      {
+        "case": "large_incompressible_blob",
+        "compression": "gzip",
+        "signed": false,
+        "send_p95_us": {
+          "base": 33608,
+          "candidate": 36933,
+          "limit": 35288.4
+        },
+        "receive_p95_us": {
+          "base": 12269,
+          "candidate": 11780,
+          "limit": 12882.45
+        }
+      },
+      {
+        "case": "large_incompressible_blob",
+        "compression": "gzip",
+        "signed": true,
+        "send_p95_us": {
+          "base": 33665,
+          "candidate": 33543,
+          "limit": 35348.25
+        },
+        "receive_p95_us": {
+          "base": 10229,
+          "candidate": 10204,
+          "limit": 10740.45
+        }
+      }
+    ],
+    "throughput_ratio": 1.0304144820820897,
+    "rss_peak_bytes": {
+      "base": 187449344,
+      "candidate": 188293120
+    },
+    "heap_gate_evaluated": true,
+    "heap_growth_bytes": {
+      "base": 14876384,
+      "candidate": 11605104,
+      "limit": 16364022.400000002
+    },
+    "pending_metrics": [],
+    "failures": [
+      "('small_sql_repetitive', 'auto', False) send_p95_us: 325 > 317.1",
+      "('small_sql_repetitive', 'auto', False) receive_p95_us: 108 > 75.60000000000001",
+      "('small_sql_repetitive', 'auto', True) send_p95_us: 290 > 286.65000000000003",
+      "('large_sql_low_compressibility', 'none', True) send_p95_us: 11434 > 10910.550000000001",
+      "('large_sql_low_compressibility', 'gzip', True) receive_p95_us: 9157 > 8947.050000000001",
+      "('large_incompressible_blob', 'none', False) receive_p95_us: 3841 > 3661.3500000000004",
+      "('large_incompressible_blob', 'gzip', False) send_p95_us: 36933 > 35288.4"
+    ]
+  },
+  "forward": {
+    "status": "fail",
+    "scenarios": [
+      {
+        "case": "small_sql_repetitive",
+        "compression": "none",
+        "signed": false,
+        "send_p95_us": {
+          "base": 81,
+          "candidate": 69,
+          "limit": 85.05
+        },
+        "receive_p95_us": {
+          "base": 51,
+          "candidate": 30,
+          "limit": 53.550000000000004
+        }
+      },
+      {
+        "case": "small_sql_repetitive",
+        "compression": "none",
+        "signed": true,
+        "send_p95_us": {
+          "base": 103,
+          "candidate": 106,
+          "limit": 108.15
+        },
+        "receive_p95_us": {
+          "base": 61,
+          "candidate": 65,
+          "limit": 64.05
+        }
+      },
+      {
+        "case": "small_sql_repetitive",
+        "compression": "auto",
+        "signed": false,
+        "send_p95_us": {
+          "base": 347,
+          "candidate": 345,
+          "limit": 364.35
+        },
+        "receive_p95_us": {
+          "base": 103,
+          "candidate": 118,
+          "limit": 108.15
+        }
+      },
+      {
+        "case": "small_sql_repetitive",
+        "compression": "auto",
+        "signed": true,
+        "send_p95_us": {
+          "base": 247,
+          "candidate": 247,
+          "limit": 259.35
+        },
+        "receive_p95_us": {
+          "base": 118,
+          "candidate": 148,
+          "limit": 123.9
+        }
+      },
+      {
+        "case": "small_sql_repetitive",
+        "compression": "gzip",
+        "signed": false,
+        "send_p95_us": {
+          "base": 377,
+          "candidate": 293,
+          "limit": 395.85
+        },
+        "receive_p95_us": {
+          "base": 116,
+          "candidate": 89,
+          "limit": 121.80000000000001
+        }
+      },
+      {
+        "case": "small_sql_repetitive",
+        "compression": "gzip",
+        "signed": true,
+        "send_p95_us": {
+          "base": 265,
+          "candidate": 299,
+          "limit": 278.25
+        },
+        "receive_p95_us": {
+          "base": 116,
+          "candidate": 134,
+          "limit": 121.80000000000001
+        }
+      },
+      {
+        "case": "large_sql_low_compressibility",
+        "compression": "none",
+        "signed": false,
+        "send_p95_us": {
+          "base": 9838,
+          "candidate": 12648,
+          "limit": 10329.9
+        },
+        "receive_p95_us": {
+          "base": 11246,
+          "candidate": 11232,
+          "limit": 11808.300000000001
+        }
+      },
+      {
+        "case": "large_sql_low_compressibility",
+        "compression": "none",
+        "signed": true,
+        "send_p95_us": {
+          "base": 11465,
+          "candidate": 11141,
+          "limit": 12038.25
+        },
+        "receive_p95_us": {
+          "base": 9466,
+          "candidate": 8780,
+          "limit": 9939.300000000001
+        }
+      },
+      {
+        "case": "large_sql_low_compressibility",
+        "compression": "auto",
+        "signed": false,
+        "send_p95_us": {
+          "base": 18606,
+          "candidate": 15694,
+          "limit": 19536.3
+        },
+        "receive_p95_us": {
+          "base": 12008,
+          "candidate": 11216,
+          "limit": 12608.4
+        }
+      },
+      {
+        "case": "large_sql_low_compressibility",
+        "compression": "auto",
+        "signed": true,
+        "send_p95_us": {
+          "base": 15618,
+          "candidate": 16965,
+          "limit": 16398.9
+        },
+        "receive_p95_us": {
+          "base": 8562,
+          "candidate": 9305,
+          "limit": 8990.1
+        }
+      },
+      {
+        "case": "large_sql_low_compressibility",
+        "compression": "gzip",
+        "signed": false,
+        "send_p95_us": {
+          "base": 15246,
+          "candidate": 18747,
+          "limit": 16008.300000000001
+        },
+        "receive_p95_us": {
+          "base": 10858,
+          "candidate": 12348,
+          "limit": 11400.9
+        }
+      },
+      {
+        "case": "large_sql_low_compressibility",
+        "compression": "gzip",
+        "signed": true,
+        "send_p95_us": {
+          "base": 15360,
+          "candidate": 16315,
+          "limit": 16128.0
+        },
+        "receive_p95_us": {
+          "base": 7836,
+          "candidate": 8607,
+          "limit": 8227.800000000001
+        }
+      },
+      {
+        "case": "large_incompressible_blob",
+        "compression": "none",
+        "signed": false,
+        "send_p95_us": {
+          "base": 12236,
+          "candidate": 12372,
+          "limit": 12847.800000000001
+        },
+        "receive_p95_us": {
+          "base": 4005,
+          "candidate": 3513,
+          "limit": 4205.25
+        }
+      },
+      {
+        "case": "large_incompressible_blob",
+        "compression": "none",
+        "signed": true,
+        "send_p95_us": {
+          "base": 11820,
+          "candidate": 11972,
+          "limit": 12411.0
+        },
+        "receive_p95_us": {
+          "base": 3174,
+          "candidate": 3439,
+          "limit": 3332.7000000000003
+        }
+      },
+      {
+        "case": "large_incompressible_blob",
+        "compression": "auto",
+        "signed": false,
+        "send_p95_us": {
+          "base": 32614,
+          "candidate": 34489,
+          "limit": 34244.700000000004
+        },
+        "receive_p95_us": {
+          "base": 11063,
+          "candidate": 12379,
+          "limit": 11616.15
+        }
+      },
+      {
+        "case": "large_incompressible_blob",
+        "compression": "auto",
+        "signed": true,
+        "send_p95_us": {
+          "base": 33307,
+          "candidate": 32842,
+          "limit": 34972.35
+        },
+        "receive_p95_us": {
+          "base": 10426,
+          "candidate": 9644,
+          "limit": 10947.300000000001
+        }
+      },
+      {
+        "case": "large_incompressible_blob",
+        "compression": "gzip",
+        "signed": false,
+        "send_p95_us": {
+          "base": 34030,
+          "candidate": 34882,
+          "limit": 35731.5
+        },
+        "receive_p95_us": {
+          "base": 11519,
+          "candidate": 11658,
+          "limit": 12094.95
+        }
+      },
+      {
+        "case": "large_incompressible_blob",
+        "compression": "gzip",
+        "signed": true,
+        "send_p95_us": {
+          "base": 33931,
+          "candidate": 34643,
+          "limit": 35627.55
+        },
+        "receive_p95_us": {
+          "base": 10220,
+          "candidate": 10440,
+          "limit": 10731.0
+        }
+      }
+    ],
+    "throughput_ratio": 0.9724551865405634,
+    "rss_peak_bytes": {
+      "base": 194105344,
+      "candidate": 193888256
+    },
+    "heap_gate_evaluated": true,
+    "heap_growth_bytes": {
+      "base": 14904016,
+      "candidate": 11233600,
+      "limit": 16394417.600000001
+    },
+    "pending_metrics": [],
+    "failures": [
+      "('small_sql_repetitive', 'none', True) receive_p95_us: 65 > 64.05",
+      "('small_sql_repetitive', 'auto', False) receive_p95_us: 118 > 108.15",
+      "('small_sql_repetitive', 'auto', True) receive_p95_us: 148 > 123.9",
+      "('small_sql_repetitive', 'gzip', True) send_p95_us: 299 > 278.25",
+      "('small_sql_repetitive', 'gzip', True) receive_p95_us: 134 > 121.80000000000001",
+      "('large_sql_low_compressibility', 'none', False) send_p95_us: 12648 > 10329.9",
+      "('large_sql_low_compressibility', 'auto', True) send_p95_us: 16965 > 16398.9",
+      "('large_sql_low_compressibility', 'auto', True) receive_p95_us: 9305 > 8990.1",
+      "('large_sql_low_compressibility', 'gzip', False) send_p95_us: 18747 > 16008.300000000001",
+      "('large_sql_low_compressibility', 'gzip', False) receive_p95_us: 12348 > 11400.9",
+      "('large_sql_low_compressibility', 'gzip', True) send_p95_us: 16315 > 16128.0",
+      "('large_sql_low_compressibility', 'gzip', True) receive_p95_us: 8607 > 8227.800000000001",
+      "('large_incompressible_blob', 'none', True) receive_p95_us: 3439 > 3332.7000000000003",
+      "('large_incompressible_blob', 'auto', False) send_p95_us: 34489 > 34244.700000000004",
+      "('large_incompressible_blob', 'auto', False) receive_p95_us: 12379 > 11616.15"
+    ]
+  },
+  "reverse": {
+    "status": "fail",
+    "scenarios": [
+      {
+        "case": "small_sql_repetitive",
+        "compression": "none",
+        "signed": false,
+        "send_p95_us": {
+          "base": 82,
+          "candidate": 89,
+          "limit": 86.10000000000001
+        },
+        "receive_p95_us": {
+          "base": 44,
+          "candidate": 49,
+          "limit": 46.2
+        }
+      },
+      {
+        "case": "small_sql_repetitive",
+        "compression": "none",
+        "signed": true,
+        "send_p95_us": {
+          "base": 128,
+          "candidate": 125,
+          "limit": 134.4
+        },
+        "receive_p95_us": {
+          "base": 69,
+          "candidate": 76,
+          "limit": 72.45
+        }
+      },
+      {
+        "case": "small_sql_repetitive",
+        "compression": "auto",
+        "signed": false,
+        "send_p95_us": {
+          "base": 395,
+          "candidate": 366,
+          "limit": 414.75
+        },
+        "receive_p95_us": {
+          "base": 114,
+          "candidate": 95,
+          "limit": 119.7
+        }
+      },
+      {
+        "case": "small_sql_repetitive",
+        "compression": "auto",
+        "signed": true,
+        "send_p95_us": {
+          "base": 301,
+          "candidate": 272,
+          "limit": 316.05
+        },
+        "receive_p95_us": {
+          "base": 148,
+          "candidate": 132,
+          "limit": 155.4
+        }
+      },
+      {
+        "case": "small_sql_repetitive",
+        "compression": "gzip",
+        "signed": false,
+        "send_p95_us": {
+          "base": 374,
+          "candidate": 361,
+          "limit": 392.7
+        },
+        "receive_p95_us": {
+          "base": 112,
+          "candidate": 102,
+          "limit": 117.60000000000001
+        }
+      },
+      {
+        "case": "small_sql_repetitive",
+        "compression": "gzip",
+        "signed": true,
+        "send_p95_us": {
+          "base": 282,
+          "candidate": 293,
+          "limit": 296.1
+        },
+        "receive_p95_us": {
+          "base": 127,
+          "candidate": 131,
+          "limit": 133.35
+        }
+      },
+      {
+        "case": "large_sql_low_compressibility",
+        "compression": "none",
+        "signed": false,
+        "send_p95_us": {
+          "base": 13107,
+          "candidate": 12000,
+          "limit": 13762.35
+        },
+        "receive_p95_us": {
+          "base": 12556,
+          "candidate": 11036,
+          "limit": 13183.800000000001
+        }
+      },
+      {
+        "case": "large_sql_low_compressibility",
+        "compression": "none",
+        "signed": true,
+        "send_p95_us": {
+          "base": 12289,
+          "candidate": 11526,
+          "limit": 12903.45
+        },
+        "receive_p95_us": {
+          "base": 9458,
+          "candidate": 9648,
+          "limit": 9930.9
+        }
+      },
+      {
+        "case": "large_sql_low_compressibility",
+        "compression": "auto",
+        "signed": false,
+        "send_p95_us": {
+          "base": 18296,
+          "candidate": 15971,
+          "limit": 19210.8
+        },
+        "receive_p95_us": {
+          "base": 12575,
+          "candidate": 11655,
+          "limit": 13203.75
+        }
+      },
+      {
+        "case": "large_sql_low_compressibility",
+        "compression": "auto",
+        "signed": true,
+        "send_p95_us": {
+          "base": 17197,
+          "candidate": 16935,
+          "limit": 18056.850000000002
+        },
+        "receive_p95_us": {
+          "base": 8972,
+          "candidate": 9484,
+          "limit": 9420.6
+        }
+      },
+      {
+        "case": "large_sql_low_compressibility",
+        "compression": "gzip",
+        "signed": false,
+        "send_p95_us": {
+          "base": 15809,
+          "candidate": 16724,
+          "limit": 16599.45
+        },
+        "receive_p95_us": {
+          "base": 11004,
+          "candidate": 11603,
+          "limit": 11554.2
+        }
+      },
+      {
+        "case": "large_sql_low_compressibility",
+        "compression": "gzip",
+        "signed": true,
+        "send_p95_us": {
+          "base": 17339,
+          "candidate": 16852,
+          "limit": 18205.95
+        },
+        "receive_p95_us": {
+          "base": 8680,
+          "candidate": 8680,
+          "limit": 9114.0
+        }
+      },
+      {
+        "case": "large_incompressible_blob",
+        "compression": "none",
+        "signed": false,
+        "send_p95_us": {
+          "base": 12548,
+          "candidate": 11931,
+          "limit": 13175.400000000001
+        },
+        "receive_p95_us": {
+          "base": 3802,
+          "candidate": 3616,
+          "limit": 3992.1000000000004
+        }
+      },
+      {
+        "case": "large_incompressible_blob",
+        "compression": "none",
+        "signed": true,
+        "send_p95_us": {
+          "base": 12823,
+          "candidate": 10554,
+          "limit": 13464.150000000001
+        },
+        "receive_p95_us": {
+          "base": 3622,
+          "candidate": 3110,
+          "limit": 3803.1000000000004
+        }
+      },
+      {
+        "case": "large_incompressible_blob",
+        "compression": "auto",
+        "signed": false,
+        "send_p95_us": {
+          "base": 34194,
+          "candidate": 35154,
+          "limit": 35903.700000000004
+        },
+        "receive_p95_us": {
+          "base": 12165,
+          "candidate": 12944,
+          "limit": 12773.25
+        }
+      },
+      {
+        "case": "large_incompressible_blob",
+        "compression": "auto",
+        "signed": true,
+        "send_p95_us": {
+          "base": 31766,
+          "candidate": 33684,
+          "limit": 33354.3
+        },
+        "receive_p95_us": {
+          "base": 10091,
+          "candidate": 10698,
+          "limit": 10595.550000000001
+        }
+      },
+      {
+        "case": "large_incompressible_blob",
+        "compression": "gzip",
+        "signed": false,
+        "send_p95_us": {
+          "base": 35848,
+          "candidate": 33659,
+          "limit": 37640.4
+        },
+        "receive_p95_us": {
+          "base": 12687,
+          "candidate": 11976,
+          "limit": 13321.35
+        }
+      },
+      {
+        "case": "large_incompressible_blob",
+        "compression": "gzip",
+        "signed": true,
+        "send_p95_us": {
+          "base": 32017,
+          "candidate": 33800,
+          "limit": 33617.85
+        },
+        "receive_p95_us": {
+          "base": 9653,
+          "candidate": 10373,
+          "limit": 10135.65
+        }
+      }
+    ],
+    "throughput_ratio": 0.9877105169363888,
+    "rss_peak_bytes": {
+      "base": 188055552,
+      "candidate": 194580480
+    },
+    "heap_gate_evaluated": true,
+    "heap_growth_bytes": {
+      "base": 14904016,
+      "candidate": 11233600,
+      "limit": 16394417.600000001
+    },
+    "pending_metrics": [],
+    "failures": [
+      "('small_sql_repetitive', 'none', False) send_p95_us: 89 > 86.10000000000001",
+      "('small_sql_repetitive', 'none', False) receive_p95_us: 49 > 46.2",
+      "('small_sql_repetitive', 'none', True) receive_p95_us: 76 > 72.45",
+      "('large_sql_low_compressibility', 'auto', True) receive_p95_us: 9484 > 9420.6",
+      "('large_sql_low_compressibility', 'gzip', False) send_p95_us: 16724 > 16599.45",
+      "('large_sql_low_compressibility', 'gzip', False) receive_p95_us: 11603 > 11554.2",
+      "('large_incompressible_blob', 'auto', False) receive_p95_us: 12944 > 12773.25",
+      "('large_incompressible_blob', 'auto', True) send_p95_us: 33684 > 33354.3",
+      "('large_incompressible_blob', 'auto', True) receive_p95_us: 10698 > 10595.550000000001",
+      "('large_incompressible_blob', 'gzip', True) send_p95_us: 33800 > 33617.85",
+      "('large_incompressible_blob', 'gzip', True) receive_p95_us: 10373 > 10135.65"
+    ]
+  },
+  "control_reverse": {
+    "status": "fail",
+    "scenarios": [
+      {
+        "case": "small_sql_repetitive",
+        "compression": "none",
+        "signed": false,
+        "send_p95_us": {
+          "base": 71,
+          "candidate": 82,
+          "limit": 74.55
+        },
+        "receive_p95_us": {
+          "base": 46,
+          "candidate": 47,
+          "limit": 48.300000000000004
+        }
+      },
+      {
+        "case": "small_sql_repetitive",
+        "compression": "none",
+        "signed": true,
+        "send_p95_us": {
+          "base": 123,
+          "candidate": 133,
+          "limit": 129.15
+        },
+        "receive_p95_us": {
+          "base": 63,
+          "candidate": 67,
+          "limit": 66.15
+        }
+      },
+      {
+        "case": "small_sql_repetitive",
+        "compression": "auto",
+        "signed": false,
+        "send_p95_us": {
+          "base": 325,
+          "candidate": 302,
+          "limit": 341.25
+        },
+        "receive_p95_us": {
+          "base": 108,
+          "candidate": 72,
+          "limit": 113.4
+        }
+      },
+      {
+        "case": "small_sql_repetitive",
+        "compression": "auto",
+        "signed": true,
+        "send_p95_us": {
+          "base": 290,
+          "candidate": 273,
+          "limit": 304.5
+        },
+        "receive_p95_us": {
+          "base": 136,
+          "candidate": 156,
+          "limit": 142.8
+        }
+      },
+      {
+        "case": "small_sql_repetitive",
+        "compression": "gzip",
+        "signed": false,
+        "send_p95_us": {
+          "base": 351,
+          "candidate": 379,
+          "limit": 368.55
+        },
+        "receive_p95_us": {
+          "base": 105,
+          "candidate": 137,
+          "limit": 110.25
+        }
+      },
+      {
+        "case": "small_sql_repetitive",
+        "compression": "gzip",
+        "signed": true,
+        "send_p95_us": {
+          "base": 274,
+          "candidate": 277,
+          "limit": 287.7
+        },
+        "receive_p95_us": {
+          "base": 140,
+          "candidate": 141,
+          "limit": 147.0
+        }
+      },
+      {
+        "case": "large_sql_low_compressibility",
+        "compression": "none",
+        "signed": false,
+        "send_p95_us": {
+          "base": 10645,
+          "candidate": 11169,
+          "limit": 11177.25
+        },
+        "receive_p95_us": {
+          "base": 10571,
+          "candidate": 12517,
+          "limit": 11099.550000000001
+        }
+      },
+      {
+        "case": "large_sql_low_compressibility",
+        "compression": "none",
+        "signed": true,
+        "send_p95_us": {
+          "base": 11434,
+          "candidate": 10391,
+          "limit": 12005.7
+        },
+        "receive_p95_us": {
+          "base": 8598,
+          "candidate": 9087,
+          "limit": 9027.9
+        }
+      },
+      {
+        "case": "large_sql_low_compressibility",
+        "compression": "auto",
+        "signed": false,
+        "send_p95_us": {
+          "base": 15736,
+          "candidate": 16944,
+          "limit": 16522.8
+        },
+        "receive_p95_us": {
+          "base": 10663,
+          "candidate": 12751,
+          "limit": 11196.15
+        }
+      },
+      {
+        "case": "large_sql_low_compressibility",
+        "compression": "auto",
+        "signed": true,
+        "send_p95_us": {
+          "base": 17153,
+          "candidate": 16562,
+          "limit": 18010.65
+        },
+        "receive_p95_us": {
+          "base": 7982,
+          "candidate": 9103,
+          "limit": 8381.1
+        }
+      },
+      {
+        "case": "large_sql_low_compressibility",
+        "compression": "gzip",
+        "signed": false,
+        "send_p95_us": {
+          "base": 15751,
+          "candidate": 17402,
+          "limit": 16538.55
+        },
+        "receive_p95_us": {
+          "base": 10597,
+          "candidate": 12008,
+          "limit": 11126.85
+        }
+      },
+      {
+        "case": "large_sql_low_compressibility",
+        "compression": "gzip",
+        "signed": true,
+        "send_p95_us": {
+          "base": 17352,
+          "candidate": 16568,
+          "limit": 18219.600000000002
+        },
+        "receive_p95_us": {
+          "base": 9157,
+          "candidate": 8521,
+          "limit": 9614.85
+        }
+      },
+      {
+        "case": "large_incompressible_blob",
+        "compression": "none",
+        "signed": false,
+        "send_p95_us": {
+          "base": 12492,
+          "candidate": 12242,
+          "limit": 13116.6
+        },
+        "receive_p95_us": {
+          "base": 3841,
+          "candidate": 3487,
+          "limit": 4033.05
+        }
+      },
+      {
+        "case": "large_incompressible_blob",
+        "compression": "none",
+        "signed": true,
+        "send_p95_us": {
+          "base": 10934,
+          "candidate": 11898,
+          "limit": 11480.7
+        },
+        "receive_p95_us": {
+          "base": 3457,
+          "candidate": 3621,
+          "limit": 3629.8500000000004
+        }
+      },
+      {
+        "case": "large_incompressible_blob",
+        "compression": "auto",
+        "signed": false,
+        "send_p95_us": {
+          "base": 35122,
+          "candidate": 34895,
+          "limit": 36878.1
+        },
+        "receive_p95_us": {
+          "base": 11767,
+          "candidate": 12768,
+          "limit": 12355.35
+        }
+      },
+      {
+        "case": "large_incompressible_blob",
+        "compression": "auto",
+        "signed": true,
+        "send_p95_us": {
+          "base": 33408,
+          "candidate": 33244,
+          "limit": 35078.4
+        },
+        "receive_p95_us": {
+          "base": 9623,
+          "candidate": 9960,
+          "limit": 10104.15
+        }
+      },
+      {
+        "case": "large_incompressible_blob",
+        "compression": "gzip",
+        "signed": false,
+        "send_p95_us": {
+          "base": 36933,
+          "candidate": 33608,
+          "limit": 38779.65
+        },
+        "receive_p95_us": {
+          "base": 11780,
+          "candidate": 12269,
+          "limit": 12369.0
+        }
+      },
+      {
+        "case": "large_incompressible_blob",
+        "compression": "gzip",
+        "signed": true,
+        "send_p95_us": {
+          "base": 33543,
+          "candidate": 33665,
+          "limit": 35220.15
+        },
+        "receive_p95_us": {
+          "base": 10204,
+          "candidate": 10229,
+          "limit": 10714.2
+        }
+      }
+    ],
+    "throughput_ratio": 0.9704832544466637,
+    "rss_peak_bytes": {
+      "base": 188293120,
+      "candidate": 187449344
+    },
+    "heap_gate_evaluated": true,
+    "heap_growth_bytes": {
+      "base": 11605104,
+      "candidate": 14876384,
+      "limit": 12765614.4
+    },
+    "pending_metrics": [],
+    "failures": [
+      "('small_sql_repetitive', 'none', False) send_p95_us: 82 > 74.55",
+      "('small_sql_repetitive', 'none', True) send_p95_us: 133 > 129.15",
+      "('small_sql_repetitive', 'none', True) receive_p95_us: 67 > 66.15",
+      "('small_sql_repetitive', 'auto', True) receive_p95_us: 156 > 142.8",
+      "('small_sql_repetitive', 'gzip', False) send_p95_us: 379 > 368.55",
+      "('small_sql_repetitive', 'gzip', False) receive_p95_us: 137 > 110.25",
+      "('large_sql_low_compressibility', 'none', False) receive_p95_us: 12517 > 11099.550000000001",
+      "('large_sql_low_compressibility', 'none', True) receive_p95_us: 9087 > 9027.9",
+      "('large_sql_low_compressibility', 'auto', False) send_p95_us: 16944 > 16522.8",
+      "('large_sql_low_compressibility', 'auto', False) receive_p95_us: 12751 > 11196.15",
+      "('large_sql_low_compressibility', 'auto', True) receive_p95_us: 9103 > 8381.1",
+      "('large_sql_low_compressibility', 'gzip', False) send_p95_us: 17402 > 16538.55",
+      "('large_sql_low_compressibility', 'gzip', False) receive_p95_us: 12008 > 11126.85",
+      "('large_incompressible_blob', 'none', True) send_p95_us: 11898 > 11480.7",
+      "('large_incompressible_blob', 'auto', False) receive_p95_us: 12768 > 12355.35",
+      "Heap growth exceeds 110% of base"
+    ]
+  },
+  "base": {
+    "commit_sha": "bc3835070267f8d859c484125e273e2c28c6341e",
+    "source_sha256": "3f7a551d6e5425866fbea48e514d7d729e068026313da03efed1b5f4846743ab"
+  },
+  "candidate": {
+    "commit_sha": "bc3835070267f8d859c484125e273e2c28c6341e",
+    "source_sha256": "a050b1c7bdb89253ba4ea3bf89ee25fd5e31d9c4b32ad0b236bdcc2aa1920dcc"
+  },
+  "dependencies": {
+    "base": {
+      "_fe_analyzer_shared": "dependency: transitive\ndescription:\nname: _fe_analyzer_shared\nsha256: \"1b0e6a07425a3e460666e88bf1c949ccc7bb0116ad562ce94a1eca60fe820725\"\nurl: \"https://pub.dev\"\nsource: hosted\nversion: \"103.0.0\"",
+      "analyzer": "dependency: transitive\ndescription:\nname: analyzer\nsha256: \"61c04d0c1bfed555c681ea079519933f071a5a026578ff73c4ff0df2d3462e5e\"\nurl: \"https://pub.dev\"\nsource: hosted\nversion: \"13.3.0\"",
+      "android_file_picker": "dependency: transitive\ndescription:\nname: android_file_picker\nsha256: \"14ab27769b54c48d5a8a71aa9858372b7a3ae77572ea0a8aee744643c5d8c53d\"\nurl: \"https://pub.dev\"\nsource: hosted\nversion: \"2.0.0\"",
+      "archive": "dependency: \"direct main\"\ndescription:\nname: archive\nsha256: \"6c5bcd986e06b94e3c40244af471750840a3d2341d1f9763a1100a14add517b4\"\nurl: \"https://pub.dev\"\nsource: hosted\nversion: \"4.3.0\"",
+      "args": "dependency: transitive\ndescription:\nname: args\nsha256: d0481093c50b1da8910eb0bb301626d4d8eb7284aa739614d2b394ee09e3ea04\nurl: \"https://pub.dev\"\nsource: hosted\nversion: \"2.7.0\"",
+      "asn1lib": "dependency: transitive\ndescription:\nname: asn1lib\nsha256: \"9a8f69025044eb466b9b60ef3bc3ac99b4dc6c158ae9c56d25eeccf5bc56d024\"\nurl: \"https://pub.dev\"\nsource: hosted\nversion: \"1.6.5\"",
+      "async": "dependency: transitive\ndescription:\nname: async\nsha256: e2eb0491ba5ddb6177742d2da23904574082139b07c1e33b8503b9f46f3e1a37\nurl: \"https://pub.dev\"\nsource: hosted\nversion: \"2.13.1\"",
+      "auto_updater": "dependency: \"direct main\"\ndescription:\nname: auto_updater\nsha256: \"74fd008b021d15e4fc50fb5f1923870e6374ae831bb1168241c23bc35a4e898b\"\nurl: \"https://pub.dev\"\nsource: hosted\nversion: \"1.0.0\"",
+      "auto_updater_macos": "dependency: transitive\ndescription:\nname: auto_updater_macos\nsha256: ef9de0daf38d782d2243fe131503a9404d62df762f5386e5360020e43c01867f\nurl: \"https://pub.dev\"\nsource: hosted\nversion: \"1.0.0\"",
+      "auto_updater_platform_interface": "dependency: transitive\ndescription:\nname: auto_updater_platform_interface\nsha256: ed5dff8cea18c58bc5ac787ff9122fedd1644272e02015d28c9b592f8078c5dc\nurl: \"https://pub.dev\"\nsource: hosted\nversion: \"1.0.0\"",
+      "auto_updater_windows": "dependency: transitive\ndescription:\nname: auto_updater_windows\nsha256: \"2bba20a71eee072f49b7267fedd5c4f1406c4b1b1e5b83932c634dbab75b80c9\"\nurl: \"https://pub.dev\"\nsource: hosted\nversion: \"1.0.0\"",
+      "boolean_selector": "dependency: transitive\ndescription:\nname: boolean_selector\nsha256: \"8aab1771e1243a5063b8b0ff68042d67334e3feab9e95b9490f9a6ebf73b42ea\"\nurl: \"https://pub.dev\"\nsource: hosted\nversion: \"2.1.2\"",
+      "brasil_fields": "dependency: \"direct main\"\ndescription:\nname: brasil_fields\nsha256: \"2020cd18d5b83131debc1b5ff2a6f9eb579eb43ed935dc68f093beee5a504730\"\nurl: \"https://pub.dev\"\nsource: hosted\nversion: \"1.21.1\"",
+      "build": "dependency: transitive\ndescription:\nname: build\nsha256: \"8a5c5761af8e31748bba3c82f68925ace40f3225c3eea25be9beb57eca7cd7a8\"\nurl: \"https://pub.dev\"\nsource: hosted\nversion: \"4.0.11\"",
+      "build_config": "dependency: transitive\ndescription:\nname: build_config\nsha256: d466ed2dc9c6cd1d169948879b84ee061eb5e22c64a7c6089879c6296d272a8d\nurl: \"https://pub.dev\"\nsource: hosted\nversion: \"1.3.3\"",
+      "build_daemon": "dependency: transitive\ndescription:\nname: build_daemon\nsha256: e1d40ef3f7934986d5da2271b1ba07794921ce263e44d622fb6c406d76589e33\nurl: \"https://pub.dev\"\nsource: hosted\nversion: \"4.1.6\"",
+      "build_runner": "dependency: \"direct dev\"\ndescription:\nname: build_runner\nsha256: \"894c243f6bc32015fec466ce30a6925bd537a77a426ee5bf481120477eb3de67\"\nurl: \"https://pub.dev\"\nsource: hosted\nversion: \"2.16.1\"",
+      "built_collection": "dependency: transitive\ndescription:\nname: built_collection\nsha256: \"376e3dd27b51ea877c28d525560790aee2e6fbb5f20e2f85d5081027d94e2100\"\nurl: \"https://pub.dev\"\nsource: hosted\nversion: \"5.1.1\"",
+      "built_value": "dependency: transitive\ndescription:\nname: built_value\nsha256: f87ea98192116f7093cb214551ce1929caae0681fdba282b3d8b4462adee7bb7\nurl: \"https://pub.dev\"\nsource: hosted\nversion: \"8.13.0\"",
+      "characters": "dependency: transitive\ndescription:\nname: characters\nsha256: faf38497bda5ead2a8c7615f4f7939df04333478bf32e4173fcb06d428b5716b\nurl: \"https://pub.dev\"\nsource: hosted\nversion: \"1.4.1\"",
+      "charcode": "dependency: transitive\ndescription:\nname: charcode\nsha256: fb0f1107cac15a5ea6ef0a6ef71a807b9e4267c713bb93e00e92d737cc8dbd8a\nurl: \"https://pub.dev\"\nsource: hosted\nversion: \"1.4.0\"",
+      "checked_yaml": "dependency: transitive\ndescription:\nname: checked_yaml\nsha256: \"959525d3162f249993882720d52b7e0c833978df229be20702b33d48d91de70f\"\nurl: \"https://pub.dev\"\nsource: hosted\nversion: \"2.0.4\"",
+      "checks": "dependency: \"direct dev\"\ndescription:\nname: checks\nsha256: \"9c360a078576950976c9045fe28392dfb5f3b0b648ae897e8c1fe307a6ffbed2\"\nurl: \"https://pub.dev\"\nsource: hosted\nversion: \"0.3.2\"",
+      "cli_config": "dependency: transitive\ndescription:\nname: cli_config\nsha256: ac20a183a07002b700f0c25e61b7ee46b23c309d76ab7b7640a028f18e4d99ec\nurl: \"https://pub.dev\"\nsource: hosted\nversion: \"0.2.0\"",
+      "cli_util": "dependency: transitive\ndescription:\nname: cli_util\nsha256: ff6785f7e9e3c38ac98b2fb035701789de90154024a75b6cb926445e83197d1c\nurl: \"https://pub.dev\"\nsource: hosted\nversion: \"0.4.2\"",
+      "clock": "dependency: transitive\ndescription:\nname: clock\nsha256: e51d50bca3217c9a9fa2b41a30e4a38971133f5f9ec7a3d57bae095007f1d28e\nurl: \"https://pub.dev\"\nsource: hosted\nversion: \"1.1.3\"",
+      "cnativeapi": "dependency: transitive\ndescription:\nname: cnativeapi\nsha256: \"43fce94bdf2f60e15bb7b0ef7b78b60fc0758e5463817fa17c5fb59f149566dd\"\nurl: \"https://pub.dev\"\nsource: hosted\nversion: \"0.3.0\"",
+      "code_assets": "dependency: transitive\ndescription:\nname: code_assets\nsha256: bf394f466ba9205f1812a0433b392d6af280f155f56651eda7c18cc32ed493b8\nurl: \"https://pub.dev\"\nsource: hosted\nversion: \"1.2.1\"",
+      "collection": "dependency: \"direct main\"\ndescription:\nname: collection\nsha256: \"2f5709ae4d3d59dd8f7cd309b4e023046b57d8a6c82130785d2b0e5868084e76\"\nurl: \"https://pub.dev\"\nsource: hosted\nversion: \"1.19.1\"",
+      "convert": "dependency: transitive\ndescription:\nname: convert\nsha256: b30acd5944035672bc15c6b7a8b47d773e41e2f17de064350988c5d02adb1c68\nurl: \"https://pub.dev\"\nsource: hosted\nversion: \"3.1.2\"",
+      "coverage": "dependency: transitive\ndescription:\nname: coverage\nsha256: \"956a3de0725ca232ad353565a8290d3357592bf4250f6f298a185e2d949c5d3d\"\nurl: \"https://pub.dev\"\nsource: hosted\nversion: \"1.15.1\"",
+      "cross_file": "dependency: transitive\ndescription:\nname: cross_file\nsha256: f141ea4f277af142a0356955707f6556f37b03947d39d55585981a06ca437bd6\nurl: \"https://pub.dev\"\nsource: hosted\nversion: \"0.3.5+5\"",
+      "crypto": "dependency: \"direct main\"\ndescription:\nname: crypto\nsha256: c8ea0233063ba03258fbcf2ca4d6dadfefe14f02fab57702265467a19f27fadf\nurl: \"https://pub.dev\"\nsource: hosted\nversion: \"3.0.7\"",
+      "crypto_keys": "dependency: transitive\ndescription:\nname: crypto_keys\nsha256: \"6e473fff865ec757174dcc585d6eaa7f5f40bf3cb58f444ec5ab4a01e9083cf9\"\nurl: \"https://pub.dev\"\nsource: hosted\nversion: \"0.3.1\"",
+      "cryptography": "dependency: \"direct main\"\ndescription:\nname: cryptography\nsha256: \"3eda3029d34ec9095a27a198ac9785630fe525c0eb6a49f3d575272f8e792ef0\"\nurl: \"https://pub.dev\"\nsource: hosted\nversion: \"2.9.0\"",
+      "cupertino_icons": "dependency: \"direct main\"\ndescription:\nname: cupertino_icons\nsha256: \"41e005c33bd814be4d3096aff55b1908d419fde52ca656c8c47719ec745873cd\"\nurl: \"https://pub.dev\"\nsource: hosted\nversion: \"1.0.9\"",
+      "cupertino_ui": "dependency: transitive\ndescription:\nname: cupertino_ui\nsha256: c23816577a1280cff409e989541767887011f8f1d8c1863a794ed308af46f2a9\nurl: \"https://pub.dev\"\nsource: hosted\nversion: \"1.1.1\"",
+      "dart_style": "dependency: transitive\ndescription:\nname: dart_style\nsha256: \"82ade9fc4273f29ed673e33166944465225b4f7fc5d4aaef48605cc751c18fc1\"\nurl: \"https://pub.dev\"\nsource: hosted\nversion: \"3.1.13\"",
+      "dbus": "dependency: transitive\ndescription:\nname: dbus\nsha256: a48d5da28e89bd02196e80d81ed8d7954923d00a0f4a68cc20b575038f023383\nurl: \"https://pub.dev\"\nsource: hosted\nversion: \"0.7.15\"",
+      "dio": "dependency: \"direct main\"\ndescription:\nname: dio\nsha256: \"852ec3b48cc431ac04fff978413c541502b67ffc3e26921e74e3d994694192c1\"\nurl: \"https://pub.dev\"\nsource: hosted\nversion: \"5.11.1\"",
+      "dio_web_adapter": "dependency: transitive\ndescription:\nname: dio_web_adapter\nsha256: \"3a1b2cd7be71086f38504956e3ebcd2837288d231ff454bafa78021244102bfc\"\nurl: \"https://pub.dev\"\nsource: hosted\nversion: \"2.2.2\"",
+      "dotenv": "dependency: transitive\ndescription:\nname: dotenv\nsha256: \"379e64b6fc82d3df29461d349a1796ecd2c436c480d4653f3af6872eccbc90e1\"\nurl: \"https://pub.dev\"\nsource: hosted\nversion: \"4.2.0\"",
+      "drift": "dependency: \"direct main\"\ndescription:\nname: drift\nsha256: e3b6352aa02e60bed6ffc3cc9894c421578dad5fbef21b1f7f57cdc0e4edabcb\nurl: \"https://pub.dev\"\nsource: hosted\nversion: \"2.35.0\"",
+      "drift_dev": "dependency: \"direct dev\"\ndescription:\nname: drift_dev\nsha256: fbad5c1e3a73820cdb1f32161eb2f40bb5e5f03c0c1a3d236595725aec7efc6d\nurl: \"https://pub.dev\"\nsource: hosted\nversion: \"2.35.0\"",
+      "equatable": "dependency: transitive\ndescription:\nname: equatable\nsha256: \"3bce007a596ff8b3119c45d68aaef631272537c03d30e5d4534dd24bf4c5eaa2\"\nurl: \"https://pub.dev\"\nsource: hosted\nversion: \"2.1.0\"",
+      "fake_async": "dependency: \"direct dev\"\ndescription:\nname: fake_async\nsha256: \"5368f224a74523e8d2e7399ea1638b37aecfca824a3cc4dfdf77bf1fa905ac44\"\nurl: \"https://pub.dev\"\nsource: hosted\nversion: \"1.3.3\"",
+      "ffi": "dependency: \"direct main\"\ndescription:\nname: ffi\nsha256: \"6d7fd89431262d8f3125e81b50d3847a091d846eafcd4fdb88dd06f36d705a45\"\nurl: \"https://pub.dev\"\nsource: hosted\nversion: \"2.2.0\"",
+      "ffi_leak_tracker": "dependency: transitive\ndescription:\nname: ffi_leak_tracker\nsha256: \"4093d4ef9ca06ffe2786e73bfb25e22aa92112b9bb4ec941f11e3e6b61489a97\"\nurl: \"https://pub.dev\"\nsource: hosted\nversion: \"0.1.2\"",
+      "file": "dependency: transitive\ndescription:\nname: file\nsha256: a3b4f84adafef897088c160faf7dfffb7696046cb13ae90b508c2cbc95d3b8d4\nurl: \"https://pub.dev\"\nsource: hosted\nversion: \"7.0.1\"",
+      "file_picker": "dependency: \"direct main\"\ndescription:\nname: file_picker\nsha256: \"98c0b156b6380ba55bc767a14e2e6b3feb246e713ad40092424596fa79005bea\"\nurl: \"https://pub.dev\"\nsource: hosted\nversion: \"13.1.0\"",
+      "file_picker_darwin": "dependency: transitive\ndescription:\nname: file_picker_darwin\nsha256: \"51aef9f4c80449c736e7cc02198675fda73689f0bd45a84da642cfeab0250d46\"\nurl: \"https://pub.dev\"\nsource: hosted\nversion: \"2.1.2\"",
+      "file_picker_linux": "dependency: transitive\ndescription:\nname: file_picker_linux\nsha256: e7db600f50672ce5ebbe422ac0906e0f3d2a476188cc93e7126afee12bf08063\nurl: \"https://pub.dev\"\nsource: hosted\nversion: \"2.0.0\"",
+      "file_picker_platform_interface": "dependency: transitive\ndescription:\nname: file_picker_platform_interface\nsha256: bbdc085a6f168e63f147e9ce8988f79fa0800a58e7f25a48f762c60837107ba5\nurl: \"https://pub.dev\"\nsource: hosted\nversion: \"4.0.0\"",
+      "file_picker_web": "dependency: transitive\ndescription:\nname: file_picker_web\nsha256: b3004268da0c1b52baa18df430e7ec4438194de855a807d26b447cbf07ef3496\nurl: \"https://pub.dev\"\nsource: hosted\nversion: \"4.0.0\"",
+      "fixnum": "dependency: transitive\ndescription:\nname: fixnum\nsha256: b6dc7065e46c974bc7c5f143080a6764ec7a4be6da1285ececdc37be96de53be\nurl: \"https://pub.dev\"\nsource: hosted\nversion: \"1.1.1\"",
+      "fl_chart": "dependency: \"direct main\"\ndescription:\nname: fl_chart\nsha256: b938f77d042cbcd822936a7a359a7235bad8bd72070de1f827efc2cc297ac888\nurl: \"https://pub.dev\"\nsource: hosted\nversion: \"1.2.0\"",
+      "fluent_ui": "dependency: \"direct main\"\ndescription:\nname: fluent_ui\nsha256: \"64c2b9dd208f8e3134d3e38db107235ee30c1dd9b792843274687a7ecc063590\"\nurl: \"https://pub.dev\"\nsource: hosted\nversion: \"4.16.1\"",
+      "fluentui_system_icons": "dependency: \"direct main\"\ndescription:\nname: fluentui_system_icons\nsha256: \"1592ae32dae75fb66741ab2c0607bc6554ef086f1c457e27ef937fb4901d33da\"\nurl: \"https://pub.dev\"\nsource: hosted\nversion: \"1.1.273\"",
+      "flutter": "dependency: \"direct main\"\ndescription: flutter\nsource: sdk\nversion: \"0.0.0\"",
+      "flutter_dotenv": "dependency: \"direct main\"\ndescription:\nname: flutter_dotenv\nsha256: d41da11fb497314fbf89811ec30af02d1d898b47980a129f0a8c0a1720460ba2\nurl: \"https://pub.dev\"\nsource: hosted\nversion: \"6.0.1\"",
+      "flutter_launcher_icons": "dependency: \"direct dev\"\ndescription:\nname: flutter_launcher_icons\nsha256: \"10f13781741a2e3972126fae08393d3c4e01fa4cd7473326b94b72cf594195e7\"\nurl: \"https://pub.dev\"\nsource: hosted\nversion: \"0.14.4\"",
+      "flutter_lints": "dependency: \"direct dev\"\ndescription:\nname: flutter_lints\nsha256: \"3105dc8492f6183fb076ccf1f351ac3d60564bff92e20bfc4af9cc1651f4e7e1\"\nurl: \"https://pub.dev\"\nsource: hosted\nversion: \"6.0.0\"",
+      "flutter_local_notifications": "dependency: \"direct main\"\ndescription:\nname: flutter_local_notifications\nsha256: \"357be7ff996dc272e2037c69c1bdd5d1bd21172219d55f8bd2e11aeea602e6d3\"\nurl: \"https://pub.dev\"\nsource: hosted\nversion: \"22.3.1\"",
+      "flutter_local_notifications_linux": "dependency: transitive\ndescription:\nname: flutter_local_notifications_linux\nsha256: \"9ca97e63776f29ab1b955725c09999fc2c150523269db150c39274f2a43c5a8b\"\nurl: \"https://pub.dev\"\nsource: hosted\nversion: \"8.0.1\"",
+      "flutter_local_notifications_platform_interface": "dependency: transitive\ndescription:\nname: flutter_local_notifications_platform_interface\nsha256: \"43c3761d916c9bd3d5c7ebbc44d82f4990329840c0c5d62ad5260cc1b5d399bd\"\nurl: \"https://pub.dev\"\nsource: hosted\nversion: \"12.2.0\"",
+      "flutter_local_notifications_web": "dependency: transitive\ndescription:\nname: flutter_local_notifications_web\nsha256: \"516afaf97a2d1e67a036c6617321b00d205d72f7a67b6eccf936cd565f985878\"\nurl: \"https://pub.dev\"\nsource: hosted\nversion: \"1.0.0\"",
+      "flutter_local_notifications_windows": "dependency: transitive\ndescription:\nname: flutter_local_notifications_windows\nsha256: \"6f43bdd03b171b7a90f22647506fea33e2bb12294b7c7c7a3d690e960a382945\"\nurl: \"https://pub.dev\"\nsource: hosted\nversion: \"3.1.1\"",
+      "flutter_localizations": "dependency: \"direct main\"\ndescription: flutter\nsource: sdk\nversion: \"0.0.0\"",
+      "flutter_secure_storage": "dependency: \"direct main\"\ndescription:\nname: flutter_secure_storage\nsha256: d4e1fb6b2cb524868929e78dc0282fa000554b22060fb53789dc481c9fc95bb8\nurl: \"https://pub.dev\"\nsource: hosted\nversion: \"11.2.0\"",
+      "flutter_secure_storage_darwin": "dependency: transitive\ndescription:\nname: flutter_secure_storage_darwin\nsha256: a031ceac9b070e62ef183cd7f7d1a8798ebde402d5049f0fe6eb3a51bd797a21\nurl: \"https://pub.dev\"\nsource: hosted\nversion: \"0.4.3\"",
+      "flutter_secure_storage_linux": "dependency: transitive\ndescription:\nname: flutter_secure_storage_linux\nsha256: caa75bd78f017422912e3a904933113b2428eb79f981ac37acd2dd2a700458ea\nurl: \"https://pub.dev\"\nsource: hosted\nversion: \"3.0.3\"",
+      "flutter_secure_storage_platform_interface": "dependency: transitive\ndescription:\nname: flutter_secure_storage_platform_interface\nsha256: \"64951127f001f546891c86f414972bf49ef2c4c8a4c92c65f5790cc0c9100045\"\nurl: \"https://pub.dev\"\nsource: hosted\nversion: \"2.1.1\"",
+      "flutter_secure_storage_web": "dependency: transitive\ndescription:\nname: flutter_secure_storage_web\nsha256: \"073a62b3aeb866ab4ce795f960413948e51e5a42a9b0c8333b6daf5bb3208a1c\"\nurl: \"https://pub.dev\"\nsource: hosted\nversion: \"2.1.1\"",
+      "flutter_secure_storage_windows": "dependency: transitive\ndescription:\nname: flutter_secure_storage_windows\nsha256: \"471951813a97006d899db4948acc654a4f28c440083ea08178935ce20b173ec1\"\nurl: \"https://pub.dev\"\nsource: hosted\nversion: \"4.2.2\"",
+      "flutter_test": "dependency: \"direct dev\"\ndescription: flutter\nsource: sdk\nversion: \"0.0.0\"",
+      "flutter_web_plugins": "dependency: transitive\ndescription: flutter\nsource: sdk\nversion: \"0.0.0\"",
+      "frontend_server_client": "dependency: transitive\ndescription:\nname: frontend_server_client\nsha256: f64a0333a82f30b0cca061bc3d143813a486dc086b574bfb233b7c1372427694\nurl: \"https://pub.dev\"\nsource: hosted\nversion: \"4.0.0\"",
+      "get_it": "dependency: \"direct main\"\ndescription:\nname: get_it\nsha256: \"2b5c6b077aad30bba9782178baff6076a2044141f1d5f2f15b43bca3fbe74874\"\nurl: \"https://pub.dev\"\nsource: hosted\nversion: \"9.3.0\"",
+      "glob": "dependency: transitive\ndescription:\nname: glob\nsha256: \"218aeb56050c714f62a3182775320dfa04602b55074873e24e31bbd39bda96fb\"\nurl: \"https://pub.dev\"\nsource: hosted\nversion: \"2.2.0\"",
+      "go_router": "dependency: \"direct main\"\ndescription:\nname: go_router\nsha256: \"008ab21d89d0de8ccd79586838f7533f126c2d894f50bf25f2947888d3c225b5\"\nurl: \"https://pub.dev\"\nsource: hosted\nversion: \"18.0.1\"",
+      "google_fonts": "dependency: \"direct main\"\ndescription:\nname: google_fonts\nsha256: e3cb3ee6b47fd2472c23de6da5744796a4da195137759ddb3fbcc9467b7b3c7d\nurl: \"https://pub.dev\"\nsource: hosted\nversion: \"8.2.1\"",
+      "graphs": "dependency: transitive\ndescription:\nname: graphs\nsha256: \"741bbf84165310a68ff28fe9e727332eef1407342fca52759cb21ad8177bb8d0\"\nurl: \"https://pub.dev\"\nsource: hosted\nversion: \"2.3.2\"",
+      "hooks": "dependency: transitive\ndescription:\nname: hooks\nsha256: eaac480a35ec0814146c2c48d96aaa829e0e44a7662c88ae84c9edf4bc35651f\nurl: \"https://pub.dev\"\nsource: hosted\nversion: \"2.2.0\"",
+      "http": "dependency: transitive\ndescription:\nname: http\nsha256: \"87721a4a50b19c7f1d49001e51409bddc46303966ce89a65af4f4e6004896412\"\nurl: \"https://pub.dev\"\nsource: hosted\nversion: \"1.6.0\"",
+      "http_multi_server": "dependency: transitive\ndescription:\nname: http_multi_server\nsha256: aa6199f908078bb1c5efb8d8638d4ae191aac11b311132c3ef48ce352fb52ef8\nurl: \"https://pub.dev\"\nsource: hosted\nversion: \"3.2.2\"",
+      "http_parser": "dependency: transitive\ndescription:\nname: http_parser\nsha256: \"178d74305e7866013777bab2c3d8726205dc5a4dd935297175b19a23a2e66571\"\nurl: \"https://pub.dev\"\nsource: hosted\nversion: \"4.1.2\"",
+      "image": "dependency: transitive\ndescription:\nname: image\nsha256: a1e7f4951e538a568e14b856702afc9ae1d2f4b202daced8d22c1b9cd211ce89\nurl: \"https://pub.dev\"\nsource: hosted\nversion: \"4.10.1\"",
+      "intl": "dependency: \"direct main\"\ndescription:\nname: intl\nsha256: \"1ca20c894b1717686a2319b8548763d812bc0aabdac580420a44c5178c57a867\"\nurl: \"https://pub.dev\"\nsource: hosted\nversion: \"0.20.3\"",
+      "io": "dependency: transitive\ndescription:\nname: io\nsha256: \"2635216ca6a737e60de577ffa1a48a0bec76ca8a62917cfc1bb88c14c570646f\"\nurl: \"https://pub.dev\"\nsource: hosted\nversion: \"1.1.0\"",
+      "jni": "dependency: transitive\ndescription:\nname: jni\nsha256: f038e58b4dc2c9037f50e233175086337e0b305e356d28211bf55f21c504cbd3\nurl: \"https://pub.dev\"\nsource: hosted\nversion: \"1.0.3\"",
+      "jni_flutter": "dependency: transitive\ndescription:\nname: jni_flutter\nsha256: b2310cdd4c18c65c081ab141a41efa94aa26c65431803703ece51996f174f351\nurl: \"https://pub.dev\"\nsource: hosted\nversion: \"1.0.3\"",
+      "jni_util": "dependency: transitive\ndescription:\nname: jni_util\nsha256: \"1ba86da04a5f2bf18fde2edb235587e70c5b0fc5bd4ba955f46b00942c3fc35f\"\nurl: \"https://pub.dev\"\nsource: hosted\nversion: \"1.0.0\"",
+      "jose": "dependency: \"direct main\"\ndescription:\nname: jose\nsha256: a0a339d0a0652dc1bd89f8b92d38479e07e16db83858fb55fa57212479f323f7\nurl: \"https://pub.dev\"\nsource: hosted\nversion: \"0.3.5+2\"",
+      "json_annotation": "dependency: transitive\ndescription:\nname: json_annotation\nsha256: \"2a743920d81b7910627f68ee2c9ac1fc0bfee32b9fc3403587d7c6791ca12f80\"\nurl: \"https://pub.dev\"\nsource: hosted\nversion: \"4.12.0\"",
+      "json_schema": "dependency: \"direct main\"\ndescription:\nname: json_schema\nsha256: f37d9c3fdfe8c9aae55fdfd5af815d24ce63c3a0f6a2c1f0982c30f43643fa1a\nurl: \"https://pub.dev\"\nsource: hosted\nversion: \"5.2.2\"",
+      "leak_tracker": "dependency: transitive\ndescription:\nname: leak_tracker\nsha256: \"33e2e26bdd85a0112ec15400c8cbffea70d0f9c3407491f672a2fad47915e2de\"\nurl: \"https://pub.dev\"\nsource: hosted\nversion: \"11.0.2\"",
+      "leak_tracker_flutter_testing": "dependency: transitive\ndescription:\nname: leak_tracker_flutter_testing\nsha256: \"1dbc140bb5a23c75ea9c4811222756104fbcd1a27173f0c34ca01e16bea473c1\"\nurl: \"https://pub.dev\"\nsource: hosted\nversion: \"3.0.10\"",
+      "leak_tracker_testing": "dependency: transitive\ndescription:\nname: leak_tracker_testing\nsha256: \"8d5a2d49f4a66b49744b23b018848400d23e54caf9463f4eb20df3eb8acb2eb1\"\nurl: \"https://pub.dev\"\nsource: hosted\nversion: \"3.0.2\"",
+      "lints": "dependency: transitive\ndescription:\nname: lints\nsha256: \"12f842a479589fea194fe5c5a3095abc7be0c1f2ddfa9a0e76aed1dbd26a87df\"\nurl: \"https://pub.dev\"\nsource: hosted\nversion: \"6.1.0\"",
+      "logger": "dependency: \"direct main\"\ndescription:\nname: logger\nsha256: \"2a0dc097e7b01d942475bdd552356db2d0f768b05540bd4b2b53f1840f2239a7\"\nurl: \"https://pub.dev\"\nsource: hosted\nversion: \"2.8.0\"",
+      "logging": "dependency: transitive\ndescription:\nname: logging\nsha256: c8245ada5f1717ed44271ed1c26b8ce85ca3228fd2ffdb75468ab01979309d61\nurl: \"https://pub.dev\"\nsource: hosted\nversion: \"1.3.0\"",
+      "mailer": "dependency: \"direct main\"\ndescription:\nname: mailer\nsha256: \"9f7213f57272c2a047f13ae89e68652d492f929d84ded9a618424b38da328f97\"\nurl: \"https://pub.dev\"\nsource: hosted\nversion: \"7.2.0\"",
+      "matcher": "dependency: transitive\ndescription:\nname: matcher\nsha256: \"31bd099b47c10cd1aeb55146a2d46ce0277630ecef3f7dae54ad7873f36696cd\"\nurl: \"https://pub.dev\"\nsource: hosted\nversion: \"0.12.20\"",
+      "material_color_utilities": "dependency: transitive\ndescription:\nname: material_color_utilities\nsha256: \"9c337007e82b1889149c82ed242ed1cb24a66044e30979c44912381e9be4c48b\"\nurl: \"https://pub.dev\"\nsource: hosted\nversion: \"0.13.0\"",
+      "material_ui": "dependency: transitive\ndescription:\nname: material_ui\nsha256: \"134ab2f0843545c4e661e4ba2753fe1bcf0753cb690d5a9ee4870638a40411e9\"\nurl: \"https://pub.dev\"\nsource: hosted\nversion: \"1.4.0\"",
+      "math_expressions": "dependency: transitive\ndescription:\nname: math_expressions\nsha256: \"22aca3a24e445be5f42ecf186cbded1f9951bf9ec5eb48fcddbd55e102bb11f5\"\nurl: \"https://pub.dev\"\nsource: hosted\nversion: \"3.2.0\"",
+      "meta": "dependency: \"direct main\"\ndescription:\nname: meta\nsha256: \"307249ce4ff29d58a18e97f6345f539382eb9c9c29ecda628900f31de0443dd9\"\nurl: \"https://pub.dev\"\nsource: hosted\nversion: \"1.19.0\"",
+      "mime": "dependency: transitive\ndescription:\nname: mime\nsha256: bd47de35f07e27267e69c8c8b22edf9473bfee170a60d60fcc93730c5144b7f6\nurl: \"https://pub.dev\"\nsource: hosted\nversion: \"2.1.0\"",
+      "mocktail": "dependency: \"direct dev\"\ndescription:\nname: mocktail\nsha256: \"5e1bf53cc7baa8062a33b84424deb61513858ea05c601b8509e683815b5914aa\"\nurl: \"https://pub.dev\"\nsource: hosted\nversion: \"1.0.5\"",
+      "native_toolchain_c": "dependency: transitive\ndescription:\nname: native_toolchain_c\nsha256: a1c26117c48cebe5677b0cf0e33a980a79a7c5577effc86f52e5a0d309cdcb60\nurl: \"https://pub.dev\"\nsource: hosted\nversion: \"0.19.3\"",
+      "nativeapi": "dependency: transitive\ndescription:\nname: nativeapi\nsha256: \"2f40b3ac356097f56efa8188703159c303ce2b8b078d04c3d2d4afbe95b384ce\"\nurl: \"https://pub.dev\"\nsource: hosted\nversion: \"0.3.0\"",
+      "nested": "dependency: transitive\ndescription:\nname: nested\nsha256: \"03bac4c528c64c95c722ec99280375a6f2fc708eec17c7b3f07253b626cd2a20\"\nurl: \"https://pub.dev\"\nsource: hosted\nversion: \"1.0.0\"",
+      "node_preamble": "dependency: transitive\ndescription:\nname: node_preamble\nsha256: \"6e7eac89047ab8a8d26cf16127b5ed26de65209847630400f9aefd7cd5c730db\"\nurl: \"https://pub.dev\"\nsource: hosted\nversion: \"2.0.2\"",
+      "objective_c": "dependency: transitive\ndescription:\nname: objective_c\nsha256: b7fb95a6d9a4f009edd63dc5ac69f07420b23a16161c6dd8660290b59c602e8e\nurl: \"https://pub.dev\"\nsource: hosted\nversion: \"9.5.0\"",
+      "odbc_fast": "dependency: \"direct main\"\ndescription:\nname: odbc_fast\nsha256: ad7b8a83120f4edc59e8aa88a61340ce25c1d37ac76551298b8d5414226716f7\nurl: \"https://pub.dev\"\nsource: hosted\nversion: \"5.0.0\"",
+      "opentelemetry": "dependency: transitive\ndescription:\nname: opentelemetry\nsha256: \"92d63a2e0731d34a7548add82420b8f3819ccda569f9bdfdcc4b25e00fe88da4\"\nurl: \"https://pub.dev\"\nsource: hosted\nversion: \"0.18.11\"",
+      "package_config": "dependency: transitive\ndescription:\nname: package_config\nsha256: f096c55ebb7deb7e384101542bfba8c52696c1b56fca2eb62827989ef2353bbc\nurl: \"https://pub.dev\"\nsource: hosted\nversion: \"2.2.0\"",
+      "package_info_plus": "dependency: \"direct main\"\ndescription:\nname: package_info_plus\nsha256: \"127e1751e37ffb2ff4658beeaca77bad0c27bf5f932bd3a501c2296926d4b481\"\nurl: \"https://pub.dev\"\nsource: hosted\nversion: \"10.2.1\"",
+      "package_info_plus_platform_interface": "dependency: transitive\ndescription:\nname: package_info_plus_platform_interface\nsha256: db762cb2f4f25ee60fb6359773861b0f199e00b90d237bd85a76a1e806b46ef4\nurl: \"https://pub.dev\"\nsource: hosted\nversion: \"4.1.0\"",
+      "path": "dependency: \"direct main\"\ndescription:\nname: path\nsha256: \"75cca69d1490965be98c73ceaea117e8a04dd21217b37b292c9ddbec0d955bc5\"\nurl: \"https://pub.dev\"\nsource: hosted\nversion: \"1.9.1\"",
+      "path_provider": "dependency: \"direct main\"\ndescription:\nname: path_provider\nsha256: a7f4874f987173da295a61c181b8ee71dab59b332a486b391babf26a1b884825\nurl: \"https://pub.dev\"\nsource: hosted\nversion: \"2.1.6\"",
+      "path_provider_android": "dependency: transitive\ndescription:\nname: path_provider_android\nsha256: \"69cbd515a62b94d32a7944f086b2f82b4ac40a1d45bebfc00813a430ab2dabcd\"\nurl: \"https://pub.dev\"\nsource: hosted\nversion: \"2.3.1\"",
+      "path_provider_foundation": "dependency: transitive\ndescription:\nname: path_provider_foundation\nsha256: \"2a376b7d6392d80cd3705782d2caa734ca4727776db0b6ec36ef3f1855197699\"\nurl: \"https://pub.dev\"\nsource: hosted\nversion: \"2.6.0\"",
+      "path_provider_linux": "dependency: transitive\ndescription:\nname: path_provider_linux\nsha256: \"58c2005f147315b11e9b4a7bc889cd5203e250cba8e3f012dae259b4972b5c16\"\nurl: \"https://pub.dev\"\nsource: hosted\nversion: \"2.2.2\"",
+      "path_provider_platform_interface": "dependency: transitive\ndescription:\nname: path_provider_platform_interface\nsha256: \"484838772624c3a4b94f1e44a3e19897fee738f2d5c4ce448443b0417f7c9dda\"\nurl: \"https://pub.dev\"\nsource: hosted\nversion: \"2.1.3\"",
+      "path_provider_windows": "dependency: transitive\ndescription:\nname: path_provider_windows\nsha256: bd6f00dbd873bfb70d0761682da2b3a2c2fccc2b9e84c495821639601d81afe7\nurl: \"https://pub.dev\"\nsource: hosted\nversion: \"2.3.0\"",
+      "petitparser": "dependency: transitive\ndescription:\nname: petitparser\nsha256: \"91bd59303e9f769f108f8df05e371341b15d59e995e6806aefab827b58336675\"\nurl: \"https://pub.dev\"\nsource: hosted\nversion: \"7.0.2\"",
+      "platform": "dependency: transitive\ndescription:\nname: platform\nsha256: a36d119c13416516a7b5913fbe8af8531e11633d784c550b2125f76c758524ec\nurl: \"https://pub.dev\"\nsource: hosted\nversion: \"3.2.0\"",
+      "plugin_platform_interface": "dependency: transitive\ndescription:\nname: plugin_platform_interface\nsha256: \"4820fbfdb9478b1ebae27888254d445073732dae3d6ea81f0b7e06d5dedc3f02\"\nurl: \"https://pub.dev\"\nsource: hosted\nversion: \"2.1.8\"",
+      "pointycastle": "dependency: transitive\ndescription:\nname: pointycastle\nsha256: \"92aa3841d083cc4b0f4709b5c74fd6409a3e6ba833ffc7dc6a8fee096366acf5\"\nurl: \"https://pub.dev\"\nsource: hosted\nversion: \"4.0.0\"",
+      "pool": "dependency: transitive\ndescription:\nname: pool\nsha256: \"4177f68c237ea2128d1bee66ac17b2ce05ba3dbaafcbdd54c5d40a39d0b6b11c\"\nurl: \"https://pub.dev\"\nsource: hosted\nversion: \"1.5.3\"",
+      "posix": "dependency: transitive\ndescription:\nname: posix\nsha256: bc1bad54ad2b735816e31f8d4600cfde6c7839975085ddfbca48b6c9f7c4044e\nurl: \"https://pub.dev\"\nsource: hosted\nversion: \"6.5.2\"",
+      "protobuf": "dependency: transitive\ndescription:\nname: protobuf\nsha256: \"13b6717366aa7ec3792dd62c19c7d33a785708224365f2db23c5ca01f1c1a0f2\"\nurl: \"https://pub.dev\"\nsource: hosted\nversion: \"6.1.0\"",
+      "protoc_plugin": "dependency: \"direct dev\"\ndescription:\nname: protoc_plugin\nsha256: e6df1acfca57523537da0ce629bf02d5f8378364f18f8a45bd914abd53e48403\nurl: \"https://pub.dev\"\nsource: hosted\nversion: \"25.1.0\"",
+      "provider": "dependency: \"direct main\"\ndescription:\nname: provider\nsha256: \"4e82183fa20e5ca25703ead7e05de9e4cceed1fbd1eadc1ac3cb6f565a09f272\"\nurl: \"https://pub.dev\"\nsource: hosted\nversion: \"6.1.5+1\"",
+      "pub_semver": "dependency: transitive\ndescription:\nname: pub_semver\nsha256: \"261236774e8b1d69cfc6b9eabbc96c40f25e7a2d6b171f3385d4f65d5734fb24\"\nurl: \"https://pub.dev\"\nsource: hosted\nversion: \"2.2.1\"",
+      "pubspec_parse": "dependency: transitive\ndescription:\nname: pubspec_parse\nsha256: c38b81cbf34450b67e0265d73433569d12e34782e30ed769c9cc99c9d5f2e796\nurl: \"https://pub.dev\"\nsource: hosted\nversion: \"1.6.0\"",
+      "punycoder": "dependency: transitive\ndescription:\nname: punycoder\nsha256: \"982734df864d9588eb13e28ac1c5a46b57e22117b3696032ac58739966cec190\"\nurl: \"https://pub.dev\"\nsource: hosted\nversion: \"0.3.0\"",
+      "quiver": "dependency: transitive\ndescription:\nname: quiver\nsha256: ea0b925899e64ecdfbf9c7becb60d5b50e706ade44a85b2363be2a22d88117d2\nurl: \"https://pub.dev\"\nsource: hosted\nversion: \"3.2.2\"",
+      "recase": "dependency: transitive\ndescription:\nname: recase\nsha256: e4eb4ec2dcdee52dcf99cb4ceabaffc631d7424ee55e56f280bc039737f89213\nurl: \"https://pub.dev\"\nsource: hosted\nversion: \"4.1.0\"",
+      "record_use": "dependency: transitive\ndescription:\nname: record_use\nsha256: \"1cb8564af8d43b464294411db9217f5ec04891c6f22ee2c32d73ae05e88a6bd2\"\nurl: \"https://pub.dev\"\nsource: hosted\nversion: \"1.1.1\"",
+      "result_dart": "dependency: \"direct main\"\ndescription:\nname: result_dart\nsha256: \"80096f0928e276c024e53cf1bb2aaffd5a94623dac8fdfa5cb3529e82b51eb3c\"\nurl: \"https://pub.dev\"\nsource: hosted\nversion: \"2.2.0\"",
+      "rfc_6901": "dependency: transitive\ndescription:\nname: rfc_6901\nsha256: \"6a43b1858dca2febaf93e15639aa6b0c49ccdfd7647775f15a499f872b018154\"\nurl: \"https://pub.dev\"\nsource: hosted\nversion: \"0.2.1\"",
+      "screen_retriever": "dependency: transitive\ndescription:\nname: screen_retriever\nsha256: ace919117a7520c13a50a6259e60c4a0d4cbe98809468792a91b5c5adada2aa6\nurl: \"https://pub.dev\"\nsource: hosted\nversion: \"0.2.2\"",
+      "screen_retriever_linux": "dependency: transitive\ndescription:\nname: screen_retriever_linux\nsha256: \"7b52006a5ceae1f3d5af7f77188c3290d6e7d8ded16d99809bea84967c65c257\"\nurl: \"https://pub.dev\"\nsource: hosted\nversion: \"0.2.2\"",
+      "screen_retriever_macos": "dependency: transitive\ndescription:\nname: screen_retriever_macos\nsha256: a1489b99cce597c45a54b9aae1cd94c8d4705353b7e0bb2457a6e4de44e0ad8a\nurl: \"https://pub.dev\"\nsource: hosted\nversion: \"0.2.2\"",
+      "screen_retriever_platform_interface": "dependency: transitive\ndescription:\nname: screen_retriever_platform_interface\nsha256: \"94a5535277510a63184ca178ce12a1449bc0b38618879aa1c18bf57369c5064a\"\nurl: \"https://pub.dev\"\nsource: hosted\nversion: \"0.2.2\"",
+      "screen_retriever_windows": "dependency: transitive\ndescription:\nname: screen_retriever_windows\nsha256: dafc6922b0bfbf1d48cf3ccbf519b4fff47bdcb820da1728ea6db675fecc9324\nurl: \"https://pub.dev\"\nsource: hosted\nversion: \"0.2.2\"",
+      "scroll_pos": "dependency: transitive\ndescription:\nname: scroll_pos\nsha256: cebf602b2dd939de6832bb902ffefb574608d1b84f420b82b381a4007d3c1e1b\nurl: \"https://pub.dev\"\nsource: hosted\nversion: \"0.5.0\"",
+      "shared_preferences": "dependency: \"direct main\"\ndescription:\nname: shared_preferences\nsha256: c3025c5534b01739267eb7d76959bbc25a6d10f6988e1c2a3036940133dd10bf\nurl: \"https://pub.dev\"\nsource: hosted\nversion: \"2.5.5\"",
+      "shared_preferences_android": "dependency: transitive\ndescription:\nname: shared_preferences_android\nsha256: \"1e12aafe408aa50da80edfd679a2a6bf63ba7ab37c7fa98286da459a757b3399\"\nurl: \"https://pub.dev\"\nsource: hosted\nversion: \"2.4.28\"",
+      "shared_preferences_foundation": "dependency: transitive\ndescription:\nname: shared_preferences_foundation\nsha256: \"2ec3934efa51e46117f23031cc141b8fc878e8525b94ec1ea4f7f586cf1b47ea\"\nurl: \"https://pub.dev\"\nsource: hosted\nversion: \"2.5.7\"",
+      "shared_preferences_linux": "dependency: transitive\ndescription:\nname: shared_preferences_linux\nsha256: \"580abfd40f415611503cae30adf626e6656dfb2f0cee8f465ece7b6defb40f2f\"\nurl: \"https://pub.dev\"\nsource: hosted\nversion: \"2.4.1\"",
+      "shared_preferences_platform_interface": "dependency: transitive\ndescription:\nname: shared_preferences_platform_interface\nsha256: \"649dc798a33931919ea356c4305c2d1f81619ea6e92244070b520187b5140ef9\"\nurl: \"https://pub.dev\"\nsource: hosted\nversion: \"2.4.2\"",
+      "shared_preferences_web": "dependency: transitive\ndescription:\nname: shared_preferences_web\nsha256: c49bd060261c9a3f0ff445892695d6212ff603ef3115edbb448509d407600019\nurl: \"https://pub.dev\"\nsource: hosted\nversion: \"2.4.3\"",
+      "shared_preferences_windows": "dependency: transitive\ndescription:\nname: shared_preferences_windows\nsha256: \"94ef0f72b2d71bc3e700e025db3710911bd51a71cefb65cc609dd0d9a982e3c1\"\nurl: \"https://pub.dev\"\nsource: hosted\nversion: \"2.4.1\"",
+      "shelf": "dependency: transitive\ndescription:\nname: shelf\nsha256: e7dd780a7ffb623c57850b33f43309312fc863fb6aa3d276a754bb299839ef12\nurl: \"https://pub.dev\"\nsource: hosted\nversion: \"1.4.2\"",
+      "shelf_packages_handler": "dependency: transitive\ndescription:\nname: shelf_packages_handler\nsha256: \"89f967eca29607c933ba9571d838be31d67f53f6e4ee15147d5dc2934fee1b1e\"\nurl: \"https://pub.dev\"\nsource: hosted\nversion: \"3.0.2\"",
+      "shelf_static": "dependency: transitive\ndescription:\nname: shelf_static\nsha256: c87c3875f91262785dade62d135760c2c69cb217ac759485334c5857ad89f6e3\nurl: \"https://pub.dev\"\nsource: hosted\nversion: \"1.1.3\"",
+      "shelf_web_socket": "dependency: transitive\ndescription:\nname: shelf_web_socket\nsha256: \"3632775c8e90d6c9712f883e633716432a27758216dfb61bd86a8321c0580925\"\nurl: \"https://pub.dev\"\nsource: hosted\nversion: \"3.0.0\"",
+      "sky_engine": "dependency: transitive\ndescription: flutter\nsource: sdk\nversion: \"0.0.0\"",
+      "socket_io_client": "dependency: \"direct main\"\ndescription:\nname: socket_io_client\nsha256: f5990ff303d385e7b2150f0e57cca097a8d20c6a2ae0a22cb2d496661ea8ed9b\nurl: \"https://pub.dev\"\nsource: hosted\nversion: \"3.1.6\"",
+      "socket_io_common": "dependency: transitive\ndescription:\nname: socket_io_common\nsha256: \"162fbaecbf4bf9a9372a62a341b3550b51dcef2f02f3e5830a297fd48203d45b\"\nurl: \"https://pub.dev\"\nsource: hosted\nversion: \"3.1.1\"",
+      "source_gen": "dependency: transitive\ndescription:\nname: source_gen\nsha256: a603f1fb984a7391ae5978d1b92bfaaa08b350dca5c825256f925818f7943bf5\nurl: \"https://pub.dev\"\nsource: hosted\nversion: \"4.2.4\"",
+      "source_map_stack_trace": "dependency: transitive\ndescription:\nname: source_map_stack_trace\nsha256: c0713a43e323c3302c2abe2a1cc89aa057a387101ebd280371d6a6c9fa68516b\nurl: \"https://pub.dev\"\nsource: hosted\nversion: \"2.1.2\"",
+      "source_maps": "dependency: transitive\ndescription:\nname: source_maps\nsha256: \"14c2945847669b44089bb1222f66873d7ff7103c58911917f2a63c5a62327898\"\nurl: \"https://pub.dev\"\nsource: hosted\nversion: \"0.10.14\"",
+      "source_span": "dependency: transitive\ndescription:\nname: source_span\nsha256: \"56a02f1f4cd1a2d96303c0144c93bd6d909eea6bee6bf5a0e0b685edbd4c47ab\"\nurl: \"https://pub.dev\"\nsource: hosted\nversion: \"1.10.2\"",
+      "sqlite3": "dependency: \"direct main\"\ndescription:\nname: sqlite3\nsha256: fa3fd961e83b2dca8890a7b1014ab1226831d2b5908067c0ab7f385ffb655caf\nurl: \"https://pub.dev\"\nsource: hosted\nversion: \"3.6.0\"",
+      "sqlparser": "dependency: transitive\ndescription:\nname: sqlparser\nsha256: \"772bb2f6f5bce0631a60f26b57d6e8882e1105c22345b05c163ee6ee5d7ba32d\"\nurl: \"https://pub.dev\"\nsource: hosted\nversion: \"0.45.0\"",
+      "stack_trace": "dependency: transitive\ndescription:\nname: stack_trace\nsha256: \"277654b3034d17ac6f9f1cb5595db011b1d5d41e8806866db28e0abaa101c490\"\nurl: \"https://pub.dev\"\nsource: hosted\nversion: \"1.12.2\"",
+      "stream_channel": "dependency: transitive\ndescription:\nname: stream_channel\nsha256: \"969e04c80b8bcdf826f8f16579c7b14d780458bd97f56d107d3950fdbeef059d\"\nurl: \"https://pub.dev\"\nsource: hosted\nversion: \"2.1.4\"",
+      "stream_transform": "dependency: transitive\ndescription:\nname: stream_transform\nsha256: a00e5f18bffc764f923e7dec1038527f7fe7a1791361a7117f0358193f13d53a\nurl: \"https://pub.dev\"\nsource: hosted\nversion: \"2.1.2\"",
+      "string_normalizer": "dependency: transitive\ndescription:\nname: string_normalizer\nsha256: \"4bc0b4edafe1517fafa79e9e6e163ea078205bcb9399d069377df6bbd6f7c57d\"\nurl: \"https://pub.dev\"\nsource: hosted\nversion: \"0.4.0\"",
+      "string_scanner": "dependency: transitive\ndescription:\nname: string_scanner\nsha256: \"921cd31725b72fe181906c6a94d987c78e3b98c2e205b397ea399d4054872b43\"\nurl: \"https://pub.dev\"\nsource: hosted\nversion: \"1.4.1\"",
+      "syncfusion_flutter_core": "dependency: \"direct main\"\ndescription:\nname: syncfusion_flutter_core\nsha256: \"85c1d4be09cfa5b74a026cd1b4c5c7c1a2b2bf709e5e61d4c2feee989ebb1da4\"\nurl: \"https://pub.dev\"\nsource: hosted\nversion: \"34.2.9\"",
+      "syncfusion_flutter_datagrid": "dependency: \"direct main\"\ndescription:\nname: syncfusion_flutter_datagrid\nsha256: \"42967c16e2bb35d9169d5b2a197fdad1d4bc3ac1c627ad9a865c654742f72bce\"\nurl: \"https://pub.dev\"\nsource: hosted\nversion: \"34.2.9\"",
+      "term_glyph": "dependency: transitive\ndescription:\nname: term_glyph\nsha256: \"7f554798625ea768a7518313e58f83891c7f5024f88e46e7182a4558850a4b8e\"\nurl: \"https://pub.dev\"\nsource: hosted\nversion: \"1.2.2\"",
+      "test": "dependency: \"direct dev\"\ndescription:\nname: test\nsha256: ca578dc12bb8b2f40b67b7d3bd2fac4f31c01a6ff7130a14e2597b919934507f\nurl: \"https://pub.dev\"\nsource: hosted\nversion: \"1.31.1\"",
+      "test_api": "dependency: transitive\ndescription:\nname: test_api\nsha256: \"2a122cbe059f8b610d3a5415f42e255b6c17b1f21eee1d960f31080237fb4f11\"\nurl: \"https://pub.dev\"\nsource: hosted\nversion: \"0.7.12\"",
+      "test_core": "dependency: transitive\ndescription:\nname: test_core\nsha256: d2e98ec12998368dc59ddd47ab709f2cd55acd6b66dc7db764455a44082f4bc5\nurl: \"https://pub.dev\"\nsource: hosted\nversion: \"0.6.18\"",
+      "timezone": "dependency: \"direct main\"\ndescription:\nname: timezone\nsha256: \"981d1020d6ef8fe1e7b3de5054e5b25579ae7c403d7734adc508ffc47668e9cb\"\nurl: \"https://pub.dev\"\nsource: hosted\nversion: \"0.11.1\"",
+      "tray_manager": "dependency: \"direct main\"\ndescription:\nname: tray_manager\nsha256: \"1f504e8e858cf44af1f5147df05d68ef735902d3259eac69aafc8afd8ee38a0e\"\nurl: \"https://pub.dev\"\nsource: hosted\nversion: \"0.7.0\"",
+      "typed_data": "dependency: transitive\ndescription:\nname: typed_data\nsha256: f9049c039ebfeb4cf7a7104a675823cd72dba8297f264b6637062516699fa006\nurl: \"https://pub.dev\"\nsource: hosted\nversion: \"1.4.0\"",
+      "unorm_dart": "dependency: transitive\ndescription:\nname: unorm_dart\nsha256: \"0c69186b03ca6addab0774bcc0f4f17b88d4ce78d9d4d8f0619e30a99ead58e7\"\nurl: \"https://pub.dev\"\nsource: hosted\nversion: \"0.3.2\"",
+      "uri": "dependency: transitive\ndescription:\nname: uri\nsha256: \"889eea21e953187c6099802b7b4cf5219ba8f3518f604a1033064d45b1b8268a\"\nurl: \"https://pub.dev\"\nsource: hosted\nversion: \"1.0.0\"",
+      "uuid": "dependency: \"direct main\"\ndescription:\nname: uuid\nsha256: \"9b129329f58692f6e6578329498a8fe9fbe98f090beb764ffbb8ee2eadd01dcd\"\nurl: \"https://pub.dev\"\nsource: hosted\nversion: \"4.6.0\"",
+      "vector_math": "dependency: transitive\ndescription:\nname: vector_math\nsha256: \"92b9910f66ed1057fd4da7b040ae7c74cafacf885bdc81be496928d5049b032d\"\nurl: \"https://pub.dev\"\nsource: hosted\nversion: \"2.4.3\"",
+      "very_good_analysis": "dependency: \"direct dev\"\ndescription:\nname: very_good_analysis\nsha256: \"0bd5eb8d6be76aa0d71e70cbdae6cac8f784f761170568e3c2214a6948c7f6d3\"\nurl: \"https://pub.dev\"\nsource: hosted\nversion: \"11.0.0\"",
+      "vm_service": "dependency: \"direct dev\"\ndescription:\nname: vm_service\nsha256: \"5f37239c4851efcef929cea7824e76df7f2f0970aef85d66bbc430afa40e72f0\"\nurl: \"https://pub.dev\"\nsource: hosted\nversion: \"15.3.0\"",
+      "watcher": "dependency: transitive\ndescription:\nname: watcher\nsha256: \"1398c9f081a753f9226febe8900fce8f7d0a67163334e1c94a2438339d79d635\"\nurl: \"https://pub.dev\"\nsource: hosted\nversion: \"1.2.1\"",
+      "web": "dependency: transitive\ndescription:\nname: web\nsha256: \"868d88a33d8a87b18ffc05f9f030ba328ffefba92d6c127917a2ba740f9cfe4a\"\nurl: \"https://pub.dev\"\nsource: hosted\nversion: \"1.1.1\"",
+      "web_socket": "dependency: transitive\ndescription:\nname: web_socket\nsha256: \"34d64019aa8e36bf9842ac014bb5d2f5586ca73df5e4d9bf5c936975cae6982c\"\nurl: \"https://pub.dev\"\nsource: hosted\nversion: \"1.0.1\"",
+      "web_socket_channel": "dependency: transitive\ndescription:\nname: web_socket_channel\nsha256: d645757fb0f4773d602444000a8131ff5d48c9e47adfe9772652dd1a4f2d45c8\nurl: \"https://pub.dev\"\nsource: hosted\nversion: \"3.0.3\"",
+      "webkit_inspection_protocol": "dependency: transitive\ndescription:\nname: webkit_inspection_protocol\nsha256: \"87d3f2333bb240704cd3f1c6b5b7acd8a10e7f0bc28c28dcf14e782014f4a572\"\nurl: \"https://pub.dev\"\nsource: hosted\nversion: \"1.2.1\"",
+      "win32": "dependency: \"direct main\"\ndescription:\nname: win32\nsha256: a0b93865d5644f11cf6a8c3f6db909f1ec168958b5805f6cc684adea957cd63d\nurl: \"https://pub.dev\"\nsource: hosted\nversion: \"6.4.0\"",
+      "window_manager": "dependency: \"direct main\"\ndescription:\nname: window_manager\nsha256: \"05c231fd7b23d2380f14c5cc10b7b93d60d4fa4a2fb4e0f032de27e44b5560e9\"\nurl: \"https://pub.dev\"\nsource: hosted\nversion: \"0.5.2\"",
+      "windows_file_picker": "dependency: transitive\ndescription:\nname: windows_file_picker\nsha256: \"9f3aa833068b09e380fdc59560ad260a4a14e9397173abb533699f967443602e\"\nurl: \"https://pub.dev\"\nsource: hosted\nversion: \"2.0.0\"",
+      "x509": "dependency: transitive\ndescription:\nname: x509\nsha256: cbd1a63846884afd273cda247b0365284c8d85a365ca98e110413f93d105b935\nurl: \"https://pub.dev\"\nsource: hosted\nversion: \"0.2.4+3\"",
+      "xdg_directories": "dependency: transitive\ndescription:\nname: xdg_directories\nsha256: \"7a3f37b05d989967cdddcbb571f1ea834867ae2faa29725fd085180e0883aa15\"\nurl: \"https://pub.dev\"\nsource: hosted\nversion: \"1.1.0\"",
+      "xml": "dependency: \"direct main\"\ndescription:\nname: xml\nsha256: \"67f0aff7be013d107995e9b75bf4e7f2c3ef2dfdb2c8e68024bba0a7fd5756a4\"\nurl: \"https://pub.dev\"\nsource: hosted\nversion: \"7.0.1\"",
+      "yaml": "dependency: transitive\ndescription:\nname: yaml\nsha256: f67cdd8e07d3c6329146aaef1ba043542b3134c12489f553ca9a7435d1068aea\nurl: \"https://pub.dev\"\nsource: hosted\nversion: \"3.1.4\"",
+      "yaml_edit": "dependency: transitive\ndescription:\nname: yaml_edit\nsha256: \"07c9e63ba42519745182b88ca12264a7ba2484d8239958778dfe4d44fe760488\"\nurl: \"https://pub.dev\"\nsource: hosted\nversion: \"2.2.4\"",
+      "zard": "dependency: \"direct main\"\ndescription:\nname: zard\nsha256: \"6ac7bc8d36bca1c88d1cf57be40b1ca5376dc5003af186cd3c0d3914946bb75c\"\nurl: \"https://pub.dev\"\nsource: hosted\nversion: \"1.4.0\""
+    },
+    "candidate": {
+      "_fe_analyzer_shared": "dependency: transitive\ndescription:\nname: _fe_analyzer_shared\nsha256: \"1b0e6a07425a3e460666e88bf1c949ccc7bb0116ad562ce94a1eca60fe820725\"\nurl: \"https://pub.dev\"\nsource: hosted\nversion: \"103.0.0\"",
+      "analyzer": "dependency: transitive\ndescription:\nname: analyzer\nsha256: \"61c04d0c1bfed555c681ea079519933f071a5a026578ff73c4ff0df2d3462e5e\"\nurl: \"https://pub.dev\"\nsource: hosted\nversion: \"13.3.0\"",
+      "android_file_picker": "dependency: transitive\ndescription:\nname: android_file_picker\nsha256: \"14ab27769b54c48d5a8a71aa9858372b7a3ae77572ea0a8aee744643c5d8c53d\"\nurl: \"https://pub.dev\"\nsource: hosted\nversion: \"2.0.0\"",
+      "archive": "dependency: \"direct main\"\ndescription:\nname: archive\nsha256: \"6c5bcd986e06b94e3c40244af471750840a3d2341d1f9763a1100a14add517b4\"\nurl: \"https://pub.dev\"\nsource: hosted\nversion: \"4.3.0\"",
+      "args": "dependency: transitive\ndescription:\nname: args\nsha256: d0481093c50b1da8910eb0bb301626d4d8eb7284aa739614d2b394ee09e3ea04\nurl: \"https://pub.dev\"\nsource: hosted\nversion: \"2.7.0\"",
+      "asn1lib": "dependency: transitive\ndescription:\nname: asn1lib\nsha256: \"9a8f69025044eb466b9b60ef3bc3ac99b4dc6c158ae9c56d25eeccf5bc56d024\"\nurl: \"https://pub.dev\"\nsource: hosted\nversion: \"1.6.5\"",
+      "async": "dependency: transitive\ndescription:\nname: async\nsha256: e2eb0491ba5ddb6177742d2da23904574082139b07c1e33b8503b9f46f3e1a37\nurl: \"https://pub.dev\"\nsource: hosted\nversion: \"2.13.1\"",
+      "auto_updater": "dependency: \"direct main\"\ndescription:\nname: auto_updater\nsha256: \"74fd008b021d15e4fc50fb5f1923870e6374ae831bb1168241c23bc35a4e898b\"\nurl: \"https://pub.dev\"\nsource: hosted\nversion: \"1.0.0\"",
+      "auto_updater_macos": "dependency: transitive\ndescription:\nname: auto_updater_macos\nsha256: ef9de0daf38d782d2243fe131503a9404d62df762f5386e5360020e43c01867f\nurl: \"https://pub.dev\"\nsource: hosted\nversion: \"1.0.0\"",
+      "auto_updater_platform_interface": "dependency: transitive\ndescription:\nname: auto_updater_platform_interface\nsha256: ed5dff8cea18c58bc5ac787ff9122fedd1644272e02015d28c9b592f8078c5dc\nurl: \"https://pub.dev\"\nsource: hosted\nversion: \"1.0.0\"",
+      "auto_updater_windows": "dependency: transitive\ndescription:\nname: auto_updater_windows\nsha256: \"2bba20a71eee072f49b7267fedd5c4f1406c4b1b1e5b83932c634dbab75b80c9\"\nurl: \"https://pub.dev\"\nsource: hosted\nversion: \"1.0.0\"",
+      "boolean_selector": "dependency: transitive\ndescription:\nname: boolean_selector\nsha256: \"8aab1771e1243a5063b8b0ff68042d67334e3feab9e95b9490f9a6ebf73b42ea\"\nurl: \"https://pub.dev\"\nsource: hosted\nversion: \"2.1.2\"",
+      "brasil_fields": "dependency: \"direct main\"\ndescription:\nname: brasil_fields\nsha256: \"2020cd18d5b83131debc1b5ff2a6f9eb579eb43ed935dc68f093beee5a504730\"\nurl: \"https://pub.dev\"\nsource: hosted\nversion: \"1.21.1\"",
+      "build": "dependency: transitive\ndescription:\nname: build\nsha256: \"8a5c5761af8e31748bba3c82f68925ace40f3225c3eea25be9beb57eca7cd7a8\"\nurl: \"https://pub.dev\"\nsource: hosted\nversion: \"4.0.11\"",
+      "build_config": "dependency: transitive\ndescription:\nname: build_config\nsha256: d466ed2dc9c6cd1d169948879b84ee061eb5e22c64a7c6089879c6296d272a8d\nurl: \"https://pub.dev\"\nsource: hosted\nversion: \"1.3.3\"",
+      "build_daemon": "dependency: transitive\ndescription:\nname: build_daemon\nsha256: e1d40ef3f7934986d5da2271b1ba07794921ce263e44d622fb6c406d76589e33\nurl: \"https://pub.dev\"\nsource: hosted\nversion: \"4.1.6\"",
+      "build_runner": "dependency: \"direct dev\"\ndescription:\nname: build_runner\nsha256: \"894c243f6bc32015fec466ce30a6925bd537a77a426ee5bf481120477eb3de67\"\nurl: \"https://pub.dev\"\nsource: hosted\nversion: \"2.16.1\"",
+      "built_collection": "dependency: transitive\ndescription:\nname: built_collection\nsha256: \"376e3dd27b51ea877c28d525560790aee2e6fbb5f20e2f85d5081027d94e2100\"\nurl: \"https://pub.dev\"\nsource: hosted\nversion: \"5.1.1\"",
+      "built_value": "dependency: transitive\ndescription:\nname: built_value\nsha256: f87ea98192116f7093cb214551ce1929caae0681fdba282b3d8b4462adee7bb7\nurl: \"https://pub.dev\"\nsource: hosted\nversion: \"8.13.0\"",
+      "characters": "dependency: transitive\ndescription:\nname: characters\nsha256: faf38497bda5ead2a8c7615f4f7939df04333478bf32e4173fcb06d428b5716b\nurl: \"https://pub.dev\"\nsource: hosted\nversion: \"1.4.1\"",
+      "charcode": "dependency: transitive\ndescription:\nname: charcode\nsha256: fb0f1107cac15a5ea6ef0a6ef71a807b9e4267c713bb93e00e92d737cc8dbd8a\nurl: \"https://pub.dev\"\nsource: hosted\nversion: \"1.4.0\"",
+      "checked_yaml": "dependency: transitive\ndescription:\nname: checked_yaml\nsha256: \"959525d3162f249993882720d52b7e0c833978df229be20702b33d48d91de70f\"\nurl: \"https://pub.dev\"\nsource: hosted\nversion: \"2.0.4\"",
+      "checks": "dependency: \"direct dev\"\ndescription:\nname: checks\nsha256: \"9c360a078576950976c9045fe28392dfb5f3b0b648ae897e8c1fe307a6ffbed2\"\nurl: \"https://pub.dev\"\nsource: hosted\nversion: \"0.3.2\"",
+      "cli_config": "dependency: transitive\ndescription:\nname: cli_config\nsha256: ac20a183a07002b700f0c25e61b7ee46b23c309d76ab7b7640a028f18e4d99ec\nurl: \"https://pub.dev\"\nsource: hosted\nversion: \"0.2.0\"",
+      "cli_util": "dependency: transitive\ndescription:\nname: cli_util\nsha256: ff6785f7e9e3c38ac98b2fb035701789de90154024a75b6cb926445e83197d1c\nurl: \"https://pub.dev\"\nsource: hosted\nversion: \"0.4.2\"",
+      "clock": "dependency: transitive\ndescription:\nname: clock\nsha256: e51d50bca3217c9a9fa2b41a30e4a38971133f5f9ec7a3d57bae095007f1d28e\nurl: \"https://pub.dev\"\nsource: hosted\nversion: \"1.1.3\"",
+      "cnativeapi": "dependency: transitive\ndescription:\nname: cnativeapi\nsha256: \"43fce94bdf2f60e15bb7b0ef7b78b60fc0758e5463817fa17c5fb59f149566dd\"\nurl: \"https://pub.dev\"\nsource: hosted\nversion: \"0.3.0\"",
+      "code_assets": "dependency: transitive\ndescription:\nname: code_assets\nsha256: bf394f466ba9205f1812a0433b392d6af280f155f56651eda7c18cc32ed493b8\nurl: \"https://pub.dev\"\nsource: hosted\nversion: \"1.2.1\"",
+      "collection": "dependency: \"direct main\"\ndescription:\nname: collection\nsha256: \"2f5709ae4d3d59dd8f7cd309b4e023046b57d8a6c82130785d2b0e5868084e76\"\nurl: \"https://pub.dev\"\nsource: hosted\nversion: \"1.19.1\"",
+      "convert": "dependency: transitive\ndescription:\nname: convert\nsha256: b30acd5944035672bc15c6b7a8b47d773e41e2f17de064350988c5d02adb1c68\nurl: \"https://pub.dev\"\nsource: hosted\nversion: \"3.1.2\"",
+      "coverage": "dependency: transitive\ndescription:\nname: coverage\nsha256: \"956a3de0725ca232ad353565a8290d3357592bf4250f6f298a185e2d949c5d3d\"\nurl: \"https://pub.dev\"\nsource: hosted\nversion: \"1.15.1\"",
+      "cross_file": "dependency: transitive\ndescription:\nname: cross_file\nsha256: f141ea4f277af142a0356955707f6556f37b03947d39d55585981a06ca437bd6\nurl: \"https://pub.dev\"\nsource: hosted\nversion: \"0.3.5+5\"",
+      "crypto": "dependency: \"direct main\"\ndescription:\nname: crypto\nsha256: c8ea0233063ba03258fbcf2ca4d6dadfefe14f02fab57702265467a19f27fadf\nurl: \"https://pub.dev\"\nsource: hosted\nversion: \"3.0.7\"",
+      "crypto_keys": "dependency: transitive\ndescription:\nname: crypto_keys\nsha256: \"6e473fff865ec757174dcc585d6eaa7f5f40bf3cb58f444ec5ab4a01e9083cf9\"\nurl: \"https://pub.dev\"\nsource: hosted\nversion: \"0.3.1\"",
+      "cryptography": "dependency: \"direct main\"\ndescription:\nname: cryptography\nsha256: \"3eda3029d34ec9095a27a198ac9785630fe525c0eb6a49f3d575272f8e792ef0\"\nurl: \"https://pub.dev\"\nsource: hosted\nversion: \"2.9.0\"",
+      "cupertino_icons": "dependency: \"direct main\"\ndescription:\nname: cupertino_icons\nsha256: \"41e005c33bd814be4d3096aff55b1908d419fde52ca656c8c47719ec745873cd\"\nurl: \"https://pub.dev\"\nsource: hosted\nversion: \"1.0.9\"",
+      "cupertino_ui": "dependency: transitive\ndescription:\nname: cupertino_ui\nsha256: c23816577a1280cff409e989541767887011f8f1d8c1863a794ed308af46f2a9\nurl: \"https://pub.dev\"\nsource: hosted\nversion: \"1.1.1\"",
+      "dart_style": "dependency: transitive\ndescription:\nname: dart_style\nsha256: \"82ade9fc4273f29ed673e33166944465225b4f7fc5d4aaef48605cc751c18fc1\"\nurl: \"https://pub.dev\"\nsource: hosted\nversion: \"3.1.13\"",
+      "dbus": "dependency: transitive\ndescription:\nname: dbus\nsha256: a48d5da28e89bd02196e80d81ed8d7954923d00a0f4a68cc20b575038f023383\nurl: \"https://pub.dev\"\nsource: hosted\nversion: \"0.7.15\"",
+      "dio": "dependency: \"direct main\"\ndescription:\nname: dio\nsha256: \"852ec3b48cc431ac04fff978413c541502b67ffc3e26921e74e3d994694192c1\"\nurl: \"https://pub.dev\"\nsource: hosted\nversion: \"5.11.1\"",
+      "dio_web_adapter": "dependency: transitive\ndescription:\nname: dio_web_adapter\nsha256: \"3a1b2cd7be71086f38504956e3ebcd2837288d231ff454bafa78021244102bfc\"\nurl: \"https://pub.dev\"\nsource: hosted\nversion: \"2.2.2\"",
+      "dotenv": "dependency: transitive\ndescription:\nname: dotenv\nsha256: \"379e64b6fc82d3df29461d349a1796ecd2c436c480d4653f3af6872eccbc90e1\"\nurl: \"https://pub.dev\"\nsource: hosted\nversion: \"4.2.0\"",
+      "drift": "dependency: \"direct main\"\ndescription:\nname: drift\nsha256: e3b6352aa02e60bed6ffc3cc9894c421578dad5fbef21b1f7f57cdc0e4edabcb\nurl: \"https://pub.dev\"\nsource: hosted\nversion: \"2.35.0\"",
+      "drift_dev": "dependency: \"direct dev\"\ndescription:\nname: drift_dev\nsha256: fbad5c1e3a73820cdb1f32161eb2f40bb5e5f03c0c1a3d236595725aec7efc6d\nurl: \"https://pub.dev\"\nsource: hosted\nversion: \"2.35.0\"",
+      "equatable": "dependency: transitive\ndescription:\nname: equatable\nsha256: \"3bce007a596ff8b3119c45d68aaef631272537c03d30e5d4534dd24bf4c5eaa2\"\nurl: \"https://pub.dev\"\nsource: hosted\nversion: \"2.1.0\"",
+      "fake_async": "dependency: \"direct dev\"\ndescription:\nname: fake_async\nsha256: \"5368f224a74523e8d2e7399ea1638b37aecfca824a3cc4dfdf77bf1fa905ac44\"\nurl: \"https://pub.dev\"\nsource: hosted\nversion: \"1.3.3\"",
+      "ffi": "dependency: \"direct main\"\ndescription:\nname: ffi\nsha256: \"6d7fd89431262d8f3125e81b50d3847a091d846eafcd4fdb88dd06f36d705a45\"\nurl: \"https://pub.dev\"\nsource: hosted\nversion: \"2.2.0\"",
+      "ffi_leak_tracker": "dependency: transitive\ndescription:\nname: ffi_leak_tracker\nsha256: \"4093d4ef9ca06ffe2786e73bfb25e22aa92112b9bb4ec941f11e3e6b61489a97\"\nurl: \"https://pub.dev\"\nsource: hosted\nversion: \"0.1.2\"",
+      "file": "dependency: transitive\ndescription:\nname: file\nsha256: a3b4f84adafef897088c160faf7dfffb7696046cb13ae90b508c2cbc95d3b8d4\nurl: \"https://pub.dev\"\nsource: hosted\nversion: \"7.0.1\"",
+      "file_picker": "dependency: \"direct main\"\ndescription:\nname: file_picker\nsha256: \"98c0b156b6380ba55bc767a14e2e6b3feb246e713ad40092424596fa79005bea\"\nurl: \"https://pub.dev\"\nsource: hosted\nversion: \"13.1.0\"",
+      "file_picker_darwin": "dependency: transitive\ndescription:\nname: file_picker_darwin\nsha256: \"51aef9f4c80449c736e7cc02198675fda73689f0bd45a84da642cfeab0250d46\"\nurl: \"https://pub.dev\"\nsource: hosted\nversion: \"2.1.2\"",
+      "file_picker_linux": "dependency: transitive\ndescription:\nname: file_picker_linux\nsha256: e7db600f50672ce5ebbe422ac0906e0f3d2a476188cc93e7126afee12bf08063\nurl: \"https://pub.dev\"\nsource: hosted\nversion: \"2.0.0\"",
+      "file_picker_platform_interface": "dependency: transitive\ndescription:\nname: file_picker_platform_interface\nsha256: bbdc085a6f168e63f147e9ce8988f79fa0800a58e7f25a48f762c60837107ba5\nurl: \"https://pub.dev\"\nsource: hosted\nversion: \"4.0.0\"",
+      "file_picker_web": "dependency: transitive\ndescription:\nname: file_picker_web\nsha256: b3004268da0c1b52baa18df430e7ec4438194de855a807d26b447cbf07ef3496\nurl: \"https://pub.dev\"\nsource: hosted\nversion: \"4.0.0\"",
+      "fixnum": "dependency: transitive\ndescription:\nname: fixnum\nsha256: b6dc7065e46c974bc7c5f143080a6764ec7a4be6da1285ececdc37be96de53be\nurl: \"https://pub.dev\"\nsource: hosted\nversion: \"1.1.1\"",
+      "fl_chart": "dependency: \"direct main\"\ndescription:\nname: fl_chart\nsha256: b938f77d042cbcd822936a7a359a7235bad8bd72070de1f827efc2cc297ac888\nurl: \"https://pub.dev\"\nsource: hosted\nversion: \"1.2.0\"",
+      "fluent_ui": "dependency: \"direct main\"\ndescription:\nname: fluent_ui\nsha256: \"64c2b9dd208f8e3134d3e38db107235ee30c1dd9b792843274687a7ecc063590\"\nurl: \"https://pub.dev\"\nsource: hosted\nversion: \"4.16.1\"",
+      "fluentui_system_icons": "dependency: \"direct main\"\ndescription:\nname: fluentui_system_icons\nsha256: \"1592ae32dae75fb66741ab2c0607bc6554ef086f1c457e27ef937fb4901d33da\"\nurl: \"https://pub.dev\"\nsource: hosted\nversion: \"1.1.273\"",
+      "flutter": "dependency: \"direct main\"\ndescription: flutter\nsource: sdk\nversion: \"0.0.0\"",
+      "flutter_dotenv": "dependency: \"direct main\"\ndescription:\nname: flutter_dotenv\nsha256: d41da11fb497314fbf89811ec30af02d1d898b47980a129f0a8c0a1720460ba2\nurl: \"https://pub.dev\"\nsource: hosted\nversion: \"6.0.1\"",
+      "flutter_launcher_icons": "dependency: \"direct dev\"\ndescription:\nname: flutter_launcher_icons\nsha256: \"10f13781741a2e3972126fae08393d3c4e01fa4cd7473326b94b72cf594195e7\"\nurl: \"https://pub.dev\"\nsource: hosted\nversion: \"0.14.4\"",
+      "flutter_lints": "dependency: \"direct dev\"\ndescription:\nname: flutter_lints\nsha256: \"3105dc8492f6183fb076ccf1f351ac3d60564bff92e20bfc4af9cc1651f4e7e1\"\nurl: \"https://pub.dev\"\nsource: hosted\nversion: \"6.0.0\"",
+      "flutter_local_notifications": "dependency: \"direct main\"\ndescription:\nname: flutter_local_notifications\nsha256: \"357be7ff996dc272e2037c69c1bdd5d1bd21172219d55f8bd2e11aeea602e6d3\"\nurl: \"https://pub.dev\"\nsource: hosted\nversion: \"22.3.1\"",
+      "flutter_local_notifications_linux": "dependency: transitive\ndescription:\nname: flutter_local_notifications_linux\nsha256: \"9ca97e63776f29ab1b955725c09999fc2c150523269db150c39274f2a43c5a8b\"\nurl: \"https://pub.dev\"\nsource: hosted\nversion: \"8.0.1\"",
+      "flutter_local_notifications_platform_interface": "dependency: transitive\ndescription:\nname: flutter_local_notifications_platform_interface\nsha256: \"43c3761d916c9bd3d5c7ebbc44d82f4990329840c0c5d62ad5260cc1b5d399bd\"\nurl: \"https://pub.dev\"\nsource: hosted\nversion: \"12.2.0\"",
+      "flutter_local_notifications_web": "dependency: transitive\ndescription:\nname: flutter_local_notifications_web\nsha256: \"516afaf97a2d1e67a036c6617321b00d205d72f7a67b6eccf936cd565f985878\"\nurl: \"https://pub.dev\"\nsource: hosted\nversion: \"1.0.0\"",
+      "flutter_local_notifications_windows": "dependency: transitive\ndescription:\nname: flutter_local_notifications_windows\nsha256: \"6f43bdd03b171b7a90f22647506fea33e2bb12294b7c7c7a3d690e960a382945\"\nurl: \"https://pub.dev\"\nsource: hosted\nversion: \"3.1.1\"",
+      "flutter_localizations": "dependency: \"direct main\"\ndescription: flutter\nsource: sdk\nversion: \"0.0.0\"",
+      "flutter_secure_storage": "dependency: \"direct main\"\ndescription:\nname: flutter_secure_storage\nsha256: d4e1fb6b2cb524868929e78dc0282fa000554b22060fb53789dc481c9fc95bb8\nurl: \"https://pub.dev\"\nsource: hosted\nversion: \"11.2.0\"",
+      "flutter_secure_storage_darwin": "dependency: transitive\ndescription:\nname: flutter_secure_storage_darwin\nsha256: a031ceac9b070e62ef183cd7f7d1a8798ebde402d5049f0fe6eb3a51bd797a21\nurl: \"https://pub.dev\"\nsource: hosted\nversion: \"0.4.3\"",
+      "flutter_secure_storage_linux": "dependency: transitive\ndescription:\nname: flutter_secure_storage_linux\nsha256: caa75bd78f017422912e3a904933113b2428eb79f981ac37acd2dd2a700458ea\nurl: \"https://pub.dev\"\nsource: hosted\nversion: \"3.0.3\"",
+      "flutter_secure_storage_platform_interface": "dependency: transitive\ndescription:\nname: flutter_secure_storage_platform_interface\nsha256: \"64951127f001f546891c86f414972bf49ef2c4c8a4c92c65f5790cc0c9100045\"\nurl: \"https://pub.dev\"\nsource: hosted\nversion: \"2.1.1\"",
+      "flutter_secure_storage_web": "dependency: transitive\ndescription:\nname: flutter_secure_storage_web\nsha256: \"073a62b3aeb866ab4ce795f960413948e51e5a42a9b0c8333b6daf5bb3208a1c\"\nurl: \"https://pub.dev\"\nsource: hosted\nversion: \"2.1.1\"",
+      "flutter_secure_storage_windows": "dependency: transitive\ndescription:\nname: flutter_secure_storage_windows\nsha256: \"471951813a97006d899db4948acc654a4f28c440083ea08178935ce20b173ec1\"\nurl: \"https://pub.dev\"\nsource: hosted\nversion: \"4.2.2\"",
+      "flutter_test": "dependency: \"direct dev\"\ndescription: flutter\nsource: sdk\nversion: \"0.0.0\"",
+      "flutter_web_plugins": "dependency: transitive\ndescription: flutter\nsource: sdk\nversion: \"0.0.0\"",
+      "frontend_server_client": "dependency: transitive\ndescription:\nname: frontend_server_client\nsha256: f64a0333a82f30b0cca061bc3d143813a486dc086b574bfb233b7c1372427694\nurl: \"https://pub.dev\"\nsource: hosted\nversion: \"4.0.0\"",
+      "get_it": "dependency: \"direct main\"\ndescription:\nname: get_it\nsha256: \"2b5c6b077aad30bba9782178baff6076a2044141f1d5f2f15b43bca3fbe74874\"\nurl: \"https://pub.dev\"\nsource: hosted\nversion: \"9.3.0\"",
+      "glob": "dependency: transitive\ndescription:\nname: glob\nsha256: \"218aeb56050c714f62a3182775320dfa04602b55074873e24e31bbd39bda96fb\"\nurl: \"https://pub.dev\"\nsource: hosted\nversion: \"2.2.0\"",
+      "go_router": "dependency: \"direct main\"\ndescription:\nname: go_router\nsha256: \"008ab21d89d0de8ccd79586838f7533f126c2d894f50bf25f2947888d3c225b5\"\nurl: \"https://pub.dev\"\nsource: hosted\nversion: \"18.0.1\"",
+      "google_fonts": "dependency: \"direct main\"\ndescription:\nname: google_fonts\nsha256: e3cb3ee6b47fd2472c23de6da5744796a4da195137759ddb3fbcc9467b7b3c7d\nurl: \"https://pub.dev\"\nsource: hosted\nversion: \"8.2.1\"",
+      "graphs": "dependency: transitive\ndescription:\nname: graphs\nsha256: \"741bbf84165310a68ff28fe9e727332eef1407342fca52759cb21ad8177bb8d0\"\nurl: \"https://pub.dev\"\nsource: hosted\nversion: \"2.3.2\"",
+      "hooks": "dependency: transitive\ndescription:\nname: hooks\nsha256: eaac480a35ec0814146c2c48d96aaa829e0e44a7662c88ae84c9edf4bc35651f\nurl: \"https://pub.dev\"\nsource: hosted\nversion: \"2.2.0\"",
+      "http": "dependency: transitive\ndescription:\nname: http\nsha256: \"87721a4a50b19c7f1d49001e51409bddc46303966ce89a65af4f4e6004896412\"\nurl: \"https://pub.dev\"\nsource: hosted\nversion: \"1.6.0\"",
+      "http_multi_server": "dependency: transitive\ndescription:\nname: http_multi_server\nsha256: aa6199f908078bb1c5efb8d8638d4ae191aac11b311132c3ef48ce352fb52ef8\nurl: \"https://pub.dev\"\nsource: hosted\nversion: \"3.2.2\"",
+      "http_parser": "dependency: transitive\ndescription:\nname: http_parser\nsha256: \"178d74305e7866013777bab2c3d8726205dc5a4dd935297175b19a23a2e66571\"\nurl: \"https://pub.dev\"\nsource: hosted\nversion: \"4.1.2\"",
+      "image": "dependency: transitive\ndescription:\nname: image\nsha256: a1e7f4951e538a568e14b856702afc9ae1d2f4b202daced8d22c1b9cd211ce89\nurl: \"https://pub.dev\"\nsource: hosted\nversion: \"4.10.1\"",
+      "intl": "dependency: \"direct main\"\ndescription:\nname: intl\nsha256: \"1ca20c894b1717686a2319b8548763d812bc0aabdac580420a44c5178c57a867\"\nurl: \"https://pub.dev\"\nsource: hosted\nversion: \"0.20.3\"",
+      "io": "dependency: transitive\ndescription:\nname: io\nsha256: \"2635216ca6a737e60de577ffa1a48a0bec76ca8a62917cfc1bb88c14c570646f\"\nurl: \"https://pub.dev\"\nsource: hosted\nversion: \"1.1.0\"",
+      "jni": "dependency: transitive\ndescription:\nname: jni\nsha256: f038e58b4dc2c9037f50e233175086337e0b305e356d28211bf55f21c504cbd3\nurl: \"https://pub.dev\"\nsource: hosted\nversion: \"1.0.3\"",
+      "jni_flutter": "dependency: transitive\ndescription:\nname: jni_flutter\nsha256: b2310cdd4c18c65c081ab141a41efa94aa26c65431803703ece51996f174f351\nurl: \"https://pub.dev\"\nsource: hosted\nversion: \"1.0.3\"",
+      "jni_util": "dependency: transitive\ndescription:\nname: jni_util\nsha256: \"1ba86da04a5f2bf18fde2edb235587e70c5b0fc5bd4ba955f46b00942c3fc35f\"\nurl: \"https://pub.dev\"\nsource: hosted\nversion: \"1.0.0\"",
+      "jose": "dependency: \"direct main\"\ndescription:\nname: jose\nsha256: a0a339d0a0652dc1bd89f8b92d38479e07e16db83858fb55fa57212479f323f7\nurl: \"https://pub.dev\"\nsource: hosted\nversion: \"0.3.5+2\"",
+      "json_annotation": "dependency: transitive\ndescription:\nname: json_annotation\nsha256: \"2a743920d81b7910627f68ee2c9ac1fc0bfee32b9fc3403587d7c6791ca12f80\"\nurl: \"https://pub.dev\"\nsource: hosted\nversion: \"4.12.0\"",
+      "json_schema": "dependency: \"direct main\"\ndescription:\nname: json_schema\nsha256: f37d9c3fdfe8c9aae55fdfd5af815d24ce63c3a0f6a2c1f0982c30f43643fa1a\nurl: \"https://pub.dev\"\nsource: hosted\nversion: \"5.2.2\"",
+      "leak_tracker": "dependency: transitive\ndescription:\nname: leak_tracker\nsha256: \"33e2e26bdd85a0112ec15400c8cbffea70d0f9c3407491f672a2fad47915e2de\"\nurl: \"https://pub.dev\"\nsource: hosted\nversion: \"11.0.2\"",
+      "leak_tracker_flutter_testing": "dependency: transitive\ndescription:\nname: leak_tracker_flutter_testing\nsha256: \"1dbc140bb5a23c75ea9c4811222756104fbcd1a27173f0c34ca01e16bea473c1\"\nurl: \"https://pub.dev\"\nsource: hosted\nversion: \"3.0.10\"",
+      "leak_tracker_testing": "dependency: transitive\ndescription:\nname: leak_tracker_testing\nsha256: \"8d5a2d49f4a66b49744b23b018848400d23e54caf9463f4eb20df3eb8acb2eb1\"\nurl: \"https://pub.dev\"\nsource: hosted\nversion: \"3.0.2\"",
+      "lints": "dependency: transitive\ndescription:\nname: lints\nsha256: \"12f842a479589fea194fe5c5a3095abc7be0c1f2ddfa9a0e76aed1dbd26a87df\"\nurl: \"https://pub.dev\"\nsource: hosted\nversion: \"6.1.0\"",
+      "logger": "dependency: \"direct main\"\ndescription:\nname: logger\nsha256: \"2a0dc097e7b01d942475bdd552356db2d0f768b05540bd4b2b53f1840f2239a7\"\nurl: \"https://pub.dev\"\nsource: hosted\nversion: \"2.8.0\"",
+      "logging": "dependency: transitive\ndescription:\nname: logging\nsha256: c8245ada5f1717ed44271ed1c26b8ce85ca3228fd2ffdb75468ab01979309d61\nurl: \"https://pub.dev\"\nsource: hosted\nversion: \"1.3.0\"",
+      "mailer": "dependency: \"direct main\"\ndescription:\nname: mailer\nsha256: \"9f7213f57272c2a047f13ae89e68652d492f929d84ded9a618424b38da328f97\"\nurl: \"https://pub.dev\"\nsource: hosted\nversion: \"7.2.0\"",
+      "matcher": "dependency: transitive\ndescription:\nname: matcher\nsha256: \"31bd099b47c10cd1aeb55146a2d46ce0277630ecef3f7dae54ad7873f36696cd\"\nurl: \"https://pub.dev\"\nsource: hosted\nversion: \"0.12.20\"",
+      "material_color_utilities": "dependency: transitive\ndescription:\nname: material_color_utilities\nsha256: \"9c337007e82b1889149c82ed242ed1cb24a66044e30979c44912381e9be4c48b\"\nurl: \"https://pub.dev\"\nsource: hosted\nversion: \"0.13.0\"",
+      "material_ui": "dependency: transitive\ndescription:\nname: material_ui\nsha256: \"134ab2f0843545c4e661e4ba2753fe1bcf0753cb690d5a9ee4870638a40411e9\"\nurl: \"https://pub.dev\"\nsource: hosted\nversion: \"1.4.0\"",
+      "math_expressions": "dependency: transitive\ndescription:\nname: math_expressions\nsha256: \"22aca3a24e445be5f42ecf186cbded1f9951bf9ec5eb48fcddbd55e102bb11f5\"\nurl: \"https://pub.dev\"\nsource: hosted\nversion: \"3.2.0\"",
+      "meta": "dependency: \"direct main\"\ndescription:\nname: meta\nsha256: \"307249ce4ff29d58a18e97f6345f539382eb9c9c29ecda628900f31de0443dd9\"\nurl: \"https://pub.dev\"\nsource: hosted\nversion: \"1.19.0\"",
+      "mime": "dependency: transitive\ndescription:\nname: mime\nsha256: bd47de35f07e27267e69c8c8b22edf9473bfee170a60d60fcc93730c5144b7f6\nurl: \"https://pub.dev\"\nsource: hosted\nversion: \"2.1.0\"",
+      "mocktail": "dependency: \"direct dev\"\ndescription:\nname: mocktail\nsha256: \"5e1bf53cc7baa8062a33b84424deb61513858ea05c601b8509e683815b5914aa\"\nurl: \"https://pub.dev\"\nsource: hosted\nversion: \"1.0.5\"",
+      "native_toolchain_c": "dependency: transitive\ndescription:\nname: native_toolchain_c\nsha256: a1c26117c48cebe5677b0cf0e33a980a79a7c5577effc86f52e5a0d309cdcb60\nurl: \"https://pub.dev\"\nsource: hosted\nversion: \"0.19.3\"",
+      "nativeapi": "dependency: transitive\ndescription:\nname: nativeapi\nsha256: \"2f40b3ac356097f56efa8188703159c303ce2b8b078d04c3d2d4afbe95b384ce\"\nurl: \"https://pub.dev\"\nsource: hosted\nversion: \"0.3.0\"",
+      "nested": "dependency: transitive\ndescription:\nname: nested\nsha256: \"03bac4c528c64c95c722ec99280375a6f2fc708eec17c7b3f07253b626cd2a20\"\nurl: \"https://pub.dev\"\nsource: hosted\nversion: \"1.0.0\"",
+      "node_preamble": "dependency: transitive\ndescription:\nname: node_preamble\nsha256: \"6e7eac89047ab8a8d26cf16127b5ed26de65209847630400f9aefd7cd5c730db\"\nurl: \"https://pub.dev\"\nsource: hosted\nversion: \"2.0.2\"",
+      "objective_c": "dependency: transitive\ndescription:\nname: objective_c\nsha256: b7fb95a6d9a4f009edd63dc5ac69f07420b23a16161c6dd8660290b59c602e8e\nurl: \"https://pub.dev\"\nsource: hosted\nversion: \"9.5.0\"",
+      "odbc_fast": "dependency: \"direct main\"\ndescription:\npath: \".\"\nref: \"8c6ef35cafc6fbdfa50037e24f54da8e07fe5d60\"\nresolved-ref: \"8c6ef35cafc6fbdfa50037e24f54da8e07fe5d60\"\nurl: \"https://github.com/cesar-carlos/dart_odbc_fast.git\"\nsource: git\nversion: \"5.0.0\"",
+      "opentelemetry": "dependency: transitive\ndescription:\nname: opentelemetry\nsha256: \"92d63a2e0731d34a7548add82420b8f3819ccda569f9bdfdcc4b25e00fe88da4\"\nurl: \"https://pub.dev\"\nsource: hosted\nversion: \"0.18.11\"",
+      "package_config": "dependency: transitive\ndescription:\nname: package_config\nsha256: f096c55ebb7deb7e384101542bfba8c52696c1b56fca2eb62827989ef2353bbc\nurl: \"https://pub.dev\"\nsource: hosted\nversion: \"2.2.0\"",
+      "package_info_plus": "dependency: \"direct main\"\ndescription:\nname: package_info_plus\nsha256: \"127e1751e37ffb2ff4658beeaca77bad0c27bf5f932bd3a501c2296926d4b481\"\nurl: \"https://pub.dev\"\nsource: hosted\nversion: \"10.2.1\"",
+      "package_info_plus_platform_interface": "dependency: transitive\ndescription:\nname: package_info_plus_platform_interface\nsha256: db762cb2f4f25ee60fb6359773861b0f199e00b90d237bd85a76a1e806b46ef4\nurl: \"https://pub.dev\"\nsource: hosted\nversion: \"4.1.0\"",
+      "path": "dependency: \"direct main\"\ndescription:\nname: path\nsha256: \"75cca69d1490965be98c73ceaea117e8a04dd21217b37b292c9ddbec0d955bc5\"\nurl: \"https://pub.dev\"\nsource: hosted\nversion: \"1.9.1\"",
+      "path_provider": "dependency: \"direct main\"\ndescription:\nname: path_provider\nsha256: a7f4874f987173da295a61c181b8ee71dab59b332a486b391babf26a1b884825\nurl: \"https://pub.dev\"\nsource: hosted\nversion: \"2.1.6\"",
+      "path_provider_android": "dependency: transitive\ndescription:\nname: path_provider_android\nsha256: \"69cbd515a62b94d32a7944f086b2f82b4ac40a1d45bebfc00813a430ab2dabcd\"\nurl: \"https://pub.dev\"\nsource: hosted\nversion: \"2.3.1\"",
+      "path_provider_foundation": "dependency: transitive\ndescription:\nname: path_provider_foundation\nsha256: \"2a376b7d6392d80cd3705782d2caa734ca4727776db0b6ec36ef3f1855197699\"\nurl: \"https://pub.dev\"\nsource: hosted\nversion: \"2.6.0\"",
+      "path_provider_linux": "dependency: transitive\ndescription:\nname: path_provider_linux\nsha256: \"58c2005f147315b11e9b4a7bc889cd5203e250cba8e3f012dae259b4972b5c16\"\nurl: \"https://pub.dev\"\nsource: hosted\nversion: \"2.2.2\"",
+      "path_provider_platform_interface": "dependency: transitive\ndescription:\nname: path_provider_platform_interface\nsha256: \"484838772624c3a4b94f1e44a3e19897fee738f2d5c4ce448443b0417f7c9dda\"\nurl: \"https://pub.dev\"\nsource: hosted\nversion: \"2.1.3\"",
+      "path_provider_windows": "dependency: transitive\ndescription:\nname: path_provider_windows\nsha256: bd6f00dbd873bfb70d0761682da2b3a2c2fccc2b9e84c495821639601d81afe7\nurl: \"https://pub.dev\"\nsource: hosted\nversion: \"2.3.0\"",
+      "petitparser": "dependency: transitive\ndescription:\nname: petitparser\nsha256: \"91bd59303e9f769f108f8df05e371341b15d59e995e6806aefab827b58336675\"\nurl: \"https://pub.dev\"\nsource: hosted\nversion: \"7.0.2\"",
+      "platform": "dependency: transitive\ndescription:\nname: platform\nsha256: a36d119c13416516a7b5913fbe8af8531e11633d784c550b2125f76c758524ec\nurl: \"https://pub.dev\"\nsource: hosted\nversion: \"3.2.0\"",
+      "plugin_platform_interface": "dependency: transitive\ndescription:\nname: plugin_platform_interface\nsha256: \"4820fbfdb9478b1ebae27888254d445073732dae3d6ea81f0b7e06d5dedc3f02\"\nurl: \"https://pub.dev\"\nsource: hosted\nversion: \"2.1.8\"",
+      "pointycastle": "dependency: transitive\ndescription:\nname: pointycastle\nsha256: \"92aa3841d083cc4b0f4709b5c74fd6409a3e6ba833ffc7dc6a8fee096366acf5\"\nurl: \"https://pub.dev\"\nsource: hosted\nversion: \"4.0.0\"",
+      "pool": "dependency: transitive\ndescription:\nname: pool\nsha256: \"4177f68c237ea2128d1bee66ac17b2ce05ba3dbaafcbdd54c5d40a39d0b6b11c\"\nurl: \"https://pub.dev\"\nsource: hosted\nversion: \"1.5.3\"",
+      "posix": "dependency: transitive\ndescription:\nname: posix\nsha256: bc1bad54ad2b735816e31f8d4600cfde6c7839975085ddfbca48b6c9f7c4044e\nurl: \"https://pub.dev\"\nsource: hosted\nversion: \"6.5.2\"",
+      "protobuf": "dependency: transitive\ndescription:\nname: protobuf\nsha256: \"13b6717366aa7ec3792dd62c19c7d33a785708224365f2db23c5ca01f1c1a0f2\"\nurl: \"https://pub.dev\"\nsource: hosted\nversion: \"6.1.0\"",
+      "protoc_plugin": "dependency: \"direct dev\"\ndescription:\nname: protoc_plugin\nsha256: e6df1acfca57523537da0ce629bf02d5f8378364f18f8a45bd914abd53e48403\nurl: \"https://pub.dev\"\nsource: hosted\nversion: \"25.1.0\"",
+      "provider": "dependency: \"direct main\"\ndescription:\nname: provider\nsha256: \"4e82183fa20e5ca25703ead7e05de9e4cceed1fbd1eadc1ac3cb6f565a09f272\"\nurl: \"https://pub.dev\"\nsource: hosted\nversion: \"6.1.5+1\"",
+      "pub_semver": "dependency: transitive\ndescription:\nname: pub_semver\nsha256: \"261236774e8b1d69cfc6b9eabbc96c40f25e7a2d6b171f3385d4f65d5734fb24\"\nurl: \"https://pub.dev\"\nsource: hosted\nversion: \"2.2.1\"",
+      "pubspec_parse": "dependency: transitive\ndescription:\nname: pubspec_parse\nsha256: c38b81cbf34450b67e0265d73433569d12e34782e30ed769c9cc99c9d5f2e796\nurl: \"https://pub.dev\"\nsource: hosted\nversion: \"1.6.0\"",
+      "punycoder": "dependency: transitive\ndescription:\nname: punycoder\nsha256: \"982734df864d9588eb13e28ac1c5a46b57e22117b3696032ac58739966cec190\"\nurl: \"https://pub.dev\"\nsource: hosted\nversion: \"0.3.0\"",
+      "quiver": "dependency: transitive\ndescription:\nname: quiver\nsha256: ea0b925899e64ecdfbf9c7becb60d5b50e706ade44a85b2363be2a22d88117d2\nurl: \"https://pub.dev\"\nsource: hosted\nversion: \"3.2.2\"",
+      "recase": "dependency: transitive\ndescription:\nname: recase\nsha256: e4eb4ec2dcdee52dcf99cb4ceabaffc631d7424ee55e56f280bc039737f89213\nurl: \"https://pub.dev\"\nsource: hosted\nversion: \"4.1.0\"",
+      "record_use": "dependency: transitive\ndescription:\nname: record_use\nsha256: \"1cb8564af8d43b464294411db9217f5ec04891c6f22ee2c32d73ae05e88a6bd2\"\nurl: \"https://pub.dev\"\nsource: hosted\nversion: \"1.1.1\"",
+      "result_dart": "dependency: \"direct main\"\ndescription:\nname: result_dart\nsha256: \"80096f0928e276c024e53cf1bb2aaffd5a94623dac8fdfa5cb3529e82b51eb3c\"\nurl: \"https://pub.dev\"\nsource: hosted\nversion: \"2.2.0\"",
+      "rfc_6901": "dependency: transitive\ndescription:\nname: rfc_6901\nsha256: \"6a43b1858dca2febaf93e15639aa6b0c49ccdfd7647775f15a499f872b018154\"\nurl: \"https://pub.dev\"\nsource: hosted\nversion: \"0.2.1\"",
+      "screen_retriever": "dependency: transitive\ndescription:\nname: screen_retriever\nsha256: ace919117a7520c13a50a6259e60c4a0d4cbe98809468792a91b5c5adada2aa6\nurl: \"https://pub.dev\"\nsource: hosted\nversion: \"0.2.2\"",
+      "screen_retriever_linux": "dependency: transitive\ndescription:\nname: screen_retriever_linux\nsha256: \"7b52006a5ceae1f3d5af7f77188c3290d6e7d8ded16d99809bea84967c65c257\"\nurl: \"https://pub.dev\"\nsource: hosted\nversion: \"0.2.2\"",
+      "screen_retriever_macos": "dependency: transitive\ndescription:\nname: screen_retriever_macos\nsha256: a1489b99cce597c45a54b9aae1cd94c8d4705353b7e0bb2457a6e4de44e0ad8a\nurl: \"https://pub.dev\"\nsource: hosted\nversion: \"0.2.2\"",
+      "screen_retriever_platform_interface": "dependency: transitive\ndescription:\nname: screen_retriever_platform_interface\nsha256: \"94a5535277510a63184ca178ce12a1449bc0b38618879aa1c18bf57369c5064a\"\nurl: \"https://pub.dev\"\nsource: hosted\nversion: \"0.2.2\"",
+      "screen_retriever_windows": "dependency: transitive\ndescription:\nname: screen_retriever_windows\nsha256: dafc6922b0bfbf1d48cf3ccbf519b4fff47bdcb820da1728ea6db675fecc9324\nurl: \"https://pub.dev\"\nsource: hosted\nversion: \"0.2.2\"",
+      "scroll_pos": "dependency: transitive\ndescription:\nname: scroll_pos\nsha256: cebf602b2dd939de6832bb902ffefb574608d1b84f420b82b381a4007d3c1e1b\nurl: \"https://pub.dev\"\nsource: hosted\nversion: \"0.5.0\"",
+      "shared_preferences": "dependency: \"direct main\"\ndescription:\nname: shared_preferences\nsha256: c3025c5534b01739267eb7d76959bbc25a6d10f6988e1c2a3036940133dd10bf\nurl: \"https://pub.dev\"\nsource: hosted\nversion: \"2.5.5\"",
+      "shared_preferences_android": "dependency: transitive\ndescription:\nname: shared_preferences_android\nsha256: \"1e12aafe408aa50da80edfd679a2a6bf63ba7ab37c7fa98286da459a757b3399\"\nurl: \"https://pub.dev\"\nsource: hosted\nversion: \"2.4.28\"",
+      "shared_preferences_foundation": "dependency: transitive\ndescription:\nname: shared_preferences_foundation\nsha256: \"2ec3934efa51e46117f23031cc141b8fc878e8525b94ec1ea4f7f586cf1b47ea\"\nurl: \"https://pub.dev\"\nsource: hosted\nversion: \"2.5.7\"",
+      "shared_preferences_linux": "dependency: transitive\ndescription:\nname: shared_preferences_linux\nsha256: \"580abfd40f415611503cae30adf626e6656dfb2f0cee8f465ece7b6defb40f2f\"\nurl: \"https://pub.dev\"\nsource: hosted\nversion: \"2.4.1\"",
+      "shared_preferences_platform_interface": "dependency: transitive\ndescription:\nname: shared_preferences_platform_interface\nsha256: \"649dc798a33931919ea356c4305c2d1f81619ea6e92244070b520187b5140ef9\"\nurl: \"https://pub.dev\"\nsource: hosted\nversion: \"2.4.2\"",
+      "shared_preferences_web": "dependency: transitive\ndescription:\nname: shared_preferences_web\nsha256: c49bd060261c9a3f0ff445892695d6212ff603ef3115edbb448509d407600019\nurl: \"https://pub.dev\"\nsource: hosted\nversion: \"2.4.3\"",
+      "shared_preferences_windows": "dependency: transitive\ndescription:\nname: shared_preferences_windows\nsha256: \"94ef0f72b2d71bc3e700e025db3710911bd51a71cefb65cc609dd0d9a982e3c1\"\nurl: \"https://pub.dev\"\nsource: hosted\nversion: \"2.4.1\"",
+      "shelf": "dependency: transitive\ndescription:\nname: shelf\nsha256: e7dd780a7ffb623c57850b33f43309312fc863fb6aa3d276a754bb299839ef12\nurl: \"https://pub.dev\"\nsource: hosted\nversion: \"1.4.2\"",
+      "shelf_packages_handler": "dependency: transitive\ndescription:\nname: shelf_packages_handler\nsha256: \"89f967eca29607c933ba9571d838be31d67f53f6e4ee15147d5dc2934fee1b1e\"\nurl: \"https://pub.dev\"\nsource: hosted\nversion: \"3.0.2\"",
+      "shelf_static": "dependency: transitive\ndescription:\nname: shelf_static\nsha256: c87c3875f91262785dade62d135760c2c69cb217ac759485334c5857ad89f6e3\nurl: \"https://pub.dev\"\nsource: hosted\nversion: \"1.1.3\"",
+      "shelf_web_socket": "dependency: transitive\ndescription:\nname: shelf_web_socket\nsha256: \"3632775c8e90d6c9712f883e633716432a27758216dfb61bd86a8321c0580925\"\nurl: \"https://pub.dev\"\nsource: hosted\nversion: \"3.0.0\"",
+      "sky_engine": "dependency: transitive\ndescription: flutter\nsource: sdk\nversion: \"0.0.0\"",
+      "socket_io_client": "dependency: \"direct main\"\ndescription:\nname: socket_io_client\nsha256: f5990ff303d385e7b2150f0e57cca097a8d20c6a2ae0a22cb2d496661ea8ed9b\nurl: \"https://pub.dev\"\nsource: hosted\nversion: \"3.1.6\"",
+      "socket_io_common": "dependency: transitive\ndescription:\nname: socket_io_common\nsha256: \"162fbaecbf4bf9a9372a62a341b3550b51dcef2f02f3e5830a297fd48203d45b\"\nurl: \"https://pub.dev\"\nsource: hosted\nversion: \"3.1.1\"",
+      "source_gen": "dependency: transitive\ndescription:\nname: source_gen\nsha256: a603f1fb984a7391ae5978d1b92bfaaa08b350dca5c825256f925818f7943bf5\nurl: \"https://pub.dev\"\nsource: hosted\nversion: \"4.2.4\"",
+      "source_map_stack_trace": "dependency: transitive\ndescription:\nname: source_map_stack_trace\nsha256: c0713a43e323c3302c2abe2a1cc89aa057a387101ebd280371d6a6c9fa68516b\nurl: \"https://pub.dev\"\nsource: hosted\nversion: \"2.1.2\"",
+      "source_maps": "dependency: transitive\ndescription:\nname: source_maps\nsha256: \"14c2945847669b44089bb1222f66873d7ff7103c58911917f2a63c5a62327898\"\nurl: \"https://pub.dev\"\nsource: hosted\nversion: \"0.10.14\"",
+      "source_span": "dependency: transitive\ndescription:\nname: source_span\nsha256: \"56a02f1f4cd1a2d96303c0144c93bd6d909eea6bee6bf5a0e0b685edbd4c47ab\"\nurl: \"https://pub.dev\"\nsource: hosted\nversion: \"1.10.2\"",
+      "sqlite3": "dependency: \"direct main\"\ndescription:\nname: sqlite3\nsha256: fa3fd961e83b2dca8890a7b1014ab1226831d2b5908067c0ab7f385ffb655caf\nurl: \"https://pub.dev\"\nsource: hosted\nversion: \"3.6.0\"",
+      "sqlparser": "dependency: transitive\ndescription:\nname: sqlparser\nsha256: \"772bb2f6f5bce0631a60f26b57d6e8882e1105c22345b05c163ee6ee5d7ba32d\"\nurl: \"https://pub.dev\"\nsource: hosted\nversion: \"0.45.0\"",
+      "stack_trace": "dependency: transitive\ndescription:\nname: stack_trace\nsha256: \"277654b3034d17ac6f9f1cb5595db011b1d5d41e8806866db28e0abaa101c490\"\nurl: \"https://pub.dev\"\nsource: hosted\nversion: \"1.12.2\"",
+      "stream_channel": "dependency: transitive\ndescription:\nname: stream_channel\nsha256: \"969e04c80b8bcdf826f8f16579c7b14d780458bd97f56d107d3950fdbeef059d\"\nurl: \"https://pub.dev\"\nsource: hosted\nversion: \"2.1.4\"",
+      "stream_transform": "dependency: transitive\ndescription:\nname: stream_transform\nsha256: a00e5f18bffc764f923e7dec1038527f7fe7a1791361a7117f0358193f13d53a\nurl: \"https://pub.dev\"\nsource: hosted\nversion: \"2.1.2\"",
+      "string_normalizer": "dependency: transitive\ndescription:\nname: string_normalizer\nsha256: \"4bc0b4edafe1517fafa79e9e6e163ea078205bcb9399d069377df6bbd6f7c57d\"\nurl: \"https://pub.dev\"\nsource: hosted\nversion: \"0.4.0\"",
+      "string_scanner": "dependency: transitive\ndescription:\nname: string_scanner\nsha256: \"921cd31725b72fe181906c6a94d987c78e3b98c2e205b397ea399d4054872b43\"\nurl: \"https://pub.dev\"\nsource: hosted\nversion: \"1.4.1\"",
+      "syncfusion_flutter_core": "dependency: \"direct main\"\ndescription:\nname: syncfusion_flutter_core\nsha256: \"85c1d4be09cfa5b74a026cd1b4c5c7c1a2b2bf709e5e61d4c2feee989ebb1da4\"\nurl: \"https://pub.dev\"\nsource: hosted\nversion: \"34.2.9\"",
+      "syncfusion_flutter_datagrid": "dependency: \"direct main\"\ndescription:\nname: syncfusion_flutter_datagrid\nsha256: \"42967c16e2bb35d9169d5b2a197fdad1d4bc3ac1c627ad9a865c654742f72bce\"\nurl: \"https://pub.dev\"\nsource: hosted\nversion: \"34.2.9\"",
+      "term_glyph": "dependency: transitive\ndescription:\nname: term_glyph\nsha256: \"7f554798625ea768a7518313e58f83891c7f5024f88e46e7182a4558850a4b8e\"\nurl: \"https://pub.dev\"\nsource: hosted\nversion: \"1.2.2\"",
+      "test": "dependency: \"direct dev\"\ndescription:\nname: test\nsha256: ca578dc12bb8b2f40b67b7d3bd2fac4f31c01a6ff7130a14e2597b919934507f\nurl: \"https://pub.dev\"\nsource: hosted\nversion: \"1.31.1\"",
+      "test_api": "dependency: transitive\ndescription:\nname: test_api\nsha256: \"2a122cbe059f8b610d3a5415f42e255b6c17b1f21eee1d960f31080237fb4f11\"\nurl: \"https://pub.dev\"\nsource: hosted\nversion: \"0.7.12\"",
+      "test_core": "dependency: transitive\ndescription:\nname: test_core\nsha256: d2e98ec12998368dc59ddd47ab709f2cd55acd6b66dc7db764455a44082f4bc5\nurl: \"https://pub.dev\"\nsource: hosted\nversion: \"0.6.18\"",
+      "timezone": "dependency: \"direct main\"\ndescription:\nname: timezone\nsha256: \"981d1020d6ef8fe1e7b3de5054e5b25579ae7c403d7734adc508ffc47668e9cb\"\nurl: \"https://pub.dev\"\nsource: hosted\nversion: \"0.11.1\"",
+      "tray_manager": "dependency: \"direct main\"\ndescription:\nname: tray_manager\nsha256: \"1f504e8e858cf44af1f5147df05d68ef735902d3259eac69aafc8afd8ee38a0e\"\nurl: \"https://pub.dev\"\nsource: hosted\nversion: \"0.7.0\"",
+      "typed_data": "dependency: transitive\ndescription:\nname: typed_data\nsha256: f9049c039ebfeb4cf7a7104a675823cd72dba8297f264b6637062516699fa006\nurl: \"https://pub.dev\"\nsource: hosted\nversion: \"1.4.0\"",
+      "unorm_dart": "dependency: transitive\ndescription:\nname: unorm_dart\nsha256: \"0c69186b03ca6addab0774bcc0f4f17b88d4ce78d9d4d8f0619e30a99ead58e7\"\nurl: \"https://pub.dev\"\nsource: hosted\nversion: \"0.3.2\"",
+      "uri": "dependency: transitive\ndescription:\nname: uri\nsha256: \"889eea21e953187c6099802b7b4cf5219ba8f3518f604a1033064d45b1b8268a\"\nurl: \"https://pub.dev\"\nsource: hosted\nversion: \"1.0.0\"",
+      "uuid": "dependency: \"direct main\"\ndescription:\nname: uuid\nsha256: \"9b129329f58692f6e6578329498a8fe9fbe98f090beb764ffbb8ee2eadd01dcd\"\nurl: \"https://pub.dev\"\nsource: hosted\nversion: \"4.6.0\"",
+      "vector_math": "dependency: transitive\ndescription:\nname: vector_math\nsha256: \"92b9910f66ed1057fd4da7b040ae7c74cafacf885bdc81be496928d5049b032d\"\nurl: \"https://pub.dev\"\nsource: hosted\nversion: \"2.4.3\"",
+      "very_good_analysis": "dependency: \"direct dev\"\ndescription:\nname: very_good_analysis\nsha256: \"0bd5eb8d6be76aa0d71e70cbdae6cac8f784f761170568e3c2214a6948c7f6d3\"\nurl: \"https://pub.dev\"\nsource: hosted\nversion: \"11.0.0\"",
+      "vm_service": "dependency: \"direct dev\"\ndescription:\nname: vm_service\nsha256: \"5f37239c4851efcef929cea7824e76df7f2f0970aef85d66bbc430afa40e72f0\"\nurl: \"https://pub.dev\"\nsource: hosted\nversion: \"15.3.0\"",
+      "watcher": "dependency: transitive\ndescription:\nname: watcher\nsha256: \"1398c9f081a753f9226febe8900fce8f7d0a67163334e1c94a2438339d79d635\"\nurl: \"https://pub.dev\"\nsource: hosted\nversion: \"1.2.1\"",
+      "web": "dependency: transitive\ndescription:\nname: web\nsha256: \"868d88a33d8a87b18ffc05f9f030ba328ffefba92d6c127917a2ba740f9cfe4a\"\nurl: \"https://pub.dev\"\nsource: hosted\nversion: \"1.1.1\"",
+      "web_socket": "dependency: transitive\ndescription:\nname: web_socket\nsha256: \"34d64019aa8e36bf9842ac014bb5d2f5586ca73df5e4d9bf5c936975cae6982c\"\nurl: \"https://pub.dev\"\nsource: hosted\nversion: \"1.0.1\"",
+      "web_socket_channel": "dependency: transitive\ndescription:\nname: web_socket_channel\nsha256: d645757fb0f4773d602444000a8131ff5d48c9e47adfe9772652dd1a4f2d45c8\nurl: \"https://pub.dev\"\nsource: hosted\nversion: \"3.0.3\"",
+      "webkit_inspection_protocol": "dependency: transitive\ndescription:\nname: webkit_inspection_protocol\nsha256: \"87d3f2333bb240704cd3f1c6b5b7acd8a10e7f0bc28c28dcf14e782014f4a572\"\nurl: \"https://pub.dev\"\nsource: hosted\nversion: \"1.2.1\"",
+      "win32": "dependency: \"direct main\"\ndescription:\nname: win32\nsha256: a0b93865d5644f11cf6a8c3f6db909f1ec168958b5805f6cc684adea957cd63d\nurl: \"https://pub.dev\"\nsource: hosted\nversion: \"6.4.0\"",
+      "window_manager": "dependency: \"direct main\"\ndescription:\nname: window_manager\nsha256: \"05c231fd7b23d2380f14c5cc10b7b93d60d4fa4a2fb4e0f032de27e44b5560e9\"\nurl: \"https://pub.dev\"\nsource: hosted\nversion: \"0.5.2\"",
+      "windows_file_picker": "dependency: transitive\ndescription:\nname: windows_file_picker\nsha256: \"9f3aa833068b09e380fdc59560ad260a4a14e9397173abb533699f967443602e\"\nurl: \"https://pub.dev\"\nsource: hosted\nversion: \"2.0.0\"",
+      "x509": "dependency: transitive\ndescription:\nname: x509\nsha256: cbd1a63846884afd273cda247b0365284c8d85a365ca98e110413f93d105b935\nurl: \"https://pub.dev\"\nsource: hosted\nversion: \"0.2.4+3\"",
+      "xdg_directories": "dependency: transitive\ndescription:\nname: xdg_directories\nsha256: \"7a3f37b05d989967cdddcbb571f1ea834867ae2faa29725fd085180e0883aa15\"\nurl: \"https://pub.dev\"\nsource: hosted\nversion: \"1.1.0\"",
+      "xml": "dependency: \"direct main\"\ndescription:\nname: xml\nsha256: \"67f0aff7be013d107995e9b75bf4e7f2c3ef2dfdb2c8e68024bba0a7fd5756a4\"\nurl: \"https://pub.dev\"\nsource: hosted\nversion: \"7.0.1\"",
+      "yaml": "dependency: transitive\ndescription:\nname: yaml\nsha256: f67cdd8e07d3c6329146aaef1ba043542b3134c12489f553ca9a7435d1068aea\nurl: \"https://pub.dev\"\nsource: hosted\nversion: \"3.1.4\"",
+      "yaml_edit": "dependency: transitive\ndescription:\nname: yaml_edit\nsha256: \"07c9e63ba42519745182b88ca12264a7ba2484d8239958778dfe4d44fe760488\"\nurl: \"https://pub.dev\"\nsource: hosted\nversion: \"2.2.4\"",
+      "zard": "dependency: \"direct main\"\ndescription:\nname: zard\nsha256: \"6ac7bc8d36bca1c88d1cf57be40b1ca5376dc5003af186cd3c0d3914946bb75c\"\nurl: \"https://pub.dev\"\nsource: hosted\nversion: \"1.4.0\""
+    }
+  },
+  "native": {
+    "base": {
+      "revision": "f15b33653593a6eed367fdc8ba98e80540dfe771",
+      "path": "C:\\Users\\cesar\\.cache\\odbc_fast\\5.0.0\\windows_x64\\odbc_engine.dll",
+      "sha256": "329f1e90398c6a9d124bcc8f57b5f0f79f4f3049f0884745eb03c0c292d7348a"
+    },
+    "candidate": {
+      "revision": "8c6ef35cafc6fbdfa50037e24f54da8e07fe5d60",
+      "path": "D:\\Developer\\plug_database\\plug_agente\\build\\odbc-native\\8c6ef35cafc6fbdfa50037e24f54da8e07fe5d60\\odbc_engine.dll",
+      "sha256": "ed1d286e4f690a82d66f157fe5671beacd3e2cee5c8262e03489a4e524f2c102"
+    }
+  },
+  "machine": {
+    "platform": "Windows-11-10.0.26300-SP0",
+    "machine": "AMD64",
+    "processor": "Intel64 Family 6 Model 170 Stepping 4, GenuineIntel",
+    "python_version": "3.13.14",
+    "dart_version": "Dart SDK version: 3.13.4 (stable) (Tue Sep 15 01:01:15 2026 -0700) on \"windows_x64\"",
+    "flutter_version": "Flutter 3.47.5 \u2022 channel stable \u2022 https://github.com/flutter/flutter.git\nFramework \u2022 revision 6a19cca564 (3 weeks ago) \u2022 2026-09-17 14:13:22 -0400\nEngine \u2022 hash ab598368592da0064197e2bc15c7f5b0a2c6bb1f (revision af7e796e16) (19 days ago) \u2022 2026-09-16 18:35:09.000Z\nTools \u2022 Dart 3.13.4 \u2022 DevTools 2.60.0",
+    "dependencies_sha256": "7451e384964630ab97f130643729a010303c22b5665982e1b54a514bdea1f12c",
+    "host_fingerprint": "cfdd16ebf9efdf7d0398c6297f2875e10dfd9dd1209f02961c71c93c96c39d98"
+  },
+  "largest_heartbeat_gap_seconds": 1.0310962999938056
+}

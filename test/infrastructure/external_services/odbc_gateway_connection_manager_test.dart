@@ -40,6 +40,67 @@ void main() {
       );
     });
 
+    test('waits for pending discard and does not return it twice', () async {
+      final completion = Completer<Result<void>>();
+      when(() => pool.discard('pending')).thenAnswer((_) => completion.future);
+      manager.markConnectionForDiscard('pending');
+      await manager.releaseConnectionSafely('pending');
+      await manager.releaseConnectionSafely('pending');
+      var finished = false;
+      final waited = manager.waitForPendingDiscards(timeout: const Duration(seconds: 1))..then((_) => finished = true);
+      await Future<void>.delayed(Duration.zero);
+      expect(finished, isFalse);
+      completion.complete(const Success(unit));
+      expect((await waited).isSuccess(), isTrue);
+      verify(() => pool.discard('pending')).called(1);
+      verifyNever(() => pool.release('pending'));
+    });
+
+    test('cleanup timeout retains the pending resource', () async {
+      final completion = Completer<Result<void>>();
+      when(() => pool.discard('pending')).thenAnswer((_) => completion.future);
+      manager.markConnectionForDiscard('pending');
+      await manager.releaseConnectionSafely('pending');
+      final result = await manager.waitForPendingDiscards(timeout: const Duration(milliseconds: 1));
+      expect(result.isError(), isTrue);
+      expect(manager.poolDiscardInflightCount, 1);
+      completion.complete(const Success(unit));
+      expect((await manager.waitForPendingDiscards(timeout: const Duration(seconds: 1))).isSuccess(), isTrue);
+    });
+
+    test('drains queued discards and isolates unknown outcomes', () async {
+      manager = OdbcGatewayConnectionManager(
+        service: service,
+        connectionPool: pool,
+        directConnectionLimiter: DirectOdbcConnectionLimiter(
+          maxConcurrent: 2,
+          acquireTimeout: const Duration(seconds: 1),
+        ),
+        metrics: metrics,
+        maxInflightPoolDiscards: 1,
+      );
+      final first = Completer<Result<void>>();
+      final second = Completer<Result<void>>();
+      when(() => pool.discard('first')).thenAnswer((_) => first.future);
+      when(() => pool.discard('second')).thenAnswer((_) => second.future);
+      manager.markConnectionForDiscard('first');
+      manager.markConnectionForDiscard('second');
+      await manager.releaseConnectionSafely('first');
+      await manager.releaseConnectionSafely('second');
+      await manager.releaseConnectionSafely('second');
+      final drained = manager.waitForPendingDiscards(timeout: const Duration(seconds: 1));
+      first.complete(const Success(unit));
+      await Future<void>.delayed(Duration.zero);
+      verify(() => pool.discard('second')).called(1);
+      verifyNever(() => pool.release('second'));
+      second.complete(const Success(unit));
+      expect((await drained).isSuccess(), isTrue);
+      manager.markConnectionOutcomeUnknown('unknown');
+      final isolated = await manager.waitForPendingDiscards(timeout: const Duration(seconds: 1));
+      expect(isolated.exceptionOrNull(), isA<domain.ConnectionFailure>());
+      verifyNever(() => pool.release('unknown'));
+    });
+
     test('records in-flight pool discards and completes gauge on finish', () async {
       manager.markConnectionForDiscard('conn-1');
       when(() => pool.discard('conn-1')).thenAnswer((_) async {
@@ -83,7 +144,7 @@ void main() {
       expect(result.exceptionOrNull(), isA<domain.Failure>());
     });
 
-    test('reconcilePoolDiscardInflight re-attempts stale discards', () async {
+    test('stale discard keeps its original owner until confirmation', () async {
       manager = OdbcGatewayConnectionManager(
         service: service,
         connectionPool: pool,
@@ -95,25 +156,23 @@ void main() {
         inflightDiscardStaleThreshold: Duration.zero,
       );
       manager.markConnectionForDiscard('stale-conn');
-      var discardCalls = 0;
-      when(() => pool.discard('stale-conn')).thenAnswer((_) async {
-        discardCalls++;
-        if (discardCalls == 1) {
-          return Completer<Result<void>>().future;
-        }
-        return const Success(unit);
-      });
+      final completion = Completer<Result<void>>();
+      when(() => pool.discard('stale-conn')).thenAnswer((_) => completion.future);
 
       await manager.releaseConnectionSafely('stale-conn');
       await manager.reconcilePoolDiscardInflight();
 
-      expect(discardCalls, 2);
+      await manager.releaseConnectionSafely('stale-conn');
+      verify(() => pool.discard('stale-conn')).called(1);
+      verifyNever(() => service.disconnect(any()));
       expect(metrics.getSnapshot()['pool_discard_reconciliation_stale'], 1);
-      expect(metrics.getSnapshot()['pool_discard_reconciliation_remediated'], 1);
+      expect(manager.poolDiscardInflightCount, 1);
+      completion.complete(const Success(unit));
+      expect((await manager.waitForPendingDiscards(timeout: const Duration(seconds: 1))).isSuccess(), isTrue);
       expect(manager.poolDiscardInflightCount, 0);
     });
 
-    test('reconcilePoolDiscardInflight force-releases when re-discard fails', () async {
+    test('completed failed discard remains unconfirmed on later drains', () async {
       manager = OdbcGatewayConnectionManager(
         service: service,
         connectionPool: pool,
@@ -124,22 +183,16 @@ void main() {
         metrics: metrics,
         inflightDiscardStaleThreshold: Duration.zero,
       );
-      manager.markConnectionForDiscard('force-conn');
-      var discardCalls = 0;
-      when(() => pool.discard('force-conn')).thenAnswer((_) async {
-        discardCalls++;
-        if (discardCalls == 1) {
-          return Completer<Result<void>>().future;
-        }
-        return Failure(Exception('discard still blocked'));
-      });
-      when(() => service.disconnect('force-conn')).thenAnswer((_) async => const Success(unit));
-
-      await manager.releaseConnectionSafely('force-conn');
-      await manager.reconcilePoolDiscardInflight();
-
-      verify(() => service.disconnect('force-conn')).called(1);
-      expect(metrics.getSnapshot()['pool_discard_reconciliation_force_release'], 1);
+      manager.markConnectionForDiscard('failed-conn');
+      when(() => pool.discard('failed-conn')).thenAnswer((_) async => Failure(Exception('discard failed')));
+      await manager.releaseConnectionSafely('failed-conn');
+      final first = await manager.waitForPendingDiscards(timeout: const Duration(seconds: 1));
+      final second = await manager.waitForPendingDiscards(timeout: const Duration(seconds: 1));
+      expect(first.isError(), isTrue);
+      expect(second.isError(), isTrue);
+      expect((second.exceptionOrNull()! as domain.ConnectionFailure).context['cleanup_unconfirmed'], isTrue);
+      verifyNever(() => service.disconnect(any()));
+      verify(() => pool.discard('failed-conn')).called(1);
       expect(manager.poolDiscardInflightCount, 0);
     });
   });

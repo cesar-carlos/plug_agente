@@ -1,0 +1,125 @@
+{
+  "authoritative": true,
+  "note": "Reapplied to unchanged recorded measurements. Original queue gate records used the parent environment and are superseded. Timing source: 8c6ef35, not final ea1e04.",
+  "environment": {
+    "BENCHMARK_ENFORCE_ODBC_GATES": "1"
+  },
+  "results": [
+    {
+      "driver": "sql_server",
+      "mode": "async",
+      "exit_code": 3,
+      "scenarios": [
+        {
+          "label": "workerCount=1",
+          "duration_ms": 202.423,
+          "encoding": "rowMajor",
+          "fallbacks": 0
+        },
+        {
+          "label": "workerCount=4",
+          "duration_ms": 333.99,
+          "encoding": "rowMajor",
+          "fallbacks": 0
+        },
+        {
+          "label": "workerCount=4 columnar",
+          "duration_ms": 328.816,
+          "encoding": "columnar",
+          "fallbacks": 0
+        },
+        {
+          "label": "workerCount=4 columnar compressed",
+          "duration_ms": 275.052,
+          "encoding": "columnarCompressed",
+          "fallbacks": 0
+        },
+        {
+          "label": "native pool",
+          "duration_ms": 283.312,
+          "encoding": "rowMajor",
+          "fallbacks": 0
+        },
+        {
+          "label": "prepared reuse",
+          "duration_ms": 109.646,
+          "encoding": "rowMajor",
+          "fallbacks": 0
+        }
+      ]
+    },
+    {
+      "driver": "sql_server",
+      "mode": "streaming",
+      "exit_code": 3,
+      "scenarios": [
+        {
+          "label": "streamQueryBuffer",
+          "rows_per_second": 1215990.2720778233
+        },
+        {
+          "label": "streamQueryBatched",
+          "rows_per_second": 243761.23586946586
+        }
+      ]
+    },
+    {
+      "driver": "sql_anywhere",
+      "mode": "async",
+      "exit_code": 3,
+      "scenarios": [
+        {
+          "label": "workerCount=1",
+          "duration_ms": 108.182,
+          "encoding": "rowMajor",
+          "fallbacks": 0
+        },
+        {
+          "label": "workerCount=4",
+          "duration_ms": 107.766,
+          "encoding": "rowMajor",
+          "fallbacks": 0
+        },
+        {
+          "label": "workerCount=4 columnar",
+          "duration_ms": 97.827,
+          "encoding": "columnar",
+          "fallbacks": 0
+        },
+        {
+          "label": "workerCount=4 columnar compressed",
+          "duration_ms": 106.927,
+          "encoding": "columnarCompressed",
+          "fallbacks": 0
+        },
+        {
+          "label": "native pool",
+          "duration_ms": 187.604,
+          "encoding": "rowMajor",
+          "fallbacks": 0
+        },
+        {
+          "label": "prepared reuse",
+          "duration_ms": 417.004,
+          "encoding": "rowMajor",
+          "fallbacks": 0
+        }
+      ]
+    },
+    {
+      "driver": "sql_anywhere",
+      "mode": "streaming",
+      "exit_code": 3,
+      "scenarios": [
+        {
+          "label": "streamQueryBuffer",
+          "rows_per_second": 422498.0195405334
+        },
+        {
+          "label": "streamQueryBatched",
+          "rows_per_second": 461973.78298781544
+        }
+      ]
+    }
+  ]
+}

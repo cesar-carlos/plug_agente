@@ -46,22 +46,19 @@ Future<void> emitMappedRowMajorChunks({
   required Future<void> Function(List<Map<String, dynamic>> chunk) onChunk,
   bool Function()? isCancelRequested,
 }) async {
-  final chunks = mapQueryRowsToChunks(
-    OdbcStreamingChunkMapperInput(
-      columns: columns,
-      rows: rows,
-      fetchSize: fetchSize,
-    ),
-  );
-
-  for (final chunk in chunks) {
+  final safeFetchSize = effectiveStreamingFetchSize(fetchSize);
+  for (var start = 0; start < rows.length; start += safeFetchSize) {
+    if (isCancelRequested?.call() ?? false) return;
+    final remaining = rows.length - start;
+    final length = remaining < safeFetchSize ? remaining : safeFetchSize;
+    final chunk = List<Map<String, dynamic>>.generate(
+      length,
+      (index) => mapOdbcRowToStreamingMap(columns, rows[start + index]),
+      growable: false,
+    );
     await onChunk(chunk);
-    if (chunks.length > 1) {
-      await Future<void>.delayed(Duration.zero);
-    }
-    if (isCancelRequested?.call() ?? false) {
-      return;
-    }
+    if (isCancelRequested?.call() ?? false) return;
+    if (rows.length > safeFetchSize) await Future<void>.delayed(Duration.zero);
   }
 }
 
@@ -86,7 +83,7 @@ List<List<Map<String, dynamic>>> mapQueryRowsToChunks(
   for (final row in input.rows) {
     chunk.add(mapOdbcRowToStreamingMap(input.columns, row));
     if (chunk.length >= safeFetchSize) {
-      chunks.add(List<Map<String, dynamic>>.from(chunk));
+      chunks.add(chunk);
       chunk = <Map<String, dynamic>>[];
     }
   }

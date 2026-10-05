@@ -30,6 +30,15 @@ streamQueryBatched: 45 ms, rows=1969, chunks=2, rowsPerSecond=43756, fetchSize=1
 
 
 class OdbcBenchmarkGateTests(unittest.TestCase):
+    def test_child_environment_enforces_gates_without_mutating_parent(self) -> None:
+        environment = {'BENCHMARK_ENFORCE_ODBC_GATES': '1'}
+        with mock.patch.dict(os.environ, {}, clear=True):
+            slow = SAMPLE_STREAM_OUTPUT.replace('rowsPerSecond=43756', 'rowsPerSecond=18933')
+            self.assertEqual(enforce_streaming_benchmark_gates(slow, environment=environment), 3)
+            self.assertEqual(enforce_async_benchmark_gates('', environment=environment), 3)
+            self.assertEqual(enforce_streaming_benchmark_gates(slow, environment={}), 0)
+            self.assertNotIn('BENCHMARK_ENFORCE_ODBC_GATES', os.environ)
+
     def test_explicit_speedup_with_missing_measurements_is_inconclusive(self) -> None:
         with mock.patch.dict(os.environ, {'BENCHMARK_STREAMING_MIN_SPEEDUP': '2.0'}, clear=True):
             self.assertEqual(enforce_streaming_benchmark_gates(''), 2)
