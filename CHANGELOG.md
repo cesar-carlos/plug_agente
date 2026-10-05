@@ -5,6 +5,48 @@ and version bump instructions remain in `docs/install/release_guide.md`.
 
 ## Unreleased
 
+### Fixed — ODBC decoder, connection cleanup and streaming
+
+- Compressed columnar decoding in `dart_odbc_fast` releases native buffers
+  through a Rust finalizer, removing the Dart callback that could abort the
+  process. Explicit release detaches the finalizer; partial failures free the
+  allocation, and older native libraries use a Dart copy with immediate release.
+- Unique logical checkout IDs prevent a delayed pool return from removing a
+  newer acquisition that reused the same native handle. Diagnostics distinguish
+  active checkouts, pending returns and unknown outcomes without connection
+  strings or credentials.
+- Pending discards are registered before queue admission, coalesced and awaited
+  with a timeout during shutdown, reload and recovery. Unconfirmed cleanup stays
+  isolated; reconciliation does not issue a second return for a pending discard.
+- Row-major streaming transfers completed batch lists without copying and maps
+  only the next batch after the consumer finishes. Cancellation avoids mapping
+  future batches; eager helpers, columnar streaming and public contracts remain
+  unchanged.
+
+### Changed — reproducible native builds and performance validation
+
+- Pin `odbc_fast` to Git revision
+  `ea1e04f03a8cf1f2d5f3790697e8bc62ba130f89`. Native builds use the tracked
+  `Cargo.lock`, `--locked` and SHA-256 manifests; Flutter hooks and packaging
+  verify the corresponding DLL without manually changing the global Pub cache.
+- Benchmark tooling uses warm-up, nine serial repetitions, alternating order,
+  identical-code controls and temporary suspension prevention. Changes to
+  source, harness or binaries invalidate measurements; intentional native
+  dependency changes require explicit revisions and binary identities.
+- Heap diagnostics collect post-GC checkpoints without retaining allocation
+  reports. Unstable controls, insufficient samples and zero heap baselines are
+  inconclusive; existing performance thresholds remain unchanged.
+- Validation passed 4,800 offline application tests, 1,881 Rust tests, 1,873 SDK
+  Dart tests, static analysis, Windows Release build and integration on SQL
+  Server and SQL Anywhere. Ten stress rounds per database ended with zero active
+  checkouts and confirmed cleanup.
+- No batch/buffer tuning candidate qualified. Native streaming remained below
+  the required 2x speedup (SQL Server: 0.253x; SQL Anywhere: 1.085x); unstable
+  controls left relative performance approval inconclusive. Defaults and the
+  baseline were preserved. Installation, upgrade and repair qualification on
+  Server 2016/2019/2022/2025 and Windows 10/11 remains pending. See the
+  [results and evidence](benchmarks/history/20261005_performance_corrections/REPORT.md).
+
 ### Added — Windows updater service foundation
 
 - Native `PlugAgenteUpdater` supervisor, versioned worker and control client,
@@ -43,6 +85,10 @@ and version bump instructions remain in `docs/install/release_guide.md`.
 - Installation scope controls `plugdb://` registration. Visual C++ runtime
   installation checks minimum version, Microsoft signature and exit status,
   recording a pending reboot without restarting Windows automatically.
+- Recoverable dependency and configuration failures continue installation with
+  warnings, required actions and a report opened on interactive completion.
+  Core runtime and updater safety failures remain blocking. Optional repair can
+  repeat configuration and diagnostics without recopying application files.
 - Downloaded updates respect quiet hours and cooldown on automatic/shutdown
   paths. Explicit apply can bypass those windows, preserving integrity checks.
 - Launcher-status tooling uses the canonical schema path; its regression tests
