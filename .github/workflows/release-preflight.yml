@@ -144,6 +144,9 @@ jobs:
       - name: Installer contract test
         run: flutter test test/installer/setup_script_test.dart
 
+      - name: Test installer recovery and warning reports
+        run: python -m unittest tool.updater.test_installer_recovery tool.updater.test_windows_installation_validation -v
+
       - name: Prepare signing certificate
         id: signing
         shell: pwsh
@@ -167,6 +170,11 @@ jobs:
           WINDOWS_CODE_SIGNING_CERT_PASSWORD: ${{ secrets.WINDOWS_CODE_SIGNING_CERT_PASSWORD }}
           WINDOWS_CODE_SIGNING_REQUIRED: ${{ inputs.require_signing || inputs.require_valid_update_signature }}
         run: python installer/build_installer.py
+
+      - name: Verify installed bundle startup and data access probes
+        env:
+          PLUG_INSTALL_CHECK_BUNDLE: build/windows/x64/runner/Release
+        run: python -m unittest tool.updater.test_install_check -v
 
       - name: Validate generated installer
         env:

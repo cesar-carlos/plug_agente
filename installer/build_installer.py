@@ -27,6 +27,7 @@ SETUP_ISS = INSTALLER_DIR / "setup.iss"
 DIST_DIR = INSTALLER_DIR / "dist"
 ENV_FILE = PROJECT_ROOT / ".env"
 DEFAULT_TIMESTAMP_URL = "http://timestamp.digicert.com"
+REQUIRED_VC_RUNTIME_DLLS = ("msvcp140.dll", "vcruntime140.dll", "vcruntime140_1.dll")
 
 ISCC_PATHS = [
     "ISCC",
@@ -225,6 +226,18 @@ def build_iscc_signtool_command() -> Optional[str]:
     return command
 
 
+def verify_bundled_vc_runtime() -> None:
+    missing = [
+        name for name in REQUIRED_VC_RUNTIME_DLLS
+        if not (BUILD_DIR / name).is_file() or (BUILD_DIR / name).stat().st_size == 0
+    ]
+    if missing:
+        raise SystemExit(
+            "Visual C++ runtime missing from the application bundle: " + ", ".join(missing)
+            + ". Rebuild Windows with the Visual Studio C++ redistributable components installed."
+        )
+
+
 def build_iscc_command() -> List[str]:
     cmd = [find_iscc()]
     pubspec = (PROJECT_ROOT / 'pubspec.yaml').read_text(encoding='utf-8')
@@ -340,6 +353,7 @@ def main() -> None:
 
     if not BUILD_DIR.exists():
         raise SystemExit(f"Erro: pasta de build nao encontrada: {BUILD_DIR}")
+    verify_bundled_vc_runtime()
 
     step += 1
     print(f"\n{step}. Build elevated action runner helper...", flush=True)
@@ -353,6 +367,8 @@ def main() -> None:
         raise SystemExit("Erro: plug_agente.exe nao encontrado no build")
     if not (BUILD_DIR / "plug_update_helper.exe").exists():
         raise SystemExit("Erro: plug_update_helper.exe nao encontrado no build")
+    if not (BUILD_DIR / "plug_install_check.exe").exists():
+        raise SystemExit("Erro: plug_install_check.exe nao encontrado no build")
     if not (BUILD_DIR / "plug_agente_elevated_runner.exe").exists():
         raise SystemExit(
             "Erro: plug_agente_elevated_runner.exe nao encontrado no build. "
@@ -373,6 +389,7 @@ def main() -> None:
         sign_file(app_exe)
         print(f"\n{step}.2. Assinando helper de update Windows...", flush=True)
         sign_file(helper_exe)
+        sign_file(BUILD_DIR / "plug_install_check.exe")
         print(f"\n{step}.3. Assinando elevated action runner...", flush=True)
         sign_file(elevated_helper_exe)
         for artifact in updater_artifacts:

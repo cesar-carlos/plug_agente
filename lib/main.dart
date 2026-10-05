@@ -1,10 +1,13 @@
 import 'dart:async';
 import 'dart:developer' as developer;
+import 'dart:io';
 
 import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
 import 'package:plug_agente/core/di/service_locator.dart';
 import 'package:plug_agente/core/logging/error_logging_bootstrap.dart';
+import 'package:plug_agente/core/runtime/installation_bundle_check.dart';
 import 'package:plug_agente/core/services/error_tracker.dart';
 import 'package:plug_agente/infrastructure/runtime/windows_runtime_probe.dart';
 import 'package:plug_agente/presentation/boot/app_initializer.dart';
@@ -15,6 +18,10 @@ Future<void> main(List<String> args) async {
   await runZonedGuarded(
     () async {
       WidgetsFlutterBinding.ensureInitialized();
+      if (args.contains('--installation-check')) {
+        final result = await checkInstallationBundle(rootBundle);
+        exit(result.fold((_) => 0, (failure) => 3));
+      }
       await ErrorLoggingBootstrap.initializeEarly();
       _installGlobalErrorHandlers();
 

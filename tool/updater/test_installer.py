@@ -7,6 +7,31 @@ from installer import build_installer
 
 
 class InstallerContractTests(unittest.TestCase):
+    def test_packaging_requires_runtime_dlls_even_when_the_machine_has_visual_cpp(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            with patch.object(build_installer, "BUILD_DIR", root):
+                with self.assertRaisesRegex(SystemExit, "msvcp140.dll.*vcruntime140.dll"):
+                    build_installer.verify_bundled_vc_runtime()
+
+    def test_packaging_accepts_a_complete_app_local_runtime(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            for name in build_installer.REQUIRED_VC_RUNTIME_DLLS:
+                (root / name).write_bytes(b"runtime")
+            with patch.object(build_installer, "BUILD_DIR", root):
+                build_installer.verify_bundled_vc_runtime()
+
+    def test_packaging_rejects_an_empty_runtime_dll(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            for name in build_installer.REQUIRED_VC_RUNTIME_DLLS:
+                (root / name).write_bytes(b"runtime")
+            (root / "vcruntime140.dll").write_bytes(b"")
+            with patch.object(build_installer, "BUILD_DIR", root):
+                with self.assertRaisesRegex(SystemExit, "vcruntime140.dll"):
+                    build_installer.verify_bundled_vc_runtime()
+
     def test_exact_expected_asset_is_required_even_when_other_installers_exist(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)

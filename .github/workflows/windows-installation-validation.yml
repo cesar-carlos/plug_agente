@@ -1,0 +1,84 @@
+name: Windows Installation Validation
+
+on:
+  workflow_dispatch:
+    inputs:
+      installer_url:
+        description: Initial installer release asset URL
+        required: true
+        type: string
+      installer_sha256:
+        description: Initial installer SHA-256
+        required: true
+        type: string
+      upgrade_url:
+        description: Upgrade installer release asset URL
+        required: true
+        type: string
+      upgrade_sha256:
+        description: Upgrade installer SHA-256
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  installation:
+    timeout-minutes: 25
+    environment: windows-installation-validation
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [server2016, server2019, server2022, server2025, windows10, windows11]
+    runs-on: [self-hosted, Windows, X64, "${{ matrix.os }}", disposable]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Setup Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+
+      - name: Download and verify signed installers
+        shell: powershell
+        env:
+          INITIAL_URL: ${{ inputs.installer_url }}
+          INITIAL_SHA256: ${{ inputs.installer_sha256 }}
+          UPGRADE_URL: ${{ inputs.upgrade_url }}
+          UPGRADE_SHA256: ${{ inputs.upgrade_sha256 }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $assets = @(
+            @{ Url = $env:INITIAL_URL; Hash = $env:INITIAL_SHA256; File = 'initial.exe' },
+            @{ Url = $env:UPGRADE_URL; Hash = $env:UPGRADE_SHA256; File = 'upgrade.exe' }
+          )
+          foreach ($asset in $assets) {
+            if (-not $asset.Url.StartsWith('https://github.com/cesar-carlos/plug_agente/releases/download/')) {
+              throw 'Use an installer release asset from the Plug Agente repository.'
+            }
+            if ($asset.Hash -notmatch '^[a-fA-F0-9]{64}$') { throw 'Invalid SHA-256.' }
+            Invoke-WebRequest -Uri $asset.Url -OutFile $asset.File -UseBasicParsing
+            if ((Get-FileHash -LiteralPath $asset.File -Algorithm SHA256).Hash -ne $asset.Hash) {
+              throw 'Installer hash mismatch.'
+            }
+            $signature = Get-AuthenticodeSignature -LiteralPath $asset.File
+            if ($signature.Status -ne 'Valid') { throw 'Installer signature is not valid.' }
+          }
+
+      - name: Validate installation upgrade repair and uninstall
+        shell: powershell
+        run: >-
+          python -m tool.updater.validate_windows_installation
+          --installer initial.exe --upgrade-installer upgrade.exe
+          --expected-os "${{ matrix.os }}" --evidence installation-evidence
+          --allow-machine-changes
+
+      - name: Preserve evidence
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: installation-${{ matrix.os }}
+          path: installation-evidence/
+          if-no-files-found: warn

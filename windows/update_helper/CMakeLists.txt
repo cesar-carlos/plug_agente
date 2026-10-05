@@ -1,9 +1,13 @@
-cmake_minimum_required(VERSION 3.14)
+cmake_minimum_required(VERSION 3.15)
 project(update_helper LANGUAGES CXX)
 
 add_executable(plug_update_helper WIN32
   "main.cpp"
 )
+if(MSVC)
+  set_property(TARGET plug_update_helper PROPERTY
+    MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
+endif()
 
 if(COMMAND apply_standard_settings)
   apply_standard_settings(plug_update_helper)

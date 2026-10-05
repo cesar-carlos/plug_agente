@@ -3,6 +3,7 @@
 #include <windows.h>
 
 #include <cstdio>
+#include <algorithm>
 #include <string>
 #include <vector>
 
@@ -265,9 +266,13 @@ int APIENTRY wWinMain(_In_ HINSTANCE instance, _In_opt_ HINSTANCE prev,
   }
 
   // Single instance: only one app per machine.
-  const SingleInstanceMutexResult mutex_result = CreateSingleInstanceMutexResult();
+  const auto launch_arguments = GetCommandLineArguments();
+  const bool is_installation_check =
+      std::find(launch_arguments.begin(), launch_arguments.end(), "--installation-check") != launch_arguments.end();
+  const SingleInstanceMutexResult mutex_result = is_installation_check
+      ? SingleInstanceMutexResult{} : CreateSingleInstanceMutexResult();
   HANDLE h_mutex = mutex_result.handle;
-  if (h_mutex == nullptr) {
+  if (h_mutex == nullptr && !is_installation_check) {
     if (mutex_result.existing_instance_detected) {
       LogSingleInstanceMutexDiagnostics(mutex_result, L"existing_instance");
       std::vector<std::string> args = GetCommandLineArguments();
@@ -276,7 +281,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE instance, _In_opt_ HINSTANCE prev,
       return EXIT_SUCCESS;
     }
     LogSingleInstanceMutexDiagnostics(mutex_result, L"degraded_no_mutex");
-  } else {
+  } else if (h_mutex != nullptr) {
     g_single_instance_mutex = new MutexGuard(h_mutex);
   }
 
@@ -292,7 +297,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE instance, _In_opt_ HINSTANCE prev,
 
   project.set_dart_entrypoint_arguments(std::move(command_line_arguments));
 
-  FlutterWindow window(project, !is_autostart);
+  FlutterWindow window(project, !is_autostart && !is_installation_check);
   Win32Window::Point origin(10, 10);
   Win32Window::Size size(1280, 720);
   if (!window.Create(L"plug_agente", origin, size)) {
@@ -303,7 +308,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE instance, _In_opt_ HINSTANCE prev,
     return EXIT_FAILURE;
   }
   window.SetQuitOnClose(true);
-  RegisterCrashRestart();
+  if (!is_installation_check) RegisterCrashRestart();
 
   ::MSG msg;
   while (::GetMessage(&msg, nullptr, 0, 0)) {

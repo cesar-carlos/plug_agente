@@ -21,9 +21,12 @@ void prepare_control(const std::string& worker_version = "") {
 void revoke() {
   if (!is_admin()) throw std::runtime_error("administrator_required");
   assert_protected_directory(updater_root());
-  auto policy = parse_json(read_file(updater_root() / L"policy.json"));
+  const auto policy_path = updater_root() / L"policy.json";
+  // A failed first enrollment may not have created an authorization policy yet.
+  if (!fs::exists(policy_path)) return;
+  auto policy = parse_json(read_file(policy_path));
   policy["enabled"] = false;
-  write_atomic(updater_root() / L"policy.json", policy.dump());
+  write_atomic(policy_path, policy.dump());
 }
 void check_install(bool automatic) {
   const auto journal_path = updater_root() / L"journal.json";

@@ -96,7 +96,7 @@ void main() {
 
       expect(setupScript, contains('ShouldLaunchAfterSilentUpdate'));
       expect(setupScript, contains("ExpandConstant('{param:LAUNCHAFTERUPDATE|0}') = '1'"));
-      expect(setupScript, contains('/MERGETASKS="!desktopicon,!startup"'));
+      expect(setupScript, contains("if not WizardIsTaskSelected('startup') then"));
       expect(helperSource, contains(r'/MERGETASKS=\"!desktopicon,!startup\"'));
       expect(helperSource, contains('/LAUNCHAFTERUPDATE=0'));
       expect(helperSource, contains('relaunch_original_user(options)'));
@@ -139,11 +139,21 @@ void main() {
       final customMessages = setupScript.split('[CustomMessages]').last.split('[Tasks]').first;
 
       expect(customMessages, contains('Opções de Inicialização'));
-      expect(customMessages, contains('Não foi possível baixar'));
+      expect(customMessages, contains('Não foi possível configurar'));
       expect(customMessages, isNot(contains(r'#$00')));
       expect(setupScript, contains('function PrepareToInstall'));
-      expect(setupScript, contains("CustomMessage('VCRedistDownloadFailed')"));
-      expect(setupScript, contains('#define VCRedistUrl "https://aka.ms/vs/17/release/vc_redist.x64.exe"'));
+    });
+
+    test('installs with bundled runtime without downloading or upgrading the system redistributable', () {
+      final setupScript = File('installer/setup.iss').readAsStringSync();
+      final windowsCmake = File('windows/CMakeLists.txt').readAsStringSync();
+
+      expect(windowsCmake, contains('include(InstallRequiredSystemLibraries)'));
+      expect(windowsCmake, contains(r'install(FILES ${CMAKE_INSTALL_SYSTEM_RUNTIME_LIBS}'));
+      expect(setupScript, contains('the application bundle requires Visual C++ runtime DLLs'));
+      expect(setupScript, isNot(contains('MinimumVCMinor')));
+      expect(setupScript, isNot(contains('DownloadAndInstallVCRedist')));
+      expect(setupScript, isNot(contains('vc_redist.x64.exe')));
     });
 
     test('localizes the Start Menu uninstall shortcut', () {

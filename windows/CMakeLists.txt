@@ -1,5 +1,5 @@
 # Project-level configuration.
-cmake_minimum_required(VERSION 3.14)
+cmake_minimum_required(VERSION 3.15)
 project(plug_agente LANGUAGES CXX)
 
 # The name of the executable created for the application. Change this to change
@@ -74,9 +74,40 @@ endif()
 
 add_subdirectory("update_helper")
 add_subdirectory("updater")
+add_subdirectory("install_check")
 
 set(INSTALL_BUNDLE_DATA_DIR "${CMAKE_INSTALL_PREFIX}/data")
 set(INSTALL_BUNDLE_LIB_DIR "${CMAKE_INSTALL_PREFIX}")
+
+if(MSVC)
+  set(CMAKE_INSTALL_SYSTEM_RUNTIME_LIBS_SKIP TRUE)
+  include(InstallRequiredSystemLibraries)
+  if(NOT CMAKE_INSTALL_SYSTEM_RUNTIME_LIBS)
+    message(FATAL_ERROR "Visual C++ redistributable DLLs are required in the application bundle")
+  endif()
+  string(REGEX MATCH "^[0-9]+\\.([0-9]+)" _compiler_version "${CMAKE_CXX_COMPILER_VERSION}")
+  set(_minimum_runtime_version "14.${CMAKE_MATCH_1}")
+  foreach(_runtime_dll IN LISTS CMAKE_INSTALL_SYSTEM_RUNTIME_LIBS)
+    if(_runtime_dll MATCHES "/msvcp140\\.dll$")
+      string(REPLACE "'" "''" _runtime_path "${_runtime_dll}")
+      execute_process(COMMAND powershell.exe -NoProfile -NonInteractive -Command
+        "(Get-Item -LiteralPath '${_runtime_path}').VersionInfo.FileVersionRaw.ToString()"
+        OUTPUT_VARIABLE _runtime_version OUTPUT_STRIP_TRAILING_WHITESPACE
+        RESULT_VARIABLE _runtime_version_result)
+      if(NOT _runtime_version_result EQUAL 0 OR
+          NOT _runtime_version MATCHES "^[0-9]+\\.[0-9]+\\.[0-9]+\\.[0-9]+$")
+        message(FATAL_ERROR "Could not read the Visual C++ redistributable DLL version")
+      endif()
+      if(_runtime_version VERSION_LESS _minimum_runtime_version)
+        message(FATAL_ERROR
+          "Visual C++ runtime ${_runtime_version} is older than compiler runtime ${_minimum_runtime_version}. Update the Visual Studio C++ redistributable component.")
+      endif()
+    endif()
+  endforeach()
+  install(FILES ${CMAKE_INSTALL_SYSTEM_RUNTIME_LIBS}
+    DESTINATION "${INSTALL_BUNDLE_LIB_DIR}"
+    CONFIGURATIONS Profile;Release COMPONENT Runtime)
+endif()
 
 install(TARGETS ${BINARY_NAME} RUNTIME DESTINATION "${CMAKE_INSTALL_PREFIX}"
   COMPONENT Runtime)

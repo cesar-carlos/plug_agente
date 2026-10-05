@@ -1,0 +1,9 @@
+self-hosted-runner:
+  labels:
+    - server2016
+    - server2019
+    - server2022
+    - server2025
+    - windows10
+    - windows11
+    - disposable
