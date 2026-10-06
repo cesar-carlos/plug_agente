@@ -1,0 +1,22 @@
+<artifact-configuration xmlns="http://signpath.io/artifact-configuration/v1">
+  <parameters>
+    <parameter name="version" required="true" />
+    <parameter name="innoProductName" required="true" />
+    <parameter name="innoProductVersion" required="true" />
+  </parameters>
+  <zip-file>
+    <pe-file-set product-name="Plug Agente" product-version="${version}">
+      <include path="plug_agente.exe" />
+      <include path="plug_update_helper.exe" />
+      <include path="plug_install_check.exe" />
+      <include path="plug_agente_elevated_runner.exe" />
+      <include path="updater/plug_update_service.exe" />
+      <include path="updater/plug_update_client.exe" />
+      <include path="updater/plug_update_worker.exe" />
+      <for-each><authenticode-sign /></for-each>
+    </pe-file-set>
+    <pe-file path="plug_agente_uninstaller.exe" product-name="${innoProductName}" product-version="${innoProductVersion}">
+      <authenticode-sign />
+    </pe-file>
+  </zip-file>
+</artifact-configuration>

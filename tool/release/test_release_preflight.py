@@ -13,6 +13,18 @@ from tool.release import release_preflight
 
 
 class ReleasePreflightTests(unittest.TestCase):
+    def test_signpath_preflight_requires_its_token_instead_of_a_pfx(self):
+        configured = {"SIGNPATH_API_TOKEN", "AUTO_UPDATE_FEED_PUBLIC_KEY", "APPCAST_SIGNING_PRIVATE_KEY"}
+        with patch.object(release_preflight, "list_github_actions_secrets", return_value=configured):
+            warnings = release_preflight.collect_publish_secret_warnings("owner/repo", "signpath")
+        self.assertFalse(any("CERT_BASE64" in warning for warning in warnings))
+        self.assertFalse(any("SIGNPATH_API_TOKEN is not configured" in warning for warning in warnings))
+
+    def test_signpath_preflight_reports_a_missing_token(self):
+        with patch.object(release_preflight, "list_github_actions_secrets", return_value=set()):
+            warnings = release_preflight.collect_publish_secret_warnings("owner/repo", "signpath")
+        self.assertTrue(any("SIGNPATH_API_TOKEN is not configured" in warning for warning in warnings))
+
     def setUp(self) -> None:
         self.temp_dir = tempfile.TemporaryDirectory()
         self.root = Path(self.temp_dir.name)

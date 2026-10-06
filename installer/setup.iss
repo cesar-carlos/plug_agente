@@ -7,7 +7,7 @@
 #define MyAppName "Plug Agente"
 #define MyAppVersion "1.8.6"
 #ifndef MyAppWorkerVersion
-  #ifdef SIGN_INSTALLER
+  #if defined(SIGN_INSTALLER) || defined(ExternalSignedUninstallerDir)
     #error Signed installers require the exact MyAppWorkerVersion including build number
   #else
     #define MyAppWorkerVersion MyAppVersion + "+1"
@@ -30,7 +30,8 @@ AppSupportURL={#MyAppURL}
 AppUpdatesURL={#MyAppURL}
 AppCopyright=Copyright (C) 2026 {#MyAppPublisher}
 UninstallDisplayName={#MyAppName}
-VersionInfoVersion={#MyAppVersion}.0
+VersionInfoVersion={#StringChange(MyAppWorkerVersion, "+", ".")}
+VersionInfoProductTextVersion={#MyAppWorkerVersion}
 VersionInfoProductName={#MyAppName}
 VersionInfoCompany={#MyAppPublisher}
 DefaultDirName={autopf}\{#MyAppName}
@@ -63,9 +64,17 @@ CloseApplicationsFilter=plug_agente.exe
 ; LAUNCHAFTERUPDATE, so Restart Manager must not start a second instance.
 RestartApplications=no
 SetupLogging=yes
+#ifdef PrivacyNoticeFile
+InfoBeforeFile={#PrivacyNoticeFile}
+#endif
 #ifdef SIGN_INSTALLER
 SignTool=mysigntool
 SignedUninstaller=yes
+#else
+  #ifdef ExternalSignedUninstallerDir
+SignedUninstaller=yes
+SignedUninstallerDir={#ExternalSignedUninstallerDir}
+  #endif
 #endif
 
 [Languages]
@@ -85,6 +94,10 @@ english.UpdaterOptionalFailed=Automatic updates could not be configured. The age
 brazilianportuguese.UpdaterOptionalFailed=Não foi possível configurar as atualizações automáticas. O agente foi instalado com esse recurso desabilitado.
 english.UpdaterRepairAction=Use manual updates. Check the signing certificate, feed keys and service permissions, then run the installer again to enable automatic updates.
 brazilianportuguese.UpdaterRepairAction=Use atualizações manuais. Verifique o certificado de assinatura, as chaves do feed e as permissões do serviço; depois execute o instalador novamente para habilitar as atualizações automáticas.
+english.UpdaterFeedKeysMissing=Automatic updates were disabled because the updater was built without the public keys needed to verify updates. The agent was installed.
+brazilianportuguese.UpdaterFeedKeysMissing=As atualizações automáticas foram desabilitadas porque o atualizador foi compilado sem as chaves públicas necessárias para verificar as atualizações. O agente foi instalado.
+english.UpdaterFeedKeysRepairAction=Use manual updates. Ask support for a corrected installer built with the feed public keys configured. Running this same installer again will not fix the missing keys.
+brazilianportuguese.UpdaterFeedKeysRepairAction=Use atualizações manuais. Solicite ao suporte um instalador corrigido, gerado com as chaves públicas do feed configuradas. Executar este mesmo instalador novamente não corrige a ausência das chaves.
 english.UpdaterDisableCritical=Critical error: automatic updates could not be safely disabled. Check the updater policy and service permissions before installing again.
 brazilianportuguese.UpdaterDisableCritical=Erro grave: não foi possível desabilitar as atualizações automáticas com segurança. Verifique a política e as permissões do serviço antes de instalar novamente.
 english.UpdaterPreparationCritical=Critical error: the existing update service could not be safely prepared. Resolve the updater permissions or pending recovery before installing again.
@@ -171,6 +184,8 @@ Name: "autoupdate"; Description: "{cm:AutomaticUpdate}"; GroupDescription: "{cm:
   #error Rebuild Windows before packaging: the installation diagnostic executable is missing
 #endif
 [Files]
+Source: "..\LICENSE"; DestDir: "{app}"; DestName: "LICENSE.txt"; Flags: ignoreversion; Check: ShouldCopyApplicationFiles
+Source: "..\assets\fonts\montserrat\OFL.txt"; DestDir: "{app}\licenses"; DestName: "Montserrat-OFL.txt"; Flags: ignoreversion; Check: ShouldCopyApplicationFiles
 Source: "..\build\windows\x64\runner\Release\*"; DestDir: "{app}"; Excludes: "*.pdb,*.ilk,*.exp,*.lib,*.log,updater,updater\*"; Flags: ignoreversion recursesubdirs createallsubdirs; Check: ShouldCopyApplicationFiles
 Source: "..\build\windows\x64\runner\Release\updater\plug_update_client.exe"; Flags: dontcopy
 Source: "..\build\windows\x64\runner\Release\updater\plug_update_service.exe"; DestDir: "{commonpf}\PlugAgenteUpdater"; Flags: ignoreversion; Check: ShouldInstallUpdaterHost

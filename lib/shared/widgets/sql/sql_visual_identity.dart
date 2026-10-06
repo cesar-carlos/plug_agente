@@ -13,7 +13,6 @@ class SqlVisualIdentity {
     Radius.circular(AppRadius.sm),
   );
 
-  /// Compact grid for query results (Syncfusion defaults: 49 / 56).
   static const double queryResultDataGridRowHeight = 30;
   static const double queryResultDataGridHeaderRowHeight = 34;
   static const EdgeInsets queryResultDataGridCellPadding = EdgeInsets.symmetric(

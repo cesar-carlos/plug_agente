@@ -83,7 +83,11 @@ class InstallerRecoveryTests(unittest.TestCase):
 
     def test_enrollment_failure_continues_only_after_confirmed_revocation(self):
         report = self.run_case("failed_enrollment_recovered")
-        self.assertIn("feed_keys_unavailable", report.read_text(encoding="utf-8-sig"))
+        contents = report.read_text(encoding="utf-8-sig")
+        self.assertIn("feed_keys_unavailable", contents)
+        self.assertIn("built without the public keys", contents)
+        self.assertIn("Running this same installer again will not fix", contents)
+        self.assertNotIn("Check the signing certificate", contents)
 
     def test_failed_revocation_remains_a_critical_failure(self):
         self.run_case("failed_enrollment_cleanup_failure")
@@ -110,3 +114,6 @@ class InstallerRecoveryTests(unittest.TestCase):
         self.assertIn("Ajuste necessário:", contents)
         self.assertIn("Use atualizações manuais", contents)
         self.assertIn("feed_keys_unavailable", contents)
+        self.assertIn("compilado sem as chaves públicas", contents)
+        self.assertIn("Solicite ao suporte um instalador corrigido", contents)
+        self.assertNotIn("Verifique o certificado", contents)

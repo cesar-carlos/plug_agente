@@ -36,6 +36,7 @@ migrate_working_dir/
 
 # Installer output
 /installer/dist/
+/installer/signpath-work/
 
 # Release validation scratch files
 /appcast.env

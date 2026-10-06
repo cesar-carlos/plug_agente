@@ -222,7 +222,8 @@ void main() {
       expect(languages.indexOf('brazilianportuguese'), lessThan(languages.indexOf('Name: "english"')));
       expect(setupScript, contains('#define MyAppPublisher "Se7e Sistemas"'));
       expect(setupScript, contains('DisableWelcomePage=yes'));
-      expect(setupScript, contains('VersionInfoVersion={#MyAppVersion}.0'));
+      expect(setupScript, contains('VersionInfoVersion={#StringChange(MyAppWorkerVersion, "+", ".")}'));
+      expect(setupScript, contains('VersionInfoProductTextVersion={#MyAppWorkerVersion}'));
       expect(setupScript, contains('Compression=lzma2/ultra64'));
       expect(setupScript, contains(r'WizardImageFile=wizard\wizard-image.png'));
       expect(setupScript, contains(r'WizardSmallImageFile=wizard\wizard-small-image.png'));

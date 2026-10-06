@@ -1,0 +1,12 @@
+<artifact-configuration xmlns="http://signpath.io/artifact-configuration/v1">
+  <parameters>
+    <parameter name="version" required="true" />
+    <parameter name="innoProductName" required="true" />
+    <parameter name="innoProductVersion" required="true" />
+  </parameters>
+  <zip-file>
+    <pe-file path="PlugAgente-Setup-*.exe" product-name="${innoProductName}" product-version="${innoProductVersion}">
+      <authenticode-sign />
+    </pe-file>
+  </zip-file>
+</artifact-configuration>

@@ -15,6 +15,7 @@ import shutil
 import subprocess
 
 from py.script_utils import PROJECT_ROOT, Console, resolve_dart_sdk_executable, run
+from tool.release.windows_version_info import application_version, set_version_info
 
 PACKAGE_DIR = PROJECT_ROOT / "tool" / "plug_agente_elevated_runner"
 OUTPUT_DIR = PROJECT_ROOT / "build" / "elevated_runner"
@@ -64,6 +65,8 @@ def main() -> int:
     built = _built_executable(bundle / "bin")
     shutil.copy2(built, OUTPUT_EXE)
     _copy_native_sidecars(bundle / "lib", OUTPUT_DIR)
+    set_version_info(OUTPUT_EXE, application_version())
+    run([str(OUTPUT_EXE), "--help"])
     print(f"Built elevated runner helper: {OUTPUT_EXE}")
 
     bundle_targets = [

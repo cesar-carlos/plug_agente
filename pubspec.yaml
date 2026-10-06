@@ -79,8 +79,7 @@ dependencies:
   fl_chart: ^1.2.0
 
   # DataGrid
-  syncfusion_flutter_datagrid: ^34.2.9
-  syncfusion_flutter_core: ^34.2.9
+  pluto_grid: ^8.1.0
 
   # File picker (native dialog)
   file_picker: ^13.1.0
@@ -115,7 +114,6 @@ dependencies:
     git:
       url: https://github.com/cesar-carlos/dart_odbc_fast.git
       ref: ea1e04f03a8cf1f2d5f3790697e8bc62ba130f89
-  google_fonts: ^8.2.1
   timezone: ^0.11.1
 
 dev_dependencies:
@@ -155,6 +153,7 @@ flutter:
 
   # To add assets to your application, add an assets section, like this:
   assets:
+    - assets/fonts/montserrat/OFL.txt
     - assets/icons/
     - assets/app_icons/
     - docs/communication/openrpc.json
@@ -185,6 +184,55 @@ flutter:
   #
   # For details regarding fonts from package dependencies,
   # see https://flutter.dev/to/font-from-package
+
+  fonts:
+    - family: Montserrat
+      fonts:
+        - asset: assets/fonts/montserrat/Montserrat.ttf
+          weight: 100
+        - asset: assets/fonts/montserrat/Montserrat.ttf
+          weight: 200
+        - asset: assets/fonts/montserrat/Montserrat.ttf
+          weight: 300
+        - asset: assets/fonts/montserrat/Montserrat.ttf
+          weight: 400
+        - asset: assets/fonts/montserrat/Montserrat.ttf
+          weight: 500
+        - asset: assets/fonts/montserrat/Montserrat.ttf
+          weight: 600
+        - asset: assets/fonts/montserrat/Montserrat.ttf
+          weight: 700
+        - asset: assets/fonts/montserrat/Montserrat.ttf
+          weight: 800
+        - asset: assets/fonts/montserrat/Montserrat.ttf
+          weight: 900
+        - asset: assets/fonts/montserrat/Montserrat-Italic.ttf
+          weight: 100
+          style: italic
+        - asset: assets/fonts/montserrat/Montserrat-Italic.ttf
+          weight: 200
+          style: italic
+        - asset: assets/fonts/montserrat/Montserrat-Italic.ttf
+          weight: 300
+          style: italic
+        - asset: assets/fonts/montserrat/Montserrat-Italic.ttf
+          weight: 400
+          style: italic
+        - asset: assets/fonts/montserrat/Montserrat-Italic.ttf
+          weight: 500
+          style: italic
+        - asset: assets/fonts/montserrat/Montserrat-Italic.ttf
+          weight: 600
+          style: italic
+        - asset: assets/fonts/montserrat/Montserrat-Italic.ttf
+          weight: 700
+          style: italic
+        - asset: assets/fonts/montserrat/Montserrat-Italic.ttf
+          weight: 800
+          style: italic
+        - asset: assets/fonts/montserrat/Montserrat-Italic.ttf
+          weight: 900
+          style: italic
 
 flutter_launcher_icons:
   image_path: "assets/app_icons/plug_connect-blockchain-512px.png"

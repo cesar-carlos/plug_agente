@@ -18,10 +18,18 @@ on:
         type: boolean
         default: true
       require_signing:
-        description: "Fail if code signing certificate secrets are unavailable"
+        description: "Require trusted code signing"
         required: true
         type: boolean
         default: true
+      signing_provider:
+        description: "Code signing provider (SignPath requires prior approval and configuration)"
+        required: true
+        type: choice
+        default: pfx
+        options:
+          - pfx
+          - signpath
       prerelease:
         description: "Publish as a prerelease"
         required: true
@@ -87,7 +95,7 @@ jobs:
       - name: Early release preflight
         shell: bash
         run: |
-          ARGS=(--early --version "${{ env.VERSION_SHORT }}" --require-iscc --check-secrets)
+          ARGS=(--early --version "${{ env.VERSION_SHORT }}" --require-iscc --check-secrets --signing-provider "${{ inputs.signing_provider || 'pfx' }}")
           if [ "${{ inputs.dry_run }}" = "true" ]; then
             ARGS+=(--allow-existing-tag)
           fi
@@ -153,9 +161,10 @@ jobs:
         run: python tool/release/release_preflight.py --gate --allow-dirty --allow-existing-tag
 
       - name: Test installer recovery and warning reports
-        run: python -m unittest tool.updater.test_installer_recovery tool.updater.test_windows_installation_validation -v
+        run: python -m unittest tool.updater.test_installer tool.updater.test_installer_recovery tool.updater.test_windows_installation_validation tool.release.test_signpath_staging -v
 
       - name: Prepare signing certificate
+        if: inputs.signing_provider != 'signpath'
         id: signing
         shell: pwsh
         env:
@@ -176,7 +185,13 @@ jobs:
           CERT_PATH: ${{ steps.signing.outputs.cert_path }}
           REQUIRE_SIGNING: ${{ inputs.require_signing }}
           SKIP_INPUT: ${{ inputs.skip_authenticode_check }}
+          SIGNING_PROVIDER: ${{ inputs.signing_provider }}
         run: |
+          if ($env:SIGNING_PROVIDER -eq 'signpath') {
+            if ($env:SKIP_INPUT -eq 'true') { throw 'SignPath artifacts always require Authenticode verification' }
+            'skip=false' | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+            exit 0
+          }
           $hasCert = -not [string]::IsNullOrWhiteSpace($env:CERT_PATH)
           $requireSigning = $env:REQUIRE_SIGNING -eq 'true'
           $skipInput = $env:SKIP_INPUT -eq 'true'
@@ -190,6 +205,7 @@ jobs:
           "skip=$($skip.ToString().ToLower())" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
 
       - name: Build installer
+        if: inputs.signing_provider != 'signpath'
         env:
           AUTO_UPDATE_FEED_URL: ${{ env.OFFICIAL_FEED_URL }}
           AUTO_UPDATE_CHANNEL: ${{ env.RELEASE_CHANNEL }}
@@ -203,6 +219,24 @@ jobs:
           WINDOWS_CODE_SIGNING_CERT_PASSWORD: ${{ secrets.WINDOWS_CODE_SIGNING_CERT_PASSWORD }}
           WINDOWS_CODE_SIGNING_REQUIRED: ${{ inputs.require_signing || inputs.require_valid_update_signature }}
         run: python installer/build_installer.py
+
+      - name: Build and sign with SignPath
+        if: inputs.signing_provider == 'signpath'
+        uses: ./.github/actions/signpath-installer
+        env:
+          AUTO_UPDATE_FEED_URL: ${{ env.OFFICIAL_FEED_URL }}
+          AUTO_UPDATE_CHANNEL: ${{ env.RELEASE_CHANNEL }}
+          AUTO_UPDATE_REQUIRE_VALID_SIGNATURE: 'true'
+          AUTO_UPDATE_FEED_PUBLIC_KEY: ${{ secrets.AUTO_UPDATE_FEED_PUBLIC_KEY }}
+          AUTO_UPDATE_REQUIRE_FEED_SIGNATURE: 'true'
+          WINDOWS_CODE_SIGNING_REQUIRED: 'true'
+        with:
+          api-token: ${{ secrets.SIGNPATH_API_TOKEN }}
+          organization-id: ${{ vars.SIGNPATH_ORGANIZATION_ID }}
+          project-slug: ${{ vars.SIGNPATH_PROJECT_SLUG }}
+          signing-policy-slug: ${{ vars.SIGNPATH_SIGNING_POLICY_SLUG }}
+          components-configuration: ${{ vars.SIGNPATH_COMPONENTS_CONFIGURATION }}
+          installer-configuration: ${{ vars.SIGNPATH_INSTALLER_CONFIGURATION }}
 
       - name: Verify installed bundle startup and data access probes
         env:

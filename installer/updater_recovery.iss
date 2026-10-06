@@ -4,11 +4,20 @@ begin
 end;
 
 procedure SkipUpdaterInstallation(const Details: String);
+var
+  Summary, RepairAction: String;
 begin
   UpdaterInstallationSkipped := True;
   UpdaterHostNeeded := False;
-  RecordInstallationIssue(ifOptionalFeature, 'updater_disabled', 'PlugAgenteUpdater', CustomMessage('UpdaterOptionalFailed'),
-    CustomMessage('UpdaterRepairAction'), Details);
+  Summary := CustomMessage('UpdaterOptionalFailed');
+  RepairAction := CustomMessage('UpdaterRepairAction');
+  if Pos('"feed_keys_unavailable"', Details) > 0 then
+  begin
+    Summary := CustomMessage('UpdaterFeedKeysMissing');
+    RepairAction := CustomMessage('UpdaterFeedKeysRepairAction');
+  end;
+  RecordInstallationIssue(ifOptionalFeature, 'updater_disabled', 'PlugAgenteUpdater', Summary,
+    RepairAction, Details);
 end;
 
 procedure RecoverUpdaterEnrollmentFailure(const ClientPath, FailureDetails: String);

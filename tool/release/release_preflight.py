@@ -350,13 +350,16 @@ def list_github_actions_secrets(repo: str) -> set[str]:
     return {line.split()[0] for line in result.stdout.splitlines() if line.strip()}
 
 
-def collect_publish_secret_warnings(repo: str) -> list[str]:
+def collect_publish_secret_warnings(repo: str, signing_provider: str = "pfx") -> list[str]:
     secrets = list_github_actions_secrets(repo)
     warnings: list[str] = []
-    if "WINDOWS_CODE_SIGNING_CERT_BASE64" not in secrets:
+    required_signing_secret = "SIGNPATH_API_TOKEN" if signing_provider == "signpath" else "WINDOWS_CODE_SIGNING_CERT_BASE64"
+    if required_signing_secret not in secrets:
         warnings.append(
-            "WINDOWS_CODE_SIGNING_CERT_BASE64 is not configured: production publication is blocked."
+            f"{required_signing_secret} is not configured: production publication is blocked."
         )
+    if signing_provider == "signpath":
+        warnings.append("SignPath additionally requires approved organization/project/policy and both artifact configurations.")
     if "AUTO_UPDATE_FEED_PUBLIC_KEY" not in secrets:
         warnings.append(
             "AUTO_UPDATE_FEED_PUBLIC_KEY is not configured: production publication is blocked."
@@ -372,9 +375,11 @@ def print_publish_workflow_hints(
     build_number: str,
     repo: str,
     skip_authenticode: bool,
+    signing_provider: str = "pfx",
 ) -> None:
     secrets = list_github_actions_secrets(repo)
-    has_signing = "WINDOWS_CODE_SIGNING_CERT_BASE64" in secrets
+    signing_secret = "SIGNPATH_API_TOKEN" if signing_provider == "signpath" else "WINDOWS_CODE_SIGNING_CERT_BASE64"
+    has_signing = signing_secret in secrets
 
     print("\nPublish workflow hints:")
     print(f"  1. Optional dry run: gh workflow run \"Publish Windows Release\" --ref main")
@@ -384,12 +389,12 @@ def print_publish_workflow_hints(
         f"     gh workflow run \"Publish Windows Release\" --ref main "
         f"-f version={version_short} -f build_number={build_number} "
         f"-f run_tests=true -f require_signing=true -f require_valid_update_signature=true -f dry_run=false "
-        f"-f skip_authenticode_check=false"
+        f"-f skip_authenticode_check=false -f signing_provider={signing_provider}"
     )
     if not has_signing:
         print(
-            "  WARN: WINDOWS_CODE_SIGNING_CERT_BASE64 is not configured; "
-            "production requires a valid certificate; unsigned development builds must use dry_run=true."
+            f"  WARN: {signing_secret} is not configured; "
+            "production requires trusted signing."
         )
     print("  Appcast publication uses workflow_call with GITHUB_TOKEN; no PAT is required.")
 
@@ -408,6 +413,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--check-installer", action="store_true", help="Require installer/dist asset for this version.")
     parser.add_argument("--check-pages", action="store_true", help="Require GitHub Pages to be enabled for Actions deploy.")
     parser.add_argument("--repo", default="cesar-carlos/plug_agente", help="GitHub repository used by --check-pages.")
+    parser.add_argument("--signing-provider", choices=("pfx", "signpath"), default="pfx")
     parser.add_argument("--analyze", action="store_true", help="Run flutter analyze.")
     parser.add_argument("--tests", action="store_true", help="Run flutter test.")
     parser.add_argument(
@@ -473,7 +479,7 @@ def main(argv: list[str] | None = None) -> int:
         args.appcast_tooling = True
     try:
         if args.check_secrets or args.print_publish_hints or args.early:
-            for warning in collect_publish_secret_warnings(args.repo):
+            for warning in collect_publish_secret_warnings(args.repo, args.signing_provider):
                 print(f"WARN: {warning}", file=sys.stderr)
 
         if args.compile_iss:
@@ -527,6 +533,7 @@ def main(argv: list[str] | None = None) -> int:
             build_number=args.build_number.strip() or "1",
             repo=args.repo,
             skip_authenticode=not has_signing,
+            signing_provider=args.signing_provider,
         )
     return 0
 

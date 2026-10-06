@@ -3,6 +3,67 @@
 Este diretorio contem os artefatos e scripts locais para gerar o instalador
 Windows.
 
+## SignPath readiness
+
+The application was submitted on 2026-10-06; SignPath acknowledged receipt.
+Approval and account provisioning are pending. The [code signing and privacy
+policies](../readme.md#code-signing-policy), MIT license, PlutoGrid migration,
+bundled Montserrat fonts and release integration are prepared locally.
+Publish these reviewed changes so the policies are accessible during review.
+
+The **Publish Windows Release** workflow now accepts `signing_provider=pfx`
+(the default) or `signing_provider=signpath`. SignPath builds on GitHub-hosted
+Windows runners and makes two requests: the seven project executables plus
+Inno's uninstaller, followed by the packaged installer. Every signing request
+must require manual approval in the SignPath policy. Local preparation uses
+`python installer/build_installer.py --prepare-signpath`; inputs are placed in
+`installer/signpath-work`, which must be empty before a new preparation.
+Staged unsigned inputs are not distribution artifacts.
+
+After approval, configure:
+
+| GitHub setting | Purpose |
+| --- | --- |
+| Secret `SIGNPATH_API_TOKEN` | Submitter token limited to the approved project/policy |
+| Variable `SIGNPATH_ORGANIZATION_ID` | Approved organization ID |
+| Variable `SIGNPATH_PROJECT_SLUG` | Project slug |
+| Variable `SIGNPATH_SIGNING_POLICY_SLUG` | Policy requiring manual approval |
+| Variable `SIGNPATH_COMPONENTS_CONFIGURATION` | Slug for imported `signpath-components.xml` |
+| Variable `SIGNPATH_INSTALLER_CONFIGURATION` | Slug for imported `signpath-installer.xml` |
+
+Keep the existing feed secrets `APPCAST_SIGNING_PRIVATE_KEY` and
+`AUTO_UPDATE_FEED_PUBLIC_KEY`. Confirm MFA and author/reviewer/approver roles,
+configure SignPath's GitHub trusted build integration, import the two XML
+configurations and validate a release with `dry_run=true` and
+`signing_provider=signpath` before production publication. The remote service
+cannot be tested until approval and these settings exist.
+
+All executables receive the same logical product name and full application
+version before signing. Inno stores padded strings in its version resources;
+the workflow passes those exact strings as metadata restriction parameters.
+It preserves the original uninstaller bytes, including Inno's internal checks.
+Dart AOT payloads survive metadata editing and are exercised with `--help`.
+Returned files must have unchanged executable content, trusted Authenticode
+signatures and the same certificate across components and installer. Bundle,
+input and configuration hashes prevent reusing signing inputs after changes.
+Third-party DLLs are included without signing them as project-owned code.
+
+The installer displays the privacy notice before installation and copies the
+MIT and Montserrat licenses. The interface uses bundled fonts without Google
+font requests. The original dependency scan found MIT, BSD, Apache and MPL
+texts; this remains a heuristic, not a complete binary redistribution audit.
+
+Automatic update application is a separate outstanding feature:
+`kApplicationContractImplemented=false` and
+`applicationContractValidated=false` remain until a non-elevated launcher,
+authenticated health/probation, original-user data recovery and rollback
+migration handling are integrated and validated. See
+[updater status](../docs/implemente/plano_auto_update_evolution.md).
+
+References: [SignPath conditions](https://signpath.org/terms.html),
+[GitHub integration](https://docs.signpath.io/trusted-build-systems/github),
+[Inno Setup signed uninstaller](https://jrsoftware.org/ishelp/topic_setup_signeduninstaller.htm).
+
 ## Fluxo recomendado
 
 Para publicacao final, prefira o workflow manual **Publish Windows Release** em

@@ -1,21 +1,23 @@
 import 'package:fluent_ui/fluent_ui.dart';
+import 'package:flutter/foundation.dart';
+import 'package:flutter/material.dart' as material;
 import 'package:plug_agente/core/theme/theme.dart';
 import 'package:plug_agente/l10n/app_localizations.dart';
 import 'package:plug_agente/shared/widgets/common/feedback/centered_message.dart';
+import 'package:plug_agente/shared/widgets/sql/query_result_column_type.dart';
 import 'package:plug_agente/shared/widgets/sql/sql_visual_identity.dart';
-import 'package:syncfusion_flutter_datagrid/datagrid.dart';
+import 'package:pluto_grid/pluto_grid.dart';
 
 /// Above this row count, sorting/filtering are disabled to avoid main-thread spikes.
 const int kQueryResultHeavyRowThreshold = 10000;
+const double _columnControlsWidth = 40;
 
-/// Scales grid row heights with system text scaling (caps extra growth for density).
 double _scaledGridExtent(BuildContext context, double base) {
   final scaler = MediaQuery.textScalerOf(context);
   final factor = (scaler.scale(base) / base).clamp(1.0, 1.45);
   return base * factor;
 }
 
-/// Result grid with cached [DataGridRow] rows and O(1) column metadata lookup.
 class QueryResultDataGrid extends StatefulWidget {
   const QueryResultDataGrid({
     required this.data,
@@ -33,99 +35,145 @@ class QueryResultDataGrid extends StatefulWidget {
 }
 
 class _QueryResultDataGridState extends State<QueryResultDataGrid> {
-  late final _CachingQueryDataSource _dataSource = _CachingQueryDataSource(
-    widget.data,
-  );
-  Map<String, Map<String, dynamic>> _metadataByLowerName = {};
+  List<PlutoColumn> _columns = [];
+  List<PlutoRow> _rows = [];
+  PlutoGridStateManager? _stateManager;
+  int _generation = 0;
+
+  bool get _isHeavyDataset => widget.data.length > kQueryResultHeavyRowThreshold;
 
   @override
   void initState() {
     super.initState();
-    _metadataByLowerName = _buildColumnMetadataIndex(widget.columnMetadata);
+    _updateResults();
   }
 
   @override
   void didUpdateWidget(QueryResultDataGrid oldWidget) {
     super.didUpdateWidget(oldWidget);
-    final metaChanged = !identical(
-      oldWidget.columnMetadata,
-      widget.columnMetadata,
-    );
-    if (metaChanged) {
-      _metadataByLowerName = _buildColumnMetadataIndex(widget.columnMetadata);
+    if (!identical(oldWidget.data, widget.data) ||
+        oldWidget.dataRevision != widget.dataRevision ||
+        !identical(oldWidget.columnMetadata, widget.columnMetadata)) {
+      _updateResults(metadataChanged: !identical(oldWidget.columnMetadata, widget.columnMetadata));
     }
-    // Compare by identity first (fast path). Fall back to length check as
-    // a secondary signal, but always update when identity differs — an in-place
-    // replacement with the same length must not leave _rowsCache stale.
-    final dataChanged = !identical(oldWidget.data, widget.data) || oldWidget.dataRevision != widget.dataRevision;
-    if (dataChanged) {
-      _dataSource.updateData(widget.data);
+  }
+
+  void _updateResults({bool metadataChanged = false}) {
+    final keys = widget.data.isEmpty ? <String>[] : widget.data.first.keys.toList();
+    final reuseGrid =
+        _stateManager != null &&
+        !metadataChanged &&
+        _columns.isNotEmpty &&
+        _columns.first.enableSorting == !_isHeavyDataset &&
+        listEquals(keys, _columns.map((column) => column.field).toList());
+    if (!reuseGrid) {
+      _generation++;
+      _stateManager = null;
+      _columns = _createColumns(keys);
     }
-    if (metaChanged && !dataChanged) {
-      setState(() {});
+    _rows = widget.data.map((row) {
+      return PlutoRow(
+        cells: {
+          for (final key in keys) key: PlutoCell(value: row[key]),
+        },
+      );
+    }).toList();
+    final manager = _stateManager;
+    if (manager != null) {
+      manager.removeAllRows(notify: false);
+      manager.appendRows(_rows);
+      if (manager.hasFilter) manager.setFilterWithFilterRows(manager.filterRows);
+      for (final column in _columns) {
+        if (column.sort.isAscending) manager.sortAscending(column);
+        if (column.sort.isDescending) manager.sortDescending(column);
+      }
     }
+  }
+
+  List<PlutoColumn> _createColumns(List<String> keys) {
+    final metadataByName = _buildColumnMetadataIndex(widget.columnMetadata);
+    return keys.map((key) {
+      final metadata = metadataByName[key.toLowerCase()];
+      return PlutoColumn(
+        title: metadata?['name'] as String? ?? key,
+        field: key,
+        type: const QueryResultColumnType(),
+        readOnly: true,
+        enableEditingMode: false,
+        enableColumnDrag: false,
+        enableSorting: !_isHeavyDataset,
+        enableFilterMenuItem: !_isHeavyDataset,
+        enableHideColumnMenuItem: false,
+        enableSetColumnsMenuItem: false,
+        width: _calculateColumnWidth(key, metadata),
+        titleTextAlign: PlutoColumnTextAlign.center,
+        formatter: (value) => value?.toString() ?? '',
+      );
+    }).toList();
   }
 
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
-    if (widget.data.isEmpty) {
+    if (_columns.isEmpty || widget.data.isEmpty) {
       return CenteredMessage(
         title: l10n.queryNoResults,
         message: l10n.queryNoResultsMessage,
         icon: FluentIcons.table,
       );
     }
-
-    final columnKeys = widget.data.first.keys.toList();
-    final columns = _generateColumns(context, columnKeys);
-    final isHeavyDataset = widget.data.length > kQueryResultHeavyRowThreshold;
-    final rowHeight = _scaledGridExtent(
-      context,
-      SqlVisualIdentity.queryResultDataGridRowHeight,
-    );
-    final headerRowHeight = _scaledGridExtent(
-      context,
-      SqlVisualIdentity.queryResultDataGridHeaderRowHeight,
-    );
-
-    return SfDataGrid(
-      source: _dataSource,
-      columns: columns,
-      rowHeight: rowHeight,
-      headerRowHeight: headerRowHeight,
-      allowSorting: !isHeavyDataset,
-      allowFiltering: !isHeavyDataset,
-      gridLinesVisibility: GridLinesVisibility.both,
-      headerGridLinesVisibility: GridLinesVisibility.both,
-      selectionMode: SelectionMode.single,
-    );
-  }
-
-  List<GridColumn> _generateColumns(
-    BuildContext context,
-    List<String> keys,
-  ) {
-    return keys.map((key) {
-      final metadata = _metadataByLowerName[key.toLowerCase()];
-      final columnWidth = _calculateColumnWidth(key, metadata);
-
-      return GridColumn(
-        columnName: key,
-        width: columnWidth,
-        label: Container(
-          padding: SqlVisualIdentity.queryResultDataGridHeaderPadding,
-          alignment: Alignment.center,
-          child: Text(
-            metadata?['name'] as String? ?? key,
-            style: context.bodyStrong.copyWith(
-              fontWeight: FontWeight.w700,
-              height: 1.15,
-            ),
+    final colors = context.appColors;
+    final rowHeight = _scaledGridExtent(context, SqlVisualIdentity.queryResultDataGridRowHeight);
+    final headerHeight = _scaledGridExtent(context, SqlVisualIdentity.queryResultDataGridHeaderRowHeight);
+    final style =
+        (colors.brightness == Brightness.dark ? const PlutoGridStyleConfig.dark() : const PlutoGridStyleConfig())
+            .copyWith(
+              gridBackgroundColor: colors.surfaceCard,
+              rowColor: colors.surfaceCard,
+              activatedColor: Color.alphaBlend(colors.selectedFill, colors.surfaceCard),
+              activatedBorderColor: colors.brand,
+              borderColor: colors.border,
+              gridBorderColor: colors.border,
+              iconColor: colors.textSecondary,
+              disabledIconColor: colors.disabled,
+              rowHeight: rowHeight,
+              columnHeight: headerHeight,
+              columnFilterHeight: headerHeight,
+              defaultCellPadding: SqlVisualIdentity.queryResultDataGridCellPadding,
+              defaultColumnTitlePadding: SqlVisualIdentity.queryResultDataGridHeaderPadding.copyWith(
+                right: SqlVisualIdentity.queryResultDataGridHeaderPadding.right + _columnControlsWidth,
+              ),
+              cellTextStyle: context.bodyText,
+              columnTextStyle: context.bodyStrong,
+            );
+    return material.Theme(
+      data: material.ThemeData(
+        useMaterial3: false,
+        brightness: colors.brightness,
+        colorSchemeSeed: colors.brand,
+        fontFamily: context.bodyText.fontFamily,
+      ),
+      child: material.Material(
+        color: colors.surfaceCard,
+        child: PlutoGrid(
+          key: ValueKey(_generation),
+          columns: _columns,
+          rows: _rows,
+          mode: PlutoGridMode.readOnly,
+          onLoaded: (event) {
+            _stateManager = event.stateManager;
+            event.stateManager.setSelectingMode(PlutoGridSelectingMode.none);
+            event.stateManager.setShowColumnFilter(!_isHeavyDataset);
+          },
+          configuration: PlutoGridConfiguration(
+            localeText: Localizations.localeOf(context).languageCode == 'pt'
+                ? const PlutoGridLocaleText.brazilianPortuguese()
+                : const PlutoGridLocaleText(),
+            style: style,
           ),
         ),
-      );
-    }).toList();
+      ),
+    );
   }
 
   double _calculateColumnWidth(
@@ -134,7 +182,7 @@ class _QueryResultDataGridState extends State<QueryResultDataGrid> {
   ) {
     const minWidth = 80.0;
     const maxWidth = 300.0;
-    const padding = 32.0;
+    const padding = 32.0 + _columnControlsWidth;
     const charWidth = 8.0;
 
     final columnDisplayName = metadata?['name'] as String? ?? columnName;
@@ -194,63 +242,4 @@ Map<String, Map<String, dynamic>> _buildColumnMetadataIndex(
     out[name.toLowerCase()] = col;
   }
   return out;
-}
-
-/// Avoids rebuilding [DataGridRow] lists on every [rows] access (Syncfusion may
-/// read [rows] repeatedly).
-class _CachingQueryDataSource extends DataGridSource {
-  _CachingQueryDataSource(this._data);
-
-  List<Map<String, dynamic>> _data;
-  List<DataGridRow>? _rowsCache;
-
-  /// The exact list instance the cache was built from. The widget always calls
-  /// [updateData] when the data identity changes, so an O(1) identity check is
-  /// enough to keep the cache valid without re-scanning columns on every read.
-  List<Map<String, dynamic>>? _cachedFor;
-
-  void updateData(List<Map<String, dynamic>> data) {
-    _data = data;
-    _rowsCache = null;
-    _cachedFor = null;
-    notifyListeners();
-  }
-
-  @override
-  List<DataGridRow> get rows {
-    if (_data.isEmpty) {
-      return [];
-    }
-    if (_rowsCache != null && identical(_cachedFor, _data)) {
-      return _rowsCache!;
-    }
-    final keys = _data.first.keys.toList();
-    _cachedFor = _data;
-    _rowsCache = _data.map((row) {
-      return DataGridRow(
-        cells: keys
-            .map(
-              (key) => DataGridCell(columnName: key, value: row[key]),
-            )
-            .toList(),
-      );
-    }).toList();
-    return _rowsCache!;
-  }
-
-  @override
-  DataGridRowAdapter buildRow(DataGridRow row) {
-    return DataGridRowAdapter(
-      cells: row.getCells().map((cell) {
-        return Container(
-          padding: SqlVisualIdentity.queryResultDataGridCellPadding,
-          alignment: Alignment.centerLeft,
-          child: Text(
-            cell.value?.toString() ?? '',
-            overflow: TextOverflow.ellipsis,
-          ),
-        );
-      }).toList(),
-    );
-  }
 }

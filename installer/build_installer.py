@@ -12,6 +12,10 @@ Execute a partir da raiz: python installer/build_installer.py
 """
 
 import argparse
+import base64
+import binascii
+import hashlib
+import json
 import os
 import re
 import shutil
@@ -23,6 +27,7 @@ from typing import List, Optional, Sequence
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(PROJECT_ROOT))
 from tool.odbc.build_pinned_native import build_pinned_native, verify_native_bundle
+from tool.release.windows_version_info import application_version, set_version_info
 INSTALLER_DIR = PROJECT_ROOT / "installer"
 BUILD_DIR = PROJECT_ROOT / "build" / "windows" / "x64" / "runner" / "Release"
 SETUP_ISS = INSTALLER_DIR / "setup.iss"
@@ -30,6 +35,11 @@ DIST_DIR = INSTALLER_DIR / "dist"
 ENV_FILE = PROJECT_ROOT / ".env"
 DEFAULT_TIMESTAMP_URL = "http://timestamp.digicert.com"
 REQUIRED_VC_RUNTIME_DLLS = ("msvcp140.dll", "vcruntime140.dll", "vcruntime140_1.dll")
+PROJECT_EXECUTABLES = (
+    "plug_agente.exe", "plug_update_helper.exe", "plug_install_check.exe",
+    "plug_agente_elevated_runner.exe", "updater/plug_update_service.exe",
+    "updater/plug_update_client.exe", "updater/plug_update_worker.exe",
+)
 
 ISCC_PATHS = [
     "ISCC",
@@ -118,6 +128,41 @@ def resolve_auto_update_feed_url() -> Optional[str]:
 
 def resolve_auto_update_define(key: str) -> Optional[str]:
     return os.environ.get(key) or read_env_value(key)
+
+
+def configure_native_feed_keys() -> Optional[str]:
+    value = resolve_auto_update_define("AUTO_UPDATE_FEED_PUBLIC_KEY")
+    if not value or not value.strip():
+        if should_sign_artifacts():
+            raise SystemExit(
+                "Refusing to build a signed installer without AUTO_UPDATE_FEED_PUBLIC_KEY. "
+                "Configure the feed signing public key before rebuilding; otherwise "
+                "updater enrollment fails with feed_keys_unavailable."
+            )
+        return None
+    keys = [part.strip() for part in value.split(",")]
+    for key in keys:
+        try:
+            decoded = base64.b64decode(key, validate=True)
+        except (ValueError, binascii.Error) as error:
+            raise SystemExit("AUTO_UPDATE_FEED_PUBLIC_KEY must contain base64 Ed25519 public keys.") from error
+        if len(decoded) != 32:
+            raise SystemExit("AUTO_UPDATE_FEED_PUBLIC_KEY entries must decode to 32 bytes.")
+    normalized = ",".join(keys)
+    os.environ["AUTO_UPDATE_FEED_PUBLIC_KEY"] = normalized
+    return normalized
+
+
+def verify_native_feed_keys(keys: Optional[str]) -> None:
+    if not keys:
+        return
+    client = BUILD_DIR / "updater" / "plug_update_client.exe"
+    if not client.is_file() or keys.encode("ascii") + b"\0" not in client.read_bytes():
+        raise SystemExit(
+            "Native updater is missing the configured AUTO_UPDATE_FEED_PUBLIC_KEY. "
+            "Rebuild the Windows bundle with the feed public keys available to CMake "
+            "before packaging the installer."
+        )
 
 
 def read_env_value(key: str) -> Optional[str]:
@@ -240,18 +285,49 @@ def verify_bundled_vc_runtime() -> None:
         )
 
 
-def build_iscc_command() -> List[str]:
+def verify_bundled_fonts() -> None:
+    assets = BUILD_DIR / "data/flutter_assets"
+    manifest = json.loads((assets / "FontManifest.json").read_text(encoding="utf-8"))
+    registered = {font["asset"] for family in manifest if family.get("family") == "Montserrat"
+                  for font in family.get("fonts", [])}
+    for name in ("Montserrat.ttf", "Montserrat-Italic.ttf"):
+        relative = f"assets/fonts/montserrat/{name}"
+        bundled = assets / relative
+        source = PROJECT_ROOT / relative
+        if relative not in registered or not bundled.is_file() or hashlib.sha256(bundled.read_bytes()).digest() != hashlib.sha256(source.read_bytes()).digest():
+            raise SystemExit(f"Bundled Montserrat font is missing or stale: {name}. Check flutter.fonts in pubspec.yaml.")
+
+
+def prepare_privacy_notice() -> Path:
+    readme = (PROJECT_ROOT / "readme.md").read_bytes()
+    text = readme.decode("utf-16-le") if b"\0" in readme[:100] else readme.decode("utf-8")
+    heading = "## Privacy policy"
+    if heading not in text:
+        raise SystemExit("Installer requires the project's privacy policy")
+    notice = DIST_DIR / "privacy-notice.txt"
+    notice.parent.mkdir(parents=True, exist_ok=True)
+    notice.write_text(text.split(heading, 1)[1].split("\n## ", 1)[0].strip() + "\n", encoding="utf-8-sig")
+    return notice
+
+
+def build_iscc_command(*, signed_uninstaller_dir: Optional[Path] = None) -> List[str]:
     cmd = [find_iscc()]
     pubspec = (PROJECT_ROOT / 'pubspec.yaml').read_text(encoding='utf-8')
     version = re.search(r'^version:\s*([0-9]+\.[0-9]+\.[0-9]+\+[0-9]+)\s*$', pubspec, re.MULTILINE)
     if version is None:
         raise SystemExit('Installer worker requires the exact application version including build number')
+    setup_version = re.search(r'^#define MyAppVersion "([0-9]+\.[0-9]+\.[0-9]+)"$', SETUP_ISS.read_text(encoding="utf-8"), re.MULTILINE)
+    if setup_version is None or setup_version.group(1) != version.group(1).split("+", 1)[0]:
+        raise SystemExit("Installer version differs from pubspec.yaml; run installer/update_version.py")
     cmd.append(f'/DMyAppWorkerVersion={version.group(1)}')
     channel = resolve_auto_update_define("AUTO_UPDATE_CHANNEL") or "stable"
     if channel not in {"stable", "beta", "internal"}:
         raise SystemExit("Invalid installer update channel")
     cmd.append(f"/DMyAppChannel={channel}")
-    sign_command = build_iscc_signtool_command()
+    cmd.append(f"/DPrivacyNoticeFile={prepare_privacy_notice()}")
+    sign_command = None if signed_uninstaller_dir is not None else build_iscc_signtool_command()
+    if signed_uninstaller_dir is not None:
+        cmd.append(f"/DExternalSignedUninstallerDir={signed_uninstaller_dir}")
     if sign_command is not None:
         cmd.append("/DSIGN_INSTALLER")
         cmd.append(f"/Smysigntool={sign_command}")
@@ -313,12 +389,19 @@ def parse_args() -> argparse.Namespace:
         action="store_true",
         help="Sincroniza a versao do pubspec.yaml antes do build (update_version.py).",
     )
+    parser.add_argument("--prepare-signpath", action="store_true",
+                        help="Build trusted unsigned inputs for the staged SignPath workflow.")
     return parser.parse_args()
 
 
 def main() -> None:
     args = parse_args()
+    if args.prepare_signpath:
+        if signing_cert_path() is not None:
+            raise SystemExit("SignPath preparation cannot use a local signing certificate")
+        os.environ["WINDOWS_CODE_SIGNING_REQUIRED"] = "true"
     ensure_signing_matches_runtime()
+    feed_keys = configure_native_feed_keys()
     run(["flutter", "pub", "get"])
     os.environ['ODBC_FAST_NATIVE_LIBRARY'] = str(build_pinned_native(PROJECT_ROOT))
 
@@ -348,16 +431,14 @@ def main() -> None:
         value = resolve_auto_update_define(key)
         if value:
             flutter_cmd.append(f"--dart-define={key}={value}")
-            if key == "AUTO_UPDATE_FEED_PUBLIC_KEY":
-                # CMake embeds the same public trust anchors into the native
-                # supervisor. Dart defines alone do not reach its configure step.
-                os.environ[key] = ",".join(part.strip() for part in value.split(","))
             print(f"   {key} injetado via --dart-define: {value}", flush=True)
     run(flutter_cmd)
 
     if not BUILD_DIR.exists():
         raise SystemExit(f"Erro: pasta de build nao encontrada: {BUILD_DIR}")
     verify_bundled_vc_runtime()
+    verify_bundled_fonts()
+    verify_native_feed_keys(feed_keys)
     native = Path(os.environ['ODBC_FAST_NATIVE_LIBRARY'])
     verify_native_bundle(BUILD_DIR, native)
     shutil.copy2(native.parent / 'manifest.json', BUILD_DIR / 'data/odbc_native_manifest.json')
@@ -381,6 +462,17 @@ def main() -> None:
             "Erro: plug_agente_elevated_runner.exe nao encontrado no build. "
             "Execute python tool/elevated/build_elevated_runner.py antes do instalador.",
         )
+
+    for name in PROJECT_EXECUTABLES:
+        set_version_info(BUILD_DIR / name, application_version())
+    run([str(BUILD_DIR / "plug_agente_elevated_runner.exe"), "--help"])
+    if args.prepare_signpath:
+        from installer.signpath_staging import prepare
+        try:
+            prepare()
+        except (OSError, ValueError, subprocess.SubprocessError) as error:
+            raise SystemExit(f"SignPath preparation failed: {error}") from error
+        return
 
     app_exe = BUILD_DIR / "plug_agente.exe"
     helper_exe = BUILD_DIR / "plug_update_helper.exe"

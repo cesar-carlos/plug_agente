@@ -1,5 +1,4 @@
 import 'package:fluent_ui/fluent_ui.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'package:plug_agente/core/theme/app_colors.dart';
 import 'package:plug_agente/core/theme/app_typography.dart';
 
@@ -18,7 +17,7 @@ class AppTheme {
     },
   );
 
-  static String get fontFamily => GoogleFonts.montserrat().fontFamily ?? 'Montserrat';
+  static const String fontFamily = 'Montserrat';
 
   static final FluentThemeData _lightTheme = _buildTheme(
     brightness: Brightness.light,

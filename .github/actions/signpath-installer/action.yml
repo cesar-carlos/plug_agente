@@ -1,0 +1,104 @@
+name: Sign Windows installer with SignPath
+description: Build, sign project components and uninstaller, package and sign the final installer
+inputs:
+  api-token:
+    description: SignPath submitter token
+    required: true
+  organization-id:
+    description: Approved SignPath organization ID
+    required: true
+  project-slug:
+    description: SignPath project slug
+    required: true
+  signing-policy-slug:
+    description: Signing policy requiring manual approval
+    required: true
+  components-configuration:
+    description: Configuration imported from installer/signpath-components.xml
+    required: true
+  installer-configuration:
+    description: Configuration imported from installer/signpath-installer.xml
+    required: true
+runs:
+  using: composite
+  steps:
+    - name: Validate SignPath configuration
+      shell: pwsh
+      env:
+        SIGNPATH_API_TOKEN: ${{ inputs.api-token }}
+        SIGNPATH_ORGANIZATION_ID: ${{ inputs.organization-id }}
+        SIGNPATH_PROJECT: ${{ inputs.project-slug }}
+        SIGNPATH_POLICY: ${{ inputs.signing-policy-slug }}
+        SIGNPATH_COMPONENTS: ${{ inputs.components-configuration }}
+        SIGNPATH_INSTALLER: ${{ inputs.installer-configuration }}
+      run: |
+        foreach ($name in @('SIGNPATH_API_TOKEN','SIGNPATH_ORGANIZATION_ID','SIGNPATH_PROJECT','SIGNPATH_POLICY','SIGNPATH_COMPONENTS','SIGNPATH_INSTALLER')) {
+          if ([string]::IsNullOrWhiteSpace([Environment]::GetEnvironmentVariable($name))) { throw "Missing $name. Complete SignPath approval and configuration first." }
+        }
+    - name: Build and stage unsigned components
+      shell: pwsh
+      run: python installer/build_installer.py --prepare-signpath
+    - name: Read signing metadata parameters
+      id: metadata
+      shell: pwsh
+      run: |
+        python installer/signpath_staging.py --parameters >> $env:GITHUB_OUTPUT
+        if ($LASTEXITCODE -ne 0) { throw 'Signing metadata validation failed' }
+    - name: Upload unsigned components
+      id: components
+      uses: actions/upload-artifact@v7
+      with:
+        name: signpath-unsigned-components
+        path: installer/signpath-work/unsigned-components/
+        if-no-files-found: error
+        retention-days: 7
+    - name: Request component and uninstaller signatures
+      uses: signpath/github-action-submit-signing-request@v3
+      with:
+        api-token: ${{ inputs.api-token }}
+        organization-id: ${{ inputs.organization-id }}
+        project-slug: ${{ inputs.project-slug }}
+        signing-policy-slug: ${{ inputs.signing-policy-slug }}
+        artifact-configuration-slug: ${{ inputs.components-configuration }}
+        github-artifact-id: ${{ steps.components.outputs.artifact-id }}
+        wait-for-completion: true
+        wait-for-completion-timeout-in-seconds: 3600
+        output-artifact-directory: installer/signpath-work/signed-components
+        parameters: |
+          version: ${{ steps.metadata.outputs.version_json }}
+          innoProductName: ${{ steps.metadata.outputs.inno_product_name_json }}
+          innoProductVersion: ${{ steps.metadata.outputs.inno_product_version_json }}
+    - name: Verify components and package the installer
+      shell: pwsh
+      run: python installer/signpath_staging.py --package installer/signpath-work/signed-components
+    - name: Upload unsigned installer
+      id: installer
+      uses: actions/upload-artifact@v7
+      with:
+        name: signpath-unsigned-installer
+        path: installer/signpath-work/unsigned-installer/
+        if-no-files-found: error
+        retention-days: 7
+    - name: Request installer signature
+      uses: signpath/github-action-submit-signing-request@v3
+      with:
+        api-token: ${{ inputs.api-token }}
+        organization-id: ${{ inputs.organization-id }}
+        project-slug: ${{ inputs.project-slug }}
+        signing-policy-slug: ${{ inputs.signing-policy-slug }}
+        artifact-configuration-slug: ${{ inputs.installer-configuration }}
+        github-artifact-id: ${{ steps.installer.outputs.artifact-id }}
+        wait-for-completion: true
+        wait-for-completion-timeout-in-seconds: 3600
+        output-artifact-directory: installer/signpath-work/signed-installer
+        parameters: |
+          version: ${{ steps.metadata.outputs.version_json }}
+          innoProductName: ${{ steps.metadata.outputs.inno_product_name_json }}
+          innoProductVersion: ${{ steps.metadata.outputs.inno_product_version_json }}
+    - name: Verify the final installer
+      shell: pwsh
+      run: |
+        $files = @(Get-ChildItem installer/signpath-work/signed-installer -File -Recurse)
+        if ($files.Count -ne 1 -or $files[0].Extension -ne '.exe') { throw 'Unexpected installer signing result' }
+        python installer/signpath_staging.py --finalize $files[0].FullName
+        if ($LASTEXITCODE -ne 0) { throw 'Final SignPath verification failed' }
