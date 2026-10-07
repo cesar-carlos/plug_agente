@@ -5,6 +5,7 @@ import 'package:plug_agente/core/constants/connection_constants.dart';
 import 'package:plug_agente/core/utils/rpc_wire_map.dart';
 import 'package:plug_agente/domain/protocol/protocol.dart';
 import 'package:plug_agente/domain/repositories/i_idempotency_store.dart';
+import 'package:plug_agente/domain/services/i_update_maintenance_gate.dart';
 import 'package:plug_agente/infrastructure/repositories/agent_config_drift_database.dart';
 import 'package:plug_agente/infrastructure/stores/idempotency_l1_cache.dart';
 
@@ -16,7 +17,9 @@ class DriftIdempotencyStore implements IIdempotencyStore {
     Duration lruUpdateMinInterval = _defaultLruUpdateMinInterval,
     DateTime Function()? nowProvider,
     IdempotencyL1Cache? l1Cache,
-  }) : _maxEntries = maxEntries,
+    IUpdateMaintenanceGate? maintenanceGate,
+  }) : _maintenanceGate = maintenanceGate,
+       _maxEntries = maxEntries,
        _lruUpdateMinInterval = lruUpdateMinInterval,
        _nowProvider = nowProvider ?? DateTime.now,
        _l1Cache = l1Cache ?? IdempotencyL1Cache() {
@@ -41,6 +44,8 @@ class DriftIdempotencyStore implements IIdempotencyStore {
   static const Duration _defaultLruUpdateMinInterval = Duration(minutes: 1);
 
   final AppDatabase _db;
+  final IUpdateMaintenanceGate? _maintenanceGate;
+  Future<T> _withAdmission<T>(Future<T> Function() action) => _maintenanceGate?.runValue(action) ?? action();
   final int _maxEntries;
   final Duration _lruUpdateMinInterval;
   final DateTime Function() _nowProvider;
@@ -48,54 +53,56 @@ class DriftIdempotencyStore implements IIdempotencyStore {
 
   @override
   Future<IdempotencyRecord?> getRecord(String key) async {
-    final now = _nowProvider();
-    final l1Record = _l1Cache.get(key);
-    if (l1Record != null) {
-      return l1Record;
-    }
-    // No bulk delete here: the per-row TTL check below handles the requested
-    // key, and the periodic purge (every 15 min) handles the rest. Running a
-    // DELETE on every read adds unnecessary write I/O on the hot path.
+    return _withAdmission(() async {
+      final now = _nowProvider();
+      final l1Record = _l1Cache.get(key);
+      if (l1Record != null) {
+        return l1Record;
+      }
+      // No bulk delete here: the per-row TTL check below handles the requested
+      // key, and the periodic purge (every 15 min) handles the rest. Running a
+      // DELETE on every read adds unnecessary write I/O on the hot path.
 
-    final row = await (_db.select(
-      _db.rpcIdempotencyCacheTable,
-    )..where((t) => t.cacheKey.equals(key))).getSingleOrNull();
-    if (row == null) {
-      _l1Cache.invalidate(key);
-      return null;
-    }
+      final row = await (_db.select(
+        _db.rpcIdempotencyCacheTable,
+      )..where((t) => t.cacheKey.equals(key))).getSingleOrNull();
+      if (row == null) {
+        _l1Cache.invalidate(key);
+        return null;
+      }
 
-    if (row.expiresAt.isBefore(now)) {
-      await (_db.delete(_db.rpcIdempotencyCacheTable)..where((t) => t.cacheKey.equals(key))).go();
-      _l1Cache.invalidate(key);
-      return null;
-    }
+      if (row.expiresAt.isBefore(now)) {
+        await (_db.delete(_db.rpcIdempotencyCacheTable)..where((t) => t.cacheKey.equals(key))).go();
+        _l1Cache.invalidate(key);
+        return null;
+      }
 
-    // Throttle LRU `updated_at` touches: skip when the existing timestamp is
-    // recent enough that the LRU ordering would not change meaningfully. This
-    // removes redundant SQLite writes on hot keys without degrading eviction
-    // accuracy for an 8192-entry cache.
-    if (_lruUpdateMinInterval <= Duration.zero || now.difference(row.updatedAt) >= _lruUpdateMinInterval) {
-      await (_db.update(_db.rpcIdempotencyCacheTable)..where((t) => t.cacheKey.equals(key))).write(
-        RpcIdempotencyCacheTableCompanion(
-          updatedAt: Value(now),
-        ),
+      // Throttle LRU `updated_at` touches: skip when the existing timestamp is
+      // recent enough that the LRU ordering would not change meaningfully. This
+      // removes redundant SQLite writes on hot keys without degrading eviction
+      // accuracy for an 8192-entry cache.
+      if (_lruUpdateMinInterval <= Duration.zero || now.difference(row.updatedAt) >= _lruUpdateMinInterval) {
+        await (_db.update(_db.rpcIdempotencyCacheTable)..where((t) => t.cacheKey.equals(key))).write(
+          RpcIdempotencyCacheTableCompanion(
+            updatedAt: Value(now),
+          ),
+        );
+      }
+
+      final parsed = _parseResponse(row.responseJson);
+      if (parsed == null) {
+        await (_db.delete(_db.rpcIdempotencyCacheTable)..where((t) => t.cacheKey.equals(key))).go();
+        _l1Cache.invalidate(key);
+        return null;
+      }
+
+      final record = IdempotencyRecord(
+        response: RpcWireMap.sanitizeRpcResponse(parsed),
+        requestFingerprint: row.requestFingerprint,
       );
-    }
-
-    final parsed = _parseResponse(row.responseJson);
-    if (parsed == null) {
-      await (_db.delete(_db.rpcIdempotencyCacheTable)..where((t) => t.cacheKey.equals(key))).go();
-      _l1Cache.invalidate(key);
-      return null;
-    }
-
-    final record = IdempotencyRecord(
-      response: RpcWireMap.sanitizeRpcResponse(parsed),
-      requestFingerprint: row.requestFingerprint,
-    );
-    _l1Cache.put(key, record, row.expiresAt);
-    return record;
+      _l1Cache.put(key, record, row.expiresAt);
+      return record;
+    });
   }
 
   @override
@@ -108,47 +115,49 @@ class DriftIdempotencyStore implements IIdempotencyStore {
     Duration ttl, {
     String? requestFingerprint,
   }) async {
-    final now = _nowProvider();
-    final effectiveTtl = ttl <= Duration.zero ? ConnectionConstants.rpcIdempotencyEntryTtl : ttl;
-    final expiresAt = now.add(effectiveTtl);
-    final jsonText = jsonEncode(response.toJson());
+    return _withAdmission(() async {
+      final now = _nowProvider();
+      final effectiveTtl = ttl <= Duration.zero ? ConnectionConstants.rpcIdempotencyEntryTtl : ttl;
+      final expiresAt = now.add(effectiveTtl);
+      final jsonText = jsonEncode(response.toJson());
 
-    // Wrap the writes in a transaction: count, evict and insert must succeed
-    // or fail atomically. Without it, a crash between eviction and insert
-    // would leave the cache below capacity but missing the entry the caller
-    // intended to persist.
-    //
-    // We intentionally do NOT purge expired entries here: the periodic purge
-    // (every `rpcIdempotencyExpiredPurgeInterval`) handles that, and the LRU
-    // eviction below naturally evicts expired entries first because they have
-    // the oldest `updated_at`. Skipping the per-set DELETE saves one SQLite
-    // write op on every cache write, which adds up under high RPC throughput.
-    await _db.transaction(() async {
-      final count = await _countRows();
-      if (count >= _maxEntries) {
-        final excess = count - _maxEntries + 1;
-        await _evictOldest(excess);
-      }
-      await _db
-          .into(_db.rpcIdempotencyCacheTable)
-          .insertOnConflictUpdate(
-            RpcIdempotencyCacheTableCompanion.insert(
-              cacheKey: key,
-              responseJson: jsonText,
-              requestFingerprint: requestFingerprint == null ? const Value.absent() : Value(requestFingerprint),
-              expiresAt: expiresAt,
-              updatedAt: now,
-            ),
-          );
+      // Wrap the writes in a transaction: count, evict and insert must succeed
+      // or fail atomically. Without it, a crash between eviction and insert
+      // would leave the cache below capacity but missing the entry the caller
+      // intended to persist.
+      //
+      // We intentionally do NOT purge expired entries here: the periodic purge
+      // (every `rpcIdempotencyExpiredPurgeInterval`) handles that, and the LRU
+      // eviction below naturally evicts expired entries first because they have
+      // the oldest `updated_at`. Skipping the per-set DELETE saves one SQLite
+      // write op on every cache write, which adds up under high RPC throughput.
+      await _db.transaction(() async {
+        final count = await _countRows();
+        if (count >= _maxEntries) {
+          final excess = count - _maxEntries + 1;
+          await _evictOldest(excess);
+        }
+        await _db
+            .into(_db.rpcIdempotencyCacheTable)
+            .insertOnConflictUpdate(
+              RpcIdempotencyCacheTableCompanion.insert(
+                cacheKey: key,
+                responseJson: jsonText,
+                requestFingerprint: requestFingerprint == null ? const Value.absent() : Value(requestFingerprint),
+                expiresAt: expiresAt,
+                updatedAt: now,
+              ),
+            );
+      });
+      _l1Cache.put(
+        key,
+        IdempotencyRecord(
+          response: response,
+          requestFingerprint: requestFingerprint,
+        ),
+        expiresAt,
+      );
     });
-    _l1Cache.put(
-      key,
-      IdempotencyRecord(
-        response: response,
-        requestFingerprint: requestFingerprint,
-      ),
-      expiresAt,
-    );
   }
 
   Future<int> _deleteExpired(DateTime now) {
@@ -157,7 +166,7 @@ class DriftIdempotencyStore implements IIdempotencyStore {
 
   @override
   Future<int> purgeExpiredEntries({DateTime? referenceTime}) {
-    return _deleteExpired(referenceTime ?? _nowProvider());
+    return _withAdmission(() => _deleteExpired(referenceTime ?? _nowProvider()));
   }
 
   Future<int> _countRows() async {

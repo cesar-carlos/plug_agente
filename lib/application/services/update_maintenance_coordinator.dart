@@ -14,6 +14,7 @@ class UpdateMaintenanceCoordinator {
     required this.isSafelyIdle,
     required this.applyExitPolicies,
     required this.flushAndCloseLocalData,
+    this.beforeClose,
     DateTime Function()? clock,
     Future<void> Function(Duration)? wait,
   }) : _clock = clock ?? DateTime.now,
@@ -24,6 +25,7 @@ class UpdateMaintenanceCoordinator {
   final bool Function() isSafelyIdle;
   final Future<Result<void>> Function(String operationId) applyExitPolicies;
   final Future<Result<void>> Function() flushAndCloseLocalData;
+  final Future<Result<void>> Function()? beforeClose;
   final DateTime Function() _clock;
   final Future<void> Function(Duration) _wait;
   final Map<String, Future<Result<void>>> _exitPolicies = {};
@@ -124,6 +126,21 @@ class UpdateMaintenanceCoordinator {
         return Failure(error);
       }
       // Exit policies may have generated work. No cleanup or snapshot until it ends.
+      if (_cancelRequested || !isSafelyIdle() || !_clock().isBefore(deadline)) {
+        retryAfter = _clock().add(const Duration(minutes: 15));
+        _restore();
+        return const Success(MaintenanceDecision.deferred);
+      }
+      final snapshot = await beforeClose?.call();
+      if (snapshot?.isError() ?? false) {
+        final error = snapshot!.exceptionOrNull()!;
+        if (error is domain.Failure && error.context['outcome_unknown'] == true) {
+          _sealed = true;
+        } else {
+          _restore();
+        }
+        return Failure(error);
+      }
       if (_cancelRequested || !isSafelyIdle() || !_clock().isBefore(deadline)) {
         retryAfter = _clock().add(const Duration(minutes: 15));
         _restore();

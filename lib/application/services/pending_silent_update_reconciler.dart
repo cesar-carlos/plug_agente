@@ -7,10 +7,12 @@ import 'package:plug_agente/application/services/auto_update_defaults.dart';
 import 'package:plug_agente/application/services/i_pending_silent_update_store.dart';
 import 'package:plug_agente/application/services/pending_silent_update.dart';
 import 'package:plug_agente/application/services/persistent_circuit_breaker.dart';
+import 'package:plug_agente/application/services/service_update_pending_coordinator.dart';
 import 'package:plug_agente/application/services/silent_update/silent_update_helper_launch_state.dart';
 import 'package:plug_agente/core/config/auto_update_feed_config.dart';
 import 'package:plug_agente/core/constants/app_constants.dart';
 import 'package:plug_agente/core/versioning/app_version_comparator.dart';
+import 'package:plug_agente/domain/services/i_privileged_updater.dart';
 
 class PendingSilentUpdateReconcileRequest {
   const PendingSilentUpdateReconcileRequest({
@@ -37,6 +39,7 @@ class PendingSilentUpdateReconciler {
     required PersistentCircuitBreaker automaticFailureBreaker,
     required String? Function() feedUrlResolver,
     required UpdateCheckIdRecorder checkIdRecorder,
+    this.servicePending,
     Duration helperWaitDuration = AutoUpdateDefaults.helperWaitDuration,
     Duration stagedPendingTtl = AutoUpdateDefaults.stagedPendingTtl,
     DateTime Function()? clock,
@@ -50,6 +53,7 @@ class PendingSilentUpdateReconciler {
        _clock = clock ?? DateTime.now;
 
   final IPendingSilentUpdateStore _pendingStore;
+  final ServiceUpdatePendingCoordinator? servicePending;
   final ISilentUpdateLauncherStatusReader _launcherStatusReader;
   final PersistentCircuitBreaker _automaticFailureBreaker;
   final String? Function() _feedUrlResolver;
@@ -60,6 +64,43 @@ class PendingSilentUpdateReconciler {
 
   Future<void> reconcile(PendingSilentUpdateReconcileRequest request) async {
     final pending = await _pendingStore.read();
+    if (servicePending != null) {
+      final result = await servicePending!.reconcile();
+      final resolved = result.getOrNull();
+      final serviceRecord = resolved?.pending ?? (pending is PendingSilentUpdateService ? pending : null);
+      if (serviceRecord != null) {
+        final status = resolved?.status;
+        final finished = resolved?.decision == ServicePendingDecision.finished;
+        final completed = status?.phase == UpdaterPhase.completed;
+        request.onDiagnosticsUpdated(
+          diagnosticsForPending(
+            pending: serviceRecord,
+            launcherStatus: null,
+            feedUrl: _feedUrlResolver() ?? officialAutoUpdateFeedUrl,
+            now: _clock(),
+            checkId: _checkIdRecorder.newId(),
+            completionSource: completed
+                ? UpdateCheckCompletionSource.automaticPendingCompleted
+                : finished && status?.phase == UpdaterPhase.rolledBack
+                ? UpdateCheckCompletionSource.automaticPendingFailed
+                : finished
+                ? UpdateCheckCompletionSource.automaticCancelled
+                : resolved?.decision == ServicePendingDecision.ready
+                ? UpdateCheckCompletionSource.automaticInstallReady
+                : UpdateCheckCompletionSource.automaticInstallStarted,
+            updateAvailable: !finished,
+            errorMessage: result.isError()
+                ? 'O serviço de atualização não confirmou o estado. Tente reconciliar novamente.'
+                : resolved?.decision == ServicePendingDecision.attention
+                ? 'A atualização exige recuperação.'
+                : null,
+          ),
+        );
+        await request.persistDiagnostics();
+        request.pushDiagnostics();
+      }
+      return;
+    }
     if (pending == null) return;
     final checkId = _checkIdRecorder.newId();
     request.onCheckIdAssigned(checkId);
@@ -244,7 +285,9 @@ class PendingSilentUpdateReconciler {
       installerPath: launcherStatus?.installerPath ?? downloaded?.installerPath,
       installerLogPath: launcherStatus?.logPath ?? downloaded?.logPath,
       installDirectory: launcherStatus?.installDirectory ?? downloaded?.installDirectory,
-      silentUpdateStrategy: launcherStatus?.strategy ?? downloaded?.strategy,
+      silentUpdateStrategy: pending is PendingSilentUpdateService
+          ? 'windowsService'
+          : launcherStatus?.strategy ?? downloaded?.strategy,
       launcherPath: downloaded?.launcherPath,
       launcherStatusPath: downloaded?.launcherStatusPath,
       launcherState: launcherStatus?.state,

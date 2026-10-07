@@ -12,6 +12,35 @@ String _jwtWithExp(int expSeconds) {
 }
 
 void main() {
+  test('maintenance stops queued refresh and exposes the in-flight writer', () async {
+    final started = Completer<void>();
+    final finish = Completer<void>();
+    var calls = 0;
+    final scheduler = HubProactiveTokenRefreshScheduler(
+      refreshBeforeExpiry: const Duration(minutes: 10),
+      accessTokenProvider: () => _jwtWithExp(DateTime.now().millisecondsSinceEpoch ~/ 1000 + 60),
+      onRefreshDue: () async {
+        calls++;
+        if (calls == 1) {
+          started.complete();
+          await finish.future;
+        }
+      },
+    );
+    addTearDown(scheduler.dispose);
+    scheduler.reschedule();
+    await started.future;
+    scheduler.pauseForMaintenance();
+    scheduler.reschedule();
+    check(scheduler.isIdle).isFalse();
+    finish.complete();
+    await Future<void>.delayed(Duration.zero);
+    check(scheduler.isIdle).isTrue();
+    check(calls).equals(1);
+    scheduler.resumeAfterMaintenance();
+    await Future<void>.delayed(const Duration(milliseconds: 20));
+    check(calls).equals(2);
+  });
   test('should invoke refresh when token is inside proactive margin', () async {
     var refreshCalls = 0;
     final exp = DateTime.now().toUtc().add(const Duration(minutes: 5));

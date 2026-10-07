@@ -5,6 +5,7 @@ import 'package:plug_agente/domain/actions/actions.dart';
 import 'package:plug_agente/domain/actions/agent_action_captured_output_chunker.dart';
 import 'package:plug_agente/domain/errors/failures.dart' as domain;
 import 'package:plug_agente/domain/repositories/i_agent_action_repository.dart';
+import 'package:plug_agente/domain/services/i_update_maintenance_gate.dart';
 import 'package:plug_agente/infrastructure/repositories/agent_action_captured_output_chunk_store.dart';
 import 'package:plug_agente/infrastructure/repositories/agent_action_drift_mapper.dart';
 import 'package:plug_agente/infrastructure/repositories/agent_config_drift_database.dart';
@@ -13,11 +14,17 @@ import 'package:result_dart/result_dart.dart';
 class AgentActionRepository implements IAgentActionRepository {
   AgentActionRepository(
     this._database, {
+    IUpdateMaintenanceGate? maintenanceGate,
     AgentActionDriftMapper mapper = const AgentActionDriftMapper(),
-  }) : _mapper = mapper,
+  }) : _maintenanceGate = maintenanceGate,
+       _mapper = mapper,
        _capturedOutputChunks = AgentActionCapturedOutputChunkStore(_database);
 
   final AppDatabase _database;
+  final IUpdateMaintenanceGate? _maintenanceGate;
+
+  Future<Result<T>> _withAdmission<T extends Object>(Future<Result<T>> Function() action) =>
+      _maintenanceGate?.run(action) ?? action();
   final AgentActionDriftMapper _mapper;
   final AgentActionCapturedOutputChunkStore _capturedOutputChunks;
 
@@ -25,209 +32,221 @@ class AgentActionRepository implements IAgentActionRepository {
   Future<Result<AgentActionDefinition>> saveDefinition(
     AgentActionDefinition definition,
   ) async {
-    try {
-      final now = DateTime.now();
-      final existing = await (_database.select(
-        _database.agentActionDefinitionTable,
-      )..where((table) => table.id.equals(definition.id))).getSingleOrNull();
-      final timestamped = definition.copyWith(
-        createdAt: existing?.createdAt ?? definition.createdAt ?? now,
-        updatedAt: now,
-      );
-      final row = _mapper.definitionToData(timestamped, now: now);
-      await _database.into(_database.agentActionDefinitionTable).insertOnConflictUpdate(row);
-      return Success(_mapper.definitionFromData(row));
-    } on Exception catch (error) {
-      return Failure(
-        _databaseFailure(
-          'Failed to save action definition',
-          cause: error,
-          context: {
-            'operation': 'saveActionDefinition',
-            'action_id': definition.id,
-          },
-        ),
-      );
-    }
+    return _withAdmission(() async {
+      try {
+        final now = DateTime.now();
+        final existing = await (_database.select(
+          _database.agentActionDefinitionTable,
+        )..where((table) => table.id.equals(definition.id))).getSingleOrNull();
+        final timestamped = definition.copyWith(
+          createdAt: existing?.createdAt ?? definition.createdAt ?? now,
+          updatedAt: now,
+        );
+        final row = _mapper.definitionToData(timestamped, now: now);
+        await _database.into(_database.agentActionDefinitionTable).insertOnConflictUpdate(row);
+        return Success(_mapper.definitionFromData(row));
+      } on Exception catch (error) {
+        return Failure(
+          _databaseFailure(
+            'Failed to save action definition',
+            cause: error,
+            context: {
+              'operation': 'saveActionDefinition',
+              'action_id': definition.id,
+            },
+          ),
+        );
+      }
+    });
   }
 
   @override
   Future<Result<AgentActionDefinition>> getDefinition(String id) async {
-    try {
-      final row = await (_database.select(
-        _database.agentActionDefinitionTable,
-      )..where((table) => table.id.equals(id))).getSingleOrNull();
-      if (row == null) {
+    return _withAdmission(() async {
+      try {
+        final row = await (_database.select(
+          _database.agentActionDefinitionTable,
+        )..where((table) => table.id.equals(id))).getSingleOrNull();
+        if (row == null) {
+          return Failure(
+            ActionNotFoundFailure.withContext(
+              message: 'Action definition was not found.',
+              context: {
+                'operation': 'getActionDefinition',
+                'action_id': id,
+                'reason': AgentActionRpcConstants.agentActionExecutionNotFoundContextReason,
+                'user_message': 'Action definition not found. Refresh the list and try again.',
+              },
+            ),
+          );
+        }
+
+        return Success(_mapper.definitionFromData(row));
+      } on Exception catch (error) {
         return Failure(
-          ActionNotFoundFailure.withContext(
-            message: 'Action definition was not found.',
+          _databaseFailure(
+            'Failed to load action definition',
+            cause: error,
             context: {
               'operation': 'getActionDefinition',
               'action_id': id,
-              'reason': AgentActionRpcConstants.agentActionExecutionNotFoundContextReason,
-              'user_message': 'Action definition not found. Refresh the list and try again.',
             },
           ),
         );
       }
-
-      return Success(_mapper.definitionFromData(row));
-    } on Exception catch (error) {
-      return Failure(
-        _databaseFailure(
-          'Failed to load action definition',
-          cause: error,
-          context: {
-            'operation': 'getActionDefinition',
-            'action_id': id,
-          },
-        ),
-      );
-    }
+    });
   }
 
   @override
   Future<Result<List<AgentActionDefinition>>> listDefinitions() async {
-    try {
-      final rows =
-          await (_database.select(_database.agentActionDefinitionTable)..orderBy([
-                (table) => OrderingTerm.asc(table.name),
-                (table) => OrderingTerm.asc(table.id),
-              ]))
-              .get();
-      return Success(
-        rows.map(_mapper.definitionFromData).toList(growable: false),
-      );
-    } on Exception catch (error) {
-      return Failure(
-        _databaseFailure(
-          'Failed to list action definitions',
-          cause: error,
-          context: const {'operation': 'listActionDefinitions'},
-        ),
-      );
-    }
+    return _withAdmission(() async {
+      try {
+        final rows =
+            await (_database.select(_database.agentActionDefinitionTable)..orderBy([
+                  (table) => OrderingTerm.asc(table.name),
+                  (table) => OrderingTerm.asc(table.id),
+                ]))
+                .get();
+        return Success(
+          rows.map(_mapper.definitionFromData).toList(growable: false),
+        );
+      } on Exception catch (error) {
+        return Failure(
+          _databaseFailure(
+            'Failed to list action definitions',
+            cause: error,
+            context: const {'operation': 'listActionDefinitions'},
+          ),
+        );
+      }
+    });
   }
 
   @override
   Future<Result<void>> deleteDefinition(String id) async {
-    // By design, deleting a definition preserves its execution history and
-    // captured output chunks. These rows use action_id as a soft reference
-    // (no FK in the Drift schema) so they remain accessible for audit/history
-    // purposes even after the definition is removed. Periodic purge jobs
-    // (AgentActionExecutionPeriodicPurge, captured-output purge) handle cleanup.
-    try {
-      var definitionExisted = false;
-      await _database.transaction(() async {
-        final existing = await (_database.select(
-          _database.agentActionDefinitionTable,
-        )..where((table) => table.id.equals(id))).getSingleOrNull();
-        if (existing == null) {
-          return;
+    return _withAdmission(() async {
+      // By design, deleting a definition preserves its execution history and
+      // captured output chunks. These rows use action_id as a soft reference
+      // (no FK in the Drift schema) so they remain accessible for audit/history
+      // purposes even after the definition is removed. Periodic purge jobs
+      // (AgentActionExecutionPeriodicPurge, captured-output purge) handle cleanup.
+      try {
+        var definitionExisted = false;
+        await _database.transaction(() async {
+          final existing = await (_database.select(
+            _database.agentActionDefinitionTable,
+          )..where((table) => table.id.equals(id))).getSingleOrNull();
+          if (existing == null) {
+            return;
+          }
+
+          definitionExisted = true;
+          await (_database.delete(
+            _database.agentActionTriggerTable,
+          )..where((table) => table.actionId.equals(id))).go();
+          await (_database.delete(
+            _database.agentActionDefinitionTable,
+          )..where((table) => table.id.equals(id))).go();
+        });
+
+        if (!definitionExisted) {
+          return Failure(
+            ActionNotFoundFailure.withContext(
+              message: 'Action definition was not found.',
+              context: {
+                'operation': 'deleteActionDefinition',
+                'action_id': id,
+                'reason': AgentActionRpcConstants.agentActionExecutionNotFoundContextReason,
+                'user_message': 'Action definition not found. Refresh the list and try again.',
+              },
+            ),
+          );
         }
 
-        definitionExisted = true;
-        await (_database.delete(
-          _database.agentActionTriggerTable,
-        )..where((table) => table.actionId.equals(id))).go();
-        await (_database.delete(
-          _database.agentActionDefinitionTable,
-        )..where((table) => table.id.equals(id))).go();
-      });
-
-      if (!definitionExisted) {
+        return const Success(unit);
+      } on Exception catch (error) {
         return Failure(
-          ActionNotFoundFailure.withContext(
-            message: 'Action definition was not found.',
+          _databaseFailure(
+            'Failed to delete action definition',
+            cause: error,
             context: {
               'operation': 'deleteActionDefinition',
               'action_id': id,
-              'reason': AgentActionRpcConstants.agentActionExecutionNotFoundContextReason,
-              'user_message': 'Action definition not found. Refresh the list and try again.',
             },
           ),
         );
       }
-
-      return const Success(unit);
-    } on Exception catch (error) {
-      return Failure(
-        _databaseFailure(
-          'Failed to delete action definition',
-          cause: error,
-          context: {
-            'operation': 'deleteActionDefinition',
-            'action_id': id,
-          },
-        ),
-      );
-    }
+    });
   }
 
   @override
   Future<Result<AgentActionTrigger>> saveTrigger(
     AgentActionTrigger trigger,
   ) async {
-    try {
-      final now = DateTime.now();
-      final existing = await (_database.select(
-        _database.agentActionTriggerTable,
-      )..where((table) => table.id.equals(trigger.id))).getSingleOrNull();
-      final timestamped = trigger.copyWith(
-        createdAt: existing?.createdAt ?? trigger.createdAt ?? now,
-        updatedAt: now,
-      );
-      final row = _mapper.triggerToData(timestamped, now: now);
-      await _database.into(_database.agentActionTriggerTable).insertOnConflictUpdate(row);
-      return Success(_mapper.triggerFromData(row));
-    } on Exception catch (error) {
-      return Failure(
-        _databaseFailure(
-          'Failed to save action trigger',
-          cause: error,
-          context: {
-            'operation': 'saveActionTrigger',
-            'trigger_id': trigger.id,
-            'action_id': trigger.actionId,
-          },
-        ),
-      );
-    }
-  }
-
-  @override
-  Future<Result<AgentActionTrigger>> getTrigger(String id) async {
-    try {
-      final row = await (_database.select(
-        _database.agentActionTriggerTable,
-      )..where((table) => table.id.equals(id))).getSingleOrNull();
-      if (row == null) {
+    return _withAdmission(() async {
+      try {
+        final now = DateTime.now();
+        final existing = await (_database.select(
+          _database.agentActionTriggerTable,
+        )..where((table) => table.id.equals(trigger.id))).getSingleOrNull();
+        final timestamped = trigger.copyWith(
+          createdAt: existing?.createdAt ?? trigger.createdAt ?? now,
+          updatedAt: now,
+        );
+        final row = _mapper.triggerToData(timestamped, now: now);
+        await _database.into(_database.agentActionTriggerTable).insertOnConflictUpdate(row);
+        return Success(_mapper.triggerFromData(row));
+      } on Exception catch (error) {
         return Failure(
-          ActionNotFoundFailure.withContext(
-            message: 'Action trigger was not found.',
+          _databaseFailure(
+            'Failed to save action trigger',
+            cause: error,
             context: {
-              'operation': 'getActionTrigger',
-              'trigger_id': id,
-              'reason': AgentActionRpcConstants.agentActionExecutionNotFoundContextReason,
-              'user_message': 'Trigger not found. Refresh the list and try again.',
+              'operation': 'saveActionTrigger',
+              'trigger_id': trigger.id,
+              'action_id': trigger.actionId,
             },
           ),
         );
       }
+    });
+  }
 
-      return Success(_mapper.triggerFromData(row));
-    } on Exception catch (error) {
-      return Failure(
-        _databaseFailure(
-          'Failed to load action trigger',
-          cause: error,
-          context: {
-            'operation': 'getActionTrigger',
-            'trigger_id': id,
-          },
-        ),
-      );
-    }
+  @override
+  Future<Result<AgentActionTrigger>> getTrigger(String id) async {
+    return _withAdmission(() async {
+      try {
+        final row = await (_database.select(
+          _database.agentActionTriggerTable,
+        )..where((table) => table.id.equals(id))).getSingleOrNull();
+        if (row == null) {
+          return Failure(
+            ActionNotFoundFailure.withContext(
+              message: 'Action trigger was not found.',
+              context: {
+                'operation': 'getActionTrigger',
+                'trigger_id': id,
+                'reason': AgentActionRpcConstants.agentActionExecutionNotFoundContextReason,
+                'user_message': 'Trigger not found. Refresh the list and try again.',
+              },
+            ),
+          );
+        }
+
+        return Success(_mapper.triggerFromData(row));
+      } on Exception catch (error) {
+        return Failure(
+          _databaseFailure(
+            'Failed to load action trigger',
+            cause: error,
+            context: {
+              'operation': 'getActionTrigger',
+              'trigger_id': id,
+            },
+          ),
+        );
+      }
+    });
   }
 
   @override
@@ -236,116 +255,122 @@ class AgentActionRepository implements IAgentActionRepository {
     bool? isEnabled,
     Set<AgentActionTriggerType>? types,
   }) async {
-    try {
-      final query = _database.select(_database.agentActionTriggerTable)
-        ..orderBy([
-          (table) => OrderingTerm.asc(table.actionId),
-          (table) => OrderingTerm.asc(table.type),
-          (table) => OrderingTerm.asc(table.id),
-        ]);
-      if (actionId != null) {
-        query.where((table) => table.actionId.equals(actionId));
-      }
-      if (isEnabled != null) {
-        query.where((table) => table.isEnabled.equals(isEnabled));
-      }
-      if (types != null && types.isNotEmpty) {
-        query.where(
-          (table) => table.type.isIn(
-            types.map((type) => type.name).toList(growable: false),
-          ),
+    return _withAdmission(() async {
+      try {
+        final query = _database.select(_database.agentActionTriggerTable)
+          ..orderBy([
+            (table) => OrderingTerm.asc(table.actionId),
+            (table) => OrderingTerm.asc(table.type),
+            (table) => OrderingTerm.asc(table.id),
+          ]);
+        if (actionId != null) {
+          query.where((table) => table.actionId.equals(actionId));
+        }
+        if (isEnabled != null) {
+          query.where((table) => table.isEnabled.equals(isEnabled));
+        }
+        if (types != null && types.isNotEmpty) {
+          query.where(
+            (table) => table.type.isIn(
+              types.map((type) => type.name).toList(growable: false),
+            ),
+          );
+        }
+
+        final rows = await query.get();
+        return Success(
+          rows.map(_mapper.triggerFromData).toList(growable: false),
         );
-      }
-
-      final rows = await query.get();
-      return Success(
-        rows.map(_mapper.triggerFromData).toList(growable: false),
-      );
-    } on Exception catch (error) {
-      return Failure(
-        _databaseFailure(
-          'Failed to list action triggers',
-          cause: error,
-          context: {
-            'operation': 'listActionTriggers',
-            'action_id': ?actionId,
-            'is_enabled': ?isEnabled,
-            'types': ?(types != null && types.isNotEmpty
-                ? types.map((type) => type.name).toList(growable: false)
-                : null),
-          },
-        ),
-      );
-    }
-  }
-
-  @override
-  Future<Result<void>> deleteTrigger(String id) async {
-    try {
-      final deleted = await (_database.delete(
-        _database.agentActionTriggerTable,
-      )..where((table) => table.id.equals(id))).go();
-      if (deleted == 0) {
+      } on Exception catch (error) {
         return Failure(
-          ActionNotFoundFailure.withContext(
-            message: 'Action trigger was not found.',
+          _databaseFailure(
+            'Failed to list action triggers',
+            cause: error,
             context: {
-              'operation': 'deleteActionTrigger',
-              'trigger_id': id,
-              'reason': AgentActionRpcConstants.agentActionExecutionNotFoundContextReason,
-              'user_message': 'Trigger not found. Refresh the list and try again.',
+              'operation': 'listActionTriggers',
+              'action_id': ?actionId,
+              'is_enabled': ?isEnabled,
+              'types': ?(types != null && types.isNotEmpty
+                  ? types.map((type) => type.name).toList(growable: false)
+                  : null),
             },
           ),
         );
       }
+    });
+  }
 
-      return const Success(unit);
-    } on Exception catch (error) {
-      return Failure(
-        _databaseFailure(
-          'Failed to delete action trigger',
-          cause: error,
-          context: {
-            'operation': 'deleteActionTrigger',
-            'trigger_id': id,
-          },
-        ),
-      );
-    }
+  @override
+  Future<Result<void>> deleteTrigger(String id) async {
+    return _withAdmission(() async {
+      try {
+        final deleted = await (_database.delete(
+          _database.agentActionTriggerTable,
+        )..where((table) => table.id.equals(id))).go();
+        if (deleted == 0) {
+          return Failure(
+            ActionNotFoundFailure.withContext(
+              message: 'Action trigger was not found.',
+              context: {
+                'operation': 'deleteActionTrigger',
+                'trigger_id': id,
+                'reason': AgentActionRpcConstants.agentActionExecutionNotFoundContextReason,
+                'user_message': 'Trigger not found. Refresh the list and try again.',
+              },
+            ),
+          );
+        }
+
+        return const Success(unit);
+      } on Exception catch (error) {
+        return Failure(
+          _databaseFailure(
+            'Failed to delete action trigger',
+            cause: error,
+            context: {
+              'operation': 'deleteActionTrigger',
+              'trigger_id': id,
+            },
+          ),
+        );
+      }
+    });
   }
 
   @override
   Future<Result<AgentActionExecution>> saveExecution(
     AgentActionExecution execution,
   ) async {
-    try {
-      // Wrap insert + chunk persistence in a transaction so a chunk-write
-      // failure rolls back the execution row. The execution row must be
-      // inserted first because the chunk table holds an FK to execution.id;
-      // attempting to write chunks before the parent execution row violates
-      // the FK constraint when PRAGMA foreign_keys=ON.
-      late AgentActionExecution finalState;
-      await _database.transaction(() async {
-        final preparedState = _prepareExecutionCapturedOutputState(execution);
-        final row = _mapper.executionToData(preparedState);
-        await _database.into(_database.agentActionExecutionTable).insertOnConflictUpdate(row);
-        await _persistExecutionCapturedOutputChunks(execution);
-        finalState = _mapper.executionFromData(row);
-      });
-      return Success(await _hydrateAfterSave(finalState, execution));
-    } on Exception catch (error) {
-      return Failure(
-        _databaseFailure(
-          'Failed to save action execution',
-          cause: error,
-          context: {
-            'operation': 'saveActionExecution',
-            'execution_id': execution.id,
-            'action_id': execution.actionId,
-          },
-        ),
-      );
-    }
+    return _withAdmission(() async {
+      try {
+        // Wrap insert + chunk persistence in a transaction so a chunk-write
+        // failure rolls back the execution row. The execution row must be
+        // inserted first because the chunk table holds an FK to execution.id;
+        // attempting to write chunks before the parent execution row violates
+        // the FK constraint when PRAGMA foreign_keys=ON.
+        late AgentActionExecution finalState;
+        await _database.transaction(() async {
+          final preparedState = _prepareExecutionCapturedOutputState(execution);
+          final row = _mapper.executionToData(preparedState);
+          await _database.into(_database.agentActionExecutionTable).insertOnConflictUpdate(row);
+          await _persistExecutionCapturedOutputChunks(execution);
+          finalState = _mapper.executionFromData(row);
+        });
+        return Success(await _hydrateAfterSave(finalState, execution));
+      } on Exception catch (error) {
+        return Failure(
+          _databaseFailure(
+            'Failed to save action execution',
+            cause: error,
+            context: {
+              'operation': 'saveActionExecution',
+              'execution_id': execution.id,
+              'action_id': execution.actionId,
+            },
+          ),
+        );
+      }
+    });
   }
 
   /// Materialises the result of [saveExecution] without re-reading what was
@@ -389,42 +414,44 @@ class AgentActionRepository implements IAgentActionRepository {
     String id, {
     bool hydrateCapturedOutput = true,
   }) async {
-    try {
-      final row = await (_database.select(
-        _database.agentActionExecutionTable,
-      )..where((table) => table.id.equals(id))).getSingleOrNull();
-      if (row == null) {
+    return _withAdmission(() async {
+      try {
+        final row = await (_database.select(
+          _database.agentActionExecutionTable,
+        )..where((table) => table.id.equals(id))).getSingleOrNull();
+        if (row == null) {
+          return Failure(
+            ActionNotFoundFailure.withContext(
+              message: 'Action execution was not found.',
+              context: {
+                'operation': 'getActionExecution',
+                'execution_id': id,
+                'reason': AgentActionRpcConstants.agentActionExecutionNotFoundContextReason,
+                'user_message': 'Execution not found. Refresh the history and try again.',
+              },
+            ),
+          );
+        }
+
+        return Success(
+          await _hydrateExecutionCapturedOutput(
+            _mapper.executionFromData(row),
+            loadChunkedBodies: hydrateCapturedOutput,
+          ),
+        );
+      } on Exception catch (error) {
         return Failure(
-          ActionNotFoundFailure.withContext(
-            message: 'Action execution was not found.',
+          _databaseFailure(
+            'Failed to load action execution',
+            cause: error,
             context: {
               'operation': 'getActionExecution',
               'execution_id': id,
-              'reason': AgentActionRpcConstants.agentActionExecutionNotFoundContextReason,
-              'user_message': 'Execution not found. Refresh the history and try again.',
             },
           ),
         );
       }
-
-      return Success(
-        await _hydrateExecutionCapturedOutput(
-          _mapper.executionFromData(row),
-          loadChunkedBodies: hydrateCapturedOutput,
-        ),
-      );
-    } on Exception catch (error) {
-      return Failure(
-        _databaseFailure(
-          'Failed to load action execution',
-          cause: error,
-          context: {
-            'operation': 'getActionExecution',
-            'execution_id': id,
-          },
-        ),
-      );
-    }
+    });
   }
 
   @override
@@ -435,141 +462,147 @@ class AgentActionRepository implements IAgentActionRepository {
     DateTime? requestedAfter,
     int? limit,
   }) async {
-    try {
-      final query = _database.select(_database.agentActionExecutionTable)
-        ..orderBy([
-          (table) => OrderingTerm.desc(table.requestedAt),
-          (table) => OrderingTerm.asc(table.id),
-        ]);
-      if (actionId != null) {
-        query.where((table) => table.actionId.equals(actionId));
-      }
-      if (idempotencyKey != null) {
-        query.where((table) => table.idempotencyKey.equals(idempotencyKey));
-      }
-      if (statuses != null && statuses.isNotEmpty) {
-        query.where(
-          (table) => table.status.isIn(
-            statuses.map((status) => status.name).toList(growable: false),
+    return _withAdmission(() async {
+      try {
+        final query = _database.select(_database.agentActionExecutionTable)
+          ..orderBy([
+            (table) => OrderingTerm.desc(table.requestedAt),
+            (table) => OrderingTerm.asc(table.id),
+          ]);
+        if (actionId != null) {
+          query.where((table) => table.actionId.equals(actionId));
+        }
+        if (idempotencyKey != null) {
+          query.where((table) => table.idempotencyKey.equals(idempotencyKey));
+        }
+        if (statuses != null && statuses.isNotEmpty) {
+          query.where(
+            (table) => table.status.isIn(
+              statuses.map((status) => status.name).toList(growable: false),
+            ),
+          );
+        }
+        if (requestedAfter != null) {
+          query.where((table) => table.requestedAt.isBiggerOrEqualValue(requestedAfter));
+        }
+        final effectiveLimit = AgentActionRuntimeStateConstants.resolveListExecutionsLimit(limit);
+        if (effectiveLimit != null) {
+          query.limit(effectiveLimit);
+        }
+
+        final rows = await query.get();
+        return Success(
+          rows.map(_mapper.executionFromData).toList(growable: false),
+        );
+      } on Exception catch (error) {
+        return Failure(
+          _databaseFailure(
+            'Failed to list action executions',
+            cause: error,
+            context: {
+              'operation': 'listActionExecutions',
+              'action_id': ?actionId,
+              'idempotency_key': ?idempotencyKey,
+              'statuses': ?(statuses != null && statuses.isNotEmpty
+                  ? statuses.map((status) => status.name).toList(growable: false)
+                  : null),
+              'requested_after': ?requestedAfter?.toIso8601String(),
+            },
           ),
         );
       }
-      if (requestedAfter != null) {
-        query.where((table) => table.requestedAt.isBiggerOrEqualValue(requestedAfter));
-      }
-      final effectiveLimit = AgentActionRuntimeStateConstants.resolveListExecutionsLimit(limit);
-      if (effectiveLimit != null) {
-        query.limit(effectiveLimit);
-      }
-
-      final rows = await query.get();
-      return Success(
-        rows.map(_mapper.executionFromData).toList(growable: false),
-      );
-    } on Exception catch (error) {
-      return Failure(
-        _databaseFailure(
-          'Failed to list action executions',
-          cause: error,
-          context: {
-            'operation': 'listActionExecutions',
-            'action_id': ?actionId,
-            'idempotency_key': ?idempotencyKey,
-            'statuses': ?(statuses != null && statuses.isNotEmpty
-                ? statuses.map((status) => status.name).toList(growable: false)
-                : null),
-            'requested_after': ?requestedAfter?.toIso8601String(),
-          },
-        ),
-      );
-    }
+    });
   }
 
   @override
   Future<Result<int>> cleanupExecutions({
     required DateTime olderThan,
   }) async {
-    try {
-      late final int deleted;
-      await _database.transaction(() async {
-        await _capturedOutputChunks.deleteForTerminalExecutionsOlderThan(olderThan);
-        deleted =
-            await (_database.delete(_database.agentActionExecutionTable)..where((table) {
-                  final finishedBeforeRetention = table.finishedAt.isSmallerThanValue(olderThan);
-                  final requestedBeforeRetention = table.requestedAt.isSmallerThanValue(olderThan);
-                  final isTerminal = table.status.isIn(
-                    AgentActionExecutionStatus.values
-                        .where((status) => status.isTerminal)
-                        .map((status) => status.name)
-                        .toList(growable: false),
-                  );
-                  return isTerminal & (finishedBeforeRetention | requestedBeforeRetention);
-                }))
-                .go();
-      });
-      return Success(deleted);
-    } on Exception catch (error) {
-      return Failure(
-        _databaseFailure(
-          'Failed to cleanup action executions',
-          cause: error,
-          context: {
-            'operation': 'cleanupActionExecutions',
-            'older_than': olderThan.toIso8601String(),
-          },
-        ),
-      );
-    }
+    return _withAdmission(() async {
+      try {
+        late final int deleted;
+        await _database.transaction(() async {
+          await _capturedOutputChunks.deleteForTerminalExecutionsOlderThan(olderThan);
+          deleted =
+              await (_database.delete(_database.agentActionExecutionTable)..where((table) {
+                    final finishedBeforeRetention = table.finishedAt.isSmallerThanValue(olderThan);
+                    final requestedBeforeRetention = table.requestedAt.isSmallerThanValue(olderThan);
+                    final isTerminal = table.status.isIn(
+                      AgentActionExecutionStatus.values
+                          .where((status) => status.isTerminal)
+                          .map((status) => status.name)
+                          .toList(growable: false),
+                    );
+                    return isTerminal & (finishedBeforeRetention | requestedBeforeRetention);
+                  }))
+                  .go();
+        });
+        return Success(deleted);
+      } on Exception catch (error) {
+        return Failure(
+          _databaseFailure(
+            'Failed to cleanup action executions',
+            cause: error,
+            context: {
+              'operation': 'cleanupActionExecutions',
+              'older_than': olderThan.toIso8601String(),
+            },
+          ),
+        );
+      }
+    });
   }
 
   @override
   Future<Result<int>> clearCapturedOutputOlderThan({
     required DateTime olderThan,
   }) async {
-    try {
-      late final int updated;
-      await _database.transaction(() async {
-        await _capturedOutputChunks.deleteForTerminalExecutionsOlderThan(olderThan);
-        final terminalStatusNames = AgentActionExecutionStatus.values
-            .where((status) => status.isTerminal)
-            .map((status) => status.name)
-            .toList(growable: false);
-        updated =
-            await (_database.update(_database.agentActionExecutionTable)..where((table) {
-                  final finishedBeforeRetention = table.finishedAt.isSmallerThanValue(olderThan);
-                  final requestedBeforeRetention = table.requestedAt.isSmallerThanValue(olderThan);
-                  final isTerminal = table.status.isIn(terminalStatusNames);
-                  final hasCapturedOutput =
-                      table.stdoutText.isNotNull() |
-                      table.stderrText.isNotNull() |
-                      table.stdoutStoredInChunks.equals(true) |
-                      table.stderrStoredInChunks.equals(true);
-                  return isTerminal & (finishedBeforeRetention | requestedBeforeRetention) & hasCapturedOutput;
-                }))
-                .write(
-                  const AgentActionExecutionTableCompanion(
-                    stdoutText: Value(null),
-                    stderrText: Value(null),
-                    stdoutTruncated: Value(false),
-                    stderrTruncated: Value(false),
-                    stdoutStoredInChunks: Value(false),
-                    stderrStoredInChunks: Value(false),
-                  ),
-                );
-      });
-      return Success(updated);
-    } on Exception catch (error) {
-      return Failure(
-        _databaseFailure(
-          'Failed to clear captured action execution output',
-          cause: error,
-          context: {
-            'operation': 'clearCapturedOutputOlderThan',
-            'older_than': olderThan.toIso8601String(),
-          },
-        ),
-      );
-    }
+    return _withAdmission(() async {
+      try {
+        late final int updated;
+        await _database.transaction(() async {
+          await _capturedOutputChunks.deleteForTerminalExecutionsOlderThan(olderThan);
+          final terminalStatusNames = AgentActionExecutionStatus.values
+              .where((status) => status.isTerminal)
+              .map((status) => status.name)
+              .toList(growable: false);
+          updated =
+              await (_database.update(_database.agentActionExecutionTable)..where((table) {
+                    final finishedBeforeRetention = table.finishedAt.isSmallerThanValue(olderThan);
+                    final requestedBeforeRetention = table.requestedAt.isSmallerThanValue(olderThan);
+                    final isTerminal = table.status.isIn(terminalStatusNames);
+                    final hasCapturedOutput =
+                        table.stdoutText.isNotNull() |
+                        table.stderrText.isNotNull() |
+                        table.stdoutStoredInChunks.equals(true) |
+                        table.stderrStoredInChunks.equals(true);
+                    return isTerminal & (finishedBeforeRetention | requestedBeforeRetention) & hasCapturedOutput;
+                  }))
+                  .write(
+                    const AgentActionExecutionTableCompanion(
+                      stdoutText: Value(null),
+                      stderrText: Value(null),
+                      stdoutTruncated: Value(false),
+                      stderrTruncated: Value(false),
+                      stdoutStoredInChunks: Value(false),
+                      stderrStoredInChunks: Value(false),
+                    ),
+                  );
+        });
+        return Success(updated);
+      } on Exception catch (error) {
+        return Failure(
+          _databaseFailure(
+            'Failed to clear captured action execution output',
+            cause: error,
+            context: {
+              'operation': 'clearCapturedOutputOlderThan',
+              'older_than': olderThan.toIso8601String(),
+            },
+          ),
+        );
+      }
+    });
   }
 
   /// Returns the execution with stdout/stderr blobs cleared and the
@@ -629,36 +662,38 @@ class AgentActionRepository implements IAgentActionRepository {
     required int offsetUtf8,
     required int maxBytes,
   }) async {
-    try {
-      final window = await _capturedOutputChunks.sliceStreamWindow(
-        executionId: executionId,
-        stream: stream,
-        offsetUtf8: offsetUtf8,
-        maxBytes: maxBytes,
-      );
-      return Success(
-        window ??
-            (
-              text: '',
-              nextOffset: offsetUtf8,
-              totalBytes: 0,
-              responseTruncated: false,
-              effectiveStart: offsetUtf8,
-            ),
-      );
-    } on Exception catch (error) {
-      return Failure(
-        _databaseFailure(
-          'Failed to slice captured action execution output',
-          cause: error,
-          context: {
-            'operation': 'sliceCapturedOutput',
-            'execution_id': executionId,
-            'stream': stream,
-          },
-        ),
-      );
-    }
+    return _withAdmission(() async {
+      try {
+        final window = await _capturedOutputChunks.sliceStreamWindow(
+          executionId: executionId,
+          stream: stream,
+          offsetUtf8: offsetUtf8,
+          maxBytes: maxBytes,
+        );
+        return Success(
+          window ??
+              (
+                text: '',
+                nextOffset: offsetUtf8,
+                totalBytes: 0,
+                responseTruncated: false,
+                effectiveStart: offsetUtf8,
+              ),
+        );
+      } on Exception catch (error) {
+        return Failure(
+          _databaseFailure(
+            'Failed to slice captured action execution output',
+            cause: error,
+            context: {
+              'operation': 'sliceCapturedOutput',
+              'execution_id': executionId,
+              'stream': stream,
+            },
+          ),
+        );
+      }
+    });
   }
 
   Future<AgentActionExecution> _hydrateExecutionCapturedOutput(

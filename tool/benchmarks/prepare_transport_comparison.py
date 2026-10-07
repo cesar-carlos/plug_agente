@@ -1,4 +1,4 @@
-"""Build both native revisions and qualify an intentional dependency update."""
+"""Prepare native artifacts and qualify an intentional dependency update."""
 from __future__ import annotations
 
 import argparse
@@ -11,6 +11,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT))
 from tool.odbc.build_pinned_native import build_pinned_native, build_source_native
+from tool.odbc.prepare_package_native import prepare_native_library
 from tool.py.script_utils import resolve_command
 
 
@@ -42,13 +43,12 @@ def main():
         if not block or not version or f'version: "{version[1]}"' not in block[1]:
             raise ValueError('Hosted package version differs from the explicit Git baseline')
         baseline = build_source_native(base, checkout, revision)
-    candidate = build_pinned_native(ROOT)
+    candidate = prepare_native_library(ROOT)
     baseline_revision = json.loads((baseline.parent / 'manifest.json').read_text())['revision']
-    candidate_revision = json.loads((candidate.parent / 'manifest.json').read_text())['revision']
     return subprocess.run([sys.executable, str(ROOT / 'tool/benchmarks/run_transport_comparison.py'),
         '--base-dir', str(base), '--output-dir', str(args.output_dir), '--allow-odbc-change',
         '--base-native-library', str(baseline), '--candidate-native-library', str(candidate),
-        '--base-odbc-revision', baseline_revision, '--candidate-odbc-revision', candidate_revision], cwd=ROOT).returncode
+        '--base-odbc-revision', baseline_revision], cwd=ROOT).returncode
 
 
 if __name__ == '__main__':

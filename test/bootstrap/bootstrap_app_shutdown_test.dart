@@ -115,6 +115,24 @@ void main() {
     );
   });
 
+  test('confirmed maintenance effects are not repeated by shutdown', () async {
+    await applyUpdateExitPoliciesOnce();
+    confirmUpdateExitPoliciesForShutdown();
+    await shutdownApp();
+    verify(() => scheduler.dispatchAppCloseTriggers()).called(1);
+    verify(() => onAppExitPolicies()).called(1);
+  });
+
+  test('restored maintenance admits a new attempt but its shutdown does not replay effects', () async {
+    await applyUpdateExitPoliciesOnce();
+    restoreShutdownAfterMaintenance();
+    await applyUpdateExitPoliciesOnce();
+    confirmUpdateExitPoliciesForShutdown();
+    await shutdownApp();
+    verify(() => scheduler.dispatchAppCloseTriggers()).called(2);
+    verify(() => onAppExitPolicies()).called(2);
+  });
+
   test('shutdownApp runs hub early phase exactly once', () async {
     await shutdownApp();
 

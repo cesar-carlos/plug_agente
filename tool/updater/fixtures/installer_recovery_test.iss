@@ -26,7 +26,8 @@ var
   UpdaterInstallationSkipped, UpdaterHostNeeded: Boolean;
   RejectRevocation, RejectAuthorizationWrite: Boolean;
   CommandCount, AuthorizationWriteCount: Integer;
-  LastCommand: String;
+  LastCommand, LastFilename: String;
+  RejectOperationCheck: Boolean;
 
 #include ProductionInstallerDir + "\installation_reporting.iss"
 
@@ -34,8 +35,9 @@ function RunDependencyCommand(const Filename, Parameters: String; var Details: S
 begin
   CommandCount := CommandCount + 1;
   LastCommand := Parameters;
+  LastFilename := Filename;
   Details := 'simulated service permission failure';
-  Result := not RejectRevocation;
+  Result := not RejectRevocation and not (RejectOperationCheck and (Pos('--check-install', Parameters) = 1));
 end;
 
 function StoreUpdaterAuthorization(const Authorized: Cardinal): Boolean;
@@ -48,6 +50,7 @@ end;
 
 #include ProductionInstallerDir + "\updater_recovery.iss"
 #include ProductionInstallerDir + "\installation_repair.iss"
+#include ProductionInstallerDir + "\updater_install_preparation.iss"
 
 procedure AssertTrue(const Condition: Boolean; const Failure: String);
 begin
@@ -57,14 +60,42 @@ end;
 
 function InitializeSetup(): Boolean;
 var
-  TestCase, ReportPath: String;
+  TestCase, ReportPath, Details: String;
   CriticalErrorRaised: Boolean;
 begin
   Result := False;
   TestCase := ExpandConstant('{param:CASE}');
   ReportPath := ExpandConstant('{param:REPORT}');
   UpdaterHostNeeded := True;
-  if TestCase = 'initial_preparation_failure' then
+  if TestCase = 'residual_policy_reinstall' then
+  begin
+    AssertTrue(ValidateUpdaterOperationBeforeInstall(True, False, 'embedded-client.exe', Details),
+      'Residual policy must be validated without depending on the installed client');
+    AssertTrue(LastFilename = 'embedded-client.exe', 'Installer must use its embedded client');
+    AssertTrue(LastCommand = '--check-install 0', 'Reinstallation is a manual operation');
+  end
+  else if TestCase = 'missing_client_repair' then
+  begin
+    AssertTrue(IsUpdaterHostRegistered(True, True),
+      'The registered host must remain installed when only the client is missing');
+    AssertTrue(not IsUpdaterHostRegistered(False, True),
+      'Residual policy without a host must allow host installation');
+    AssertTrue(not IsUpdaterHostRegistered(True, False),
+      'An incomplete first enrollment must allow administrative repair');
+    AssertTrue(ValidateUpdaterOperationBeforeInstall(True, False, 'embedded-client.exe', Details),
+      'Missing installed client must not prevent the operation check');
+    RejectOperationCheck := True;
+    AssertTrue(not ValidateUpdaterOperationBeforeInstall(True, False, 'embedded-client.exe', Details),
+      'An active or unconfirmed operation must still block repair');
+  end
+  else if TestCase = 'administrative_host_upgrade' then
+  begin
+    AssertTrue(CanAdministrativelyUpgradeUpdaterHost(True, False, True), 'Explicit administrative transition is allowed');
+    AssertTrue(not CanAdministrativelyUpgradeUpdaterHost(True, True, True), 'Automatic updates cannot replace the supervisor');
+    AssertTrue(not CanAdministrativelyUpgradeUpdaterHost(False, False, True), 'Standard user cannot replace the supervisor');
+    AssertTrue(not CanAdministrativelyUpgradeUpdaterHost(True, False, False), 'Transition needs explicit updater authorization');
+  end
+  else if TestCase = 'initial_preparation_failure' then
   begin
     AssertTrue(CanSkipUpdaterPreparation(False, False), 'Fresh manual install must continue');
     SkipUpdaterInstallation('missing optional dependency');

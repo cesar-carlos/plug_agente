@@ -110,10 +110,7 @@ dependencies:
 
   # HTTP Client
   dio: ^5.11.1
-  odbc_fast:
-    git:
-      url: https://github.com/cesar-carlos/dart_odbc_fast.git
-      ref: ea1e04f03a8cf1f2d5f3790697e8bc62ba130f89
+  odbc_fast: ^5.0.1
   timezone: ^0.11.1
 
 dev_dependencies:
@@ -133,7 +130,7 @@ dev_dependencies:
   checks: ^0.3.2
   vm_service: ^15.3.0
 
-# odbc_fast 5.0.0 requires meta ^1.19.0; flutter_test on Flutter 3.47 still
+# odbc_fast 5.x requires meta ^1.19.0; flutter_test on Flutter 3.47 still
 # advertises meta 1.18. Keep the override until the SDK pin catches up.
 dependency_overrides:
   meta: 1.19.0
@@ -241,8 +238,3 @@ flutter_launcher_icons:
     icon_size: 256
   android: false
   ios: false
-
-hooks:
-  user_defines:
-    odbc_fast:
-      native_library_directory: build/odbc-native/pinned/

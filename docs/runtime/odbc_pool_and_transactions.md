@@ -1,7 +1,7 @@
 # ODBC Pool, Transactions and Runtime Tuning
 
 This document is the source of truth for how `plug_agente` uses
-[`odbc_fast`](https://pub.dev/packages/odbc_fast) **5.0.0** at runtime. It
+[`odbc_fast`](https://pub.dev/packages/odbc_fast) **5.0.1** from pub.dev at runtime. It
 covers pool sizing and lifecycle, transaction control, async backpressure,
 lock-safety, streaming session reuse, bulk insert atomicity, and
 observability hooks. Defaults, decisions and trade-offs are documented
@@ -601,5 +601,5 @@ Keep the last homologated installer for operational rollback. Diagnose uncertain
 writes/resources before any retry; restoring a build does not determine an
 uncertain transaction's outcome.
 
-Official reference: [5.0.0 changelog](https://github.com/cesar-carlos/dart_odbc_fast/blob/v5.0.0/CHANGELOG.md)
-and [examples](https://github.com/cesar-carlos/dart_odbc_fast/blob/v5.0.0/example/README.md).
+Official reference: [5.0.1 changelog](https://github.com/cesar-carlos/dart_odbc_fast/blob/v5.0.1/CHANGELOG.md)
+and [examples](https://github.com/cesar-carlos/dart_odbc_fast/blob/v5.0.1/example/README.md).

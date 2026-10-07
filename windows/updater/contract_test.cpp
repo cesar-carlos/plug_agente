@@ -15,6 +15,16 @@ int main(int argc, char** argv) {
       std::cout << "Cross-language signature checks passed\n"; return 0;
     }
     bool rejected = false;
+    if (!requires_authenticode(Json::object()) || requires_authenticode(Json{{"requireAuthenticode", false}}))
+      throw std::runtime_error("authenticode_policy_default_changed");
+    const Json hashes{{"binaryHashes", {{"app", std::string(64, 'a')}}}};
+    require_binary_hash(hashes, "app", std::string(64, 'a'));
+    for (const auto& digest : {std::string(64, 'b'), std::string(63, 'a'), std::string()}) {
+      rejected = false;
+      try { require_binary_hash(hashes, "app", digest); } catch (...) { rejected = true; }
+      if (!rejected) throw std::runtime_error("registered_binary_tampering_accepted");
+    }
+    rejected = false;
     try { parse_json("{\"version\":1,\"version\":2}"); } catch (...) { rejected = true; }
     if (!rejected) throw std::runtime_error("duplicates_accepted");
     const auto manifest = parse_json(R"({"formatVersion":1,"version":"1.8.6+1","channel":"stable","installer":{"name":"PlugAgente-Setup-1.8.6.exe","size":123,"sha256":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"},"protocol":{"host":1,"worker":1},"data":{"schema":30,"rollbackProtocol":1},"requirements":["app.files","firewall.new"],"release":{"commit":"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb","tag":"v1.8.6"}})");

@@ -43,6 +43,8 @@ std::string encode_base64(const std::vector<uint8_t>& bytes);
 std::vector<uint8_t> user_dpapi(const std::vector<uint8_t>& bytes, bool encrypting);
 Json verify_manifest(const Json& envelope, const std::string& keys);
 std::string trusted_publisher(const fs::path& executable);
+void verify_publisher_if_required(const fs::path& executable, const Json& policy);
+void verify_registered_binary(const fs::path& executable, const Json& policy, const std::string& name);
 std::wstring quote(const std::wstring& value);
 bool is_admin();
 Json load_policy(bool require_enabled = true);

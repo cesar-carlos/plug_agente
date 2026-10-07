@@ -5031,4 +5031,25 @@ class AppLocalizationsEn extends AppLocalizations {
   String agentActionsEditorNextRun(String time) {
     return 'Next run: $time';
   }
+
+  @override
+  String get updateRecoveryTitle => 'Recovery required';
+
+  @override
+  String get updateMaintenanceTitle => 'Update maintenance';
+
+  @override
+  String get updateRecoveryRetryFailed =>
+      'The service has not confirmed recovery. Check the updater service and try reconciling again.';
+
+  @override
+  String get updateRecoveryDescription =>
+      'The agent cannot resume its operations. Check the updater service and reconcile to restart safely.';
+
+  @override
+  String get updateMaintenanceDescription =>
+      'The agent is finishing its work for the update. Actions and settings are temporarily unavailable.';
+
+  @override
+  String get updateReconcileAction => 'Reconcile operation';
 }

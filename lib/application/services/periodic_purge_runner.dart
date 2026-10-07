@@ -28,6 +28,8 @@ class PeriodicPurgeRunner {
 
   bool _purgeInFlight = false;
 
+  bool get isIdle => !_purgeInFlight;
+
   bool get isRunning => _timer != null;
 
   void start() {

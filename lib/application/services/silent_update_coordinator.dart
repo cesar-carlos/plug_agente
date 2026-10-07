@@ -13,6 +13,7 @@ import 'package:plug_agente/application/services/auto_update_failure_messages.da
 import 'package:plug_agente/application/services/i_pending_silent_update_store.dart';
 import 'package:plug_agente/application/services/pending_silent_update.dart';
 import 'package:plug_agente/application/services/pending_silent_update_reconciler.dart';
+import 'package:plug_agente/application/services/persistent_circuit_breaker.dart';
 import 'package:plug_agente/application/services/silent_update/silent_update_collaborators.dart';
 import 'package:plug_agente/application/services/silent_update/silent_update_diagnostics_store.dart';
 import 'package:plug_agente/application/services/silent_update/silent_update_download_apply_service.dart';
@@ -231,7 +232,9 @@ class SilentUpdateCoordinator implements ISilentUpdateCoordinator {
       switch (pendingResolution) {
         case PendingDownloadedInFlight(:final pending):
           final now = _collaborators.clock();
-          final launcherStatus = await _collaborators.launcherStatusReader.read(pending.launcherStatusPath);
+          final launcherStatus = await _collaborators.launcherStatusReader.read(
+            pending is PendingSilentUpdateDownloaded ? pending.launcherStatusPath : null,
+          );
           _lastAutomaticDiagnostics = PendingSilentUpdateReconciler.diagnosticsForPending(
             pending: pending,
             launcherStatus: launcherStatus,
@@ -251,7 +254,9 @@ class SilentUpdateCoordinator implements ISilentUpdateCoordinator {
           // surface Ready (manual banner/apply) when automatic updates are off.
           // Do not auto-apply after a UAC cancel: the operator already refused
           // elevation and should retry from the banner, not get another prompt.
-          final readyStatus = await _collaborators.launcherStatusReader.read(pending.launcherStatusPath);
+          final readyStatus = await _collaborators.launcherStatusReader.read(
+            pending is PendingSilentUpdateDownloaded ? pending.launcherStatusPath : null,
+          );
           if (_shouldAutoApply() &&
               !_cancelRequested &&
               !SilentUpdateHelperLaunchState.isUserCancelledElevation(readyStatus)) {
@@ -409,7 +414,10 @@ class SilentUpdateCoordinator implements ISilentUpdateCoordinator {
       }
     } on FormatException catch (error) {
       final now = _collaborators.clock();
-      final failureState = await _collaborators.automaticFailureBreaker.recordFailure();
+      final failureState = isAutoUpdateDeferral(error)
+          ? PersistentCircuitBreakerState(failureCount: _collaborators.automaticFailureBreaker.failureCount,
+            cooldownUntil: _collaborators.automaticFailureBreaker.cooldownUntil)
+          : await _collaborators.automaticFailureBreaker.recordFailure();
       _lastAutomaticDiagnostics = _lastAutomaticDiagnostics?.copyWith(
         completedAt: now,
         completionSource: UpdateCheckCompletionSource.automaticValidationFailure,
@@ -435,7 +443,10 @@ class SilentUpdateCoordinator implements ISilentUpdateCoordinator {
         stackTrace: stackTrace,
       );
       final now = _collaborators.clock();
-      final failureState = await _collaborators.automaticFailureBreaker.recordFailure();
+      final failureState = isAutoUpdateDeferral(error)
+          ? PersistentCircuitBreakerState(failureCount: _collaborators.automaticFailureBreaker.failureCount,
+            cooldownUntil: _collaborators.automaticFailureBreaker.cooldownUntil)
+          : await _collaborators.automaticFailureBreaker.recordFailure();
       _lastAutomaticDiagnostics = _lastAutomaticDiagnostics?.copyWith(
         completedAt: now,
         completionSource: UpdateCheckCompletionSource.automaticInstallFailure,
@@ -559,10 +570,12 @@ class SilentUpdateCoordinator implements ISilentUpdateCoordinator {
 
   Future<Result<SilentUpdateOutcome>> _returnInstallerReady({
     required String feedUrl,
-    required PendingSilentUpdateDownloaded pending,
+    required PendingSilentUpdate pending,
   }) async {
     final now = _collaborators.clock();
-    final launcherStatus = await _collaborators.launcherStatusReader.read(pending.launcherStatusPath);
+    final launcherStatus = await _collaborators.launcherStatusReader.read(
+      pending is PendingSilentUpdateDownloaded ? pending.launcherStatusPath : null,
+    );
     final elevatedCancelled = SilentUpdateHelperLaunchState.isUserCancelledElevation(launcherStatus);
     _lastAutomaticDiagnostics = PendingSilentUpdateReconciler.diagnosticsForPending(
       pending: pending,

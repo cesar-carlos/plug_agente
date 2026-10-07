@@ -30,7 +30,7 @@ class SettingsBackedPendingSilentUpdateStore implements IPendingSilentUpdateStor
       if (decoded is Map<String, dynamic>) {
         return PendingSilentUpdate.fromJson(decoded);
       }
-    } on FormatException catch (error, stackTrace) {
+    } on Object catch (error, stackTrace) {
       developer.log(
         'Failed to parse pending silent update state',
         name: 'settings_backed_pending_silent_update_store',

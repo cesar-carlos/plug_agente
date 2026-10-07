@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
 import 'package:plug_agente/application/ports/hub_recovery_ui_sink.dart';
@@ -56,6 +58,49 @@ const _context = HubConnectionContext(
 );
 
 void main() {
+  test('maintenance retains in-flight retry and resumes without resetting failure budgets', () async {
+    final started = Completer<void>();
+    final finish = Completer<void>();
+    var calls = 0;
+    var resets = 0;
+    final coordinator = HubPersistentRetryCoordinator(
+      runtime: HubPersistentRetryRuntimeDependencies(
+        resilienceLogPrefix: () => '',
+        maxFailedTicks: () => 3,
+        maxUnreachableFailedTicks: () => 5,
+        persistentRetryInterval: () => const Duration(days: 1),
+        resolveConnectionContext: () => _context,
+        runPersistentTick: () async {
+          calls++;
+          if (calls == 1) {
+            started.complete();
+            await finish.future;
+          }
+        },
+        resetPersistentRetryCounters: () {
+          resets++;
+        },
+        onPersistentRetryExhausted: (_, _) {},
+      ),
+    );
+    addTearDown(coordinator.dispose);
+    coordinator.start();
+    await started.future;
+    coordinator.pauseForMaintenance();
+    await coordinator.tick();
+    expect(coordinator.retryInFlight, isTrue);
+    expect(coordinator.hasActiveTimer, isFalse);
+    expect(calls, 1);
+    finish.complete();
+    await Future<void>.delayed(Duration.zero);
+    expect(coordinator.retryInFlight, isFalse);
+    coordinator.resumeAfterMaintenance();
+    await Future<void>.delayed(Duration.zero);
+    expect(calls, 2);
+    expect(resets, 1);
+    expect(coordinator.hasActiveTimer, isTrue);
+  });
+
   test('start runs tick immediately and resets counters', () async {
     var tickCount = 0;
     var resetCount = 0;

@@ -1,6 +1,8 @@
 #include <flutter/dart_project.h>
 #include <flutter/flutter_view_controller.h>
 #include <windows.h>
+#include <shlobj.h>
+#include <filesystem>
 
 #include <cstdio>
 #include <algorithm>
@@ -267,8 +269,16 @@ int APIENTRY wWinMain(_In_ HINSTANCE instance, _In_opt_ HINSTANCE prev,
 
   // Single instance: only one app per machine.
   const auto launch_arguments = GetCommandLineArguments();
+  const bool is_update_validation =
+      std::find(launch_arguments.begin(), launch_arguments.end(), "--update-validation") != launch_arguments.end();
   const bool is_installation_check =
       std::find(launch_arguments.begin(), launch_arguments.end(), "--installation-check") != launch_arguments.end();
+  PWSTR program_files = nullptr;
+  if (SUCCEEDED(SHGetKnownFolderPath(FOLDERID_ProgramFiles, 0, nullptr, &program_files))) {
+    const auto blocked = std::filesystem::path(program_files) / L"PlugAgenteUpdater" / L"boot-blocked";
+    CoTaskMemFree(program_files);
+    if (!is_update_validation && !is_installation_check && GetFileAttributesW(blocked.c_str()) != INVALID_FILE_ATTRIBUTES) return EXIT_SUCCESS;
+  }
   const SingleInstanceMutexResult mutex_result = is_installation_check
       ? SingleInstanceMutexResult{} : CreateSingleInstanceMutexResult();
   HANDLE h_mutex = mutex_result.handle;
@@ -297,7 +307,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE instance, _In_opt_ HINSTANCE prev,
 
   project.set_dart_entrypoint_arguments(std::move(command_line_arguments));
 
-  FlutterWindow window(project, !is_autostart && !is_installation_check);
+  FlutterWindow window(project, !is_autostart && !is_installation_check && !is_update_validation);
   Win32Window::Point origin(10, 10);
   Win32Window::Size size(1280, 720);
   if (!window.Create(L"plug_agente", origin, size)) {
@@ -308,7 +318,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE instance, _In_opt_ HINSTANCE prev,
     return EXIT_FAILURE;
   }
   window.SetQuitOnClose(true);
-  if (!is_installation_check) RegisterCrashRestart();
+  if (!is_installation_check && !is_update_validation) RegisterCrashRestart();
 
   ::MSG msg;
   while (::GetMessage(&msg, nullptr, 0, 0)) {

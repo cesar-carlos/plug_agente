@@ -74,15 +74,15 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument('--allow-odbc-change', action='store_true')
     parser.add_argument('--base-native-library', type=Path)
     parser.add_argument('--candidate-native-library', type=Path)
-    parser.add_argument('--base-odbc-revision')
-    parser.add_argument('--candidate-odbc-revision')
+    parser.add_argument('--base-odbc-revision', help='Git source revision; omit for a published native manifest')
+    parser.add_argument('--candidate-odbc-revision', help='Git source revision; omit for a published native manifest')
     args = parser.parse_args(argv)
-    native_arguments = (args.base_native_library, args.candidate_native_library,
-                        args.base_odbc_revision, args.candidate_odbc_revision)
+    native_arguments = (args.base_native_library, args.candidate_native_library)
     if args.allow_odbc_change and not all(native_arguments):
-        parser.error('ODBC changes require both native binaries and full source revisions')
-    if any(native_arguments) and not all(native_arguments):
-        parser.error('Provide complete native provenance for both revisions')
+        parser.error('ODBC changes require both native binaries with verified provenance')
+    if (any((*native_arguments, args.base_odbc_revision, args.candidate_odbc_revision))
+            and not all(native_arguments)):
+        parser.error('Provide both native binaries with source revisions or published manifests')
     base, candidate, output = args.base_dir.resolve(), args.candidate_dir.resolve(), args.output_dir.resolve()
     if base == candidate:
         parser.error("An isolated comparison checkout is required")

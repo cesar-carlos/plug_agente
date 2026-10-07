@@ -1,4 +1,5 @@
 import copy
+import hashlib
 import unittest
 
 from tool.benchmarks.compare_transport_repetitions import compare
@@ -99,6 +100,31 @@ class TransportComparisonTests(unittest.TestCase):
             self.assertEqual(len(native_identity(path, 'a' * 40)['sha256']), 64)
             with self.assertRaises(ValueError):
                 native_identity(path, 'main')
+
+    def test_published_native_provenance_records_package_and_rejects_changed_binary(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / 'odbc_engine.dll'
+            path.write_bytes(b'published engine')
+            manifest = {
+                'source': 'pub.dev', 'version': '5.0.1', 'package_sha256': 'a' * 64,
+                'url': 'https://github.com/cesar-carlos/dart_odbc_fast/releases/download/v5.0.1/odbc_engine.dll',
+                'sha256': hashlib.sha256(path.read_bytes()).hexdigest(),
+            }
+            (path.parent / 'manifest.json').write_text(json.dumps(manifest))
+            identity = native_identity(path)
+            self.assertEqual(identity['version'], '5.0.1')
+            self.assertEqual(identity['package_sha256'], 'a' * 64)
+            self.assertNotIn('revision', identity)
+            path.write_bytes(b'stale engine')
+            with self.assertRaisesRegex(ValueError, 'differs from the binary'):
+                native_identity(path)
+
+    def test_missing_published_provenance_cannot_qualify_a_native_artifact(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / 'odbc_engine.dll'
+            path.write_bytes(b'engine without provenance')
+            with self.assertRaises(FileNotFoundError):
+                native_identity(path)
 
     def test_each_existing_limit_is_preserved(self):
         for field in ('latency', 'throughput', 'heap'):

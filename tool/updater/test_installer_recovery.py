@@ -49,6 +49,15 @@ class InstallerRecoveryTests(unittest.TestCase):
         self.assertEqual(result.read_text(), "passed")
         return report
 
+    def test_reinstall_with_residual_policy_uses_the_installer_embedded_client(self):
+        self.run_case("residual_policy_reinstall")
+
+    def test_missing_installed_client_can_be_repaired_but_active_operations_still_block(self):
+        self.run_case("missing_client_repair")
+
+    def test_only_explicit_administrative_installs_can_transition_the_supervisor(self):
+        self.run_case("administrative_host_upgrade")
+
     def test_optional_preparation_failure_continues_without_privileged_updater_copying(self):
         report = self.run_case("initial_preparation_failure")
         contents = report.read_text(encoding="utf-8-sig")

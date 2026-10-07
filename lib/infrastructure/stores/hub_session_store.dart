@@ -3,6 +3,7 @@ import 'package:plug_agente/domain/entities/auth_token.dart';
 import 'package:plug_agente/domain/errors/failures.dart' as domain;
 import 'package:plug_agente/domain/repositories/i_hub_auth_secret_store.dart';
 import 'package:plug_agente/domain/repositories/i_hub_session_store.dart';
+import 'package:plug_agente/domain/services/i_update_maintenance_gate.dart';
 import 'package:plug_agente/domain/value_objects/config_row_legacy_secrets.dart';
 import 'package:plug_agente/domain/value_objects/hub_auth_secrets.dart';
 import 'package:plug_agente/domain/value_objects/hub_session_legacy_row_bundle.dart';
@@ -17,53 +18,61 @@ class HubSessionStore implements IHubSessionStore {
   HubSessionStore(
     this._database, {
     required IHubAuthSecretStore authSecretStore,
-  }) : _authSecretStore = authSecretStore;
+    IUpdateMaintenanceGate? maintenanceGate,
+  }) : _maintenanceGate = maintenanceGate,
+       _authSecretStore = authSecretStore;
 
   final AppDatabase _database;
   final IHubAuthSecretStore _authSecretStore;
 
+  final IUpdateMaintenanceGate? _maintenanceGate;
+  Future<Result<T>> _withAdmission<T extends Object>(Future<Result<T>> Function() action) =>
+      _maintenanceGate?.run(action) ?? action();
+
   @override
   Future<Result<HubStoredSession>> readSession(String configId) async {
-    try {
-      final configData = await _loadConfigData(configId);
-      if (configData == null) {
-        return Failure(domain.NotFoundFailure('Config not found'));
-      }
+    return _withAdmission(() async {
+      try {
+        final configData = await _loadConfigData(configId);
+        if (configData == null) {
+          return Failure(domain.NotFoundFailure('Config not found'));
+        }
 
-      final secretsResult = await _loadMergedSecrets(configData);
-      if (secretsResult.isError()) {
-        return Failure(secretsResult.exceptionOrNull()!);
-      }
+        final secretsResult = await _loadMergedSecrets(configData);
+        if (secretsResult.isError()) {
+          return Failure(secretsResult.exceptionOrNull()!);
+        }
 
-      final secrets = secretsResult.getOrThrow();
-      final authToken = _normalize(secrets.authToken);
-      final refreshToken = _normalize(secrets.refreshToken);
-      if (authToken == null || refreshToken == null) {
-        return const Success(HubStoredSession());
-      }
+        final secrets = secretsResult.getOrThrow();
+        final authToken = _normalize(secrets.authToken);
+        final refreshToken = _normalize(secrets.refreshToken);
+        if (authToken == null || refreshToken == null) {
+          return const Success(HubStoredSession());
+        }
 
-      return Success(
-        HubStoredSession(
-          token: AuthToken(
-            token: authToken,
-            refreshToken: refreshToken,
+        return Success(
+          HubStoredSession(
+            token: AuthToken(
+              token: authToken,
+              refreshToken: refreshToken,
+            ),
           ),
-        ),
-      );
-    } on domain.Failure catch (failure) {
-      return Failure(failure);
-    } on Exception catch (error) {
-      return Failure(
-        _buildDatabaseFailure(
-          'Failed to read stored hub session',
-          cause: error,
-          context: {
-            'operation': 'readSession',
-            'configId': configId,
-          },
-        ),
-      );
-    }
+        );
+      } on domain.Failure catch (failure) {
+        return Failure(failure);
+      } on Exception catch (error) {
+        return Failure(
+          _buildDatabaseFailure(
+            'Failed to read stored hub session',
+            cause: error,
+            context: {
+              'operation': 'readSession',
+              'configId': configId,
+            },
+          ),
+        );
+      }
+    });
   }
 
   @override
@@ -71,250 +80,260 @@ class HubSessionStore implements IHubSessionStore {
     String configId,
     AuthToken token,
   ) async {
-    try {
-      final configData = await _loadConfigData(configId);
-      if (configData == null) {
-        return Failure(domain.NotFoundFailure('Config not found'));
-      }
+    return _withAdmission(() async {
+      try {
+        final configData = await _loadConfigData(configId);
+        if (configData == null) {
+          return Failure(domain.NotFoundFailure('Config not found'));
+        }
 
-      if (!_authSecretStore.isAvailable) {
+        if (!_authSecretStore.isAvailable) {
+          return Failure(
+            SecureStorageGuard.unavailableFailure(
+              operation: 'writeSessionTokens',
+              store: 'hub_auth',
+            ),
+          );
+        }
+
+        final secretsResult = await _loadMergedSecrets(configData);
+        if (secretsResult.isError()) {
+          return Failure(secretsResult.exceptionOrNull()!);
+        }
+
+        final currentSecrets = secretsResult.getOrThrow();
+        await _authSecretStore.saveSecrets(
+          configId,
+          HubAuthSecrets(
+            authToken: token.token,
+            refreshToken: token.refreshToken,
+            authPassword: currentSecrets.authPassword,
+          ),
+        );
+        await _clearLegacyTokenColumns(configId);
+        return const Success(unit);
+      } on domain.Failure catch (failure) {
+        return Failure(failure);
+      } on Exception catch (error) {
         return Failure(
-          SecureStorageGuard.unavailableFailure(
-            operation: 'writeSessionTokens',
-            store: 'hub_auth',
+          _buildDatabaseFailure(
+            'Failed to persist hub session tokens',
+            cause: error,
+            context: {
+              'operation': 'writeSessionTokens',
+              'configId': configId,
+            },
           ),
         );
       }
-
-      final secretsResult = await _loadMergedSecrets(configData);
-      if (secretsResult.isError()) {
-        return Failure(secretsResult.exceptionOrNull()!);
-      }
-
-      final currentSecrets = secretsResult.getOrThrow();
-      await _authSecretStore.saveSecrets(
-        configId,
-        HubAuthSecrets(
-          authToken: token.token,
-          refreshToken: token.refreshToken,
-          authPassword: currentSecrets.authPassword,
-        ),
-      );
-      await _clearLegacyTokenColumns(configId);
-      return const Success(unit);
-    } on domain.Failure catch (failure) {
-      return Failure(failure);
-    } on Exception catch (error) {
-      return Failure(
-        _buildDatabaseFailure(
-          'Failed to persist hub session tokens',
-          cause: error,
-          context: {
-            'operation': 'writeSessionTokens',
-            'configId': configId,
-          },
-        ),
-      );
-    }
+    });
   }
 
   @override
   Future<Result<void>> clearSession(String configId) async {
-    try {
-      final configData = await _loadConfigData(configId);
-      if (configData == null) {
-        return Failure(domain.NotFoundFailure('Config not found'));
-      }
+    return _withAdmission(() async {
+      try {
+        final configData = await _loadConfigData(configId);
+        if (configData == null) {
+          return Failure(domain.NotFoundFailure('Config not found'));
+        }
 
-      if (!_authSecretStore.isAvailable) {
-        await _updateLegacySecrets(
-          configId,
-          authToken: null,
-          refreshToken: null,
-        );
+        if (!_authSecretStore.isAvailable) {
+          await _updateLegacySecrets(
+            configId,
+            authToken: null,
+            refreshToken: null,
+          );
+          return const Success(unit);
+        }
+
+        final secretsResult = await _loadMergedSecrets(configData);
+        if (secretsResult.isError()) {
+          return Failure(secretsResult.exceptionOrNull()!);
+        }
+
+        final currentSecrets = secretsResult.getOrThrow();
+        if (_normalize(currentSecrets.authPassword) == null) {
+          await _authSecretStore.deleteSecrets(configId);
+        } else {
+          await _authSecretStore.saveSecrets(
+            configId,
+            HubAuthSecrets(authPassword: currentSecrets.authPassword),
+          );
+        }
+        await _clearLegacyTokenColumns(configId);
         return const Success(unit);
-      }
-
-      final secretsResult = await _loadMergedSecrets(configData);
-      if (secretsResult.isError()) {
-        return Failure(secretsResult.exceptionOrNull()!);
-      }
-
-      final currentSecrets = secretsResult.getOrThrow();
-      if (_normalize(currentSecrets.authPassword) == null) {
-        await _authSecretStore.deleteSecrets(configId);
-      } else {
-        await _authSecretStore.saveSecrets(
-          configId,
-          HubAuthSecrets(authPassword: currentSecrets.authPassword),
+      } on domain.Failure catch (failure) {
+        return Failure(failure);
+      } on Exception catch (error) {
+        return Failure(
+          _buildDatabaseFailure(
+            'Failed to clear stored hub session',
+            cause: error,
+            context: {
+              'operation': 'clearSession',
+              'configId': configId,
+            },
+          ),
         );
       }
-      await _clearLegacyTokenColumns(configId);
-      return const Success(unit);
-    } on domain.Failure catch (failure) {
-      return Failure(failure);
-    } on Exception catch (error) {
-      return Failure(
-        _buildDatabaseFailure(
-          'Failed to clear stored hub session',
-          cause: error,
-          context: {
-            'operation': 'clearSession',
-            'configId': configId,
-          },
-        ),
-      );
-    }
+    });
   }
 
   @override
   Future<Result<HubSessionLegacyRowBundle>> readLegacyRowBundle(
     List<ConfigRowLegacySecrets> rows,
   ) async {
-    try {
-      if (rows.isEmpty) {
-        return const Success(
-          HubSessionLegacyRowBundle(
-            sessions: <String, HubStoredSession>{},
-            credentials: <String, HubStoredCredentialsState>{},
-          ),
-        );
-      }
-
-      final secretsResult = await _loadMergedHubSecretsForLegacyRows(rows);
-      if (secretsResult.isError()) {
-        return Failure(secretsResult.exceptionOrNull()!);
-      }
-
-      final secretsById = secretsResult.getOrThrow();
-      final sessions = <String, HubStoredSession>{};
-      final credentialsById = <String, HubStoredCredentialsState>{};
-      for (final row in rows) {
-        final secrets = secretsById[row.configId] ?? const HubAuthSecrets();
-        final authToken = _normalize(secrets.authToken);
-        final refreshToken = _normalize(secrets.refreshToken);
-        if (authToken == null || refreshToken == null) {
-          sessions[row.configId] = const HubStoredSession();
-        } else {
-          sessions[row.configId] = HubStoredSession(
-            token: AuthToken(
-              token: authToken,
-              refreshToken: refreshToken,
+    return _withAdmission(() async {
+      try {
+        if (rows.isEmpty) {
+          return const Success(
+            HubSessionLegacyRowBundle(
+              sessions: <String, HubStoredSession>{},
+              credentials: <String, HubStoredCredentialsState>{},
             ),
           );
         }
 
-        final username = row.normalizedAuthUsername;
-        if (username == null) {
-          credentialsById[row.configId] = const HubStoredCredentialsState();
-          continue;
+        final secretsResult = await _loadMergedHubSecretsForLegacyRows(rows);
+        if (secretsResult.isError()) {
+          return Failure(secretsResult.exceptionOrNull()!);
         }
 
-        final password = _normalize(secrets.authPassword);
-        if (password == null) {
-          credentialsById[row.configId] = const HubStoredCredentialsState();
-          continue;
+        final secretsById = secretsResult.getOrThrow();
+        final sessions = <String, HubStoredSession>{};
+        final credentialsById = <String, HubStoredCredentialsState>{};
+        for (final row in rows) {
+          final secrets = secretsById[row.configId] ?? const HubAuthSecrets();
+          final authToken = _normalize(secrets.authToken);
+          final refreshToken = _normalize(secrets.refreshToken);
+          if (authToken == null || refreshToken == null) {
+            sessions[row.configId] = const HubStoredSession();
+          } else {
+            sessions[row.configId] = HubStoredSession(
+              token: AuthToken(
+                token: authToken,
+                refreshToken: refreshToken,
+              ),
+            );
+          }
+
+          final username = row.normalizedAuthUsername;
+          if (username == null) {
+            credentialsById[row.configId] = const HubStoredCredentialsState();
+            continue;
+          }
+
+          final password = _normalize(secrets.authPassword);
+          if (password == null) {
+            credentialsById[row.configId] = const HubStoredCredentialsState();
+            continue;
+          }
+
+          credentialsById[row.configId] = HubStoredCredentialsState(
+            credentials: HubStoredCredentials(
+              username: username,
+              password: password,
+            ),
+          );
         }
 
-        credentialsById[row.configId] = HubStoredCredentialsState(
-          credentials: HubStoredCredentials(
-            username: username,
-            password: password,
+        return Success(
+          HubSessionLegacyRowBundle(
+            sessions: sessions,
+            credentials: credentialsById,
+          ),
+        );
+      } on domain.Failure catch (failure) {
+        return Failure(failure);
+      } on Exception catch (error) {
+        return Failure(
+          _buildDatabaseFailure(
+            'Failed to read stored hub session bundle',
+            cause: error,
+            context: {
+              'operation': 'readLegacyRowBundle',
+              'configCount': rows.length,
+            },
           ),
         );
       }
-
-      return Success(
-        HubSessionLegacyRowBundle(
-          sessions: sessions,
-          credentials: credentialsById,
-        ),
-      );
-    } on domain.Failure catch (failure) {
-      return Failure(failure);
-    } on Exception catch (error) {
-      return Failure(
-        _buildDatabaseFailure(
-          'Failed to read stored hub session bundle',
-          cause: error,
-          context: {
-            'operation': 'readLegacyRowBundle',
-            'configCount': rows.length,
-          },
-        ),
-      );
-    }
+    });
   }
 
   @override
   Future<Result<HubStoredCredentialsState>> readStoredCredentials(
     String configId,
   ) async {
-    try {
-      final configData = await _loadConfigData(configId);
-      if (configData == null) {
-        return Failure(domain.NotFoundFailure('Config not found'));
-      }
+    return _withAdmission(() async {
+      try {
+        final configData = await _loadConfigData(configId);
+        if (configData == null) {
+          return Failure(domain.NotFoundFailure('Config not found'));
+        }
 
-      final username = _normalize(configData.authUsername);
-      if (username == null) {
-        return const Success(HubStoredCredentialsState());
-      }
+        final username = _normalize(configData.authUsername);
+        if (username == null) {
+          return const Success(HubStoredCredentialsState());
+        }
 
-      final secretsResult = await _loadMergedSecrets(configData);
-      if (secretsResult.isError()) {
-        return Failure(secretsResult.exceptionOrNull()!);
-      }
+        final secretsResult = await _loadMergedSecrets(configData);
+        if (secretsResult.isError()) {
+          return Failure(secretsResult.exceptionOrNull()!);
+        }
 
-      final password = _normalize(secretsResult.getOrThrow().authPassword);
-      if (password == null) {
-        return const Success(HubStoredCredentialsState());
-      }
+        final password = _normalize(secretsResult.getOrThrow().authPassword);
+        if (password == null) {
+          return const Success(HubStoredCredentialsState());
+        }
 
-      return Success(
-        HubStoredCredentialsState(
-          credentials: HubStoredCredentials(
-            username: username,
-            password: password,
+        return Success(
+          HubStoredCredentialsState(
+            credentials: HubStoredCredentials(
+              username: username,
+              password: password,
+            ),
           ),
-        ),
-      );
-    } on domain.Failure catch (failure) {
-      return Failure(failure);
-    } on Exception catch (error) {
-      return Failure(
-        _buildDatabaseFailure(
-          'Failed to read stored hub credentials',
-          cause: error,
-          context: {
-            'operation': 'readStoredCredentials',
-            'configId': configId,
-          },
-        ),
-      );
-    }
+        );
+      } on domain.Failure catch (failure) {
+        return Failure(failure);
+      } on Exception catch (error) {
+        return Failure(
+          _buildDatabaseFailure(
+            'Failed to read stored hub credentials',
+            cause: error,
+            context: {
+              'operation': 'readStoredCredentials',
+              'configId': configId,
+            },
+          ),
+        );
+      }
+    });
   }
 
   @override
   Future<Result<void>> deleteAllSecrets(String configId) async {
-    try {
-      if (_authSecretStore.isAvailable) {
-        await _authSecretStore.deleteSecrets(configId);
+    return _withAdmission(() async {
+      try {
+        if (_authSecretStore.isAvailable) {
+          await _authSecretStore.deleteSecrets(configId);
+        }
+        await _clearLegacySecretColumns(configId);
+        return const Success(unit);
+      } on Exception catch (error) {
+        return Failure(
+          _buildDatabaseFailure(
+            'Failed to delete hub authentication secrets',
+            cause: error,
+            context: {
+              'operation': 'deleteAllSecrets',
+              'configId': configId,
+            },
+          ),
+        );
       }
-      await _clearLegacySecretColumns(configId);
-      return const Success(unit);
-    } on Exception catch (error) {
-      return Failure(
-        _buildDatabaseFailure(
-          'Failed to delete hub authentication secrets',
-          cause: error,
-          context: {
-            'operation': 'deleteAllSecrets',
-            'configId': configId,
-          },
-        ),
-      );
-    }
+    });
   }
 
   Future<ConfigData?> _loadConfigData(String configId) {

@@ -51,6 +51,7 @@ final class OdbcInFlightExecutionRegistry {
       <String, Map<String, OdbcInFlightExecutionHandle>>{};
   final Set<String> _pendingAborts = <String>{};
   final Set<String> _ownerAborts = <String>{};
+  bool get hasUnconfirmedWork => _active.isNotEmpty || _pendingAborts.isNotEmpty || _ownerAborts.isNotEmpty;
   final Map<String, Timer> _pendingAbortExpiryTimers = <String, Timer>{};
   void Function(String requestId)? _pendingAbortListener;
 

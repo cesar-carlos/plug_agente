@@ -3,6 +3,7 @@ from __future__ import annotations
 
 
 import sys
+import argparse
 from pathlib import Path
 
 _TOOL_DIR = Path(__file__).resolve().parents[1]
@@ -42,6 +43,9 @@ def _built_executable(bundle_bin: Path) -> Path:
 
 
 def main() -> int:
+    parser = argparse.ArgumentParser(description='Build the elevated action runner.')
+    parser.add_argument('--release-only', action='store_true', help='Copy only to the release bundle for installer packaging.')
+    args = parser.parse_args()
     dart = resolve_dart_sdk_executable()
     run([dart, "pub", "get"], cwd=PACKAGE_DIR)
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
@@ -69,10 +73,9 @@ def main() -> int:
     run([str(OUTPUT_EXE), "--help"])
     print(f"Built elevated runner helper: {OUTPUT_EXE}")
 
-    bundle_targets = [
-        PROJECT_ROOT / "build" / "windows" / "x64" / "runner" / "Release",
-        PROJECT_ROOT / "build" / "windows" / "x64" / "runner" / "Debug",
-    ]
+    bundle_targets = [PROJECT_ROOT / "build" / "windows" / "x64" / "runner" / "Release"]
+    if not args.release_only:
+        bundle_targets.append(PROJECT_ROOT / "build" / "windows" / "x64" / "runner" / "Debug")
     for bundle_dir in bundle_targets:
         if bundle_dir.is_dir():
             shutil.copy2(OUTPUT_EXE, bundle_dir / "plug_agente_elevated_runner.exe")

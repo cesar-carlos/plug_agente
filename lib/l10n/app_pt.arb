@@ -2108,5 +2108,11 @@
         "type": "String"
       }
     }
-  }
+  },
+  "updateRecoveryTitle": "Recuperação necessária",
+  "updateMaintenanceTitle": "Manutenção para atualização",
+  "updateRecoveryRetryFailed": "O serviço não confirmou a recuperação. Verifique o serviço de atualização e tente reconciliar novamente.",
+  "updateRecoveryDescription": "O agente não pode retomar suas operações. Verifique o serviço de atualização e reconcilie para reiniciar com segurança.",
+  "updateMaintenanceDescription": "O agente está concluindo o trabalho para atualizar. Ações e configurações estão temporariamente indisponíveis.",
+  "updateReconcileAction": "Reconciliar operação"
 }

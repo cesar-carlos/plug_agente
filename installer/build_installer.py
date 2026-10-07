@@ -26,7 +26,7 @@ from typing import List, Optional, Sequence
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(PROJECT_ROOT))
-from tool.odbc.build_pinned_native import build_pinned_native, verify_native_bundle
+from tool.odbc.prepare_package_native import prepare_native_library, verify_native_bundle
 from tool.release.windows_version_info import application_version, set_version_info
 INSTALLER_DIR = PROJECT_ROOT / "installer"
 BUILD_DIR = PROJECT_ROOT / "build" / "windows" / "x64" / "runner" / "Release"
@@ -391,19 +391,31 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument("--prepare-signpath", action="store_true",
                         help="Build trusted unsigned inputs for the staged SignPath workflow.")
+    parser.add_argument("--manifest-only", action="store_true",
+                        help="Require Ed25519 feed/manifest authentication without an Authenticode certificate.")
     return parser.parse_args()
 
 
 def main() -> None:
     args = parse_args()
+    if args.manifest_only:
+        if args.prepare_signpath or signing_cert_path() is not None:
+            raise SystemExit("Manifest-only mode cannot use SignPath or a local signing certificate")
+        os.environ["AUTO_UPDATE_REQUIRE_VALID_SIGNATURE"] = "false"
+        os.environ["AUTO_UPDATE_REQUIRE_FEED_SIGNATURE"] = "true"
+        os.environ["WINDOWS_CODE_SIGNING_REQUIRED"] = "false"
     if args.prepare_signpath:
         if signing_cert_path() is not None:
             raise SystemExit("SignPath preparation cannot use a local signing certificate")
         os.environ["WINDOWS_CODE_SIGNING_REQUIRED"] = "true"
     ensure_signing_matches_runtime()
     feed_keys = configure_native_feed_keys()
+    if args.manifest_only and not feed_keys:
+        raise SystemExit("Manifest-only updates require the Ed25519 feed public key")
+    # CMake does not read .env. Keep the native enrollment policy and Dart in sync.
+    os.environ["AUTO_UPDATE_REQUIRE_VALID_SIGNATURE"] = "true" if auto_update_requires_valid_signature() else "false"
     run(["flutter", "pub", "get"])
-    os.environ['ODBC_FAST_NATIVE_LIBRARY'] = str(build_pinned_native(PROJECT_ROOT))
+    os.environ['ODBC_FAST_NATIVE_LIBRARY'] = str(prepare_native_library(PROJECT_ROOT))
 
     step = 1
     if args.sync_version:
@@ -447,7 +459,7 @@ def main() -> None:
     print(f"\n{step}. Build elevated action runner helper...", flush=True)
     elevated_runner_script = PROJECT_ROOT / "tool" / "elevated" / "build_elevated_runner.py"
     if elevated_runner_script.exists():
-        run([sys.executable, str(elevated_runner_script)])
+        run([sys.executable, str(elevated_runner_script), '--release-only'])
     else:
         raise SystemExit("Erro: tool/elevated/build_elevated_runner.py nao encontrado")
 

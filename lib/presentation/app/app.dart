@@ -2,17 +2,20 @@ import 'package:fluent_ui/fluent_ui.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:go_router/go_router.dart';
+import 'package:plug_agente/application/services/update_maintenance_admission.dart';
 import 'package:plug_agente/core/constants/app_constants.dart';
 import 'package:plug_agente/core/logger/app_logger.dart';
 import 'package:plug_agente/core/routes/deep_link_service.dart';
 import 'package:plug_agente/core/routes/routes.dart';
 import 'package:plug_agente/core/runtime/runtime_capabilities.dart';
+import 'package:plug_agente/core/services/i_auto_update_orchestrator.dart';
 import 'package:plug_agente/core/services/i_window_manager_service.dart';
 import 'package:plug_agente/core/theme/theme.dart';
 import 'package:plug_agente/l10n/app_localizations.dart';
 import 'package:plug_agente/presentation/providers/presentation_provider_read.dart';
 import 'package:plug_agente/presentation/providers/theme_provider.dart';
 import 'package:plug_agente/presentation/widgets/auto_update_ready_banner.dart';
+import 'package:plug_agente/presentation/widgets/update_maintenance_surface.dart';
 import 'package:provider/provider.dart';
 
 class PlugAgentApp extends StatefulWidget {
@@ -101,7 +104,7 @@ class _PlugAgentAppState extends State<PlugAgentApp> {
       // The banner shrinks to zero height when there is no pending
       // downloaded update, so it has no impact on regular layouts.
       builder: (context, child) {
-        return Column(
+        final content = Column(
           children: [
             const AutoUpdateReadyBanner(),
             Expanded(
@@ -109,6 +112,14 @@ class _PlugAgentAppState extends State<PlugAgentApp> {
             ),
           ],
         );
+        final admission = readOptionalGetItService<UpdateMaintenanceAdmission>();
+        if (admission == null) return content;
+        return UpdateMaintenanceSurface(admission: admission, child: content, reconcile: () async {
+          final orchestrator = readOptionalGetItService<IAutoUpdateOrchestrator>();
+          if (orchestrator == null) throw StateError('Updater is unavailable');
+          final result = await orchestrator.applyPendingSilentUpdate();
+          if (result.isError()) throw result.exceptionOrNull()!;
+        });
       },
       localizationsDelegates: const [
         AppLocalizations.delegate,

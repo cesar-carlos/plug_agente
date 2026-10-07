@@ -113,8 +113,7 @@ final class HubConnectionCoordinator {
         effectiveHardReloginRecoveryEnabled: _effectiveHardReloginRecoveryEnabled,
         effectiveHardReloginFailureThreshold: _effectiveHardReloginFailureThreshold,
         effectiveHubPersistentRetryMaxFailedTicks: () => _effectiveHubPersistentRetryMaxFailedTicks,
-        effectiveHubPersistentUnreachableMaxFailedTicks: () =>
-            _effectiveHubPersistentUnreachableMaxFailedTicks,
+        effectiveHubPersistentUnreachableMaxFailedTicks: () => _effectiveHubPersistentUnreachableMaxFailedTicks,
         effectiveHubPersistentRetryInterval: () => _effectiveHubPersistentRetryInterval,
         effectiveHubHardReloginCooldown: _effectiveHubHardReloginCooldown,
         hasAuthBridge: hubRecoveryAuthBridge != null,
@@ -227,6 +226,19 @@ final class HubConnectionCoordinator {
   );
 
   Future<void> disconnect() => _connectionSessionOrchestrator.disconnect();
+
+  bool get maintenanceWritersIdle =>
+      !_persistentRetryCoordinator.retryInFlight && _proactiveTokenRefreshScheduler.isIdle;
+
+  void pauseWritersForMaintenance() {
+    _persistentRetryCoordinator.pauseForMaintenance();
+    _proactiveTokenRefreshScheduler.pauseForMaintenance();
+  }
+
+  void resumeWritersAfterMaintenance() {
+    _persistentRetryCoordinator.resumeAfterMaintenance();
+    _proactiveTokenRefreshScheduler.resumeAfterMaintenance();
+  }
 
   void cancelNegotiatingWatchdog() => _resilienceCoordinator.cancelNegotiatingWatchdog();
 

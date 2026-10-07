@@ -2108,5 +2108,11 @@
         "type": "String"
       }
     }
-  }
+  },
+  "updateRecoveryTitle": "Recovery required",
+  "updateMaintenanceTitle": "Update maintenance",
+  "updateRecoveryRetryFailed": "The service has not confirmed recovery. Check the updater service and try reconciling again.",
+  "updateRecoveryDescription": "The agent cannot resume its operations. Check the updater service and reconcile to restart safely.",
+  "updateMaintenanceDescription": "The agent is finishing its work for the update. Actions and settings are temporarily unavailable.",
+  "updateReconcileAction": "Reconcile operation"
 }

@@ -18,16 +18,17 @@ on:
         type: boolean
         default: true
       require_signing:
-        description: "Require trusted code signing"
+        description: "Require Authenticode for pfx/signpath (manifest provider uses Ed25519)"
         required: true
         type: boolean
         default: true
       signing_provider:
-        description: "Code signing provider (SignPath requires prior approval and configuration)"
+        description: "Trust provider: manifest = Ed25519 without certificate; pfx/signpath = Authenticode"
         required: true
         type: choice
-        default: pfx
+        default: manifest
         options:
+          - manifest
           - pfx
           - signpath
       prerelease:
@@ -41,7 +42,7 @@ on:
         type: boolean
         default: false
       skip_authenticode_check:
-        description: "Skip signtool verify only for non-distributed dry-run artifacts"
+        description: "Skip Authenticode in dry runs; automatically enabled for manifest provider"
         required: false
         type: boolean
         default: false
@@ -108,7 +109,8 @@ jobs:
           FEED_KEY: ${{ secrets.APPCAST_SIGNING_PRIVATE_KEY }}
           FEED_PUBLIC_KEY: ${{ secrets.AUTO_UPDATE_FEED_PUBLIC_KEY }}
         run: |
-          if ('${{ inputs.run_tests }}' -ne 'true' -or '${{ inputs.require_signing }}' -ne 'true' -or '${{ inputs.require_valid_update_signature }}' -ne 'true' -or '${{ inputs.skip_authenticode_check }}' -eq 'true') { throw "Production requires tests and signature verification." }
+          if ('${{ inputs.run_tests }}' -ne 'true') { throw 'Production requires tests.' }
+          if ('${{ inputs.signing_provider }}' -ne 'manifest' -and ('${{ inputs.require_signing }}' -ne 'true' -or '${{ inputs.require_valid_update_signature }}' -ne 'true' -or '${{ inputs.skip_authenticode_check }}' -eq 'true')) { throw 'Certificate providers require Authenticode verification.' }
           if (!$env:FEED_KEY -or !$env:FEED_PUBLIC_KEY) { throw "Production requires feed signing keys." }
 
       - name: Setup Flutter
@@ -164,7 +166,7 @@ jobs:
         run: python -m unittest tool.updater.test_installer tool.updater.test_installer_recovery tool.updater.test_windows_installation_validation tool.release.test_signpath_staging -v
 
       - name: Prepare signing certificate
-        if: inputs.signing_provider != 'signpath'
+        if: inputs.signing_provider == 'pfx'
         id: signing
         shell: pwsh
         env:
@@ -187,6 +189,10 @@ jobs:
           SKIP_INPUT: ${{ inputs.skip_authenticode_check }}
           SIGNING_PROVIDER: ${{ inputs.signing_provider }}
         run: |
+          if ($env:SIGNING_PROVIDER -eq 'manifest') {
+            'skip=true' | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+            exit 0
+          }
           if ($env:SIGNING_PROVIDER -eq 'signpath') {
             if ($env:SKIP_INPUT -eq 'true') { throw 'SignPath artifacts always require Authenticode verification' }
             'skip=false' | Out-File -FilePath $env:GITHUB_OUTPUT -Append
@@ -212,13 +218,18 @@ jobs:
           # Production keeps the runtime signature gate enabled.
           # Flip the workflow input to true once helper+installer are signed
           # end-to-end and at least two release builds passed in the field.
-          AUTO_UPDATE_REQUIRE_VALID_SIGNATURE: ${{ inputs.require_valid_update_signature }}
+          AUTO_UPDATE_REQUIRE_VALID_SIGNATURE: ${{ inputs.signing_provider != 'manifest' && inputs.require_valid_update_signature }}
           AUTO_UPDATE_FEED_PUBLIC_KEY: ${{ secrets.AUTO_UPDATE_FEED_PUBLIC_KEY }}
           AUTO_UPDATE_REQUIRE_FEED_SIGNATURE: ${{ !inputs.dry_run || vars.AUTO_UPDATE_REQUIRE_FEED_SIGNATURE == 'true' }}
           WINDOWS_CODE_SIGNING_CERT_PATH: ${{ steps.signing.outputs.cert_path }}
           WINDOWS_CODE_SIGNING_CERT_PASSWORD: ${{ secrets.WINDOWS_CODE_SIGNING_CERT_PASSWORD }}
-          WINDOWS_CODE_SIGNING_REQUIRED: ${{ inputs.require_signing || inputs.require_valid_update_signature }}
-        run: python installer/build_installer.py
+          WINDOWS_CODE_SIGNING_REQUIRED: ${{ inputs.signing_provider != 'manifest' && (inputs.require_signing || inputs.require_valid_update_signature) }}
+          SIGNING_PROVIDER: ${{ inputs.signing_provider }}
+        shell: pwsh
+        run: |
+          if ($env:SIGNING_PROVIDER -eq 'manifest') { python installer/build_installer.py --manifest-only }
+          else { python installer/build_installer.py }
+          if ($LASTEXITCODE -ne 0) { throw 'Installer build failed' }
 
       - name: Build and sign with SignPath
         if: inputs.signing_provider == 'signpath'
@@ -377,6 +388,7 @@ jobs:
       release_tag: v${{ inputs.version }}
       rollout_percentage: "5"
       channel: ${{ inputs.prerelease && 'beta' || 'stable' }}
+      require_authenticode: ${{ inputs.signing_provider != 'manifest' }}
     secrets: inherit
     permissions:
       contents: write

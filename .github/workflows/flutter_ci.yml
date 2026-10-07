@@ -49,7 +49,7 @@ jobs:
       - name: Install dependencies
         run: |
           flutter pub get
-          python tool/odbc/build_pinned_native.py
+          python tool/odbc/prepare_package_native.py --github-env "${{ github.env }}"
 
       - name: Analyze application
         shell: bash
@@ -97,7 +97,7 @@ jobs:
       - name: Install dependencies
         run: |
           flutter pub get
-          python tool/odbc/build_pinned_native.py
+          python tool/odbc/prepare_package_native.py --github-env "${{ github.env }}"
 
       # Live ODBC/Hub E2E tests use tags live|slow|perf and are local-only
       # (see docs/testing/e2e_setup.md). CI must not run them on GitHub runners.
@@ -144,7 +144,7 @@ jobs:
       - name: Agent contract and production codec fixtures
         run: |
           flutter pub get
-          python tool/odbc/build_pinned_native.py
+          python tool/odbc/prepare_package_native.py --github-env "${{ github.env }}"
           flutter test test/docs/openrpc_contract_test.dart test/docs/communication test/infrastructure/external_services/transport/hub_inbound_catalog_codec_test.dart
       - name: Set up Node
         uses: actions/setup-node@v6
@@ -184,7 +184,7 @@ jobs:
       - name: Install dependencies
         run: |
           flutter pub get
-          python tool/odbc/build_pinned_native.py
+          python tool/odbc/prepare_package_native.py --github-env "${{ github.env }}"
 
       - name: Agent actions production preflight
         run: dart run tool/agent_actions/preflight_agent_actions_production.dart
@@ -217,7 +217,7 @@ jobs:
       - name: Install dependencies
         run: |
           flutter pub get
-          python tool/odbc/build_pinned_native.py
+          python tool/odbc/prepare_package_native.py --github-env "${{ github.env }}"
 
       - name: Verify Drift generated sources are current
         shell: bash
@@ -267,6 +267,7 @@ jobs:
             tool.tests.test_transport_comparison \
             tool.tests.test_streaming_tuning \
             tool.tests.test_build_pinned_native \
+            tool.tests.test_prepare_package_native \
             tool.tests.test_odbc_benchmark_runner \
             tool.tests.test_odbc_benchmark_gate \
             tool.tests.test_compare_benchmark_summary \
@@ -295,16 +296,16 @@ jobs:
       - name: Install dependencies
         run: |
           flutter pub get
-          python tool/odbc/build_pinned_native.py
+          python tool/odbc/prepare_package_native.py --github-env "${{ github.env }}"
 
-      - name: Build pinned native engine
-        run: python tool/odbc/build_pinned_native.py --github-env "$env:GITHUB_ENV"
+      - name: Prepare published package native engine
+        run: python tool/odbc/prepare_package_native.py --github-env "$env:GITHUB_ENV"
 
       - name: Build Windows debug bundle
         run: flutter build windows --debug
 
-      - name: Verify pinned native engine in the bundle
-        run: python tool/odbc/build_pinned_native.py --verify-bundle build/windows/x64/runner/Debug
+      - name: Verify published native engine in the bundle
+        run: python tool/odbc/prepare_package_native.py --verify-bundle build/windows/x64/runner/Debug
 
       - name: Smoke native update helper
         shell: pwsh
@@ -421,7 +422,7 @@ jobs:
       - name: Install dependencies
         run: |
           flutter pub get
-          python tool/odbc/build_pinned_native.py
+          python tool/odbc/prepare_package_native.py --github-env "${{ github.env }}"
 
       - name: Qualify transport with identical-code control and both revision orders
         shell: bash

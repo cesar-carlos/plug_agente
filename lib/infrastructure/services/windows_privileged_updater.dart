@@ -98,6 +98,12 @@ class WindowsPrivilegedUpdater implements IPrivilegedUpdater {
     if (operation != null && !RegExp(r'^[0-9a-f]{32}$').hasMatch(operation)) {
       throw const FormatException('Invalid operation identity');
     }
+    for (final key in const ['rebootPending', 'ownedByCaller', 'restartOnly', 'finalizationPending']) {
+      if (value[key] != null && value[key] is! bool) throw FormatException('Invalid $key');
+    }
+    if (value['retryAfterUnixMillis'] != null && value['retryAfterUnixMillis'] is! int) {
+      throw const FormatException('Invalid recovery retry date');
+    }
     return UpdaterStatus(
       phase: UpdaterPhase.values.byName(value['state'] as String),
       operationId: operation,
@@ -105,6 +111,12 @@ class WindowsPrivilegedUpdater implements IPrivilegedUpdater {
       reason: value['reason'] as String?,
       missingCapabilities: List<String>.from(value['missingCapabilities'] as List? ?? const []),
       rebootPending: value['rebootPending'] == true,
+      ownedByCaller: value['ownedByCaller'] == true,
+      restartOnly: value['restartOnly'] == true,
+      finalizationPending: value['finalizationPending'] == true,
+      retryAfter: value['retryAfterUnixMillis'] is int
+          ? DateTime.fromMillisecondsSinceEpoch(value['retryAfterUnixMillis'] as int, isUtc: true)
+          : null,
     );
   }
 
@@ -131,6 +143,7 @@ class WindowsPrivilegedUpdater implements IPrivilegedUpdater {
           applicationReady: value['applicationReady'] as bool,
           channel: value['channel'] as String,
           approved: List<String>.unmodifiable(List<String>.from(value['approved'] as List)),
+          recoveryContract: value['recoveryContract'] as int? ?? 0,
         ),
       );
     } on Object catch (error) {
@@ -146,6 +159,9 @@ class WindowsPrivilegedUpdater implements IPrivilegedUpdater {
   @override
   Future<Result<UpdaterStatus>> cancel(String operationId) =>
       _statusCall({'command': 'cancel', 'operationId': operationId});
+  @override
+  Future<Result<UpdaterStatus>> requestApplicationRecovery({required String operationId, required int appPid}) =>
+      _statusCall({'command': 'recoverApplication', 'operationId': operationId, 'appPid': appPid});
   @override
   Future<Result<UpdaterStartConfirmation>> start({
     required String operationId,
@@ -180,7 +196,21 @@ class WindowsPrivilegedUpdater implements IPrivilegedUpdater {
     required String version,
     required String nonce,
   }) async {
-    final result = await _call({'command': 'health', 'operationId': operationId, 'version': version, 'nonce': nonce});
+    final result = await _call({
+      'command': 'health',
+      'operationId': operationId,
+      'version': version,
+      'nonce': nonce,
+      'appPid': pid,
+    });
+    return result.fold((_) => const Success(unit), Failure.new);
+  }
+
+  Future<Result<Map<String, dynamic>>> validationContext(String operationId, String nonce) =>
+      _call({'command': 'validationContext', 'operationId': operationId, 'nonce': nonce, 'appPid': pid});
+
+  Future<Result<void>> confirmRestoration(String operationId, String nonce) async {
+    final result = await _call({'command': 'restored', 'operationId': operationId, 'nonce': nonce, 'appPid': pid});
     return result.fold((_) => const Success(unit), Failure.new);
   }
 }

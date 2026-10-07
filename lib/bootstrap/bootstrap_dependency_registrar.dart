@@ -71,6 +71,7 @@ import 'package:plug_agente/application/services/hub_access_token_renewer.dart';
 import 'package:plug_agente/application/services/hub_session_coordinator.dart';
 import 'package:plug_agente/application/services/i_pending_silent_update_store.dart';
 import 'package:plug_agente/application/services/odbc_circuit_breaker_reset_service.dart';
+import 'package:plug_agente/application/services/privileged_silent_update_installer.dart';
 import 'package:plug_agente/application/services/protocol_negotiator.dart';
 import 'package:plug_agente/application/services/query_normalizer_service.dart';
 import 'package:plug_agente/application/services/rpc_idempotency_cache_periodic_purge.dart';
@@ -78,6 +79,7 @@ import 'package:plug_agente/application/services/settings_backed_pending_silent_
 import 'package:plug_agente/application/services/silent_update_installer.dart';
 import 'package:plug_agente/application/services/sql_operation_classifier.dart';
 import 'package:plug_agente/application/services/startup_configuration_session_state.dart';
+import 'package:plug_agente/application/services/update_maintenance_admission.dart';
 import 'package:plug_agente/application/use_cases/apply_agent_action_on_app_exit_policies.dart';
 import 'package:plug_agente/application/use_cases/authorize_sql_operation.dart';
 import 'package:plug_agente/application/use_cases/backfill_agent_action_execution_correlation.dart';
@@ -151,6 +153,7 @@ import 'package:plug_agente/application/use_cases/validate_agent_action_trigger.
 import 'package:plug_agente/application/validation/config_validator.dart';
 import 'package:plug_agente/application/validation/query_normalizer.dart';
 import 'package:plug_agente/bootstrap/bootstrap_app_shutdown.dart';
+import 'package:plug_agente/bootstrap/bootstrap_update_maintenance.dart';
 import 'package:plug_agente/core/config/app_environment.dart';
 import 'package:plug_agente/core/config/auto_update_feed_config.dart';
 import 'package:plug_agente/core/config/feature_flags.dart';
@@ -238,6 +241,7 @@ import 'package:plug_agente/domain/repositories/i_token_secret_store.dart';
 import 'package:plug_agente/domain/repositories/i_transport_client.dart';
 import 'package:plug_agente/domain/repositories/sql_execution_queue_metrics_collector.dart';
 import 'package:plug_agente/domain/services/i_privileged_updater.dart';
+import 'package:plug_agente/domain/services/i_update_maintenance_gate.dart';
 import 'package:plug_agente/domain/services/i_update_manifest_downloader.dart';
 import 'package:plug_agente/domain/services/i_update_secrets_snapshot.dart';
 import 'package:plug_agente/domain/streaming/i_streaming_named_parameter_preparer.dart';
@@ -421,7 +425,9 @@ Future<void> _closeApplicationForSilentUpdate({
   String? noticeTitle,
   String? noticeBody,
 }) async {
-  await _emitPreCloseNotice(title: noticeTitle, body: noticeBody);
+  if (!getIt.isRegistered<BootstrapUpdateMaintenance>() || !getIt<BootstrapUpdateMaintenance>().prepared) {
+    await _emitPreCloseNotice(title: noticeTitle, body: noticeBody);
+  }
   if (getIt.isRegistered<WindowManagerService>()) {
     final service = getIt<WindowManagerService>();
     // Flip preventClose/closeToTray off so the close request actually exits

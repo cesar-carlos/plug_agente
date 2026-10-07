@@ -9373,6 +9373,42 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Next run: {time}'**
   String agentActionsEditorNextRun(String time);
+
+  /// No description provided for @updateRecoveryTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Recovery required'**
+  String get updateRecoveryTitle;
+
+  /// No description provided for @updateMaintenanceTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Update maintenance'**
+  String get updateMaintenanceTitle;
+
+  /// No description provided for @updateRecoveryRetryFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'The service has not confirmed recovery. Check the updater service and try reconciling again.'**
+  String get updateRecoveryRetryFailed;
+
+  /// No description provided for @updateRecoveryDescription.
+  ///
+  /// In en, this message translates to:
+  /// **'The agent cannot resume its operations. Check the updater service and reconcile to restart safely.'**
+  String get updateRecoveryDescription;
+
+  /// No description provided for @updateMaintenanceDescription.
+  ///
+  /// In en, this message translates to:
+  /// **'The agent is finishing its work for the update. Actions and settings are temporarily unavailable.'**
+  String get updateMaintenanceDescription;
+
+  /// No description provided for @updateReconcileAction.
+  ///
+  /// In en, this message translates to:
+  /// **'Reconcile operation'**
+  String get updateReconcileAction;
 }
 
 class _AppLocalizationsDelegate extends LocalizationsDelegate<AppLocalizations> {

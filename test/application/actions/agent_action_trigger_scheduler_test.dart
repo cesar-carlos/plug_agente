@@ -1196,6 +1196,10 @@ void main() {
       expect(first.getOrThrow(), 1);
       expect(second.getOrThrow(), 0);
       expect(runner.runCount, 1);
+      scheduler.resetAppCloseAfterMaintenance();
+      expect((await scheduler.dispatchAppCloseTriggers()).getOrThrow(), 1);
+      expect((await scheduler.dispatchAppCloseTriggers()).getOrThrow(), 0);
+      expect(runner.runCount, 2);
     });
 
     test('should wait for lock release before acquiring again after stop', () async {

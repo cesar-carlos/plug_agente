@@ -3,6 +3,7 @@ import 'dart:async';
 /// In-process abort signals for elevated executions awaiting helper status files.
 class ElevatedActionExecutionAbortRegistry {
   final Map<String, Completer<void>> _abortCompletersByExecutionId = <String, Completer<void>>{};
+  bool get hasPendingExecutions => _abortCompletersByExecutionId.isNotEmpty;
 
   void register(String executionId) {
     final trimmedId = executionId.trim();

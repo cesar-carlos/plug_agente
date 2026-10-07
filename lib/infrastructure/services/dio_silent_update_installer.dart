@@ -256,6 +256,24 @@ class DioSilentUpdateInstaller implements ISilentUpdateInstaller {
       }
 
       final installDirectory = await _installDirectoryResolver();
+      if (request.stageForService) {
+        if (!request.deferHelperLaunch) {
+          return Failure(domain.ValidationFailure('A preparação pelo serviço exige aplicação separada.'));
+        }
+        return Success(
+          SilentUpdateInstallResult(
+            installerPath: installerPath,
+            logPath: logPath,
+            launcherPath: '',
+            launcherStatusPath: '',
+            installDirectory: installDirectory,
+            strategy: SilentUpdateInstallStrategy.windowsService,
+            installDirectoryWritable: false,
+            appPid: _currentProcessIdResolver(),
+            updateDirectorySecurityStatus: updateDirectorySecurityStatus,
+          ),
+        );
+      }
       final installDirectoryWritable = await _installDirectoryWritableProbe(installDirectory);
       final strategy = installDirectoryWritable
           ? SilentUpdateInstallStrategy.currentUserThenElevated
@@ -567,8 +585,7 @@ String _helperSignatureRequiredMessage(HelperSignatureStatus status) {
       'Silent update helper signature is required but Authenticode verification failed. Refusing to launch.',
     HelperSignatureStatus.unknown =>
       'Silent update helper signature is required but could not be verified. Refusing to launch.',
-    HelperSignatureStatus.valid =>
-      'Silent update helper signature is required but was not valid. Refusing to launch.',
+    HelperSignatureStatus.valid => 'Silent update helper signature is required but was not valid. Refusing to launch.',
   };
 }
 

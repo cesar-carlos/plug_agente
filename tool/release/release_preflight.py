@@ -312,9 +312,9 @@ def run_optional_checks(args: argparse.Namespace) -> None:
         print(f'Passed {artifact}; evidence: build/release-preflight/{artifact}.log', flush=True)
 
     if args.tests or args.tests_ci:
-        from tool.odbc.build_pinned_native import build_pinned_native
+        from tool.odbc.prepare_package_native import prepare_native_library
         run(['flutter', 'pub', 'get'])
-        os.environ['ODBC_FAST_NATIVE_LIBRARY'] = str(build_pinned_native(PROJECT_ROOT))
+        os.environ['ODBC_FAST_NATIVE_LIBRARY'] = str(prepare_native_library(PROJECT_ROOT))
     if args.analyze:
         check(["flutter", "analyze"], 'analyze')
     if args.tests:
@@ -354,7 +354,7 @@ def collect_publish_secret_warnings(repo: str, signing_provider: str = "pfx") ->
     secrets = list_github_actions_secrets(repo)
     warnings: list[str] = []
     required_signing_secret = "SIGNPATH_API_TOKEN" if signing_provider == "signpath" else "WINDOWS_CODE_SIGNING_CERT_BASE64"
-    if required_signing_secret not in secrets:
+    if signing_provider != "manifest" and required_signing_secret not in secrets:
         warnings.append(
             f"{required_signing_secret} is not configured: production publication is blocked."
         )
@@ -380,6 +380,9 @@ def print_publish_workflow_hints(
     secrets = list_github_actions_secrets(repo)
     signing_secret = "SIGNPATH_API_TOKEN" if signing_provider == "signpath" else "WINDOWS_CODE_SIGNING_CERT_BASE64"
     has_signing = signing_secret in secrets
+    signed = signing_provider != "manifest"
+    signing_flag = "true" if signed else "false"
+    skip_flag = "false" if signed else "true"
 
     print("\nPublish workflow hints:")
     print(f"  1. Optional dry run: gh workflow run \"Publish Windows Release\" --ref main")
@@ -388,10 +391,10 @@ def print_publish_workflow_hints(
     print(
         f"     gh workflow run \"Publish Windows Release\" --ref main "
         f"-f version={version_short} -f build_number={build_number} "
-        f"-f run_tests=true -f require_signing=true -f require_valid_update_signature=true -f dry_run=false "
-        f"-f skip_authenticode_check=false -f signing_provider={signing_provider}"
+        f"-f run_tests=true -f require_signing={signing_flag} -f require_valid_update_signature={signing_flag} -f dry_run=false "
+        f"-f skip_authenticode_check={skip_flag} -f signing_provider={signing_provider}"
     )
-    if not has_signing:
+    if signed and not has_signing:
         print(
             f"  WARN: {signing_secret} is not configured; "
             "production requires trusted signing."
@@ -413,7 +416,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--check-installer", action="store_true", help="Require installer/dist asset for this version.")
     parser.add_argument("--check-pages", action="store_true", help="Require GitHub Pages to be enabled for Actions deploy.")
     parser.add_argument("--repo", default="cesar-carlos/plug_agente", help="GitHub repository used by --check-pages.")
-    parser.add_argument("--signing-provider", choices=("pfx", "signpath"), default="pfx")
+    parser.add_argument("--signing-provider", choices=("manifest", "pfx", "signpath"), default="manifest")
     parser.add_argument("--analyze", action="store_true", help="Run flutter analyze.")
     parser.add_argument("--tests", action="store_true", help="Run flutter test.")
     parser.add_argument(

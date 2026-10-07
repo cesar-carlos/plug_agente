@@ -701,7 +701,10 @@ final class AdaptiveOdbcConnectionPool
     final nativeEligible = resolvedDriverInfo == null ? null : _isNativeEligible(resolvedDriverInfo.databaseType);
     final circuitState = _lastCircuitKey == null ? null : _nativeCircuits[_lastCircuitKey];
     final circuitDisabledUntil = circuitState?.disabledUntil;
+    final nativeDiagnostics = _nativePool.getHealthDiagnostics();
     return {
+      ...nativeDiagnostics,
+      'native_backend_active_count': nativeDiagnostics['native_active_count'],
       'strategy': 'adaptive_experimental',
       'effective_strategy': _lastEffectiveStrategy ?? 'lease',
       'native_pool_exposed': _featureFlags.enableOdbcExperimentalDriverAdaptivePooling,

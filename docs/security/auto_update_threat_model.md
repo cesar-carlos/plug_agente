@@ -1,5 +1,24 @@
 # Auto-Update Threat Model
 
+## Provedor manifest (revisão 2026-10-06)
+
+O provedor `manifest` dispensa Authenticode, mas exige assinatura Ed25519 do feed
+e do manifesto e verificação do hash/tamanho do instalador pelo serviço. O
+administrador registra o serviço e a confiança inicial uma vez. ACLs protegem
+controle, worker, bundle e política; hashes registrados detectam substituições.
+Políticas anteriores sem `requireAuthenticode` continuam exigindo certificado.
+
+Neste modo, a chave Ed25519 é a raiz criptográfica da distribuição: seu
+comprometimento pode autorizar um instalador malicioso. As afirmações históricas
+abaixo de que são necessários dois certificados comprometidos **não se aplicam**
+a `manifest`. A chave privada não vai para o cliente; proteger o secret e o acesso
+a workflows de publicação. SHA-256 sozinho não autentica o publicador.
+
+O adaptador do serviço não recorre a UAC quando falha. A aplicação automática
+permanece bloqueada até concluir a transição e homologar recuperação e rollback;
+consulte o [plano atualizado](../implemente/plano_auto_update_evolution.md).
+
+
 ## Escopo
 
 Este documento descreve o modelo de ameacas do pipeline de auto-update do

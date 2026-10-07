@@ -163,7 +163,7 @@ void _registerActionsInfrastructure(GetIt getIt) {
       ),
     )
     ..registerLazySingleton<ActionExecutionQueue>(
-      () => ActionExecutionQueue(metrics: getIt<MetricsCollector>()),
+      () => ActionExecutionQueue(metrics: getIt<MetricsCollector>(), maintenanceGate: getIt<IUpdateMaintenanceGate>()),
     )
     ..registerLazySingleton<IAgentActionSecretStore>(
       () {

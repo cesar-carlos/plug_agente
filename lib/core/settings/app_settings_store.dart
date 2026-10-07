@@ -36,6 +36,7 @@ class GlobalAppSettingsStore implements IAppSettingsStore {
   GlobalAppSettingsStore({String? filePath}) : _filePath = filePath;
 
   String? _filePath;
+  void Function(String key)? writeAdmission;
   final Map<String, Object> _cache = <String, Object>{};
   Future<void> _writeQueue = Future<void>.value();
 
@@ -176,6 +177,7 @@ class GlobalAppSettingsStore implements IAppSettingsStore {
 
   @override
   Future<void> setValue(String key, Object value) async {
+    writeAdmission?.call(key);
     if (!_isSupportedValue(value)) {
       throw ArgumentError.value(value, 'value', 'Unsupported value type');
     }
@@ -185,6 +187,9 @@ class GlobalAppSettingsStore implements IAppSettingsStore {
 
   @override
   Future<void> setValues(Map<String, Object> values) async {
+    if (writeAdmission case final admission?) {
+      values.keys.forEach(admission);
+    }
     for (final entry in values.entries) {
       if (!_isSupportedValue(entry.value)) {
         throw ArgumentError.value(
@@ -200,6 +205,7 @@ class GlobalAppSettingsStore implements IAppSettingsStore {
 
   @override
   Future<void> remove(String key) async {
+    writeAdmission?.call(key);
     if (!_cache.containsKey(key)) {
       return;
     }
@@ -220,6 +226,7 @@ class GlobalAppSettingsStore implements IAppSettingsStore {
         continue;
       }
 
+      writeAdmission?.call(key);
       _cache[key] = value;
       migratedCount++;
     }

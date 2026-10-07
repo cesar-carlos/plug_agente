@@ -47,6 +47,33 @@ final class AppShutdownSequence {
     resetShutdownStateForTesting();
   }
 
+  bool get periodicPurgesIdle =>
+      (!_getIt.isRegistered<RpcIdempotencyCachePeriodicPurge>() || _getIt<RpcIdempotencyCachePeriodicPurge>().isIdle) &&
+      (!_getIt.isRegistered<AgentActionExecutionPeriodicPurge>() ||
+          _getIt<AgentActionExecutionPeriodicPurge>().isIdle) &&
+      (!_getIt.isRegistered<AgentActionRemoteAuditPeriodicPurge>() ||
+          _getIt<AgentActionRemoteAuditPeriodicPurge>().isIdle) &&
+      (!_getIt.isRegistered<ElevatedBridgeArtifactsPeriodicPurge>() ||
+          _getIt<ElevatedBridgeArtifactsPeriodicPurge>().isIdle) &&
+      (!_getIt.isRegistered<AgentActionCapturedOutputPeriodicPurge>() ||
+          _getIt<AgentActionCapturedOutputPeriodicPurge>().isIdle);
+
+  void stopPeriodicPurgesForMaintenance() => _stopPeriodicPurges();
+
+  void resumePeriodicPurgesAfterMaintenance() {
+    if (_getIt.isRegistered<RpcIdempotencyCachePeriodicPurge>()) _getIt<RpcIdempotencyCachePeriodicPurge>().start();
+    if (_getIt.isRegistered<AgentActionRemoteAuditPeriodicPurge>()) {
+      _getIt<AgentActionRemoteAuditPeriodicPurge>().start();
+    }
+    if (_getIt.isRegistered<AgentActionCapturedOutputPeriodicPurge>()) {
+      _getIt<AgentActionCapturedOutputPeriodicPurge>().start();
+    }
+    if (_getIt.isRegistered<AgentActionExecutionPeriodicPurge>()) _getIt<AgentActionExecutionPeriodicPurge>().start();
+    if (_getIt.isRegistered<ElevatedBridgeArtifactsPeriodicPurge>()) {
+      _getIt<ElevatedBridgeArtifactsPeriodicPurge>().start();
+    }
+  }
+
   void _stopPeriodicPurges() {
     if (_getIt.isRegistered<RpcIdempotencyCachePeriodicPurge>()) {
       _getIt<RpcIdempotencyCachePeriodicPurge>().stop();

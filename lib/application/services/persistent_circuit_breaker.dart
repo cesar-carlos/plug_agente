@@ -82,6 +82,9 @@ class PersistentCircuitBreaker {
     );
   }
 
+  Future<void> deferWithoutFailure(Duration duration) =>
+      _persistence.persistFailure(failureCount: failureCount, cooldownUntil: _clock().add(duration));
+
   /// Clears the breaker. No-op when neither key is present so the common
   /// "no failures yet" path stays a single map lookup.
   Future<void> reset() async {

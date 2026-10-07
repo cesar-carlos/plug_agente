@@ -249,6 +249,11 @@ class AgentActionTriggerScheduler {
     );
   }
 
+  void resetAppCloseAfterMaintenance() {
+    if (_appCloseDispatchInFlight != null) throw StateError('App-close triggers are still running');
+    _appCloseDispatchedThisProcess = false;
+  }
+
   void unscheduleTrigger(String triggerId) {
     _unscheduleTrigger(triggerId);
   }

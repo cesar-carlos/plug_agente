@@ -18,6 +18,30 @@ final class HubPersistentRetryCoordinator {
   bool _inFlight = false;
   int _failureLogCount = 0;
   bool _sessionBudgetsCaptured = false;
+  bool _maintenancePaused = false;
+  bool _resumeTimer = false;
+  Duration? _timerInterval;
+
+  void pauseForMaintenance() {
+    _resumeTimer = hasActiveTimer;
+    _maintenancePaused = true;
+    cancelTimer();
+  }
+
+  void resumeAfterMaintenance() {
+    _maintenancePaused = false;
+    if (_resumeTimer) {
+      if (_timerInterval == null) {
+        start();
+      } else {
+        unawaited(tick());
+        _timer = Timer.periodic(_timerInterval!, (_) {
+          unawaited(tick());
+        });
+      }
+    }
+    _resumeTimer = false;
+  }
 
   /// Budgets captured at [start] so Diagnostics Apply takes effect on the next
   /// persistent start (not mid-flight bumps).
@@ -36,10 +60,15 @@ final class HubPersistentRetryCoordinator {
   /// Starts persistent retry using the effective interval/budgets at call time
   /// (Diagnostics Apply is picked up on the next [start], without app restart).
   void start({Duration? interval}) {
+    if (_maintenancePaused) {
+      _resumeTimer = true;
+      return;
+    }
     cancelTimer();
     _deps.resetPersistentRetryCounters();
     _failureLogCount = 0;
     final effectiveInterval = interval ?? _deps.persistentRetryInterval();
+    _timerInterval = effectiveInterval;
     _sessionMaxFailedTicks = _deps.maxFailedTicks();
     _sessionMaxUnreachableFailedTicks = _deps.maxUnreachableFailedTicks();
     _sessionBudgetsCaptured = true;
@@ -58,7 +87,7 @@ final class HubPersistentRetryCoordinator {
   }
 
   Future<void> tick() async {
-    if (_inFlight) {
+    if (_inFlight || _maintenancePaused) {
       return;
     }
     _inFlight = true;

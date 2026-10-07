@@ -3,3 +3,9 @@
 abstract interface class IHubConnectionShutdownPort {
   Future<void> disconnectForShutdown();
 }
+
+abstract interface class IHubConnectionMaintenancePort {
+  bool get maintenanceWritersIdle;
+  void pauseWritersForMaintenance();
+  void resumeWritersAfterMaintenance();
+}

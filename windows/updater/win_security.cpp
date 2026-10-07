@@ -231,6 +231,19 @@ std::string trusted_publisher(const fs::path& executable) {
   if (thumbprint.empty()) throw std::runtime_error("authenticode_unconfirmed");
   return thumbprint;
 }
+void verify_publisher_if_required(const fs::path& executable, const Json& policy) {
+  if (!requires_authenticode(policy)) return;
+  const auto publisher = trusted_publisher(executable);
+  if (std::find(policy.at("publishers").begin(), policy.at("publishers").end(), publisher) == policy.at("publishers").end())
+    throw std::runtime_error("publisher_rejected");
+}
+void verify_registered_binary(const fs::path& executable, const Json& policy, const std::string& name) {
+  PinnedPath pinned(executable);
+  assert_protected_directory(executable, true, false);
+  if (policy.contains("binaryHashes")) require_binary_hash(policy, name, sha256_file(executable));
+  else if (!requires_authenticode(policy)) throw std::runtime_error("binary_registration_missing");
+  verify_publisher_if_required(executable, policy);
+}
 std::wstring quote(const std::wstring& value) {
   std::wstring result = L"\""; size_t slashes = 0;
   for (const wchar_t character : value) {

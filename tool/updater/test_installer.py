@@ -3,6 +3,7 @@ import os
 import json
 import tempfile
 import unittest
+from types import SimpleNamespace
 from pathlib import Path
 from unittest.mock import patch
 
@@ -10,6 +11,29 @@ from installer import build_installer
 
 
 class InstallerContractTests(unittest.TestCase):
+    def test_manifest_only_requires_keys_before_build(self):
+        args = SimpleNamespace(manifest_only=True, prepare_signpath=False, sync_version=False)
+        with patch.dict(os.environ, {}, clear=True), patch.object(build_installer, "parse_args", return_value=args), \
+                patch.object(build_installer, "signing_cert_path", return_value=None), \
+                patch.object(build_installer, "configure_native_feed_keys", return_value=None), \
+                patch.object(build_installer, "run") as run:
+            with self.assertRaisesRegex(SystemExit, "Ed25519"):
+                build_installer.main()
+            run.assert_not_called()
+            self.assertEqual(os.environ["AUTO_UPDATE_REQUIRE_VALID_SIGNATURE"], "false")
+            self.assertEqual(os.environ["AUTO_UPDATE_REQUIRE_FEED_SIGNATURE"], "true")
+            self.assertEqual(os.environ["WINDOWS_CODE_SIGNING_REQUIRED"], "false")
+
+    def test_manifest_only_cannot_mix_signing_providers(self):
+        for signpath, certificate in [(True, None), (False, Path("fixture.pfx"))]:
+            args = SimpleNamespace(manifest_only=True, prepare_signpath=signpath, sync_version=False)
+            with self.subTest(signpath=signpath), patch.object(build_installer, "parse_args", return_value=args), \
+                    patch.object(build_installer, "signing_cert_path", return_value=certificate), \
+                    patch.object(build_installer, "run") as run:
+                with self.assertRaisesRegex(SystemExit, "cannot use SignPath or a local"):
+                    build_installer.main()
+                run.assert_not_called()
+
     def test_packaging_rejects_missing_font_registration_and_stale_font_assets(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)

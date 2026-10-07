@@ -12,6 +12,27 @@ import 'package:plug_agente/domain/repositories/i_transport_client.dart';
 import 'package:plug_agente/infrastructure/codecs/transport_work_pool.dart';
 
 bool _appCloseActionsDispatched = false;
+bool _updateExitPoliciesApplied = false;
+
+void confirmUpdateExitPoliciesForShutdown() {
+  _appCloseActionsDispatched = true;
+  _updateExitPoliciesApplied = true;
+}
+
+void restoreShutdownAfterMaintenance() {
+  _appCloseActionsDispatched = false;
+  _updateExitPoliciesApplied = false;
+}
+
+Future<void> applyUpdateExitPoliciesOnce() async {
+  if (_updateExitPoliciesApplied) return;
+  await _dispatchAppCloseAgentActions(requireConfirmed: true);
+  if (getIt.isRegistered<ApplyAgentActionOnAppExitPolicies>()) {
+    final result = await getIt<ApplyAgentActionOnAppExitPolicies>()();
+    if (result.isError()) throw result.exceptionOrNull()!;
+  }
+  _updateExitPoliciesApplied = true;
+}
 
 /// Resets module-level shutdown flags between tests.
 ///
@@ -20,6 +41,7 @@ bool _appCloseActionsDispatched = false;
 /// clean dispatch gate without tearing down the DI graph.
 void resetShutdownStateForTesting() {
   _appCloseActionsDispatched = false;
+  _updateExitPoliciesApplied = false;
 }
 
 /// Centralized shutdown of all application resources.
@@ -105,6 +127,7 @@ Future<void> _launchPendingSilentUpdateHelperIfReady() async {
 }
 
 Future<void> _applyAgentActionOnAppExitPolicies() async {
+  if (_updateExitPoliciesApplied) return;
   if (!getIt.isRegistered<ApplyAgentActionOnAppExitPolicies>()) {
     return;
   }
@@ -142,12 +165,10 @@ Future<void> _applyAgentActionOnAppExitPolicies() async {
   }
 }
 
-Future<void> _dispatchAppCloseAgentActions() async {
+Future<void> _dispatchAppCloseAgentActions({bool requireConfirmed = false}) async {
   if (_appCloseActionsDispatched) {
     return;
   }
-  _appCloseActionsDispatched = true;
-
   if (!getIt.isRegistered<AgentActionTriggerScheduler>()) {
     return;
   }
@@ -166,6 +187,7 @@ Future<void> _dispatchAppCloseAgentActions() async {
         }
       },
       (failure) {
+        if (requireConfirmed) throw failure;
         developer.log(
           'Failed to dispatch app-close agent action triggers',
           name: 'bootstrap_app_shutdown',
@@ -174,8 +196,10 @@ Future<void> _dispatchAppCloseAgentActions() async {
         );
       },
     );
+    _appCloseActionsDispatched = true;
     scheduler.stop();
   } on Object catch (error, stackTrace) {
+    if (requireConfirmed) rethrow;
     developer.log(
       'Failed to dispatch app-close agent action triggers',
       name: 'bootstrap_app_shutdown',

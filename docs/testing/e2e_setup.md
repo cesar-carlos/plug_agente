@@ -88,19 +88,28 @@ flutter test test/integration/windows_startup_registry_live_e2e_test.dart
 
 ## Executar
 
-Prepare a biblioteca nativa da revisao Git fixada antes de executar Flutter.
-O build usa Rust 1.93.0 e o compilador C/C++ da plataforma (MSVC no Windows;
-`unixodbc-dev` no Linux). Nenhum arquivo do cache global do Pub e alterado:
+Use o pacote publicado no pub.dev e a biblioteca nativa da mesma versao
+fixada no `pubspec.lock`. A preparacao baixa a release oficial e verifica
+o SHA-256, sem compilar Rust ou alterar o cache global do Pub:
 
 ```bash
 flutter pub get
-python tool/odbc/build_pinned_native.py
+python tool/odbc/prepare_package_native.py
 ```
 
-O artefato e seu manifesto ficam em `build/odbc-native/<revisao>/`. O hook
-Flutter consome a copia verificada em `build/odbc-native/pinned/`, configurada
-por `hooks.user_defines` no pubspec. Reexecute o comando apos trocar a revisao.
-O gate de release e o build do instalador fazem essa preparacao automaticamente.
+O artefato e seu manifesto ficam em `build/odbc-native/packages/<versao>/<plataforma>/`.
+Defina `ODBC_FAST_NATIVE_LIBRARY` com o caminho absoluto do artefato exibido
+pelo comando para que Flutter/Dart usem a copia verificada. No PowerShell,
+por exemplo, para o lock atual:
+
+```powershell
+$env:ODBC_FAST_NATIVE_LIBRARY = (Resolve-Path 'build/odbc-native/packages/5.0.1/windows_x64/odbc_engine.dll').Path
+```
+
+No Linux, use `export ODBC_FAST_NATIVE_LIBRARY="$PWD/build/odbc-native/packages/5.0.1/linux_x64/libodbc_engine.so"`
+e instale `unixodbc-dev`. Reexecute a preparacao e atualize o caminho ao trocar
+a versao. O gate de release e o build do instalador fazem isso automaticamente;
+o CI usa `--github-env` para exportar o caminho aos passos seguintes.
 
 ```bash
 # Suite rapida: exclui testes marcados como live/slow/perf

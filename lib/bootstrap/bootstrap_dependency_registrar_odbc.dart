@@ -99,6 +99,7 @@ void _registerOdbc(
           );
         }
         final sqlQueue = SqlExecutionQueue(
+          maintenanceGate: getIt<IUpdateMaintenanceGate>(),
           maxQueueSize: ConnectionConstants.sqlQueueMaxSize,
           maxConcurrentWorkers: sqlQueueMaxWorkers,
           maxConcurrentBatchWorkers: ConnectionConstants.sqlQueueMaxBatchWorkersForWorkers(

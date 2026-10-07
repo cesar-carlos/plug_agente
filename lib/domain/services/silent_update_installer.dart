@@ -1,9 +1,11 @@
 import 'package:plug_agente/domain/errors/silent_install_failure.dart';
+import 'package:plug_agente/domain/services/i_privileged_updater.dart';
 import 'package:result_dart/result_dart.dart';
 
 enum SilentUpdateInstallStrategy {
   currentUserThenElevated,
   elevatedOnly,
+  windowsService,
 }
 
 class SilentUpdateInstallRequest {
@@ -17,6 +19,9 @@ class SilentUpdateInstallRequest {
     this.cancelRequested,
     this.allowDownloadResume = true,
     this.deferHelperLaunch = false,
+    this.manifestUrl,
+    this.manifestSha256,
+    this.stageForService = false,
   });
 
   final String version;
@@ -25,6 +30,9 @@ class SilentUpdateInstallRequest {
   final String assetName;
   final String sha256;
   final bool requireValidSignature;
+  final String? manifestUrl;
+  final String? manifestSha256;
+  final bool stageForService;
 
   /// Optional cancellation token. When provided and returns `true`, the
   /// installer aborts at the next safe checkpoint (between download chunks,
@@ -78,6 +86,7 @@ class SilentUpdateLaunchRequest {
     required this.installDirectoryWritable,
     required this.requireValidSignature,
     required this.appPid,
+    this.serviceOperationId,
   });
 
   final String version;
@@ -91,6 +100,7 @@ class SilentUpdateLaunchRequest {
   final bool installDirectoryWritable;
   final bool requireValidSignature;
   final int appPid;
+  final String? serviceOperationId;
 }
 
 class SilentUpdateInstallResult {
@@ -106,6 +116,7 @@ class SilentUpdateInstallResult {
     required this.updateDirectorySecurityStatus,
     this.helperSha256,
     this.helperSignatureStatus,
+    this.serviceOperationId,
   });
 
   final String installerPath;
@@ -130,6 +141,7 @@ class SilentUpdateInstallResult {
   /// (`valid`, `invalid`, `unsigned`, `unknown`). `null` when the probe was
   /// not invoked.
   final String? helperSignatureStatus;
+  final String? serviceOperationId;
 }
 
 abstract interface class ISilentUpdateInstaller {
@@ -145,4 +157,13 @@ abstract interface class ISilentUpdateInstaller {
   Future<Result<void>> launchPreparedHelper(SilentUpdateLaunchRequest request);
 
   Future<Result<void>> cleanupObsoleteArtifacts();
+}
+
+abstract interface class IServiceSilentUpdateInstaller implements ISilentUpdateInstaller {
+  IPrivilegedUpdater get updater;
+  Future<Result<void>> launchServiceOperation({
+    required String version,
+    required String operationId,
+    required int appPid,
+  });
 }

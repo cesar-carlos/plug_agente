@@ -212,7 +212,8 @@ class ConnectionProvider extends ChangeNotifier implements HubRecoveryUiSink {
 
   bool get isConnected => _displayState.status == ConnectionStatus.connected;
 
-  bool get isReconnecting => _displayState.isBurstRecoveryInFlight || _displayState.status == ConnectionStatus.reconnecting;
+  bool get isReconnecting =>
+      _displayState.isBurstRecoveryInFlight || _displayState.status == ConnectionStatus.reconnecting;
   bool get isConnectingOrNegotiating =>
       _displayState.status == ConnectionStatus.connecting || _displayState.status == ConnectionStatus.negotiating;
   bool get isCheckingDriver => _displayState.isCheckingDriver;
@@ -334,11 +335,18 @@ class ConnectionProvider extends ChangeNotifier implements HubRecoveryUiSink {
   HubRecoveryDiagnosticsSnapshot get hubRecoveryDiagnostics => _hubConnectionCoordinator.buildDiagnosticsSnapshot();
 }
 
-final class _HubConnectionShutdownPortAdapter implements IHubConnectionShutdownPort {
+final class _HubConnectionShutdownPortAdapter implements IHubConnectionShutdownPort, IHubConnectionMaintenancePort {
   const _HubConnectionShutdownPortAdapter(this._connectionProvider);
 
   final ConnectionProvider _connectionProvider;
 
   @override
   Future<void> disconnectForShutdown() => _connectionProvider.disconnectForShutdown();
+
+  @override
+  bool get maintenanceWritersIdle => _connectionProvider._hubConnectionCoordinator.maintenanceWritersIdle;
+  @override
+  void pauseWritersForMaintenance() => _connectionProvider._hubConnectionCoordinator.pauseWritersForMaintenance();
+  @override
+  void resumeWritersAfterMaintenance() => _connectionProvider._hubConnectionCoordinator.resumeWritersAfterMaintenance();
 }

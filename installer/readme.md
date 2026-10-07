@@ -3,22 +3,34 @@
 Este diretorio contem os artefatos e scripts locais para gerar o instalador
 Windows.
 
-## SignPath readiness
+## Atualização sem certificado comercial
 
-The application was submitted on 2026-10-06; SignPath acknowledged receipt.
-Approval and account provisioning are pending. The [code signing and privacy
-policies](../readme.md#code-signing-policy), MIT license, PlutoGrid migration,
-bundled Montserrat fonts and release integration are prepared locally.
-Publish these reviewed changes so the policies are accessible during review.
+O modo gratuito usa `signing_provider=manifest` no workflow **Publish Windows Release**
+(padrão) ou `python installer/build_installer.py --manifest-only` no build local.
+Esse modo exige chaves Ed25519 para feed e manifesto e mantém SHA-256, tamanho,
+canal, versão crescente e permissões administrativas registradas. A primeira
+instalação global requer administrador para registrar o serviço e proteger os
+binários. Os executáveis não recebem Authenticode; o Windows poderá mostrar
+publicador desconhecido na instalação manual.
 
-The **Publish Windows Release** workflow now accepts `signing_provider=pfx`
-(the default) or `signing_provider=signpath`. SignPath builds on GitHub-hosted
-Windows runners and makes two requests: the seven project executables plus
-Inno's uninstaller, followed by the packaged installer. Every signing request
-must require manual approval in the SignPath policy. Local preparation uses
-`python installer/build_installer.py --prepare-signpath`; inputs are placed in
-`installer/signpath-work`, which must be empty before a new preparation.
-Staged unsigned inputs are not distribution artifacts.
+O novo adaptador Windows usa exclusivamente o serviço: indisponibilidade não
+aciona o helper com UAC. A aplicação automática **continua bloqueada** pelos gates
+`kApplicationContractImplemented=false` e `applicationContractValidated=false`.
+A implementação de transição e a homologação ainda estão em andamento; não
+publicar esse build como atualização automática pronta. O modo manual permanece
+utilizável. Consulte o [estado detalhado](../docs/implemente/plano_auto_update_evolution.md).
+
+## SignPath opcional
+
+A SignPath Foundation recusou a candidatura em 2026-10-06 por visibilidade pública
+insuficiente. A integração fica disponível para uma eventual contratação ou
+nova aprovação; não é dependência do modo `manifest`.
+
+Os provedores opcionais `pfx` e `signpath` mantêm Authenticode obrigatório em
+produção. SignPath faz duas solicitações: componentes e uninstaller, depois
+instalador final. A política SignPath deve exigir aprovação manual de cada
+solicitação. A preparação local usa `python installer/build_installer.py --prepare-signpath`.
+Entradas intermediárias em `installer/signpath-work` não são artefatos de distribuição.
 
 After approval, configure:
 
@@ -74,6 +86,10 @@ depurar build e instalador na maquina de desenvolvimento.
 python installer/build_installer.py
 ```
 
+A dependencia `odbc_fast` vem do pub.dev. O build prepara a biblioteca nativa
+da release oficial correspondente ao `pubspec.lock`, verifica o SHA-256 e
+inclui `data/odbc_native_manifest.json` no bundle, sem compilar o engine Rust.
+
 Esse comando executa:
 
 1. `flutter build windows --release` (gera `plug_agente.exe` e
@@ -81,16 +97,16 @@ Esse comando executa:
    quiser sincronizar `pubspec.yaml`, `installer/setup.iss` e
    `lib/core/constants/app_version.g.dart` via `update_version.py` antes do
    build. Sem essa flag a versao atual e preservada (util para testes locais).
-2. `python tool/elevated/build_elevated_runner.py` (compila o helper Dart
+2. `python tool/elevated/build_elevated_runner.py --release-only` (compila o helper Dart
    `plug_agente_elevated_runner.exe` em `tool/plug_agente_elevated_runner/` e
-   copia para o bundle Release/Debug). O script falha cedo se esse helper nao
+   copia para o bundle Release). O script falha cedo se esse helper nao
    estiver no bundle.
 3. Compila e valida também `updater/plug_update_service.exe`, `plug_update_client.exe` e `plug_update_worker.exe`. O instalador coloca controle em `%ProgramFiles%\PlugAgenteUpdater` e workers em `workers/<versão+build>`, fora do bundle substituído. `build_installer.py` compila o parâmetro `MyAppWorkerVersion` a partir do `pubspec.yaml`.
 4. Validacao de que `plug_agente.exe`, `plug_update_helper.exe` e
    `plug_agente_elevated_runner.exe` estao no bundle Release.
 5. Assinatura do aplicativo, helper, runner elevado, servico, cliente e worker.
-   Obrigatoria em producao; artefatos sem assinatura sao restritos a
-   desenvolvimento/dry-run, sem distribuicao.
+   Obrigatória para os provedores `pfx` e `signpath`; `manifest` usa Ed25519
+   no feed e manifesto, sem Authenticode nos executáveis.
 6. `ISCC installer/setup.iss`. Com certificado, o ISCC recebe `SignTool` e
    `SignedUninstaller=yes` para assinar o setup e o uninstaller embutido.
 7. `signtool verify` no `PlugAgente-Setup-<versao>.exe` quando a assinatura
@@ -105,9 +121,9 @@ feed oficial padrao.
 `AUTO_UPDATE_REQUIRE_VALID_SIGNATURE` controla um gate em dois niveis: o lado
 Dart bloqueia o spawn quando `plug_update_helper.exe` nao esta com Authenticode
 valido; o helper nativo bloqueia o `setup.exe` quando o instalador nao esta
-assinado. Produção exige esse gate e assinatura do feed; os inputs de
-publicação são `true` por padrão. Artefatos locais sem certificado podem ser
-usados apenas para desenvolvimento/dry-run, sem distribuição automática.
+assinado. O provedor `manifest` desliga somente Authenticode, no Dart e no
+contrato nativo; a assinatura Ed25519 continua obrigatória. Os demais provedores
+mantêm ambos os tipos de assinatura em produção.
 
 O build embute as mesmas chaves públicas no Dart e no supervisor nativo. O
 canal também é compilado no setup, para enrollment e `install-mode.ini`.

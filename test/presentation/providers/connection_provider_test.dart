@@ -3,6 +3,7 @@ import 'dart:convert';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
+import 'package:plug_agente/application/bootstrap/hub_connection_shutdown_registry.dart';
 import 'package:plug_agente/application/ports/i_hub_recovery_auth_bridge.dart';
 import 'package:plug_agente/application/services/hub_access_token_refresh_gate.dart';
 import 'package:plug_agente/application/services/hub_access_token_renewer.dart';
@@ -130,6 +131,48 @@ void main() {
     transport = _FakeTransport();
     when(() => configProvider.currentConfig).thenReturn(null);
     when(() => checkHubAvailability(any())).thenAnswer((_) async => true);
+  });
+
+  test('real lifecycle binding pauses hub retries and exposes an in-flight reconnect', () async {
+    final registry = HubConnectionShutdownRegistry();
+    final started = Completer<void>();
+    final finish = Completer<Result<void>>();
+    var calls = 0;
+    when(() => connectToHub(any(), any(), authToken: any(named: 'authToken'))).thenAnswer((_) {
+      calls++;
+      started.complete();
+      return finish.future;
+    });
+    registry.pauseWritersForMaintenance();
+    final provider = ConnectionProvider(
+      connectToHub,
+      testDb,
+      checkDriver,
+      configProvider: configProvider,
+      transportClient: transport,
+      checkHubAvailabilityUseCase: checkHubAvailability,
+      hubConnectionShutdownRegistry: registry,
+      hubPersistentRetryInterval: const Duration(days: 1),
+    );
+    addTearDown(provider.dispose);
+    provider.startPersistentHubRecovery(
+      configId: 'cfg',
+      serverUrl: 'https://hub.test',
+      agentId: 'agent-1',
+      authToken: 'access',
+    );
+    await Future<void>.delayed(Duration.zero);
+    expect(calls, 0);
+    expect(registry.maintenanceWritersIdle, isTrue);
+    registry.resumeWritersAfterMaintenance();
+    await started.future.timeout(const Duration(seconds: 2));
+    registry.pauseWritersForMaintenance();
+    expect(registry.maintenanceWritersIdle, isFalse);
+    finish.complete(const Success(unit));
+    await Future<void>.delayed(const Duration(milliseconds: 20));
+    expect(registry.maintenanceWritersIdle, isTrue);
+    expect(calls, 1);
+    await provider.disconnect();
   });
 
   group('ConnectionProvider.connect', () {

@@ -14,6 +14,7 @@ constexpr int kProtocolVersion = 1;
 // Fail closed until launcher, probation bootstrap and data recovery are wired
 // and validated. Editing a policy cannot activate an unfinished implementation.
 constexpr bool kApplicationContractImplemented = false;
+constexpr int kRecoveryContractVersion = 1;
 constexpr size_t kMaxMessageBytes = 1024 * 1024;
 constexpr size_t kMaxManifestBytes = 65536;
 constexpr unsigned long kInstallTimeoutMs = 30 * 60 * 1000;
@@ -25,6 +26,15 @@ inline bool can_prepare_operation(const std::string& state) {
   // Unknown/new states never authorize overwriting a potentially active job.
   return state == "idle" || state == "preparing" || state == "deferred" ||
       state == "completed" || state == "rolledBack";
+}
+
+inline bool terminal_operation(const std::string& state) {
+  return state == "completed" || state == "rolledBack" || state == "deferred";
+}
+
+inline bool finalization_needed(const Json& job, bool matching_boot_guard) {
+  return terminal_operation(job.value("state", "")) &&
+      (job.value("finalizationPending", false) || matching_boot_guard);
 }
 
 inline Json parse_json(const std::string& bytes, size_t limit = kMaxMessageBytes) {
@@ -42,6 +52,14 @@ inline Json parse_json(const std::string& bytes, size_t limit = kMaxMessageBytes
 
 inline bool is_hex(const std::string& value, size_t length) {
   return value.size() == length && value.find_first_not_of("0123456789abcdef") == std::string::npos;
+}
+inline bool requires_authenticode(const Json& policy) {
+  // Policies created before the manifest-only provider retain their requirement.
+  return policy.value("requireAuthenticode", true);
+}
+inline void require_binary_hash(const Json& policy, const std::string& name, const std::string& digest) {
+  const auto expected = policy.at("binaryHashes").at(name).get<std::string>();
+  if (!is_hex(expected, 64) || expected != digest) throw std::runtime_error("registered_binary_changed");
 }
 inline bool newer_version(const std::string& candidate, const std::string& installed) {
   const std::regex syntax("[0-9]+\\.[0-9]+\\.[0-9]+\\+[0-9]+");

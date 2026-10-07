@@ -1,6 +1,7 @@
 import 'package:plug_agente/application/observability/update_check_diagnostics.dart';
 import 'package:plug_agente/application/services/i_pending_silent_update_store.dart';
 import 'package:plug_agente/application/services/persistent_circuit_breaker.dart';
+import 'package:plug_agente/application/services/service_update_pending_coordinator.dart';
 import 'package:plug_agente/application/services/silent_update_outcome.dart';
 import 'package:plug_agente/core/constants/app_constants.dart';
 import 'package:result_dart/result_dart.dart';
@@ -11,11 +12,13 @@ class SilentUpdateCancellationHandler {
     required IPendingSilentUpdateStore pendingStore,
     required PersistentCircuitBreaker automaticFailureBreaker,
     required DateTime Function() clock,
+    this.servicePending,
   }) : _pendingStore = pendingStore,
        _automaticFailureBreaker = automaticFailureBreaker,
        _clock = clock;
 
   final IPendingSilentUpdateStore _pendingStore;
+  final ServiceUpdatePendingCoordinator? servicePending;
   final PersistentCircuitBreaker _automaticFailureBreaker;
   final DateTime Function() _clock;
 
@@ -26,7 +29,16 @@ class SilentUpdateCancellationHandler {
     required void Function(UpdateCheckDiagnostics?) onDiagnosticsUpdated,
     required Future<void> Function() persistDiagnostics,
   }) async {
-    await _pendingStore.clear();
+    if (servicePending != null) {
+      final result = await servicePending!.reconcile(cancel: true);
+      if (result.isError()) return Failure(result.exceptionOrNull()!);
+      final decision = result.getOrThrow().decision;
+      if (decision == ServicePendingDecision.active || decision == ServicePendingDecision.attention) {
+        return const Success(SilentUpdateOutcome.pendingInProgress);
+      }
+    } else {
+      await _pendingStore.clear();
+    }
     await _automaticFailureBreaker.reset();
     final now = _clock();
     onDiagnosticsUpdated(

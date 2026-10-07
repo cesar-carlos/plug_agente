@@ -3,6 +3,7 @@ import 'package:plug_agente/core/utils/odbc_connection_string_secrets.dart';
 import 'package:plug_agente/domain/errors/failures.dart' as domain;
 import 'package:plug_agente/domain/repositories/i_odbc_credential_secret_store.dart';
 import 'package:plug_agente/domain/repositories/i_odbc_credential_store.dart';
+import 'package:plug_agente/domain/services/i_update_maintenance_gate.dart';
 import 'package:plug_agente/domain/value_objects/config_row_legacy_secrets.dart';
 import 'package:plug_agente/domain/value_objects/odbc_credential_secrets.dart';
 import 'package:plug_agente/infrastructure/repositories/agent_config_drift_database.dart';
@@ -12,92 +13,104 @@ class OdbcCredentialStore implements IOdbcCredentialStore {
   OdbcCredentialStore(
     this._database, {
     required IOdbcCredentialSecretStore credentialSecretStore,
-  }) : _credentialSecretStore = credentialSecretStore;
+    IUpdateMaintenanceGate? maintenanceGate,
+  }) : _maintenanceGate = maintenanceGate,
+       _credentialSecretStore = credentialSecretStore;
 
   final AppDatabase _database;
   final IOdbcCredentialSecretStore _credentialSecretStore;
 
+  final IUpdateMaintenanceGate? _maintenanceGate;
+  Future<Result<T>> _withAdmission<T extends Object>(Future<Result<T>> Function() action) =>
+      _maintenanceGate?.run(action) ?? action();
+
   @override
   Future<Result<OdbcCredentialSecrets>> readCredentials(String configId) async {
-    try {
-      final configData = await _loadConfigData(configId);
-      if (configData == null) {
-        return Failure(domain.NotFoundFailure('Config not found'));
-      }
+    return _withAdmission(() async {
+      try {
+        final configData = await _loadConfigData(configId);
+        if (configData == null) {
+          return Failure(domain.NotFoundFailure('Config not found'));
+        }
 
-      final secretsResult = await _loadMergedSecrets(configData);
-      if (secretsResult.isError()) {
-        return Failure(secretsResult.exceptionOrNull()!);
-      }
+        final secretsResult = await _loadMergedSecrets(configData);
+        if (secretsResult.isError()) {
+          return Failure(secretsResult.exceptionOrNull()!);
+        }
 
-      return Success(secretsResult.getOrThrow());
-    } on domain.Failure catch (failure) {
-      return Failure(failure);
-    } on Exception catch (error) {
-      return Failure(
-        _buildDatabaseFailure(
-          'Failed to read stored ODBC credentials',
-          cause: error,
-          context: {
-            'operation': 'readCredentials',
-            'configId': configId,
-          },
-        ),
-      );
-    }
+        return Success(secretsResult.getOrThrow());
+      } on domain.Failure catch (failure) {
+        return Failure(failure);
+      } on Exception catch (error) {
+        return Failure(
+          _buildDatabaseFailure(
+            'Failed to read stored ODBC credentials',
+            cause: error,
+            context: {
+              'operation': 'readCredentials',
+              'configId': configId,
+            },
+          ),
+        );
+      }
+    });
   }
 
   @override
   Future<Result<Map<String, OdbcCredentialSecrets>>> readCredentialsForLegacyRows(
     List<ConfigRowLegacySecrets> rows,
   ) async {
-    try {
-      if (rows.isEmpty) {
-        return const Success(<String, OdbcCredentialSecrets>{});
-      }
+    return _withAdmission(() async {
+      try {
+        if (rows.isEmpty) {
+          return const Success(<String, OdbcCredentialSecrets>{});
+        }
 
-      final secretsResult = await _loadMergedOdbcSecretsForLegacyRows(rows);
-      if (secretsResult.isError()) {
-        return Failure(secretsResult.exceptionOrNull()!);
-      }
+        final secretsResult = await _loadMergedOdbcSecretsForLegacyRows(rows);
+        if (secretsResult.isError()) {
+          return Failure(secretsResult.exceptionOrNull()!);
+        }
 
-      return Success(secretsResult.getOrThrow());
-    } on domain.Failure catch (failure) {
-      return Failure(failure);
-    } on Exception catch (error) {
-      return Failure(
-        _buildDatabaseFailure(
-          'Failed to read stored ODBC credentials',
-          cause: error,
-          context: {
-            'operation': 'readCredentialsForLegacyRows',
-            'configCount': rows.length,
-          },
-        ),
-      );
-    }
+        return Success(secretsResult.getOrThrow());
+      } on domain.Failure catch (failure) {
+        return Failure(failure);
+      } on Exception catch (error) {
+        return Failure(
+          _buildDatabaseFailure(
+            'Failed to read stored ODBC credentials',
+            cause: error,
+            context: {
+              'operation': 'readCredentialsForLegacyRows',
+              'configCount': rows.length,
+            },
+          ),
+        );
+      }
+    });
   }
 
   @override
   Future<Result<void>> deleteAllSecrets(String configId) async {
-    try {
-      if (_credentialSecretStore.isAvailable) {
-        await _credentialSecretStore.deleteSecrets(configId);
+    return _withAdmission(() async {
+      try {
+        if (_credentialSecretStore.isAvailable) {
+          await _credentialSecretStore.deleteSecrets(configId);
+        }
+        await _clearLegacyOdbcColumns(configId);
+        return const Success(unit);
+      } on Exception catch (error) {
+        return Failure(
+          _buildDatabaseFailure(
+            'Failed to delete ODBC credentials',
+            cause: error,
+            context: {
+              'operation': 'deleteAllSecrets',
+              'configId': configId,
+            },
+          ),
+        );
       }
-      await _clearLegacyOdbcColumns(configId);
-      return const Success(unit);
-    } on Exception catch (error) {
-      return Failure(
-        _buildDatabaseFailure(
-          'Failed to delete ODBC credentials',
-          cause: error,
-          context: {
-            'operation': 'deleteAllSecrets',
-            'configId': configId,
-          },
-        ),
-      );
-    }
+    });
   }
 
   Future<ConfigData?> _loadConfigData(String configId) {

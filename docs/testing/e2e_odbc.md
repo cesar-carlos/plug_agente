@@ -354,20 +354,24 @@ separately. Run benchmarks without concurrent suites.
 
 ### Qualificacao de desempenho e diagnostico do pool
 
-Compile primeiro a revisao Git fixa de `odbc_fast` com
-`python tool/odbc/build_pinned_native.py`. O build fica no workspace;
-o cache global do Pub nao e alterado manualmente. O hook Dart recebe o
-diretorio da DLL por `hooks.user_defines` no `pubspec.yaml`. O empacotamento
-verifica o SHA-256 do binario no bundle.
+Prepare primeiro a biblioteca nativa da versao publicada de `odbc_fast` com
+`python tool/odbc/prepare_package_native.py`. A release oficial e verificada
+por SHA-256 e fica no workspace, junto do manifesto de origem, versao e hash
+do pacote. Exporte o caminho mostrado em `ODBC_FAST_NATIVE_LIBRARY` antes de
+executar Flutter/Dart (veja `e2e_setup.md`). O empacotamento verifica tambem
+o SHA-256 do binario no bundle.
 
 O comparador `tool/benchmarks/run_transport_comparison.py` exige um checkout
 isolado para `--base-dir`. Para um arquivo extraido de `git archive`, informe
 tambem `--base-revision bc383507`. Uma mudanca intencional da biblioteca exige
-`--allow-odbc-change`, `--base-odbc-revision`, `--candidate-odbc-revision`,
-`--base-native-library` e `--candidate-native-library`, com SHAs completos e
-binarios das respectivas revisoes. Diferencas em outras dependencias bloqueiam
-a comparacao. `prepare_transport_comparison.py` compila os dois binarios; use
-`--baseline-repository` para reaproveitar um repositorio nativo local existente.
+`--allow-odbc-change`, `--base-native-library` e `--candidate-native-library`.
+Para artefatos compilados de Git, informe a respectiva `--base-odbc-revision`
+ou `--candidate-odbc-revision`, com SHA completo. Para artefatos publicados,
+o comparador exige o `manifest.json` gerado pela preparacao junto do binario
+e valida seus hashes. Diferencas em outras dependencias bloqueiam a comparacao.
+`prepare_transport_comparison.py` usa a release publicada para a candidata e
+mantem a compilacao da referencia historica; use `--baseline-repository` para
+reaproveitar um repositorio nativo local existente.
 
 As execucoes sao seriais: controle com codigo identico, referencia/candidata e
 candidata/referencia, com aquecimento e nove repeticoes. O controle e avaliado

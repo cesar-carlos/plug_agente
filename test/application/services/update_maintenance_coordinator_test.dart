@@ -6,6 +6,31 @@ import 'package:plug_agente/domain/errors/failures.dart' show ConfigurationFailu
 import 'package:result_dart/result_dart.dart';
 
 void main() {
+  test('exit effects precede secret capture and a capture failure restores admission', () async {
+    final sequence = <String>[];
+    final coordinator = UpdateMaintenanceCoordinator(
+      freezeAdmission: () => sequence.add('freeze'),
+      restoreAdmission: () => sequence.add('restore'),
+      isSafelyIdle: () => true,
+      applyExitPolicies: (_) async { sequence.add('exit'); return const Success(unit); },
+      beforeClose: () async { sequence.add('secrets'); return Failure(ConfigurationFailure('Snapshot indisponível.')); },
+      flushAndCloseLocalData: () async { sequence.add('close'); return const Success(unit); });
+    expect((await coordinator.prepare('attempt1')).isError(), isTrue);
+    expect(sequence, ['freeze', 'exit', 'secrets', 'restore']);
+  });
+
+  test('exit secrets persistence and resource closure execute in order', () async {
+    final sequence = <String>[];
+    final coordinator = UpdateMaintenanceCoordinator(
+      freezeAdmission: () => sequence.add('freeze'), restoreAdmission: () => sequence.add('restore'),
+      isSafelyIdle: () => true,
+      applyExitPolicies: (_) async { sequence.add('exit'); return const Success(unit); },
+      beforeClose: () async { sequence.add('secrets'); return const Success(unit); },
+      flushAndCloseLocalData: () async { sequence.add('flush-close'); return const Success(unit); });
+    expect((await coordinator.prepare('attempt1')).getOrThrow(), MaintenanceDecision.ready);
+    expect(sequence, ['freeze', 'exit', 'secrets', 'flush-close']);
+  });
+
   test('unknown or thrown exit-policy outcome keeps admission blocked', () async {
     for (final throws in [false, true]) {
       var restored = false;

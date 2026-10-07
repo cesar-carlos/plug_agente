@@ -34,6 +34,20 @@ sealed class PendingSilentUpdate {
     final version = json['version'];
     if (version is! String || version.isEmpty) return null;
     final startedAt = _readDateTime(json['startedAt']);
+    if (json['strategy'] == 'windowsService') {
+      final operation = json['serviceOperationId'];
+      if (operation is! String || !RegExp(r'^[a-f0-9]{32}$').hasMatch(operation)) {
+        return PendingSilentUpdateProbed(version: version, startedAt: startedAt);
+      }
+      return PendingSilentUpdateService(
+        version: version,
+        startedAt: startedAt,
+        operationId: operation,
+        cancelRequested: json['cancelRequested'] == true,
+        requiresNewPreparation: json['servicePendingContract'] != 1,
+        dispatchAttemptedAt: _readDateTime(json['dispatchAttemptedAt'] ?? json['launchedAt']),
+      );
+    }
     // Presence of `installerPath` AND `launcherPath` AND `appPid` is the
     // canonical signal that the staged path is complete enough to apply.
     final installerPath = json['installerPath'] as String?;
@@ -80,6 +94,7 @@ sealed class PendingSilentUpdate {
         appPid: appPid,
         updateDirectorySecurityStatus: updateDirectorySecurityStatus,
         launchedAt: _readDateTime(json['launchedAt']),
+        serviceOperationId: json['serviceOperationId'] as String?,
       );
     }
 
@@ -88,6 +103,43 @@ sealed class PendingSilentUpdate {
       startedAt: startedAt,
     );
   }
+}
+
+final class PendingSilentUpdateService extends PendingSilentUpdate {
+  const PendingSilentUpdateService({
+    required super.version,
+    required super.startedAt,
+    required this.operationId,
+    this.cancelRequested = false,
+    this.requiresNewPreparation = false,
+    this.dispatchAttemptedAt,
+  });
+
+  final String operationId;
+  final bool cancelRequested;
+  final bool requiresNewPreparation;
+  final DateTime? dispatchAttemptedAt;
+
+  PendingSilentUpdateService copyWith({bool? cancelRequested, DateTime? dispatchAttemptedAt, bool clearDispatchAttempt = false}) =>
+      PendingSilentUpdateService(
+        version: version,
+        startedAt: startedAt,
+        operationId: operationId,
+        cancelRequested: cancelRequested ?? this.cancelRequested,
+        requiresNewPreparation: requiresNewPreparation,
+        dispatchAttemptedAt: clearDispatchAttempt ? null : dispatchAttemptedAt ?? this.dispatchAttemptedAt,
+      );
+
+  @override
+  Map<String, Object?> toJson() => {
+    'strategy': 'windowsService',
+    'servicePendingContract': requiresNewPreparation ? 0 : 1,
+    'version': version,
+    'startedAt': startedAt?.toIso8601String(),
+    'serviceOperationId': operationId,
+    'cancelRequested': cancelRequested,
+    'dispatchAttemptedAt': dispatchAttemptedAt?.toIso8601String(),
+  };
 }
 
 /// Pre-download marker. Persisted by the coordinator the instant a probe
@@ -126,6 +178,7 @@ final class PendingSilentUpdateDownloaded extends PendingSilentUpdate {
     this.strategy,
     this.updateDirectorySecurityStatus,
     this.launchedAt,
+    this.serviceOperationId,
   });
 
   final String installerPath;
@@ -144,6 +197,7 @@ final class PendingSilentUpdateDownloaded extends PendingSilentUpdate {
   final bool? installDirectoryWritable;
   final bool? requireValidSignature;
   final String? strategy;
+  final String? serviceOperationId;
   final String? updateDirectorySecurityStatus;
 
   /// Armed / pre-spawn stamp written immediately before
@@ -178,6 +232,7 @@ final class PendingSilentUpdateDownloaded extends PendingSilentUpdate {
       installDirectoryWritable: installDirectoryWritable,
       requireValidSignature: requireValidSignature,
       strategy: strategy,
+      serviceOperationId: serviceOperationId,
       updateDirectorySecurityStatus: updateDirectorySecurityStatus,
       launchedAt: clearLaunchedAt ? null : (launchedAt ?? this.launchedAt),
     );
@@ -193,6 +248,7 @@ final class PendingSilentUpdateDownloaded extends PendingSilentUpdate {
     'launcherStatusPath': launcherStatusPath,
     'installDirectory': installDirectory,
     'strategy': strategy,
+    'serviceOperationId': serviceOperationId,
     'assetSize': assetSize,
     'sha256': sha256,
     'installDirectoryWritable': installDirectoryWritable,

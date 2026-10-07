@@ -19,6 +19,11 @@ on:
         description: Upgrade installer SHA-256
         required: true
         type: string
+      require_authenticode:
+        description: Require Authenticode in addition to mandatory signed manifest
+        required: true
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -41,13 +46,17 @@ jobs:
         with:
           python-version: '3.11'
 
-      - name: Download and verify signed installers
+      - name: Install manifest verification dependencies
+        run: python -m pip install "cryptography>=42.0.0" "jsonschema>=4.0.0"
+
+      - name: Download and verify installer hashes
         shell: powershell
         env:
           INITIAL_URL: ${{ inputs.installer_url }}
           INITIAL_SHA256: ${{ inputs.installer_sha256 }}
           UPGRADE_URL: ${{ inputs.upgrade_url }}
           UPGRADE_SHA256: ${{ inputs.upgrade_sha256 }}
+          REQUIRE_AUTHENTICODE: ${{ inputs.require_authenticode }}
         run: |
           $ErrorActionPreference = 'Stop'
           $assets = @(
@@ -63,9 +72,43 @@ jobs:
             if ((Get-FileHash -LiteralPath $asset.File -Algorithm SHA256).Hash -ne $asset.Hash) {
               throw 'Installer hash mismatch.'
             }
-            $signature = Get-AuthenticodeSignature -LiteralPath $asset.File
-            if ($signature.Status -ne 'Valid') { throw 'Installer signature is not valid.' }
+            if ($asset.Url -notmatch '/(v[0-9]+\.[0-9]+\.[0-9]+)/PlugAgente-Setup-([0-9]+\.[0-9]+\.[0-9]+)\.exe$') {
+              throw 'Invalid release installer URL.'
+            }
+            $version = $Matches[2]
+            if ($Matches[1] -ne "v$version") { throw 'Release tag and asset name differ.' }
+            $manifestUrl = $asset.Url.Substring(0, $asset.Url.LastIndexOf('/') + 1) + "PlugAgente-Manifest-$version.json"
+            Invoke-WebRequest -Uri $manifestUrl -OutFile ($asset.File + '.manifest.json') -UseBasicParsing
+            if ($env:REQUIRE_AUTHENTICODE -eq 'true') {
+              $signature = Get-AuthenticodeSignature -LiteralPath $asset.File
+              if ($signature.Status -ne 'Valid') { throw 'Installer signature is not valid.' }
+            }
           }
+
+      - name: Authenticate manifests and bind each installer to its release
+        shell: python
+        env:
+          AUTO_UPDATE_FEED_PUBLIC_KEY: ${{ secrets.AUTO_UPDATE_FEED_PUBLIC_KEY }}
+          INITIAL_URL: ${{ inputs.installer_url }}
+          UPGRADE_URL: ${{ inputs.upgrade_url }}
+        run: |
+          import json, os
+          from pathlib import Path
+          from urllib.parse import urlparse
+          from tool.updater.manifest import verify
+          from tool.updater.verify_release import verify_release
+          keys = os.environ['AUTO_UPDATE_FEED_PUBLIC_KEY']
+          if not keys.strip():
+              raise RuntimeError('Trusted Ed25519 public keys are required')
+          for name, url in [('initial.exe', os.environ['INITIAL_URL']), ('upgrade.exe', os.environ['UPGRADE_URL'])]:
+              manifest = Path(name + '.manifest.json')
+              if manifest.stat().st_size > 131072:
+                  raise RuntimeError('Manifest size limit exceeded')
+              payload = verify(json.loads(manifest.read_text(encoding='utf-8')), [k.strip() for k in keys.split(',') if k.strip()])
+              path = urlparse(url).path.split('/')
+              if payload['release']['tag'] != path[-2] or payload['installer']['name'] != path[-1]:
+                  raise RuntimeError('Signed manifest does not match requested release')
+              verify_release(manifest, Path(name), keys, payload['version'], payload['channel'])
 
       - name: Validate installation upgrade repair and uninstall
         shell: powershell

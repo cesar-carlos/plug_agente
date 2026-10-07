@@ -15,6 +15,7 @@ import 'package:plug_agente/domain/entities/cancellation_token.dart';
 import 'package:plug_agente/domain/errors/failures.dart' as domain;
 import 'package:plug_agente/domain/repositories/i_sql_in_flight_execution_abort_port.dart';
 import 'package:plug_agente/domain/repositories/sql_execution_queue_metrics_collector.dart';
+import 'package:plug_agente/domain/services/i_update_maintenance_gate.dart';
 import 'package:result_dart/result_dart.dart';
 
 export 'package:plug_agente/application/queue/sql_execution_kind.dart';
@@ -59,6 +60,7 @@ class SqlExecutionQueue {
     Duration defaultEnqueueTimeout = const Duration(seconds: 5),
     int fullRejectionLogStride = SqlExecutionBackpressure.defaultFullRejectionLogStride,
     ISqlInFlightExecutionAbortPort? inFlightAbortPort,
+    IUpdateMaintenanceGate? maintenanceGate,
   }) : assert(maxQueueSize > 0, 'maxQueueSize must be > 0'),
        assert(maxConcurrentWorkers > 0, 'maxConcurrentWorkers must be > 0'),
        assert(
@@ -97,6 +99,7 @@ class SqlExecutionQueue {
              maxConcurrentNonQueryWorkers ??
              ConnectionConstants.sqlQueueMaxNonQueryWorkersForWorkers(maxConcurrentWorkers),
        ),
+       _maintenanceGate = maintenanceGate,
        _metricsCollector = metricsCollector,
        _defaultEnqueueTimeout = defaultEnqueueTimeout,
        _fullRejectionLogStride = fullRejectionLogStride,
@@ -120,6 +123,7 @@ class SqlExecutionQueue {
   final SqlExecutionQueueSaturationTracker _saturationTracker;
   late final SqlExecutionGhostQueryPolicy _ghostQueryPolicy;
 
+  final IUpdateMaintenanceGate? _maintenanceGate;
   bool _disposed = false;
   String? _maintenanceOperation;
 
@@ -253,7 +257,7 @@ class SqlExecutionQueue {
   }
 
   domain.ConfigurationFailure? _admitSubmission({required String? requestId}) {
-    if (_maintenanceOperation != null) {
+    if (_maintenanceOperation != null && !(_maintenanceGate?.allowsInternalWork ?? false)) {
       return domain.ConfigurationFailure.withContext(
         message: 'O agente está em preparação para manutenção.',
         context: const {'reason': 'maintenance', 'retryable': true},

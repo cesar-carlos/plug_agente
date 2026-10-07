@@ -14,20 +14,18 @@ from the Google Fonts repository at commit
 
 ## Code signing policy
 
-SignPath Foundation integration is being prepared. The project has not yet
-received approval, and this statement does not imply that current releases
-are signed by SignPath. The intended service is free code signing provided by
-[SignPath.io](https://signpath.io), with a certificate from
-[SignPath Foundation](https://signpath.org).
+Releases support an Ed25519 signed feed and manifest without a commercial
+Authenticode certificate (`signing_provider=manifest`). Windows executables in
+this mode have no verified Authenticode publisher. PFX and SignPath remain
+optional signing providers. The SignPath Foundation application was declined on
+2026-10-06 because the project did not yet meet its public visibility criteria.
 
 The repository maintainer is [cesar-carlos](https://github.com/cesar-carlos).
-Reviewer and signing-approver assignments, as well as MFA for repository and
-signing access, must be confirmed before activation. The proposed release
-process builds on GitHub-hosted runners, requires manual signing approval,
-and verifies the returned signatures before publication. The release workflow supports PFX certificates and the
-staged SignPath
-provider. SignPath organization settings and its approval policy must be
-configured before the remote provider can be used. See [remaining work](installer/readme.md#signpath-readiness).
+Private signing keys stay in release secrets; clients receive public keys only.
+Automatic application through the Windows service remains disabled pending
+completion and validation of the transition, maintenance and recovery contract.
+See [installer status](installer/readme.md) and the
+[implementation plan](docs/implemente/plano_auto_update_evolution.md).
 
 ## Privacy policy
 

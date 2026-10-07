@@ -23,6 +23,8 @@ class AgentActionRemoteAuditPeriodicPurge {
 
   void start() => _runner.start();
 
+  bool get isIdle => _runner.isIdle;
+
   void stop() => _runner.stop();
 
   Future<void> purgeNow() => _runner.purgeNow();

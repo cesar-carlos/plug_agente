@@ -22,9 +22,22 @@ class HubProactiveTokenRefreshScheduler {
   Timer? _timer;
   bool _refreshInFlight = false;
   bool _refreshQueued = false;
+  bool _maintenancePaused = false;
+  bool get isIdle => !_refreshInFlight;
+
+  void pauseForMaintenance() {
+    _maintenancePaused = true;
+    cancel();
+  }
+
+  void resumeAfterMaintenance() {
+    _maintenancePaused = false;
+    reschedule();
+  }
 
   void reschedule() {
     cancel();
+    if (_maintenancePaused) return;
     final token = _accessTokenProvider()?.trim();
     if (token == null || token.isEmpty) {
       return;
@@ -51,6 +64,7 @@ class HubProactiveTokenRefreshScheduler {
   }
 
   Future<void> _fireRefresh() async {
+    if (_maintenancePaused) return;
     if (_refreshInFlight) {
       _refreshQueued = true;
       return;

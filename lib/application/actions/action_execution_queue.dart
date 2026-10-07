@@ -4,6 +4,7 @@ import 'dart:collection';
 import 'package:plug_agente/core/constants/agent_action_queue_constants.dart';
 import 'package:plug_agente/domain/actions/actions.dart';
 import 'package:plug_agente/domain/repositories/action_execution_queue_metrics_collector.dart';
+import 'package:plug_agente/domain/services/i_update_maintenance_gate.dart';
 import 'package:result_dart/result_dart.dart';
 
 typedef AgentActionQueuedTask<T extends Object> = Future<Result<T>> Function();
@@ -25,7 +26,11 @@ class AgentActionQueueRequest<T extends Object> {
 }
 
 class ActionExecutionQueue {
-  ActionExecutionQueue({ActionExecutionQueueMetricsCollector? metrics}) : _metrics = metrics;
+  ActionExecutionQueue({ActionExecutionQueueMetricsCollector? metrics, IUpdateMaintenanceGate? maintenanceGate})
+    : _metrics = metrics,
+      _maintenanceGate = maintenanceGate;
+
+  final IUpdateMaintenanceGate? _maintenanceGate;
 
   final ActionExecutionQueueMetricsCollector? _metrics;
 
@@ -410,7 +415,7 @@ class ActionExecutionQueue {
   }
 
   ActionQueueFailure? _disposedFailure({required String actionId}) {
-    if (_maintenanceOperation != null) {
+    if (_maintenanceOperation != null && !(_maintenanceGate?.allowsInternalWork ?? false)) {
       return ActionQueueFailure.withContext(
         message: 'O agente está em preparação para manutenção.',
         code: AgentActionFailureCode.maintenanceMode,

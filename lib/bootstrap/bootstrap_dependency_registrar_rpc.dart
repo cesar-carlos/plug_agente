@@ -63,7 +63,7 @@ void _registerRpc(
       () => AuthorizationCacheMetricsCollector(getIt<MetricsCollector>()),
     )
     ..registerLazySingleton<IIdempotencyStore>(
-      () => DriftIdempotencyStore(getIt<AppDatabase>()),
+      () => DriftIdempotencyStore(getIt<AppDatabase>(), maintenanceGate: getIt<IUpdateMaintenanceGate>()),
     )
     ..registerLazySingleton<IAuthorizationDecisionCache>(
       () => InMemoryAuthorizationDecisionCache(

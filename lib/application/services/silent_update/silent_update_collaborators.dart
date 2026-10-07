@@ -11,6 +11,7 @@ import 'package:plug_agente/application/services/auto_update_defaults.dart';
 import 'package:plug_agente/application/services/i_pending_silent_update_store.dart';
 import 'package:plug_agente/application/services/pending_silent_update_reconciler.dart';
 import 'package:plug_agente/application/services/persistent_circuit_breaker.dart';
+import 'package:plug_agente/application/services/service_update_pending_coordinator.dart';
 import 'package:plug_agente/application/services/settings_backed_pending_silent_update_store.dart';
 import 'package:plug_agente/application/services/silent_update/silent_update_automatic_circuit_breaker.dart';
 import 'package:plug_agente/application/services/silent_update/silent_update_cancellation_handler.dart';
@@ -26,6 +27,7 @@ import 'package:plug_agente/core/runtime/i_uac_detector.dart';
 import 'package:plug_agente/core/runtime/runtime_capabilities.dart';
 import 'package:plug_agente/core/security/appcast_signature_verifier.dart';
 import 'package:plug_agente/core/settings/app_settings_store.dart';
+import 'package:plug_agente/domain/services/i_privileged_updater.dart';
 import 'package:plug_agente/domain/services/i_update_manifest_downloader.dart';
 
 /// Wires the silent-update collaborators so the coordinator stays an orchestrator.
@@ -119,10 +121,35 @@ class SilentUpdateCollaborators {
       metricsCollector: metricsCollector,
       clock: resolvedClock,
     );
+    final servicePending = silentUpdateInstaller is IServiceSilentUpdateInstaller
+        ? ServiceUpdatePendingCoordinator(
+            updater: silentUpdateInstaller.updater,
+            store: resolvedPendingStore,
+            flush: () async {
+              await wiredPreferences.flushPendingPersistence();
+              if (wiredPreferences.lastPersistError case final error?) {
+                throw StateError('Updater evidence was not persisted: ${error.runtimeType}');
+              }
+            },
+            clock: resolvedClock,
+            stagedTtl: AutoUpdateDefaults.stagedPendingTtl,
+            onFinished: (status) async {
+              if (status.phase == UpdaterPhase.rolledBack) {
+                await automaticFailureBreaker.recordFailure();
+              } else if (status.phase == UpdaterPhase.completed) {
+                await automaticFailureBreaker.reset();
+              } else if (status.restartOnly) {
+                final remaining = status.retryAfter?.difference(resolvedClock()) ?? const Duration(minutes: 15);
+                if (remaining > Duration.zero) await automaticFailureBreaker.deferWithoutFailure(remaining);
+              }
+            },
+          )
+        : null;
     final resolvedDownloadApplyService =
         downloadApplyService ??
         SilentUpdateDownloadApplyService(
           installer: silentUpdateInstaller,
+          servicePending: servicePending,
           pendingStore: resolvedPendingStore,
           automaticFailureBreaker: automaticFailureBreaker,
           launcherStatusReader: resolvedLauncherStatusReader,
@@ -136,6 +163,7 @@ class SilentUpdateCollaborators {
         pendingReconciler ??
         PendingSilentUpdateReconciler(
           pendingStore: resolvedPendingStore,
+          servicePending: servicePending,
           launcherStatusReader: resolvedLauncherStatusReader,
           automaticFailureBreaker: automaticFailureBreaker,
           feedUrlResolver: feedUrlResolver,
@@ -160,6 +188,7 @@ class SilentUpdateCollaborators {
       rolloutBucketResolver: SilentUpdateRolloutBucketResolver(preferences: preferences),
       cancellationHandler: SilentUpdateCancellationHandler(
         pendingStore: resolvedPendingStore,
+        servicePending: servicePending,
         automaticFailureBreaker: automaticFailureBreaker,
         clock: resolvedClock,
       ),

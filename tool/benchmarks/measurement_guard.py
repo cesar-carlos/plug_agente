@@ -3,7 +3,9 @@ from __future__ import annotations
 
 import ctypes
 import hashlib
+import json
 import os
+import re
 import threading
 import time
 from pathlib import Path
@@ -19,11 +21,23 @@ def file_set_identity(root: Path, filenames: tuple[str, ...]) -> str:
     return digest.hexdigest()
 
 
-def native_identity(path: Path, revision: str) -> dict:
-    if not revision or len(revision) != 40 or any(c not in '0123456789abcdef' for c in revision):
-        raise ValueError('A full native source revision is required')
-    return {'revision': revision, 'path': str(path.resolve()),
-            'sha256': hashlib.sha256(path.read_bytes()).hexdigest()}
+def native_identity(path: Path, revision: str | None = None) -> dict:
+    digest = hashlib.sha256(path.read_bytes()).hexdigest()
+    if revision is not None:
+        if not re.fullmatch('[0-9a-f]{40}', revision):
+            raise ValueError('A full native source revision is required')
+        provenance = {'revision': revision}
+    else:
+        manifest = json.loads((path.parent / 'manifest.json').read_text(encoding='utf-8'))
+        version = manifest.get('version', '')
+        url = f'https://github.com/cesar-carlos/dart_odbc_fast/releases/download/v{version}/{path.name}'
+        if (manifest.get('source') != 'pub.dev'
+                or not re.fullmatch(r'[0-9]+\.[0-9]+\.[0-9]+(?:[-+][0-9A-Za-z.-]+)?', version)
+                or not re.fullmatch('[0-9a-f]{64}', manifest.get('package_sha256', ''))
+                or manifest.get('url') != url or manifest.get('sha256') != digest):
+            raise ValueError('Published native provenance is invalid or differs from the binary')
+        provenance = {key: manifest[key] for key in ('source', 'version', 'package_sha256', 'url')}
+    return {**provenance, 'path': str(path.resolve()), 'sha256': digest}
 
 
 def validate_dependency_change(base: dict, candidate: dict, *, allow_odbc: bool) -> None:

@@ -14,6 +14,7 @@ import 'package:plug_agente/domain/errors/client_token_version_conflict_exceptio
 import 'package:plug_agente/domain/errors/failures.dart' as domain;
 import 'package:plug_agente/domain/repositories/i_client_token_repository.dart';
 import 'package:plug_agente/domain/repositories/i_token_secret_store.dart';
+import 'package:plug_agente/domain/services/i_update_maintenance_gate.dart';
 import 'package:plug_agente/infrastructure/datasources/client_token_local_data_source.dart';
 import 'package:plug_agente/infrastructure/repositories/agent_config_drift_database.dart';
 import 'package:plug_agente/infrastructure/services/client_token_secret_orchestrator.dart';
@@ -24,7 +25,9 @@ class ClientTokenRepository implements IClientTokenRepository {
     this._localDataSource, {
     ITokenSecretStore? secretStore,
     Random? random,
-  }) : _secretOrchestrator = ClientTokenSecretOrchestrator(
+    IUpdateMaintenanceGate? maintenanceGate,
+  }) : _maintenanceGate = maintenanceGate,
+       _secretOrchestrator = ClientTokenSecretOrchestrator(
          secretStore,
          _localDataSource,
        ),
@@ -34,14 +37,39 @@ class ClientTokenRepository implements IClientTokenRepository {
   final ClientTokenSecretOrchestrator _secretOrchestrator;
   final Random _random;
 
+  final IUpdateMaintenanceGate? _maintenanceGate;
+  Future<Result<T>> _withAdmission<T extends Object>(Future<Result<T>> Function() action) =>
+      _maintenanceGate?.run(action) ?? action();
+
   @override
   Future<Result<ClientTokenSummary>> getTokenById(String tokenId) async {
-    try {
-      final row = await _localDataSource.findRowById(tokenId);
-      if (row == null) {
+    return _withAdmission(() async {
+      try {
+        final row = await _localDataSource.findRowById(tokenId);
+        if (row == null) {
+          return Failure(
+            domain.NotFoundFailure.withContext(
+              message: 'Client token not found',
+              context: {
+                'operation': 'get_local_client_token_by_id',
+                'token_id': tokenId,
+              },
+            ),
+          );
+        }
+        return Success(await _hydrateSummary(row));
+      } on Exception catch (error, stackTrace) {
+        developer.log(
+          'Failed to load client token by id',
+          name: 'client_token_repository',
+          error: error,
+          stackTrace: stackTrace,
+          level: 1000,
+        );
         return Failure(
-          domain.NotFoundFailure.withContext(
-            message: 'Client token not found',
+          domain.ServerFailure.withContext(
+            message: 'Failed to load local client token',
+            cause: error,
             context: {
               'operation': 'get_local_client_token_by_id',
               'token_id': tokenId,
@@ -49,36 +77,38 @@ class ClientTokenRepository implements IClientTokenRepository {
           ),
         );
       }
-      return Success(await _hydrateSummary(row));
-    } on Exception catch (error, stackTrace) {
-      developer.log(
-        'Failed to load client token by id',
-        name: 'client_token_repository',
-        error: error,
-        stackTrace: stackTrace,
-        level: 1000,
-      );
-      return Failure(
-        domain.ServerFailure.withContext(
-          message: 'Failed to load local client token',
-          cause: error,
-          context: {
-            'operation': 'get_local_client_token_by_id',
-            'token_id': tokenId,
-          },
-        ),
-      );
-    }
+    });
   }
 
   @override
   Future<Result<ClientTokenSummary>> getTokenByHash(String tokenHash) async {
-    try {
-      final row = await _localDataSource.findRowByHash(tokenHash);
-      if (row == null) {
+    return _withAdmission(() async {
+      try {
+        final row = await _localDataSource.findRowByHash(tokenHash);
+        if (row == null) {
+          return Failure(
+            domain.NotFoundFailure.withContext(
+              message: 'Client token not found',
+              context: {
+                'operation': 'get_local_client_token_by_hash',
+                'token_hash': tokenHash,
+              },
+            ),
+          );
+        }
+        return Success(await _hydrateSummary(row));
+      } on Exception catch (error, stackTrace) {
+        developer.log(
+          'Failed to load client token by hash',
+          name: 'client_token_repository',
+          error: error,
+          stackTrace: stackTrace,
+          level: 1000,
+        );
         return Failure(
-          domain.NotFoundFailure.withContext(
-            message: 'Client token not found',
+          domain.ServerFailure.withContext(
+            message: 'Failed to load local client token',
+            cause: error,
             context: {
               'operation': 'get_local_client_token_by_hash',
               'token_hash': tokenHash,
@@ -86,36 +116,38 @@ class ClientTokenRepository implements IClientTokenRepository {
           ),
         );
       }
-      return Success(await _hydrateSummary(row));
-    } on Exception catch (error, stackTrace) {
-      developer.log(
-        'Failed to load client token by hash',
-        name: 'client_token_repository',
-        error: error,
-        stackTrace: stackTrace,
-        level: 1000,
-      );
-      return Failure(
-        domain.ServerFailure.withContext(
-          message: 'Failed to load local client token',
-          cause: error,
-          context: {
-            'operation': 'get_local_client_token_by_hash',
-            'token_hash': tokenHash,
-          },
-        ),
-      );
-    }
+    });
   }
 
   @override
   Future<Result<ClientTokenSummary>> getTokenPolicySummaryByHash(String tokenHash) async {
-    try {
-      final row = await _localDataSource.findRowByHash(tokenHash);
-      if (row == null) {
+    return _withAdmission(() async {
+      try {
+        final row = await _localDataSource.findRowByHash(tokenHash);
+        if (row == null) {
+          return Failure(
+            domain.NotFoundFailure.withContext(
+              message: 'Client token not found',
+              context: {
+                'operation': 'get_local_client_token_policy_by_hash',
+                'token_hash': tokenHash,
+              },
+            ),
+          );
+        }
+        return Success(_localDataSource.mapRowToSummaryWithoutTokenValue(row));
+      } on Exception catch (error, stackTrace) {
+        developer.log(
+          'Failed to load client token policy by hash',
+          name: 'client_token_repository',
+          error: error,
+          stackTrace: stackTrace,
+          level: 1000,
+        );
         return Failure(
-          domain.NotFoundFailure.withContext(
-            message: 'Client token not found',
+          domain.ServerFailure.withContext(
+            message: 'Failed to load local client token policy',
+            cause: error,
             context: {
               'operation': 'get_local_client_token_policy_by_hash',
               'token_hash': tokenHash,
@@ -123,65 +155,50 @@ class ClientTokenRepository implements IClientTokenRepository {
           ),
         );
       }
-      return Success(_localDataSource.mapRowToSummaryWithoutTokenValue(row));
-    } on Exception catch (error, stackTrace) {
-      developer.log(
-        'Failed to load client token policy by hash',
-        name: 'client_token_repository',
-        error: error,
-        stackTrace: stackTrace,
-        level: 1000,
-      );
-      return Failure(
-        domain.ServerFailure.withContext(
-          message: 'Failed to load local client token policy',
-          cause: error,
-          context: {
-            'operation': 'get_local_client_token_policy_by_hash',
-            'token_hash': tokenHash,
-          },
-        ),
-      );
-    }
+    });
   }
 
   @override
   Future<Result<ClientTokenSecretLookup>> getTokenSecret(String tokenId) async {
-    try {
-      final row = await _localDataSource.findRowById(tokenId);
-      if (row == null) {
-        return const Success(ClientTokenSecretLookup(tokenValue: null));
+    return _withAdmission(() async {
+      try {
+        final row = await _localDataSource.findRowById(tokenId);
+        if (row == null) {
+          return const Success(ClientTokenSecretLookup(tokenValue: null));
+        }
+        final tokenSecret = await _secretOrchestrator.readTokenSecret(row);
+        return Success(ClientTokenSecretLookup(tokenValue: tokenSecret));
+      } on Exception catch (error) {
+        return Failure(
+          domain.ServerFailure.withContext(
+            message: 'Failed to load local client token secret',
+            cause: error,
+            context: {
+              'operation': 'get_local_client_token_secret',
+              'token_id': tokenId,
+            },
+          ),
+        );
       }
-      final tokenSecret = await _secretOrchestrator.readTokenSecret(row);
-      return Success(ClientTokenSecretLookup(tokenValue: tokenSecret));
-    } on Exception catch (error) {
-      return Failure(
-        domain.ServerFailure.withContext(
-          message: 'Failed to load local client token secret',
-          cause: error,
-          context: {
-            'operation': 'get_local_client_token_secret',
-            'token_id': tokenId,
-          },
-        ),
-      );
-    }
+    });
   }
 
   @override
   Future<Result<String>> createToken(ClientTokenCreateRequest request) async {
-    try {
-      final token = await _createToken(request);
-      return Success(token);
-    } on Exception catch (error) {
-      return Failure(
-        domain.ServerFailure.withContext(
-          message: 'Failed to create local client token',
-          cause: error,
-          context: const {'operation': 'create_local_client_token'},
-        ),
-      );
-    }
+    return _withAdmission(() async {
+      try {
+        final token = await _createToken(request);
+        return Success(token);
+      } on Exception catch (error) {
+        return Failure(
+          domain.ServerFailure.withContext(
+            message: 'Failed to create local client token',
+            cause: error,
+            context: const {'operation': 'create_local_client_token'},
+          ),
+        );
+      }
+    });
   }
 
   @override
@@ -190,150 +207,162 @@ class ClientTokenRepository implements IClientTokenRepository {
     ClientTokenCreateRequest request, {
     int? expectedVersion,
   }) async {
-    try {
-      final updateResult = await _updateToken(
-        tokenId,
-        request,
-        expectedVersion: expectedVersion,
-      );
-      if (updateResult == null) {
+    return _withAdmission(() async {
+      try {
+        final updateResult = await _updateToken(
+          tokenId,
+          request,
+          expectedVersion: expectedVersion,
+        );
+        if (updateResult == null) {
+          return Failure(
+            domain.ValidationFailure(
+              'Client token not found for update operation',
+            ),
+          );
+        }
+        return Success(updateResult);
+      } on ClientTokenVersionConflictException catch (error) {
+        final context = <String, dynamic>{
+          'operation': 'update_local_client_token',
+          'token_id': tokenId,
+          'reason': AuthorizationContextConstants.tokenVersionConflictReason,
+          'current_version': error.currentVersion,
+        };
+        if (expectedVersion != null) {
+          context['expected_version'] = expectedVersion;
+        }
         return Failure(
-          domain.ValidationFailure(
-            'Client token not found for update operation',
+          domain.ValidationFailure.withContext(
+            message: 'Client token was modified by another operation',
+            context: context,
+          ),
+        );
+      } on Exception catch (error) {
+        return Failure(
+          domain.ServerFailure.withContext(
+            message: 'Failed to update local client token',
+            cause: error,
+            context: {
+              'operation': 'update_local_client_token',
+              'token_id': tokenId,
+            },
           ),
         );
       }
-      return Success(updateResult);
-    } on ClientTokenVersionConflictException catch (error) {
-      final context = <String, dynamic>{
-        'operation': 'update_local_client_token',
-        'token_id': tokenId,
-        'reason': AuthorizationContextConstants.tokenVersionConflictReason,
-        'current_version': error.currentVersion,
-      };
-      if (expectedVersion != null) {
-        context['expected_version'] = expectedVersion;
-      }
-      return Failure(
-        domain.ValidationFailure.withContext(
-          message: 'Client token was modified by another operation',
-          context: context,
-        ),
-      );
-    } on Exception catch (error) {
-      return Failure(
-        domain.ServerFailure.withContext(
-          message: 'Failed to update local client token',
-          cause: error,
-          context: {
-            'operation': 'update_local_client_token',
-            'token_id': tokenId,
-          },
-        ),
-      );
-    }
+    });
   }
 
   @override
   Future<Result<List<ClientTokenSummary>>> listTokens({
     ClientTokenListQuery? query,
   }) async {
-    try {
-      final tokens = await _localDataSource.listTokens(query: query);
-      return Success(tokens);
-    } on Exception catch (error) {
-      return Failure(
-        domain.ServerFailure.withContext(
-          message: 'Failed to list local client tokens',
-          cause: error,
-          context: const {'operation': 'list_local_client_tokens'},
-        ),
-      );
-    }
+    return _withAdmission(() async {
+      try {
+        final tokens = await _localDataSource.listTokens(query: query);
+        return Success(tokens);
+      } on Exception catch (error) {
+        return Failure(
+          domain.ServerFailure.withContext(
+            message: 'Failed to list local client tokens',
+            cause: error,
+            context: const {'operation': 'list_local_client_tokens'},
+          ),
+        );
+      }
+    });
   }
 
   @override
   Future<Result<void>> revokeToken(String tokenId) async {
-    try {
-      final didRevoke = await _localDataSource.markTokenRevoked(tokenId);
-      if (!didRevoke) {
+    return _withAdmission(() async {
+      try {
+        final didRevoke = await _localDataSource.markTokenRevoked(tokenId);
+        if (!didRevoke) {
+          return Failure(
+            domain.ValidationFailure(
+              'Client token not found for revoke operation',
+            ),
+          );
+        }
+        return const Success(unit);
+      } on Exception catch (error) {
         return Failure(
-          domain.ValidationFailure(
-            'Client token not found for revoke operation',
+          domain.ServerFailure.withContext(
+            message: 'Failed to revoke local client token',
+            cause: error,
+            context: {
+              'operation': 'revoke_local_client_token',
+              'token_id': tokenId,
+            },
           ),
         );
       }
-      return const Success(unit);
-    } on Exception catch (error) {
-      return Failure(
-        domain.ServerFailure.withContext(
-          message: 'Failed to revoke local client token',
-          cause: error,
-          context: {
-            'operation': 'revoke_local_client_token',
-            'token_id': tokenId,
-          },
-        ),
-      );
-    }
+    });
   }
 
   @override
   Future<Result<void>> deleteToken(String tokenId) async {
-    try {
-      final deletedRow = await _localDataSource.deleteToken(tokenId);
-      if (deletedRow == null) {
+    return _withAdmission(() async {
+      try {
+        final deletedRow = await _localDataSource.deleteToken(tokenId);
+        if (deletedRow == null) {
+          return Failure(
+            domain.ValidationFailure(
+              'Client token not found for delete operation',
+            ),
+          );
+        }
+        await _secretOrchestrator.deleteStoredSecretsBestEffort(
+          tokenId: tokenId,
+          tokenHash: deletedRow.tokenHash,
+        );
+        return const Success(unit);
+      } on Exception catch (error) {
         return Failure(
-          domain.ValidationFailure(
-            'Client token not found for delete operation',
+          domain.ServerFailure.withContext(
+            message: 'Failed to delete local client token',
+            cause: error,
+            context: {
+              'operation': 'delete_local_client_token',
+              'token_id': tokenId,
+            },
           ),
         );
       }
-      await _secretOrchestrator.deleteStoredSecretsBestEffort(
-        tokenId: tokenId,
-        tokenHash: deletedRow.tokenHash,
-      );
-      return const Success(unit);
-    } on Exception catch (error) {
-      return Failure(
-        domain.ServerFailure.withContext(
-          message: 'Failed to delete local client token',
-          cause: error,
-          context: {
-            'operation': 'delete_local_client_token',
-            'token_id': tokenId,
-          },
-        ),
-      );
-    }
+    });
   }
 
   Future<void> replaceTokens(List<ClientTokenSummary> tokens) async {
-    if (tokens.isEmpty) {
-      return;
+    Future<void> replace() async {
+      if (tokens.isEmpty) {
+        return;
+      }
+
+      final previousRowsById = await _localDataSource.loadAllRowsById();
+      final rows = tokens
+          .map(
+            (token) => (
+              summary: token,
+              tokenHash: fallbackStoredClientTokenHash(
+                tokenId: token.id,
+                tokenValue: token.tokenValue,
+              ),
+              persistedTokenValue: _secretOrchestrator.persistedTokenValueForStorage(
+                token.tokenValue,
+              ),
+            ),
+          )
+          .toList();
+
+      await _localDataSource.replaceTokenRows(rows: rows);
+      await _secretOrchestrator.syncSecretsForReplacement(
+        tokens: tokens,
+        previousRowsById: previousRowsById,
+      );
     }
 
-    final previousRowsById = await _localDataSource.loadAllRowsById();
-    final rows = tokens
-        .map(
-          (token) => (
-            summary: token,
-            tokenHash: fallbackStoredClientTokenHash(
-              tokenId: token.id,
-              tokenValue: token.tokenValue,
-            ),
-            persistedTokenValue: _secretOrchestrator.persistedTokenValueForStorage(
-              token.tokenValue,
-            ),
-          ),
-        )
-        .toList();
-
-    await _localDataSource.replaceTokenRows(rows: rows);
-    await _secretOrchestrator.syncSecretsForReplacement(
-      tokens: tokens,
-      previousRowsById: previousRowsById,
-    );
+    return _maintenanceGate?.runValue(replace) ?? replace();
   }
 
   String hashTokenForLookup(String token) => hashStoredClientToken(token);

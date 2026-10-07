@@ -3,6 +3,7 @@ part of 'bootstrap_dependency_registrar.dart';
 void _registerAutoUpdate(GetIt getIt) {
   if (Platform.isWindows) {
     getIt
+      ..registerLazySingleton(() => BootstrapUpdateMaintenance(getIt))
       ..registerLazySingleton<IPrivilegedUpdater>(WindowsPrivilegedUpdater.new)
       ..registerLazySingleton<IUpdateSecretsSnapshot>(WindowsUpdateSecretsSnapshot.new);
   }
@@ -18,9 +19,19 @@ void _registerAutoUpdate(GetIt getIt) {
             environment: AppEnvironment.snapshot(),
           ),
         );
-        return DioSilentUpdateInstaller(
+        final downloader = DioSilentUpdateInstaller(
           downloadTimeout: downloadTimeout,
           dioFactory: () => DioFactory.createDio(requestTimeout: downloadTimeout),
+        );
+        if (!Platform.isWindows) return downloader;
+        return PrivilegedSilentUpdateInstaller(
+          downloader: downloader,
+          manifests: getIt<IUpdateManifestDownloader>(),
+          updater: getIt<IPrivilegedUpdater>(),
+          secrets: getIt<IUpdateSecretsSnapshot>(),
+          prepareMaintenance: getIt<BootstrapUpdateMaintenance>().prepare,
+          onRecoveryRequired: getIt<BootstrapUpdateMaintenance>().markRecoveryRequired,
+          dataDirectory: () async => getIt<GlobalStorageContext>().appDirectoryPath,
         );
       },
     )

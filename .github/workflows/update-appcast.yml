@@ -3,6 +3,9 @@ name: Update Appcast on Release
 on:
   workflow_call:
     inputs:
+      require_authenticode:
+        type: boolean
+        default: true
       release_tag:
         required: true
         type: string
@@ -19,6 +22,10 @@ on:
         required: true
   workflow_dispatch:
     inputs:
+      require_authenticode:
+        description: "Require Authenticode in addition to the mandatory Ed25519 manifest"
+        type: boolean
+        default: false
       release_tag:
         description: "Git tag (e.g. v1.4.0). Release must exist with PlugAgente-Setup-*.exe asset."
         required: false
@@ -294,6 +301,7 @@ jobs:
           } >> "$GITHUB_OUTPUT"
 
       - name: Verify installer Authenticode
+        if: inputs.require_authenticode
         shell: pwsh
         env:
           INSTALLER_PATH: ${{ steps.asset.outputs.path }}

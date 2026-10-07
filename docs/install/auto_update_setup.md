@@ -1,5 +1,14 @@
 # Auto-Update
 
+> Revisão de 2026-10-06: `signing_provider=manifest` (padrão no publish) e
+> `build_installer.py --manifest-only` exigem Ed25519 do feed/manifesto e SHA-256,
+> sem certificado Authenticode. Exigências de certificado neste guia se aplicam
+> aos provedores opcionais `pfx`/`signpath`. As chaves do feed continuam obrigatórias.
+> O novo adaptador Windows usa o serviço sem fallback com UAC, mas a aplicação
+> automática permanece bloqueada até concluir e homologar a transição. Consulte
+> o [estado atual](../implemente/plano_auto_update_evolution.md) antes de publicar.
+
+
 Configuracao, publicacao e diagnostico do update automatico do Plug Agente no
 Windows.
 

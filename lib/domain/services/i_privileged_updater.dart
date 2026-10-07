@@ -27,6 +27,10 @@ class UpdaterStatus {
     this.reason,
     this.missingCapabilities = const [],
     this.rebootPending = false,
+    this.ownedByCaller = false,
+    this.restartOnly = false,
+    this.finalizationPending = false,
+    this.retryAfter,
   });
 
   final UpdaterPhase phase;
@@ -35,6 +39,20 @@ class UpdaterStatus {
   final String? reason;
   final List<String> missingCapabilities;
   final bool rebootPending;
+  final bool ownedByCaller;
+  final bool restartOnly;
+  final bool finalizationPending;
+  final DateTime? retryAfter;
+
+  bool get active => switch (phase) {
+    UpdaterPhase.waitingForExit ||
+    UpdaterPhase.snapshotting ||
+    UpdaterPhase.installing ||
+    UpdaterPhase.verifying ||
+    UpdaterPhase.rollingBack ||
+    UpdaterPhase.restoringUserData => true,
+    _ => false,
+  };
 
   bool get terminal => switch (phase) {
     UpdaterPhase.completed || UpdaterPhase.rolledBack => true,
@@ -51,14 +69,16 @@ class UpdaterCapabilities {
     required this.applicationReady,
     required this.channel,
     required this.approved,
+    this.recoveryContract = 0,
   });
 
   final bool authorized;
   final bool applicationReady;
   final String channel;
   final List<String> approved;
+  final int recoveryContract;
 
-  bool get canApplyAutomatically => authorized && applicationReady;
+  bool get canApplyAutomatically => authorized && applicationReady && recoveryContract == 1;
 }
 
 /// Dispatch is acknowledged separately from installation and health success.
@@ -74,6 +94,7 @@ abstract interface class IPrivilegedUpdater {
   Future<Result<UpdaterStatus>> status();
   Future<Result<UpdaterStatus>> prepare({required Map<String, Object?> manifest, required String installerPath});
   Future<Result<UpdaterStatus>> cancel(String operationId);
+  Future<Result<UpdaterStatus>> requestApplicationRecovery({required String operationId, required int appPid});
   Future<Result<UpdaterStartConfirmation>> start({
     required String operationId,
     required int appPid,

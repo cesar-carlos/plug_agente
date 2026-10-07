@@ -9,6 +9,7 @@ import 'package:plug_agente/core/di/service_locator.dart';
 import 'package:plug_agente/core/logging/error_logging_bootstrap.dart';
 import 'package:plug_agente/core/runtime/installation_bundle_check.dart';
 import 'package:plug_agente/core/services/error_tracker.dart';
+import 'package:plug_agente/infrastructure/runtime/update_validation_bootstrap.dart';
 import 'package:plug_agente/infrastructure/runtime/windows_runtime_probe.dart';
 import 'package:plug_agente/presentation/boot/app_initializer.dart';
 import 'package:plug_agente/presentation/boot/app_root.dart';
@@ -18,6 +19,9 @@ Future<void> main(List<String> args) async {
   await runZonedGuarded(
     () async {
       WidgetsFlutterBinding.ensureInitialized();
+      if (args.contains('--update-validation')) {
+        exit(await runUpdateValidation(args, rootBundle));
+      }
       if (args.contains('--installation-check')) {
         final result = await checkInstallationBundle(rootBundle);
         exit(result.fold((_) => 0, (failure) => 3));

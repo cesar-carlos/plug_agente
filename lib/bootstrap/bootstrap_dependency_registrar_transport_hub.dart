@@ -173,6 +173,7 @@ void _registerTransportHub(GetIt getIt) {
     ..registerLazySingleton<IClientTokenRepository>(
       () => ClientTokenRepository(
         getIt<ClientTokenLocalDataSource>(),
+        maintenanceGate: getIt<IUpdateMaintenanceGate>(),
         secretStore: getIt<ITokenSecretStore>(),
       ),
     )

@@ -1,6 +1,14 @@
 part of 'bootstrap_dependency_registrar.dart';
 
 void _registerPersistence(GetIt getIt) {
+  if (!getIt.isRegistered<UpdateMaintenanceAdmission>()) {
+    getIt.registerSingleton(UpdateMaintenanceAdmission(), dispose: (admission) => admission.dispose());
+    getIt.registerSingleton<IUpdateMaintenanceGate>(getIt<UpdateMaintenanceAdmission>());
+  }
+  final settings = getIt<IAppSettingsStore>();
+  if (settings is GlobalAppSettingsStore) {
+    settings.writeAdmission = getIt<UpdateMaintenanceAdmission>().checkSettingsWrite;
+  }
   getIt
     ..registerLazySingleton(
       () => AppDatabase(
@@ -43,6 +51,7 @@ void _registerPersistence(GetIt getIt) {
       () => HubSessionStore(
         getIt<AppDatabase>(),
         authSecretStore: getIt<IHubAuthSecretStore>(),
+        maintenanceGate: getIt<IUpdateMaintenanceGate>(),
       ),
     )
     ..registerLazySingleton<IOdbcCredentialSecretStore>(
@@ -65,6 +74,7 @@ void _registerPersistence(GetIt getIt) {
       () => OdbcCredentialStore(
         getIt<AppDatabase>(),
         credentialSecretStore: getIt<IOdbcCredentialSecretStore>(),
+        maintenanceGate: getIt<IUpdateMaintenanceGate>(),
       ),
     )
     ..registerLazySingleton(
@@ -73,6 +83,7 @@ void _registerPersistence(GetIt getIt) {
     ..registerLazySingleton<IAgentConfigRepository>(
       () => AgentConfigRepository(
         getIt<AppDatabase>(),
+        maintenanceGate: getIt<IUpdateMaintenanceGate>(),
         authSecretStore: getIt<IHubAuthSecretStore>(),
         hubSessionStore: getIt<IHubSessionStore>(),
         odbcCredentialSecretStore: getIt<IOdbcCredentialSecretStore>(),
@@ -80,6 +91,6 @@ void _registerPersistence(GetIt getIt) {
       ),
     )
     ..registerLazySingleton<IAgentActionRepository>(
-      () => AgentActionRepository(getIt<AppDatabase>()),
+      () => AgentActionRepository(getIt<AppDatabase>(), maintenanceGate: getIt<IUpdateMaintenanceGate>()),
     );
 }

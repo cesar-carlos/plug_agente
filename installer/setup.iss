@@ -189,7 +189,7 @@ Source: "..\assets\fonts\montserrat\OFL.txt"; DestDir: "{app}\licenses"; DestNam
 Source: "..\build\windows\x64\runner\Release\*"; DestDir: "{app}"; Excludes: "*.pdb,*.ilk,*.exp,*.lib,*.log,updater,updater\*"; Flags: ignoreversion recursesubdirs createallsubdirs; Check: ShouldCopyApplicationFiles
 Source: "..\build\windows\x64\runner\Release\updater\plug_update_client.exe"; Flags: dontcopy
 Source: "..\build\windows\x64\runner\Release\updater\plug_update_service.exe"; DestDir: "{commonpf}\PlugAgenteUpdater"; Flags: ignoreversion; Check: ShouldInstallUpdaterHost
-Source: "..\build\windows\x64\runner\Release\updater\plug_update_client.exe"; DestDir: "{commonpf}\PlugAgenteUpdater"; Flags: ignoreversion; Check: ShouldInstallUpdaterHost
+Source: "..\build\windows\x64\runner\Release\updater\plug_update_client.exe"; DestDir: "{commonpf}\PlugAgenteUpdater"; Flags: ignoreversion; Check: ShouldInstallUpdaterClient
 Source: "..\build\windows\x64\runner\Release\updater\plug_update_worker.exe"; DestDir: "{commonpf}\PlugAgenteUpdater\workers\{#MyAppWorkerVersion}"; Flags: ignoreversion; Check: ShouldInstallUpdaterWorker
 #endif
 
@@ -222,6 +222,8 @@ Type: dirifempty; Name: "{commonappdata}\PlugAgente"
 [Code]
 var
   UpdaterHostNeeded: Boolean;
+  UpdaterHostUpgradeAuthorized: Boolean;
+  UpdaterClientNeeded: Boolean;
   UpdaterInstallationSkipped: Boolean;
   UpdaterWasPresent: Boolean;
 
@@ -261,13 +263,14 @@ begin
 end;
 
 #include "updater_recovery.iss"
+#include "updater_install_preparation.iss"
 
 function UpdaterExists(): Boolean;
 begin
   // Failed first enrollment must not pin an incomplete updater host on the next repair.
-  Result := FileExists(ExpandConstant('{commonpf}\PlugAgenteUpdater\plug_update_service.exe')) and
-    FileExists(ExpandConstant('{commonpf}\PlugAgenteUpdater\plug_update_client.exe')) and
-    FileExists(ExpandConstant('{commonappdata}\PlugAgenteUpdater\policy.json'));
+  Result := IsUpdaterHostRegistered(
+    FileExists(ExpandConstant('{commonpf}\PlugAgenteUpdater\plug_update_service.exe')),
+    FileExists(ExpandConstant('{commonappdata}\PlugAgenteUpdater\policy.json')));
 end;
 
 function WantsAutomaticUpdates(): Boolean;
@@ -277,8 +280,12 @@ begin
   Result := False;
   if UpdaterInstallationSkipped or not IsAdminInstallMode then
     Exit;
-  if IsOptionalRepair() and not WantsAutomaticUpdates() then
+  // Keep this install's explicit administrative intent after revoking the old host.
+  if UpdaterHostUpgradeAuthorized then
+  begin
+    Result := True;
     Exit;
+  end;
   if WizardSilent() then
   begin
     if IsOptionalRepair() and (ExpandConstant('{param:AUTOUPDATE|0}') = '1') then
@@ -302,6 +309,11 @@ begin
   Result := UpdaterHostNeeded;
 end;
 
+function ShouldInstallUpdaterClient(): Boolean;
+begin
+  Result := UpdaterHostNeeded or (UpdaterClientNeeded and not UpdaterInstallationSkipped);
+end;
+
 function ShouldInstallUpdaterWorker(): Boolean;
 begin
   Result := IsAdminInstallMode and WantsAutomaticUpdates();
@@ -319,7 +331,7 @@ begin
   begin
     // The supervisor survives routine bundle/worker updates. Enrollment is an
     // administrative transition, never an implicit action of a silent upgrade.
-    if UpdaterHostNeeded or not WizardSilent() or IsOptionalRepair() then
+    if UpdaterHostNeeded or UpdaterClientNeeded or not WizardSilent() or IsOptionalRepair() then
     begin
       if not RunDependencyCommand(ClientPath, '--enroll ' + AddQuotes(ExpandConstant('{app}')) + ' ' +
           AddQuotes(ExpandConstant('{srcexe}')) + ' ' + ExpandConstant('{param:CHANNEL|{#MyAppChannel}}') + ' {#MyAppWorkerVersion}',
@@ -358,14 +370,6 @@ begin
   ClientPath := ExpandConstant('{commonpf}\PlugAgenteUpdater\plug_update_client.exe');
   UpdaterWasPresent := UpdaterExists() or FileExists(ClientPath) or
     FileExists(ExpandConstant('{commonappdata}\PlugAgenteUpdater\policy.json'));
-  if UpdaterWasPresent or (ExpandConstant('{param:UPDATERSERVICE|0}') = '1') then
-    Result := RunDependencyCommand(ClientPath, '--check-install ' + ExpandConstant('{param:UPDATERSERVICE|0}'), Details);
-  if not Result then
-  begin
-    RegisterCriticalInstallationError(CustomMessage('UpdaterOperationCritical') + #13#10 + Details);
-    SuppressibleMsgBox(CustomMessage('UpdaterOperationCritical') + #13#10 + Details,
-      mbCriticalError, MB_OK, IDOK);
-  end;
 end;
 
 procedure DeinitializeSetup;
@@ -571,6 +575,23 @@ begin
   Result := '';
   NeedsRestart := False;
   CriticalInstallationError := False;
+  if UpdaterWasPresent or (ExpandConstant('{param:UPDATERSERVICE|0}') = '1') then
+  begin
+    Prepared := False;
+    try
+      ExtractTemporaryFile('plug_update_client.exe');
+      Prepared := ValidateUpdaterOperationBeforeInstall(UpdaterWasPresent,
+        ExpandConstant('{param:UPDATERSERVICE|0}') = '1', ExpandConstant('{tmp}\plug_update_client.exe'), Details);
+    except
+      Details := GetExceptionMessage;
+    end;
+    if not Prepared then
+    begin
+      Result := CustomMessage('UpdaterOperationCritical') + #13#10 + Details;
+      RegisterCriticalInstallationError(Result);
+      Exit;
+    end;
+  end;
   if IsOptionalRepair() then
   begin
     SettingsPath := ExpandConstant('{app}\install-mode.ini');
@@ -586,6 +607,56 @@ begin
     VerifyInstalledCore;
   end;
   UpdaterHostNeeded := WantsAutomaticUpdates() and not UpdaterExists();
+  UpdaterClientNeeded := WantsAutomaticUpdates() and not FileExists(ExpandConstant('{commonpf}\PlugAgenteUpdater\plug_update_client.exe'));
+  if ExpandConstant('{param:UPGRADEUPDATERHOST|0}') = '1' then
+  begin
+    if not CanAdministrativelyUpgradeUpdaterHost(IsAdminInstallMode,
+      ExpandConstant('{param:UPDATERSERVICE|0}') = '1', WantsAutomaticUpdates()) then
+    begin
+      Result := CustomMessage('UpdaterPreparationCritical');
+      RegisterCriticalInstallationError(Result);
+      Exit;
+    end;
+    UpdaterHostUpgradeAuthorized := True;
+    if not StoreUpdaterAuthorization(0) then
+    begin
+      Result := CustomMessage('UpdaterPreparationCritical');
+      RegisterCriticalInstallationError(Result);
+      Exit;
+    end;
+    try
+      ExtractTemporaryFile('plug_update_client.exe');
+      Prepared := RunDependencyCommand(ExpandConstant('{tmp}\plug_update_client.exe'), '--prepare-host-upgrade', Details);
+    except
+      Prepared := False;
+      Details := GetExceptionMessage;
+    end;
+    if not Prepared then
+    begin
+      StoreUpdaterAuthorization(0);
+      Result := CustomMessage('UpdaterPreparationCritical') + #13#10 + Details;
+      RegisterCriticalInstallationError(Result);
+      Exit;
+    end;
+    UpdaterHostNeeded := True;
+  end;
+  if WantsAutomaticUpdates() and UpdaterExists() and not UpdaterHostNeeded then
+  begin
+    Prepared := False;
+    try
+      ExtractTemporaryFile('plug_update_client.exe');
+      Prepared := RunDependencyCommand(ExpandConstant('{tmp}\plug_update_client.exe'), '--check-host-contract', Details);
+    except
+      Details := GetExceptionMessage;
+    end;
+    if not Prepared then
+    begin
+      StoreUpdaterAuthorization(0);
+      Result := CustomMessage('UpdaterPreparationCritical') + #13#10 + Details + #13#10 + '/UPGRADEUPDATERHOST=1';
+      RegisterCriticalInstallationError(Result);
+      Exit;
+    end;
+  end;
   if WantsAutomaticUpdates() then
   begin
     // Execute the installer-embedded client before copying privileged files:

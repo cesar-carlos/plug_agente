@@ -13,7 +13,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from tool.py.benchmark_common import bootstrap_env, ensure_on_path, collect_machine_metadata, collect_source_identity
 from tool.py.script_utils import resolve_command
 from tool.benchmarks.measurement_guard import MeasurementGuard, native_identity, file_set_identity
-from tool.odbc.build_pinned_native import build_pinned_native, pinned_package
+from tool.odbc.prepare_package_native import prepare_native_library
 
 
 def metrics(report):
@@ -65,13 +65,12 @@ def main():
     ensure_on_path()
     bootstrap_env(Path(__file__).resolve().parents[2] / '.env')
     args.output_dir.mkdir(parents=True, exist_ok=True)
-    library = build_pinned_native(args.root)
-    _, revision = pinned_package(args.root)
+    library = prepare_native_library(args.root)
     identity = collect_source_identity(args.root)
     harness_files = ('tool/benchmarks/benchmark_streaming_tuning.dart', 'tool/benchmarks/odbc_benchmark_fixture.dart')
     harness_identity = file_set_identity(args.root, harness_files)
     summary = {'machine': collect_machine_metadata(), 'source': identity,
-               'native': native_identity(library, revision), 'harness_sha256': harness_identity, 'drivers': {}}
+               'native': native_identity(library), 'harness_sha256': harness_identity, 'drivers': {}}
     with MeasurementGuard() as guard:
         for driver, keys in {'sql_server': ('ODBC_TEST_DSN_SQL_SERVER', 'ODBC_DSN_SQL_SERVER'),
                              'sql_anywhere': ('ODBC_TEST_DSN', 'ODBC_DSN')}.items():
@@ -113,7 +112,7 @@ def main():
             (args.output_dir / 'summary.json').write_text(json.dumps(summary, indent=2), encoding='utf-8')
         summary['interrupted'] = guard.interrupted
         if (guard.interrupted or identity != collect_source_identity(args.root)
-                or summary['native'] != native_identity(library, revision)
+                or summary['native'] != native_identity(library)
                 or harness_identity != file_set_identity(args.root, harness_files)):
             for value in summary['drivers'].values():
                 value.update(status='inconclusive', recommendation=None)

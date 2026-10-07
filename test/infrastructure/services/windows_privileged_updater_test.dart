@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:plug_agente/domain/errors/failures.dart' as domain;
 import 'package:plug_agente/domain/services/i_privileged_updater.dart';
@@ -12,6 +14,22 @@ void main() {
   });
   const operation = 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa';
   const nonce = 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb';
+  test('probation and restoration identify the actual requesting application process', () async {
+    final commands = <String>[];
+    final updater = WindowsPrivilegedUpdater(
+      requestTransport: (request) async {
+        expect(request['operationId'], operation);
+        expect(request['nonce'], nonce);
+        expect(request['appPid'], pid);
+        commands.add(request['command']! as String);
+        return const Success({'ok': true});
+      },
+    );
+    expect((await updater.validationContext(operation, nonce)).isSuccess(), isTrue);
+    expect((await updater.confirmHealth(operationId: operation, version: '1.8.7+1', nonce: nonce)).isSuccess(), isTrue);
+    expect((await updater.confirmRestoration(operation, nonce)).isSuccess(), isTrue);
+    expect(commands, ['validationContext', 'health', 'restored']);
+  });
   test('revoked enrollment remains queryable and cannot apply', () async {
     final updater = WindowsPrivilegedUpdater(
       requestTransport: (request) async {
@@ -100,10 +118,53 @@ void main() {
       {
         'status': {'protocol': 1, 'state': 'idle', 'operationId': '../outside'},
       },
+      {
+        'status': {'protocol': 1, 'state': 'preparing', 'ownedByCaller': 'true'},
+      },
+      {
+        'status': {'protocol': 1, 'state': 'completed', 'finalizationPending': 0},
+      },
+      {
+        'status': {'protocol': 1, 'state': 'deferred', 'retryAfterUnixMillis': 'tomorrow'},
+      },
     ]) {
       final updater = WindowsPrivilegedUpdater(requestTransport: (_) async => Success(response));
       expect((await updater.status()).isError(), isTrue);
     }
+  });
+  test('old supervisor lacks the additive recovery capability and cannot apply', () async {
+    final updater = WindowsPrivilegedUpdater(
+      requestTransport: (_) async => const Success({
+        'capabilities': {
+          'protocol': 1,
+          'authorized': true,
+          'applicationReady': true,
+          'channel': 'stable',
+          'approved': <String>[],
+        },
+      }),
+    );
+    expect((await updater.capabilities()).getOrThrow().canApplyAutomatically, isFalse);
+  });
+  test('recovery IPC accepts only operation and application identity', () async {
+    final updater = WindowsPrivilegedUpdater(
+      requestTransport: (request) async {
+        expect(request, {'command': 'recoverApplication', 'operationId': operation, 'appPid': 123});
+        return const Success({
+          'status': {
+            'protocol': 1,
+            'state': 'waitingForExit',
+            'operationId': operation,
+            'restartOnly': true,
+            'ownedByCaller': true,
+            'retryAfterUnixMillis': 1770000000000,
+          },
+        });
+      },
+    );
+    final status = (await updater.requestApplicationRecovery(operationId: operation, appPid: 123)).getOrThrow();
+    expect(status.restartOnly, isTrue);
+    expect(status.retryAfter, DateTime.fromMillisecondsSinceEpoch(1770000000000, isUtc: true));
   });
   test('typed transport failure is preserved across capability query', () async {
     final failure = domain.ConfigurationFailure.withContext(

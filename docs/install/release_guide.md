@@ -1,5 +1,14 @@
 # Guia de Release e Versionamento
 
+> Revisão de 2026-10-06: `signing_provider=manifest` (padrão no publish) e
+> `build_installer.py --manifest-only` exigem Ed25519 do feed/manifesto e SHA-256,
+> sem certificado Authenticode. Exigências de certificado neste guia se aplicam
+> aos provedores opcionais `pfx`/`signpath`. As chaves do feed continuam obrigatórias.
+> O novo adaptador Windows usa o serviço sem fallback com UAC, mas a aplicação
+> automática permanece bloqueada até concluir e homologar a transição. Consulte
+> o [estado atual](../implemente/plano_auto_update_evolution.md) antes de publicar.
+
+
 Fonte operacional para versionamento, build do instalador, tag e publicacao do
 Plug Agente.
 
@@ -116,12 +125,13 @@ python tool/release/release_preflight.py --version 1.2.7 --allow-dirty --check-i
   --feed-public-key "$AUTO_UPDATE_FEED_PUBLIC_KEY"
 ```
 
-O `installer/build_installer.py` compila `odbc_fast` a partir da revisao Git fixa do `pubspec.lock`
-em uma copia dentro de `build/`, usando Rust 1.93.0 e MSVC. O hook recebe o
-artefato por `hooks.user_defines`, sem alterar o cache do Pub. Antes de
-empacotar, o script exige que a DLL presente no bundle tenha o mesmo SHA-256
-da biblioteca compilada. O manifesto da revisao, compilador e hashes e copiado
-para `data/odbc_native_manifest.json` no bundle.
+O `installer/build_installer.py` usa o pacote `odbc_fast: ^5.0.1` do pub.dev,
+com a versao exata e o hash do pacote registrados no `pubspec.lock`.
+`tool/odbc/prepare_package_native.py` baixa a biblioteca nativa da release
+oficial correspondente e exige o SHA-256 publicado antes de disponibiliza-la
+ao hook por `ODBC_FAST_NATIVE_LIBRARY`. Nao compila o engine Rust nem altera
+o cache do Pub. Antes de empacotar, exige que a DLL no bundle tenha esse mesmo
+hash. A origem, versao e hashes ficam em `data/odbc_native_manifest.json`.
 
 O script tambem executa:
 
@@ -130,9 +140,9 @@ O script tambem executa:
    sem certificado, defina `AUTO_UPDATE_REQUIRE_VALID_SIGNATURE=false`
 2. `installer/update_version.py` somente com `--sync-version`
 3. `flutter build windows --release`
-4. `python tool/elevated/build_elevated_runner.py` (`dart build cli`, copia
+4. `python tool/elevated/build_elevated_runner.py --release-only` (`dart build cli`, copia
    `plug_agente_elevated_runner.exe` e sidecars nativos para o bundle
-   Release/Debug; obrigatorio)
+   Release; obrigatorio)
 5. Validacao de presenca do aplicativo, helper, runner elevado e componentes
    `updater/plug_update_service.exe`, `plug_update_client.exe` e
    `plug_update_worker.exe` no bundle Release

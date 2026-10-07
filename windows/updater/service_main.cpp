@@ -1,4 +1,5 @@
 #include "win_security.h"
+#include "user_session.h"
 #include <sddl.h>
 #include <shellapi.h>
 #include <atomic>
@@ -32,8 +33,12 @@ Json journal() {
 }
 Json public_status(const Json& value) {
   Json status{{"protocol", 1}, {"state", value.value("state", "idle")}};
-  for (const auto& name : {"operationId", "version", "reason", "missingCapabilities", "rebootPending"})
+  for (const auto& name : {"operationId", "version", "reason", "missingCapabilities", "rebootPending", "restartOnly", "finalizationPending", "retryAfterUnixMillis"})
     if (value.contains(name)) status[name] = value.at(name);
+  const auto guard = control_root() / L"boot-blocked";
+  if (fs::exists(guard) && (!value.contains("operationId") || read_file(guard, 64) != value.at("operationId"))) {
+    status["state"] = "recoveryRequired"; status["reason"] = "boot_guard_identity_rejected";
+  }
   return status;
 }
 void reconcile_interrupted_operation();
@@ -70,9 +75,7 @@ DWORD authorize_client(HANDLE pipe, const Json& policy) {
   const auto install = fs::path(wide(policy.at("installDirectory").get<std::string>()));
   if (path != install / L"plug_agente.exe" && path != control_root() / L"plug_update_client.exe")
     throw std::runtime_error("client_image_rejected");
-  const auto thumbprint = trusted_publisher(path);
-  if (std::find(policy.at("publishers").begin(), policy.at("publishers").end(), thumbprint) == policy.at("publishers").end())
-    throw std::runtime_error("client_publisher_rejected");
+  verify_registered_binary(path, policy, path == install / L"plug_agente.exe" ? "app" : "client");
   return pid;
 }
 void copy_client_file(HANDLE pipe, const fs::path& source, const fs::path& destination, uint64_t expected_size) {
@@ -106,14 +109,85 @@ bool process_alive(const Json& job) {
   const uint64_t started = (static_cast<uint64_t>(creation.dwHighDateTime) << 32) | creation.dwLowDateTime;
   return started == job.value("workerCreated", uint64_t{0}) && WaitForSingleObject(process.get(), 0) == WAIT_TIMEOUT;
 }
+void discard_cancelled_preparation(const Json& current) {
+  if (current.value("state", "") != "deferred" || current.value("reason", "") != "cancelled_before_installation" ||
+      current.value("snapshotComplete", false) || current.contains("setupPid") || process_alive(current) ||
+      current.value("finalizationPending", false)) return;
+  const auto directory = updater_root() / L"operations" / wide(current.at("operationId").get<std::string>());
+  if (!is_hex(current.at("operationId"), 32)) throw std::runtime_error("operation_identity_rejected");
+  if (!fs::exists(directory)) return;
+  assert_protected_tree(directory);
+  for (const auto& name : {L"setup.exe", L"manifest.json", L"secrets.dpapi", L"start.ready"}) {
+    const auto path = directory / name;
+    if (!fs::exists(path)) continue;
+    PinnedPath file(path, DELETE | FILE_READ_ATTRIBUTES);
+    FILE_DISPOSITION_INFO disposition{TRUE};
+    if (!SetFileInformationByHandle(file.leaf(), FileDispositionInfo, &disposition, sizeof(disposition)))
+      throw std::runtime_error("staging_cleanup_unconfirmed");
+  }
+  if (fs::is_empty(directory)) fs::remove(directory);
+}
+void spawn_worker(Json& current, bool recovery) {
+  const auto policy = load_policy(false);
+  const auto worker = registered_worker(current);
+  PinnedPath pinned_worker(worker);
+  assert_protected_directory(worker, true, false);
+  if (recovery) {
+    if (sha256_file(worker) != current.at("workerSha256")) throw std::runtime_error("recovery_worker_changed");
+    verify_publisher_if_required(worker, policy);
+  } else {
+    verify_registered_binary(worker, policy, "worker");
+    current["workerSha256"] = sha256_file(worker);
+  }
+  verify_registered_binary(control_root() / L"plug_update_service.exe", policy, "service");
+  save(current); // Recovery must retain the worker hash even if process creation fails.
+  std::wstring line = quote(worker.native()) + (recovery ? L" --recover " : L" --operation ") + wide(current.at("operationId").get<std::string>());
+  STARTUPINFOW startup{}; startup.cb = sizeof(startup); PROCESS_INFORMATION process{};
+  if (!CreateProcessW(worker.c_str(), line.data(), nullptr, nullptr, FALSE, CREATE_NO_WINDOW | CREATE_SUSPENDED,
+      nullptr, control_root().c_str(), &startup, &process)) throw std::runtime_error("worker_start_failed");
+  Handle worker_process(process.hProcess), thread(process.hThread);
+  try {
+    current["workerPid"] = process.dwProcessId;
+    current["workerCreated"] = process_creation_time(worker_process.get());
+    save(current);
+    write_atomic(updater_root() / L"operations" / wide(current.at("operationId").get<std::string>()) / L"start.ready", "1");
+    if (ResumeThread(thread.get()) == static_cast<DWORD>(-1)) throw std::runtime_error("worker_resume_failed");
+  } catch (...) {
+    TerminateProcess(worker_process.get(), 1); // Only our never-resumed child.
+    throw;
+  }
+  worker_active = true;
+}
 void reconcile_interrupted_operation() {
+  static ULONGLONG next_recovery = 0;
   auto current = journal();
   worker_active = process_alive(current);
   const auto state = current.value("state", "idle");
-  if (!worker_active && (state == "installing" || state == "verifying" || state == "rollingBack" ||
-      state == "snapshotting" || state == "waitingForExit" || state == "restoringUserData")) {
+  if (worker_active) return;
+  discard_cancelled_preparation(current);
+  const auto guard = control_root() / L"boot-blocked";
+  const bool matching_guard = fs::exists(guard) && current.contains("operationId") &&
+      read_file(guard, 64) == current.at("operationId");
+  if (finalization_needed(current, matching_guard)) {
+    current["finalizationPending"] = true;
+    current["recoveryFrom"] = state;
+    current["state"] = "recoveryRequired";
+    save(current);
+  }
+  if (state == "installing" || state == "verifying" || state == "rollingBack" ||
+      state == "snapshotting" || state == "waitingForExit" || state == "restoringUserData") {
+    current["recoveryFrom"] = state;
     current["state"] = "recoveryRequired"; current["reason"] = "worker_interrupted";
     save(current);
+  }
+  if (current.value("state", "") != "recoveryRequired" || GetTickCount64() < next_recovery) return;
+  next_recovery = GetTickCount64() + 60000;
+  try {
+    find_original_user_session(current);
+    spawn_worker(current, true);
+  } catch (const std::exception&) {
+    // Retain the protected journal and boot guard until recovery can be proven.
+    current["reason"] = "recovery_deferred"; save(current);
   }
 }
 Json handle_request(HANDLE pipe, const Json& request) {
@@ -126,17 +200,28 @@ Json handle_request(HANDLE pipe, const Json& request) {
   const auto command = request.at("command").get<std::string>();
   auto current = journal();
   worker_active = process_alive(current);
-  if (command == "status") return Json{{"ok", true}, {"status", public_status(current)}, {"channel", policy.at("channel")}};
+  if (command == "status") {
+    auto status = public_status(current);
+    status["ownedByCaller"] = current.value("clientSid", "") == sid;
+    return Json{{"ok", true}, {"status", status}, {"channel", policy.at("channel")}};
+  }
   if (command == "capabilities") return Json{{"ok", true}, {"capabilities", {
       {"protocol", kProtocolVersion}, {"authorized", policy.at("enabled")},
       {"applicationReady", kApplicationContractImplemented && policy.value("applicationContractValidated", false)},
+      {"recoveryContract", kRecoveryContractVersion},
       {"channel", policy.at("channel")}, {"approved", policy.at("capabilities")}}}};
   if (command == "prepare") {
     if (!policy.at("enabled").get<bool>()) throw std::runtime_error("authorization_required");
-    if (worker_active) throw std::runtime_error("installation_in_progress");
+    if (worker_active || current.value("finalizationPending", false) || fs::exists(control_root() / L"boot-blocked"))
+      throw std::runtime_error("installation_in_progress");
     if (!can_prepare_operation(current.value("state", "")))
       throw std::runtime_error("recovery_required");
     const auto manifest = verify_manifest(request.at("manifest"), policy.at("publicKeys").get<std::string>());
+    if (current.value("restartOnly", false) && current.value("version", "") == manifest.at("version") &&
+        unix_time_ms() < current.value("retryAfterUnixMillis", uint64_t{0}))
+      throw std::runtime_error("application_recovery_cooldown");
+    if (!newer_version(manifest.at("version"), policy.value("installedVersion", policy.at("workerVersion").get<std::string>())))
+      throw std::runtime_error("version_replay_rejected");
     if (current.value("state", "") == "preparing") {
       const auto stored = updater_root() / L"operations" / wide(current.at("operationId").get<std::string>()) / L"manifest.json";
       if (current.value("version", "") == manifest.at("version") && sid == current.value("clientSid", "") &&
@@ -161,9 +246,7 @@ Json handle_request(HANDLE pipe, const Json& request) {
     copy_client_file(pipe, fs::path(wide(request.at("installerPath").get<std::string>())), installer, manifest.at("installer").at("size").get<uint64_t>());
     if (fs::file_size(installer) != manifest.at("installer").at("size").get<uint64_t>() ||
         sha256_file(installer) != manifest.at("installer").at("sha256")) throw std::runtime_error("installer_hash_mismatch");
-    const auto publisher = trusted_publisher(installer);
-    if (std::find(policy.at("publishers").begin(), policy.at("publishers").end(), publisher) == policy.at("publishers").end())
-      throw std::runtime_error("installer_publisher_rejected");
+    verify_publisher_if_required(installer, policy);
     write_atomic(directory / L"manifest.json", request.at("manifest").dump());
     const auto previous = current;
     current = Json{{"state", "preparing"}, {"operationId", id}, {"version", manifest.at("version")},
@@ -176,13 +259,70 @@ Json handle_request(HANDLE pipe, const Json& request) {
   if (request.value("operationId", "") != current.value("operationId", "") || sid != current.value("clientSid", ""))
     throw std::runtime_error("operation_identity_rejected");
   if (command == "cancel") {
-    if (worker_active) throw std::runtime_error("installation_in_progress");
+    if (worker_active || current.value("finalizationPending", false) || fs::exists(control_root() / L"boot-blocked"))
+      throw std::runtime_error("installation_in_progress");
     if (current.value("state", "") != "preparing" && current.value("state", "") != "deferred")
       throw std::runtime_error("cancellation_not_safe");
     current["state"] = "deferred"; current["reason"] = "cancelled_before_installation"; save(current);
+    discard_cancelled_preparation(current);
+    auto status = public_status(current); status["ownedByCaller"] = true;
+    return Json{{"ok", true}, {"status", status}};
+  }
+  if (command == "recoverApplication") {
+    if (worker_active && current.value("restartOnly", false))
+      return Json{{"ok", true}, {"status", public_status(current)}};
+    if (worker_active || current.value("finalizationPending", false) ||
+        (current.value("state", "") != "preparing" && current.value("state", "") != "deferred"))
+      throw std::runtime_error("recovery_not_safe");
+    const auto existing_guard = control_root() / L"boot-blocked";
+    if (fs::exists(existing_guard) && read_file(existing_guard, 64) != current.at("operationId"))
+      throw std::runtime_error("boot_guard_identity_rejected");
+    if (policy.value("recoveryContract", 0) != kRecoveryContractVersion || current.value("applicationRecoveryAttempted", false))
+      throw std::runtime_error("recovery_contract_required");
+    Handle manual_setup(OpenMutexW(SYNCHRONIZE, FALSE, L"Global\\PlugAgenteSetup"));
+    if (manual_setup.valid() || GetLastError() == ERROR_ACCESS_DENIED) throw std::runtime_error("manual_setup_in_progress");
+    const DWORD app_pid = request.at("appPid").get<DWORD>();
+    Handle app(OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, FALSE, app_pid));
+    DWORD session = 0; wchar_t image[32768]{}; DWORD length = 32768;
+    if (!app.valid() || !QueryFullProcessImageNameW(app.get(), 0, image, &length) ||
+        fs::path(image) != fs::path(wide(policy.at("installDirectory").get<std::string>())) / L"plug_agente.exe" ||
+        process_user_sid(app.get()) != sid || !ProcessIdToSessionId(app_pid, &session) || !active_user_session(session, sid))
+      throw std::runtime_error("app_identity_rejected");
+    if (request.at("appCreated").get<uint64_t>() != process_creation_time(app.get()))
+      throw std::runtime_error("app_identity_rejected");
+    current["appPid"] = app_pid; current["appCreated"] = process_creation_time(app.get());
+    current["sessionId"] = session; current["workerVersion"] = policy.at("workerVersion");
+    current["restartOnly"] = true; current["applicationRecoveryAttempted"] = true;
+    current["retryAfterUnixMillis"] = unix_time_ms() + 15 * 60 * 1000;
+    current["state"] = "waitingForExit";
+    current["reason"] = "application_recovery_requested";
+    verify_registered_binary(fs::path(image), policy, "app");
+    write_atomic(control_root() / L"boot-blocked", current.at("operationId").get<std::string>());
+    save(current);
+    spawn_worker(current, false);
     return Json{{"ok", true}, {"status", public_status(current)}};
   }
-  if (command == "health") {
+  if (command == "validationContext" || command == "health" || command == "restored") {
+    if (request.at("nonce") != current.at("healthNonce")) throw std::runtime_error("health_identity_rejected");
+    require_validation_process(current, request.at("appPid").get<DWORD>(), sid);
+    const auto state = current.value("state", "");
+    if (state != "verifying" && state != "restoringUserData") throw std::runtime_error("validation_not_expected");
+    if (command == "validationContext") {
+      Json context{{"ok", true}, {"dataDirectory", current.at("dataDirectory")},
+                   {"version", state == "verifying" ? current.at("version") : policy.at("installedVersion")},
+                   {"restoring", state == "restoringUserData"}};
+      if (state == "restoringUserData") {
+        const auto blob = read_file(updater_root() / L"operations" / wide(current.at("operationId").get<std::string>()) / L"secrets.dpapi", 512 * 1024);
+        context["secretsSnapshot"] = encode_base64(std::vector<uint8_t>(blob.begin(), blob.end()));
+      }
+      return context;
+    }
+    if (command == "restored") {
+      if (state != "restoringUserData") throw std::runtime_error("restoration_not_expected");
+      write_atomic(updater_root() / L"operations" / wide(current.at("operationId").get<std::string>()) / L"restored.json",
+                   Json{{"nonce", current.at("healthNonce")}}.dump());
+      return Json{{"ok", true}};
+    }
     if (current.value("state", "") != "verifying") throw std::runtime_error("health_not_expected");
     if (request.at("version") != current.at("version") || request.at("nonce") != current.at("healthNonce")) throw std::runtime_error("health_identity_rejected");
     write_atomic(updater_root() / L"operations" / wide(current.at("operationId").get<std::string>()) / L"health.json",
@@ -190,21 +330,26 @@ Json handle_request(HANDLE pipe, const Json& request) {
     return Json{{"ok", true}};
   }
   if (command != "start") throw std::runtime_error("unsupported_command");
-  if (worker_active) return Json{{"ok", true}, {"status", public_status(current)}, {"healthNonce", current.at("healthNonce")}};
+  if (worker_active && !current.value("restartOnly", false)) return Json{{"ok", true}, {"status", public_status(current)}, {"healthNonce", current.at("healthNonce")}};
   if (!policy.at("enabled").get<bool>()) throw std::runtime_error("authorization_required");
   // Activation requires the separately homologated application/launcher
   // contract. Enrollment alone is never evidence that recovery is complete.
   if constexpr (!kApplicationContractImplemented) throw std::runtime_error("transition_validation_required");
   if (!policy.value("applicationContractValidated", false))
     throw std::runtime_error("transition_validation_required");
+  if (policy.value("recoveryContract", 0) != kRecoveryContractVersion)
+    throw std::runtime_error("recovery_contract_required");
   Handle manual_setup(OpenMutexW(SYNCHRONIZE, FALSE, L"Global\\PlugAgenteSetup"));
   if (manual_setup.valid() || GetLastError() == ERROR_ACCESS_DENIED) throw std::runtime_error("manual_setup_in_progress");
   if (current.value("state", "") != "preparing") throw std::runtime_error("operation_not_prepared");
+  if (fs::exists(control_root() / L"boot-blocked")) throw std::runtime_error("update_finalization_pending");
   DWORD session = 0;
   if (!ProcessIdToSessionId(client_pid, &session) || !active_user_session(session, sid))
     throw std::runtime_error("interactive_session_required");
   const auto directory = updater_root() / L"operations" / wide(current.at("operationId").get<std::string>());
   const auto manifest = verify_manifest(parse_json(read_file(directory / L"manifest.json")), policy.at("publicKeys").get<std::string>());
+  if (!newer_version(manifest.at("version"), policy.at("installedVersion")))
+    throw std::runtime_error("version_replay_rejected");
   if (!missing_capabilities(manifest, policy).empty()) throw std::runtime_error("authorization_required");
   // The current-user client submits its encrypted exact snapshot before shutdown.
   const auto secret_blob = decode_base64(request.at("secretsSnapshot").get<std::string>());
@@ -227,21 +372,16 @@ Json handle_request(HANDLE pipe, const Json& request) {
   current["dataDirectory"] = utf8(data_directory.native());
   current["healthNonce"] = operation_id(); current["state"] = "waitingForExit";
   current["workerVersion"] = policy.at("workerVersion");
+  write_atomic(control_root() / L"boot-blocked", current.at("operationId").get<std::string>());
   save(current);
-  const auto worker = registered_worker(policy);
-  PinnedPath pinned_worker(worker);
-  if (trusted_publisher(worker) != trusted_publisher(control_root() / L"plug_update_service.exe")) throw std::runtime_error("worker_publisher_rejected");
-  std::wstring line = quote(worker.native()) + L" --operation " + wide(current.at("operationId").get<std::string>());
-  STARTUPINFOW startup{}; startup.cb = sizeof(startup); PROCESS_INFORMATION process{};
-  if (!CreateProcessW(worker.c_str(), line.data(), nullptr, nullptr, FALSE, CREATE_NO_WINDOW, nullptr, control_root().c_str(), &startup, &process))
-    throw std::runtime_error("worker_start_failed");
-  Handle worker_process(process.hProcess), thread(process.hThread);
-  FILETIME creation{}, exit{}, kernel{}, user{};
-  GetProcessTimes(process.hProcess, &creation, &exit, &kernel, &user);
-  current["workerPid"] = process.dwProcessId;
-  current["workerCreated"] = (static_cast<uint64_t>(creation.dwHighDateTime) << 32) | creation.dwLowDateTime;
-  save(current); worker_active = true;
-  write_atomic(directory / L"start.ready", "1");
+  try { spawn_worker(current, false); }
+  catch (...) {
+    current["state"] = "preparing";
+    current["reason"] = "worker_start_failed";
+    save(current);
+    fs::remove(control_root() / L"boot-blocked");
+    throw;
+  }
   return Json{{"ok", true}, {"status", public_status(current)}, {"healthNonce", current.at("healthNonce")}};
 }
 void WINAPI service_main(DWORD, LPWSTR*) {
