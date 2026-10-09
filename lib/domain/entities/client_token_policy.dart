@@ -17,6 +17,7 @@ class ClientTokenPolicy {
     this.tokenId,
     this.issuedAt,
     this.tokenUpdatedAt,
+    this.credentialExpiresAt,
   }) : allTables = allTables || (allPermissions ?? false),
        allViews = allViews || (allPermissions ?? false),
        globalPermissions =
@@ -57,6 +58,14 @@ class ClientTokenPolicy {
   final String? tokenId;
   final DateTime? issuedAt;
   final DateTime? tokenUpdatedAt;
+
+  /// Verified credential deadline; deliberately excluded from policy JSON.
+  final DateTime? credentialExpiresAt;
+
+  bool isCredentialExpiredAt(DateTime now) {
+    final expiry = credentialExpiresAt;
+    return expiry != null && !now.isBefore(expiry);
+  }
 
   bool get allPermissions => allTables && allViews && globalPermissions.isFullAccess;
 

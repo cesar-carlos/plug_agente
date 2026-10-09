@@ -17,6 +17,7 @@ class ClientTokenRuntimeRestrictions {
   });
 
   factory ClientTokenRuntimeRestrictions.fromPayload(Map<String, dynamic> payload) {
+    if (!isValidPayload(payload)) throw const FormatException('Invalid token runtime restrictions');
     final databaseValue = payload['database'];
     final database = databaseValue is String && databaseValue.trim().isNotEmpty ? databaseValue.trim() : null;
     final nested = payload['agent_actions'];
@@ -39,6 +40,24 @@ class ClientTokenRuntimeRestrictions {
       actionIds: Set.unmodifiable(actionIds),
     );
   }
+
+  static bool isValidPayload(Map<String, dynamic> payload) {
+    if (payload.containsKey('database')) {
+      final value = payload['database'];
+      if (value is! String || value.trim().isEmpty) return false;
+    }
+    for (final key in ['token_scope', 'agent_action_scopes']) {
+      if (payload.containsKey(key) && !_isScopeValue(payload[key])) return false;
+    }
+    if (!payload.containsKey('agent_actions')) return true;
+    final actions = payload['agent_actions'];
+    if (actions is! Map<String, dynamic>) return false;
+    if (actions.containsKey('scopes') && !_isScopeValue(actions['scopes'])) return false;
+    return !actions.containsKey('action_ids') || _isStringList(actions['action_ids']);
+  }
+
+  static bool _isScopeValue(Object? value) => value is String || _isStringList(value);
+  static bool _isStringList(Object? value) => value is List && value.every((item) => item is String);
 
   final String? database;
   final bool declaresAgentActionMetadata;

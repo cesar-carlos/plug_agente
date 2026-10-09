@@ -4255,10 +4255,10 @@ class AppLocalizationsPt extends AppLocalizations {
   String get ctButtonRefreshList => 'Atualizar lista';
 
   @override
-  String get ctButtonAutoRefreshOn => 'Atualização automática: ligada';
+  String get ctButtonAutoRefreshOn => 'Atualizar após salvar: ligado';
 
   @override
-  String get ctButtonAutoRefreshOff => 'Atualização automática: desligada';
+  String get ctButtonAutoRefreshOff => 'Atualizar após salvar: desligado';
 
   @override
   String get ctButtonViewDetails => 'Ver detalhes';
@@ -5064,4 +5064,19 @@ class AppLocalizationsPt extends AppLocalizations {
 
   @override
   String get updateReconcileAction => 'Reconciliar operação';
+
+  @override
+  String get ctSavedListStale => 'Alteração salva; lista desatualizada';
+
+  @override
+  String get ctListStale => 'Atualize a lista para refletir as alterações salvas.';
+
+  @override
+  String get ctPreferencesSaveFailed =>
+      'Não foi possível persistir as preferências. A seleção atual continua aplicada.';
+
+  @override
+  String ctPaginationSummary(int page, int totalPages, int totalCount) {
+    return 'Página $page de $totalPages · $totalCount tokens';
+  }
 }

@@ -1,6 +1,4 @@
-import 'dart:convert';
-
-import 'package:crypto/crypto.dart';
+import 'package:plug_agente/core/utils/client_token_credential.dart';
 import 'package:plug_agente/domain/repositories/i_revoked_token_store.dart';
 
 /// In-memory revoked token store with TTL.
@@ -21,7 +19,7 @@ class InMemoryRevokedTokenStore implements IRevokedTokenStore {
 
   @override
   bool isRevoked(String token) {
-    final key = _hash(token);
+    final key = hashClientCredentialToken(token);
     final expiresAt = _store[key];
     if (expiresAt == null) return false;
     if (_nowProvider().isAfter(expiresAt)) {
@@ -32,14 +30,10 @@ class InMemoryRevokedTokenStore implements IRevokedTokenStore {
   }
 
   @override
-  void add(String token) {
-    final key = _hash(token);
-    _store[key] = _nowProvider().add(_defaultTtl);
-  }
+  void add(String token) => addCredentialHash(hashClientCredentialToken(token));
 
-  String _hash(String token) {
-    final bytes = utf8.encode(token.trim());
-    final digest = sha256.convert(bytes);
-    return digest.toString();
+  @override
+  void addCredentialHash(String credentialHash) {
+    _store[credentialHash] = _nowProvider().add(_defaultTtl);
   }
 }

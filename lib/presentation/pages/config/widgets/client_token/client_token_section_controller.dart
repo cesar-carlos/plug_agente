@@ -57,6 +57,10 @@ class ClientTokenSectionController {
   Timer? _clientFilterDebounceTimer;
   var _isCreateTokenDialogOpen = false;
   var _dialogControllerListenersAttached = false;
+  var _disposed = false;
+  bool isSubmitting = false;
+  int pageSize = ClientTokenListQuery.defaultPageSize;
+  bool get hasPreferenceWarning => _listPreferences.lastFailure != null;
 
   bool allTables = false;
   bool allViews = false;
@@ -76,6 +80,7 @@ class ClientTokenSectionController {
   bool get isGlobalScopeMode => allTables || allViews;
 
   void dispose() {
+    _disposed = true;
     nameController.dispose();
     clientIdController.dispose();
     agentIdController.dispose();
@@ -87,6 +92,7 @@ class ClientTokenSectionController {
   }
 
   void notifyCreateTokenDialogChanged() {
+    if (_disposed) return;
     if (_isCreateTokenDialogOpen) {
       createTokenDialogRevision.value++;
       return;
@@ -127,15 +133,19 @@ class ClientTokenSectionController {
     tokenStatusFilter = data.statusFilter;
     tokenSortOption = data.sortOption;
     autoRefreshAfterCreate = data.autoRefreshAfterCreate;
+    pageSize = data.pageSize;
+    _onSectionChanged();
   }
 
-  Future<void> saveListPreferences() {
-    return _listPreferences.save((
+  Future<void> saveListPreferences() async {
+    await _listPreferences.save((
       clientFilter: listClientFilterController.text.trim(),
       statusFilter: tokenStatusFilter,
       sortOption: tokenSortOption,
       autoRefreshAfterCreate: autoRefreshAfterCreate,
+      pageSize: pageSize,
     ));
+    if (!_disposed) _onSectionChanged();
   }
 
   ClientTokenCreateRequest? tryBuildDraftRequestFromForm() {
@@ -391,17 +401,20 @@ class ClientTokenSectionController {
   }
 
   void clearTokenFilters() {
+    _clientFilterDebounceTimer?.cancel();
     listClientFilterController.clear();
     tokenStatusFilter = ClientTokenStatusFilter.all;
     tokenSortOption = ClientTokenSortOption.newest;
     _onSectionChanged();
   }
 
-  ClientTokenListQuery buildListQuery() {
+  ClientTokenListQuery buildListQuery({int page = 1}) {
     return ClientTokenListQuery(
       clientIdContains: listClientFilterController.text.trim(),
       status: tokenStatusFilter,
       sort: tokenSortOption,
+      page: page,
+      pageSize: pageSize,
     );
   }
 

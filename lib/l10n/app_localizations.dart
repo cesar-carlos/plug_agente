@@ -7919,13 +7919,13 @@ abstract class AppLocalizations {
   /// No description provided for @ctButtonAutoRefreshOn.
   ///
   /// In en, this message translates to:
-  /// **'Auto refresh: on'**
+  /// **'Refresh after saving: on'**
   String get ctButtonAutoRefreshOn;
 
   /// No description provided for @ctButtonAutoRefreshOff.
   ///
   /// In en, this message translates to:
-  /// **'Auto refresh: off'**
+  /// **'Refresh after saving: off'**
   String get ctButtonAutoRefreshOff;
 
   /// No description provided for @ctButtonViewDetails.
@@ -9409,6 +9409,30 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Reconcile operation'**
   String get updateReconcileAction;
+
+  /// No description provided for @ctSavedListStale.
+  ///
+  /// In en, this message translates to:
+  /// **'Changes saved; list out of date'**
+  String get ctSavedListStale;
+
+  /// No description provided for @ctListStale.
+  ///
+  /// In en, this message translates to:
+  /// **'Refresh the list to display the saved changes.'**
+  String get ctListStale;
+
+  /// No description provided for @ctPreferencesSaveFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Preferences could not be persisted. Your current selection is still applied.'**
+  String get ctPreferencesSaveFailed;
+
+  /// No description provided for @ctPaginationSummary.
+  ///
+  /// In en, this message translates to:
+  /// **'Page {page} of {totalPages} · {totalCount} tokens'**
+  String ctPaginationSummary(int page, int totalPages, int totalCount);
 }
 
 class _AppLocalizationsDelegate extends LocalizationsDelegate<AppLocalizations> {

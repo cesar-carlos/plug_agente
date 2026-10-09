@@ -7,7 +7,6 @@ export 'agent_register_profile_provider.dart';
 export 'appcast_probe_service.dart';
 export 'auth_service.dart';
 export 'auto_update_orchestrator.dart';
-export 'client_token_auth_cache_invalidation.dart';
 export 'client_token_validation_service.dart';
 export 'compression_service.dart';
 export 'config_service.dart';

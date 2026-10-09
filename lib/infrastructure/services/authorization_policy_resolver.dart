@@ -3,7 +3,9 @@ import 'dart:developer' as developer;
 import 'package:plug_agente/core/config/feature_flags.dart';
 import 'package:plug_agente/core/constants/authorization_context_constants.dart';
 import 'package:plug_agente/core/utils/client_token_credential.dart';
+import 'package:plug_agente/core/utils/jwt_numeric_date.dart';
 import 'package:plug_agente/domain/entities/client_token_policy.dart';
+import 'package:plug_agente/domain/entities/client_token_runtime_restrictions.dart';
 import 'package:plug_agente/domain/entities/client_token_summary.dart';
 import 'package:plug_agente/domain/entities/token_audit_event.dart';
 import 'package:plug_agente/domain/errors/failures.dart' as domain;
@@ -13,6 +15,7 @@ import 'package:plug_agente/domain/repositories/i_client_token_policy_cache.dart
 import 'package:plug_agente/domain/repositories/i_client_token_repository.dart';
 import 'package:plug_agente/domain/repositories/i_revoked_token_store.dart';
 import 'package:plug_agente/domain/repositories/i_token_audit_store.dart';
+import 'package:plug_agente/domain/services/client_token_lifetime_validator.dart';
 import 'package:plug_agente/infrastructure/external_services/jwt_jwks_verifier.dart';
 import 'package:result_dart/result_dart.dart';
 
@@ -29,7 +32,9 @@ class AuthorizationPolicyResolver implements IAuthorizationPolicyResolver {
     ITokenAuditStore? tokenAuditStore,
     IClientTokenPolicyCache? policyCache,
     IAuthorizationCacheMetrics? cacheMetrics,
-  }) : _jwksVerifier = jwksVerifier,
+    DateTime Function()? now,
+  }) : _now = now ?? DateTime.now,
+       _jwksVerifier = jwksVerifier,
        _clientTokenRepository = clientTokenRepository,
        _revokedTokenStore = revokedTokenStore,
        _tokenAuditStore = tokenAuditStore,
@@ -37,6 +42,7 @@ class AuthorizationPolicyResolver implements IAuthorizationPolicyResolver {
        _cacheMetrics = cacheMetrics;
 
   final FeatureFlags _featureFlags;
+  final DateTime Function() _now;
   final JwtJwksVerifier? _jwksVerifier;
   final IClientTokenRepository? _clientTokenRepository;
   final IRevokedTokenStore? _revokedTokenStore;
@@ -81,7 +87,7 @@ class AuthorizationPolicyResolver implements IAuthorizationPolicyResolver {
       final cachedPolicy = policyCache.get(credentialHash);
       if (cachedPolicy != null) {
         _cacheMetrics?.recordPolicyCacheLookup(hit: true);
-        return Success(cachedPolicy);
+        return _validateResolvedLifetime(Success(cachedPolicy), credentialHash);
       }
       _cacheMetrics?.recordPolicyCacheLookup(hit: false);
     }
@@ -103,10 +109,23 @@ class AuthorizationPolicyResolver implements IAuthorizationPolicyResolver {
         // the current policy instead of letting an old lookup authorize.
         return resolvePolicy(token);
       }
-      return resolution.result;
+      return _validateResolvedLifetime(resolution.result, credentialHash);
     }
 
-    return _resolveUncachedPolicy(rawToken, clientTokenRepository);
+    return _validateResolvedLifetime(await _resolveUncachedPolicy(rawToken, clientTokenRepository), credentialHash);
+  }
+
+  Future<Result<ClientTokenPolicy>> _validateResolvedLifetime(
+    Result<ClientTokenPolicy> resolved,
+    String credentialHash,
+  ) async {
+    if (resolved.isError()) return resolved;
+    final result = ClientTokenLifetimeValidator.validate(resolved.getOrThrow(), now: _now());
+    if (result.isError()) {
+      _policyCache?.invalidate(credentialHash);
+      await _recordAuthorizationDeniedAudit(result.exceptionOrNull()! as domain.Failure);
+    }
+    return result;
   }
 
   Future<Result<ClientTokenPolicy>> _resolveUncachedPolicy(
@@ -127,7 +146,7 @@ class AuthorizationPolicyResolver implements IAuthorizationPolicyResolver {
           _featureFlags.enableSocketJwksValidation &&
           _jwksVerifier != null;
       if (!shouldFallbackToJwks) {
-        _addToRevokedStoreIfNeeded(rawToken, localFailure);
+        await _addToRevokedStoreIfNeeded(rawToken, localFailure);
         await _recordAuthorizationDeniedAudit(localFailure);
         return Failure(localFailure);
       }
@@ -145,7 +164,7 @@ class AuthorizationPolicyResolver implements IAuthorizationPolicyResolver {
       if (jwksResolved.isError()) {
         final failure = jwksResolved.exceptionOrNull();
         if (failure is domain.Failure) {
-          _addToRevokedStoreIfNeeded(rawToken, failure);
+          await _addToRevokedStoreIfNeeded(rawToken, failure);
           await _recordAuthorizationDeniedAudit(failure);
         }
       }
@@ -153,7 +172,7 @@ class AuthorizationPolicyResolver implements IAuthorizationPolicyResolver {
     }
 
     final failure = _unsignedTokenAuthenticationFailure();
-    _addToRevokedStoreIfNeeded(rawToken, failure);
+    await _addToRevokedStoreIfNeeded(rawToken, failure);
     await _recordAuthorizationDeniedAudit(failure);
     return Failure(failure);
   }
@@ -182,13 +201,15 @@ class AuthorizationPolicyResolver implements IAuthorizationPolicyResolver {
       );
     }
 
-    return _policyFromSummary(summaryResult.getOrThrow(), rawToken);
+    return _policyFromSummary(summaryResult.getOrThrow());
   }
 
   Result<ClientTokenPolicy> _policyFromSummary(
     ClientTokenSummary summary,
-    String rawToken,
   ) {
+    if (!ClientTokenRuntimeRestrictions.isValidPayload(summary.payload)) {
+      return _invalidPolicyPayload(const FormatException('Invalid token runtime restrictions'));
+    }
     if (summary.isRevoked) {
       final failure = domain.ConfigurationFailure.withContext(
         message: 'Token revoked',
@@ -200,7 +221,6 @@ class AuthorizationPolicyResolver implements IAuthorizationPolicyResolver {
           'user_message': _tokenRevokedUserMessage,
         },
       );
-      _addToRevokedStoreIfNeeded(rawToken, failure);
       return Failure(failure);
     }
 
@@ -236,15 +256,16 @@ class AuthorizationPolicyResolver implements IAuthorizationPolicyResolver {
       );
     }
 
-    if (failure is domain.ServerFailure) {
+    if (failure is domain.ServerFailure || failure is domain.DatabaseFailure) {
       return Failure(
         domain.ConfigurationFailure.withContext(
           message: 'Failed to resolve token policy from local store',
           cause: failure.cause,
           context: {
+            ...failure.context,
             'authentication': true,
             'reason': AuthorizationContextConstants.unauthorizedReason,
-            'operation': failure.context['operation'],
+            'retryable': failure.isTransient || failure.context['retryable'] == true,
             'user_message': _localStoreReadUserMessage,
           },
         ),
@@ -268,10 +289,65 @@ class AuthorizationPolicyResolver implements IAuthorizationPolicyResolver {
   Result<ClientTokenPolicy> _extractPolicyFromPayload(
     Map<String, dynamic> payload,
   ) {
-    final policyJson = payload['policy'] as Map<String, dynamic>? ?? payload;
+    try {
+      return _parsePolicyFromPayload(payload);
+    } on FormatException catch (error) {
+      return _invalidPolicyPayload(error);
+    }
+  }
+
+  Result<ClientTokenPolicy> _invalidPolicyPayload(Object cause) {
+    return Failure(
+      domain.ConfigurationFailure.withContext(
+        message: 'Invalid token policy payload',
+        cause: cause,
+        context: {
+          'authentication': true,
+          'reason': AuthorizationContextConstants.invalidPolicyReason,
+          'user_message': 'Politica do token invalida. Gere outro token com permissoes validas.',
+        },
+      ),
+    );
+  }
+
+  Result<ClientTokenPolicy> _parsePolicyFromPayload(Map<String, dynamic> payload) {
+    final rawPolicy = payload['policy'];
+    if (rawPolicy != null && rawPolicy is! Map<String, dynamic>) {
+      throw const FormatException('Token policy must be an object');
+    }
+    final policyJson = rawPolicy as Map<String, dynamic>? ?? payload;
+    final rawRules = policyJson['rules'];
+    if (rawRules != null && (rawRules is! List || rawRules.any((rule) => rule is! Map<String, dynamic>))) {
+      throw const FormatException('Token policy rules must contain objects');
+    }
+    final rawPermissions = policyJson['global_permissions'];
+    if (rawPermissions != null && rawPermissions is! Map<String, dynamic>) {
+      throw const FormatException('Token global permissions must be an object');
+    }
+    final rawRevoked = payload['revoked'];
+    if (rawRevoked != null && rawRevoked is! bool) {
+      throw const FormatException('Token revoked claim must be a boolean');
+    }
+    _validateOptionalFields<String>(policyJson, const ['client_id', 'agent_id', 'token_id']);
+    _validateOptionalFields<bool>(policyJson, const ['all_tables', 'all_views', 'all_permissions', 'is_revoked']);
+    _validateOptionalFields<Map<String, dynamic>>(policyJson, const ['payload']);
+    _validateOptionalFields<String>(payload, const ['jti']);
+    const permissionFields = ['read', 'update', 'delete', 'ddl'];
+    if (rawPermissions is Map<String, dynamic>) {
+      _validateOptionalFields<bool>(rawPermissions, permissionFields);
+    }
+    if (rawRules is List) {
+      for (final rule in rawRules.cast<Map<String, dynamic>>()) {
+        _validateOptionalFields<String>(rule, const ['effect', 'resource_type', 'resource']);
+        _validateOptionalFields<bool>(rule, permissionFields);
+      }
+    }
     final base = ClientTokenPolicy.fromJson(policyJson);
+    if (!ClientTokenRuntimeRestrictions.isValidPayload(base.payload)) {
+      throw const FormatException('Invalid token runtime restrictions');
+    }
     final jwtTokenId = payload['jti'] as String?;
-    final jwtIssuedAt = _jwtSecondsToUtc(payload['iat']);
+    final jwtIssuedAt = parseJwtNumericDate(payload['iat'], claim: 'iat');
     final merged = ClientTokenPolicy(
       clientId: base.clientId,
       agentId: base.agentId,
@@ -284,6 +360,7 @@ class AuthorizationPolicyResolver implements IAuthorizationPolicyResolver {
       tokenId: base.tokenId ?? jwtTokenId,
       issuedAt: base.issuedAt ?? jwtIssuedAt,
       tokenUpdatedAt: base.tokenUpdatedAt,
+      credentialExpiresAt: parseJwtNumericDate(payload['exp'], claim: 'exp'),
     );
     if (merged.clientId.trim().isEmpty) {
       return Failure(
@@ -315,60 +392,62 @@ class AuthorizationPolicyResolver implements IAuthorizationPolicyResolver {
     return Success(merged);
   }
 
-  DateTime? _jwtSecondsToUtc(Object? raw) {
-    if (raw is int) {
-      return DateTime.fromMillisecondsSinceEpoch(raw * 1000, isUtc: true);
+  void _validateOptionalFields<T>(Map<String, dynamic> source, List<String> fields) {
+    for (final field in fields) {
+      final value = source[field];
+      if (value != null && value is! T) {
+        throw FormatException('Invalid token policy field: $field');
+      }
     }
-    if (raw is num) {
-      return DateTime.fromMillisecondsSinceEpoch(raw.toInt() * 1000, isUtc: true);
-    }
-    return null;
   }
 
-  void _addToRevokedStoreIfNeeded(String token, domain.Failure failure) {
+  Future<void> _addToRevokedStoreIfNeeded(String token, domain.Failure failure) async {
     if (!_featureFlags.enableSocketRevokedTokenInSession || _revokedTokenStore == null) {
       return;
     }
     final reason = failure.context['reason'] as String?;
-    if (reason == AuthorizationContextConstants.tokenRevokedReason) {
-      if (token.isNotEmpty) {
-        _revokedTokenStore.add(token);
-      }
-      final clientId = failure.context['client_id'] as String?;
-      _tokenAuditStore?.record(
-        TokenAuditEvent(
-          eventType: TokenAuditEventType.revokedInSession,
-          timestamp: DateTime.now().toUtc(),
-          clientId: clientId,
-          metadata: {'reason': AuthorizationContextConstants.tokenRevokedReason},
-        ),
-      );
+    if (reason != AuthorizationContextConstants.tokenRevokedReason || token.isEmpty) {
+      return;
     }
+    _revokedTokenStore.add(token);
+    await _recordAuditEvent(
+      TokenAuditEvent(
+        eventType: TokenAuditEventType.revokedInSession,
+        timestamp: DateTime.now().toUtc(),
+        clientId: failure.context['client_id'] as String?,
+        tokenId: failure.context['token_id'] as String?,
+        metadata: {'reason': AuthorizationContextConstants.tokenRevokedReason},
+      ),
+    );
   }
 
-  Future<void> _recordAuthorizationDeniedAudit(domain.Failure failure) async {
+  Future<void> _recordAuthorizationDeniedAudit(domain.Failure failure) {
+    return _recordAuditEvent(
+      TokenAuditEvent(
+        eventType: TokenAuditEventType.authorizationDenied,
+        timestamp: DateTime.now().toUtc(),
+        clientId: failure.context['client_id'] as String?,
+        tokenId: failure.context['token_id'] as String?,
+        metadata: {
+          'reason': failure.context['reason'] ?? AuthorizationContextConstants.authorizationDeniedReason,
+          'message': failure.message,
+        },
+      ),
+    );
+  }
+
+  Future<void> _recordAuditEvent(TokenAuditEvent event) async {
     final auditStore = _tokenAuditStore;
     if (auditStore == null) {
       return;
     }
     try {
-      await auditStore.record(
-        TokenAuditEvent(
-          eventType: TokenAuditEventType.authorizationDenied,
-          timestamp: DateTime.now().toUtc(),
-          clientId: failure.context['client_id'] as String?,
-          tokenId: failure.context['token_id'] as String?,
-          metadata: {
-            'reason': failure.context['reason'] ?? AuthorizationContextConstants.authorizationDeniedReason,
-            'message': failure.message,
-          },
-        ),
-      );
-    } on Exception catch (e, stackTrace) {
+      await auditStore.record(event);
+    } on Exception catch (error, stackTrace) {
       developer.log(
-        'Authorization denied audit failed (best effort only)',
+        'Authorization audit failed (best effort only)',
         name: 'authorization_policy_resolver',
-        error: e,
+        error: error.runtimeType,
         stackTrace: stackTrace,
       );
     }

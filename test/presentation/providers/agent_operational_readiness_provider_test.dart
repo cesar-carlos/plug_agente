@@ -22,12 +22,14 @@ class SpyAgentOperationalReadinessAssembler extends AgentOperationalReadinessAss
     required bool hubConnected,
     required List<ClientTokenSummary> clientTokens,
     String? schedulerIssueReason,
+    int? activeClientTokenCount,
   }) {
     assembleCallCount++;
     return super.assemble(
       hubPhase: hubPhase,
       hubConnected: hubConnected,
       clientTokens: clientTokens,
+      activeClientTokenCount: activeClientTokenCount,
       schedulerIssueReason: schedulerIssueReason,
     );
   }
@@ -51,6 +53,7 @@ void main() {
 
     when(() => connectionProvider.status).thenReturn(ConnectionStatus.connected);
     when(() => connectionProvider.isConnected).thenReturn(true);
+    when(() => clientTokenProvider.activeTokenCount).thenReturn(0);
     when(() => clientTokenProvider.tokens).thenReturn(const <ClientTokenSummary>[]);
     when(() => connectionProvider.addListener(any())).thenAnswer((invocation) {
       connectionListeners.add(invocation.positionalArguments[0] as VoidCallback);
@@ -103,6 +106,18 @@ void main() {
     notifyConnectionListeners();
     expect(assembler.assembleCallCount, 2);
     expect(listenerCalls, 1);
+  });
+
+  test('uses global active count even when filtered page is empty', () {
+    when(() => clientTokenProvider.activeTokenCount).thenReturn(101);
+    readinessProvider.bind(connectionProvider: connectionProvider, clientTokenProvider: clientTokenProvider);
+    expect(readinessProvider.snapshot.activeClientTokenCount, 101);
+    expect(clientTokenProvider.tokens, isEmpty);
+    when(() => clientTokenProvider.activeTokenCount).thenReturn(100);
+    for (final callback in clientTokenListeners) {
+      callback();
+    }
+    expect(readinessProvider.snapshot.activeClientTokenCount, 100);
   });
 
   test('notifyListeners runs when assembled snapshot changes', () {

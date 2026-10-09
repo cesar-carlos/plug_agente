@@ -3,6 +3,7 @@ import 'dart:developer' as developer;
 
 import 'package:jose/jose.dart';
 import 'package:plug_agente/core/constants/authorization_context_constants.dart';
+import 'package:plug_agente/core/utils/jwt_numeric_date.dart';
 import 'package:plug_agente/domain/errors/failures.dart' as domain;
 import 'package:plug_agente/infrastructure/external_services/jwks_key_store_cache.dart';
 import 'package:result_dart/result_dart.dart';
@@ -51,10 +52,12 @@ class JwtJwksVerifier {
   final Duration jwksCacheTtl;
   final DateTime Function() _now;
   final JwksKeyStoreCache _jwksKeyStoreCache;
+  int _trustRevision = 0;
   int _consecutiveFailures = 0;
   DateTime? _circuitOpenUntil;
 
   Future<Result<Map<String, dynamic>>> verify(String token) async {
+    final trustRevision = _trustRevision;
     final now = _now();
     if (_isCircuitOpen(now)) {
       return Failure(
@@ -63,6 +66,7 @@ class JwtJwksVerifier {
           context: {
             'authentication': true,
             'reason': AuthorizationContextConstants.jwksCircuitOpenReason,
+            'retryable': true,
             'retry_after': _circuitOpenUntil?.toUtc().toIso8601String(),
           },
         ),
@@ -80,7 +84,28 @@ class JwtJwksVerifier {
       return _finalizeResult(result);
     }
 
-    final config = await _getConfig();
+    final JwksConfig? config;
+    try {
+      config = await _getConfig();
+    } on Exception catch (error) {
+      if (trustRevision != _trustRevision) return verify(token);
+      return _finalizeResult(
+        Failure(
+          domain.ConfigurationFailure.withContext(
+            message: 'Failed to read JWKS configuration',
+            cause: error,
+            context: {
+              'authentication': true,
+              'reason': AuthorizationContextConstants.invalidJwksConfigReason,
+              'user_message':
+                  'Nao foi possivel ler a configuracao JWKS. Confira a configuracao do agente e tente novamente.',
+            },
+          ),
+        ),
+        countInCircuit: true,
+      );
+    }
+    if (trustRevision != _trustRevision) return verify(token);
     if (config == null || config.jwksUrl.trim().isEmpty) {
       final result = Failure<Map<String, dynamic>, Exception>(
         domain.ConfigurationFailure.withContext(
@@ -100,7 +125,7 @@ class JwtJwksVerifier {
       if (alg == null || alg == 'none') {
         final result = Failure<Map<String, dynamic>, Exception>(
           domain.ConfigurationFailure.withContext(
-            message: 'Token algorithm "none" or missing is not allowed',
+            message: 'Token header or algorithm is invalid or not allowed',
             context: {
               'authentication': true,
               'reason': AuthorizationContextConstants.invalidTokenSignatureReason,
@@ -125,37 +150,68 @@ class JwtJwksVerifier {
         return _finalizeResult(result);
       }
 
-      final keyStore = _jwksKeyStoreCache.resolve(config.jwksUrl);
+      final parts = rawToken.split('.');
+      if (parts.length != 3) throw const FormatException('Invalid compact JWT');
+      final rawPayload = jsonDecode(utf8.decode(base64Url.decode(base64Url.normalize(parts[1]))));
+      if (rawPayload is! Map<String, dynamic>) throw const FormatException('JWT payload must be an object');
+      final storeResult = _jwksKeyStoreCache.resolve(config.jwksUrl);
+      if (storeResult.isError()) return _finalizeResult(Failure(storeResult.exceptionOrNull()!));
+      final keyStore = storeResult.getOrThrow();
 
       final verified = await JsonWebToken.decodeAndVerify(
         rawToken,
-        keyStore,
+        _VerificationKeyStore(keyStore),
         allowedArguments: config.allowedAlgorithms,
       );
 
+      if (trustRevision != _trustRevision) return await verify(token);
       final claims = verified.claims;
       final claimsNow = _now();
+      final payload = claims.toJson();
+      final DateTime? expiry;
+      final DateTime? notBefore;
+      try {
+        _validateIdentityClaims(payload);
+        expiry = parseJwtNumericDate(payload['exp'], claim: 'exp');
+        notBefore = parseJwtNumericDate(payload['nbf'], claim: 'nbf');
+      } on FormatException catch (error) {
+        return _finalizeResult(
+          Failure(
+            domain.ConfigurationFailure.withContext(
+              message: 'Invalid token claims',
+              cause: error,
+              context: {
+                'authentication': true,
+                'reason': AuthorizationContextConstants.invalidTokenSignatureReason,
+                'user_message': 'Token invalido. Gere outro token com identificacao e datas validas.',
+              },
+            ),
+          ),
+        );
+      }
 
-      if (claims.expiry != null && claims.expiry!.isBefore(claimsNow)) {
+      if (expiry != null && !claimsNow.isBefore(expiry)) {
         final result = Failure<Map<String, dynamic>, Exception>(
           domain.ConfigurationFailure.withContext(
             message: 'Token has expired',
             context: {
               'authentication': true,
               'reason': AuthorizationContextConstants.tokenExpiredReason,
+              'user_message': 'Token expirado. Gere um novo token para continuar.',
             },
           ),
         );
         return _finalizeResult(result);
       }
 
-      if (claims.notBefore != null && claims.notBefore!.isAfter(claimsNow)) {
+      if (notBefore != null && claimsNow.isBefore(notBefore)) {
         final result = Failure<Map<String, dynamic>, Exception>(
           domain.ConfigurationFailure.withContext(
             message: 'Token is not yet valid',
             context: {
               'authentication': true,
               'reason': AuthorizationContextConstants.tokenNotYetValidReason,
+              'user_message': 'Este token ainda nao esta valido. Aguarde seu horario de ativacao.',
             },
           ),
         );
@@ -179,13 +235,11 @@ class JwtJwksVerifier {
           );
           return _finalizeResult(result);
         }
-        final actualIssuer = claims.issuer;
-        if (actualIssuer == null || actualIssuer.toString() != configuredIssuer) {
+        final actualIssuer = payload['iss'] as String?;
+        if (actualIssuer == null || actualIssuer != configuredIssuer) {
           final result = Failure<Map<String, dynamic>, Exception>(
             domain.ConfigurationFailure.withContext(
-              message:
-                  'Token issuer "${actualIssuer ?? "null"}" does not match '
-                  'expected "$configuredIssuer"',
+              message: 'Token issuer does not match the configured issuer',
               context: {
                 'authentication': true,
                 'reason': AuthorizationContextConstants.invalidTokenSignatureReason,
@@ -197,8 +251,9 @@ class JwtJwksVerifier {
       }
 
       if (config.audience != null && config.audience!.isNotEmpty) {
-        final aud = claims.audience;
-        if (aud == null || !aud.contains(config.audience)) {
+        final aud = payload['aud'];
+        final matchesAudience = aud is String ? aud == config.audience : aud is List && aud.contains(config.audience);
+        if (!matchesAudience) {
           final result = Failure<Map<String, dynamic>, Exception>(
             domain.ConfigurationFailure.withContext(
               message: 'Token audience does not contain expected "${config.audience}"',
@@ -212,14 +267,31 @@ class JwtJwksVerifier {
         }
       }
 
-      final payload = claims.toJson();
       _jwksKeyStoreCache.remember(config.jwksUrl, keyStore);
       final result = Success<Map<String, dynamic>, Exception>(payload);
       return _finalizeResult(result);
+    } on _JwksLoadException catch (error) {
+      if (trustRevision != _trustRevision) return verify(token);
+      return _finalizeResult(
+        Failure(
+          domain.ConfigurationFailure.withContext(
+            message: 'Failed to load JWKS keys',
+            cause: error.cause,
+            context: {
+              'authentication': true,
+              'reason': AuthorizationContextConstants.invalidJwksConfigReason,
+              'user_message':
+                  'Nao foi possivel carregar as chaves JWKS. Confira a conexao com o servidor e tente novamente.',
+              'retryable': true,
+            },
+          ),
+        ),
+        countInCircuit: true,
+      );
     } on JoseException catch (error) {
       final result = Failure<Map<String, dynamic>, Exception>(
         domain.ConfigurationFailure.withContext(
-          message: 'Token verification failed: ${error.message}',
+          message: 'Token signature verification failed',
           cause: error,
           context: {
             'authentication': true,
@@ -227,9 +299,8 @@ class JwtJwksVerifier {
           },
         ),
       );
-      // JoseException may indicate JWKS unavailability (network/parse) — count
-      // toward the circuit so repeated infra failures eventually open it.
-      return _finalizeResult(result, countInCircuit: true);
+      if (trustRevision != _trustRevision) return verify(token);
+      return _finalizeResult(result);
     } on Exception catch (error) {
       final result = Failure<Map<String, dynamic>, Exception>(
         domain.ConfigurationFailure.withContext(
@@ -241,8 +312,24 @@ class JwtJwksVerifier {
           },
         ),
       );
-      // Generic Exception = IO/network error fetching JWKS — definitely infra.
-      return _finalizeResult(result, countInCircuit: true);
+      if (trustRevision != _trustRevision) return verify(token);
+      return _finalizeResult(result);
+    }
+  }
+
+  void invalidateTrust() {
+    _trustRevision++;
+    _consecutiveFailures = 0;
+    _circuitOpenUntil = null;
+    _jwksKeyStoreCache.invalidate();
+  }
+
+  void _validateIdentityClaims(Map<String, dynamic> payload) {
+    final issuer = payload['iss'];
+    if (issuer != null && issuer is! String) throw const FormatException('JWT issuer must be a string');
+    final audience = payload['aud'];
+    if (audience != null && audience is! String && (audience is! List || audience.any((value) => value is! String))) {
+      throw const FormatException('JWT audience must contain strings');
     }
   }
 
@@ -275,7 +362,7 @@ class JwtJwksVerifier {
     if (until == null) {
       return false;
     }
-    if (now.isAfter(until)) {
+    if (!now.isBefore(until)) {
       _circuitOpenUntil = null;
       _consecutiveFailures = 0;
       return false;
@@ -289,13 +376,24 @@ class JwtJwksVerifier {
     try {
       final normalized = base64Url.normalize(parts[0]);
       final decoded = utf8.decode(base64Url.decode(normalized));
-      final header = jsonDecode(decoded) as Map<String, dynamic>;
-      return header['alg'] as String?;
-    } on Exception catch (e, stackTrace) {
+      final header = jsonDecode(decoded);
+      if (header is! Map<String, dynamic>) {
+        return null;
+      }
+      // Validate external JSON before JOSE's typed accessors can cast it.
+      for (final field in ['alg', 'kid', 'cty', 'typ', 'jku', 'enc', 'zip']) {
+        if (header.containsKey(field) && header[field] is! String) return null;
+      }
+      final critical = header['crit'];
+      if (header.containsKey('crit') && (critical is! List || critical.any((value) => value is! String))) return null;
+      if (header.containsKey('jwk') && header['jwk'] is! Map<String, dynamic>) return null;
+      final algorithm = header['alg'];
+      return algorithm is String ? algorithm : null;
+    } on FormatException catch (error, stackTrace) {
       developer.log(
         'JWT header parsing failed (malformed or invalid token)',
         name: 'jwt_jwks_verifier',
-        error: e,
+        error: error.runtimeType,
         stackTrace: stackTrace,
       );
       return null;
@@ -309,4 +407,25 @@ class JwtJwksVerifier {
     }
     return value;
   }
+}
+
+class _VerificationKeyStore extends JsonWebKeyStore {
+  _VerificationKeyStore(this._delegate);
+  final JsonWebKeyStore _delegate;
+
+  @override
+  Stream<JsonWebKey?> findJsonWebKeys(JoseHeader header, String operation) async* {
+    try {
+      await for (final key in _delegate.findJsonWebKeys(header, operation)) {
+        yield key;
+      }
+    } on Exception catch (error) {
+      throw _JwksLoadException(error);
+    }
+  }
+}
+
+class _JwksLoadException implements Exception {
+  const _JwksLoadException(this.cause);
+  final Exception cause;
 }

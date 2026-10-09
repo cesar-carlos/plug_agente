@@ -3,6 +3,7 @@ import 'package:plug_agente/application/services/active_config_metadata_cache.da
 import 'package:plug_agente/application/services/config_service.dart';
 import 'package:plug_agente/domain/entities/config.dart';
 import 'package:plug_agente/domain/repositories/i_agent_config_repository.dart';
+import 'package:plug_agente/domain/repositories/i_authorization_trust_invalidator.dart';
 import 'package:plug_agente/domain/repositories/i_odbc_circuit_breaker_reset.dart';
 import 'package:result_dart/result_dart.dart';
 
@@ -13,9 +14,11 @@ class SaveAgentConfig {
     IOdbcCircuitBreakerReset? circuitBreakerReset,
     IOdbcCircuitBreakerReset? Function()? circuitBreakerResetProvider,
     ActiveConfigMetadataCache? metadataCache,
+    IAuthorizationTrustInvalidator? authorizationTrustInvalidator,
     SqlStreamingConnectionStringCache? streamingConnectionStringCache,
   }) : _circuitBreakerReset = circuitBreakerReset,
        _circuitBreakerResetProvider = circuitBreakerResetProvider,
+       _authorizationTrustInvalidator = authorizationTrustInvalidator,
        _metadataCache = metadataCache,
        _streamingConnectionStringCache = streamingConnectionStringCache;
 
@@ -24,6 +27,7 @@ class SaveAgentConfig {
   final IOdbcCircuitBreakerReset? _circuitBreakerReset;
   final IOdbcCircuitBreakerReset? Function()? _circuitBreakerResetProvider;
   final ActiveConfigMetadataCache? _metadataCache;
+  final IAuthorizationTrustInvalidator? _authorizationTrustInvalidator;
   final SqlStreamingConnectionStringCache? _streamingConnectionStringCache;
 
   IOdbcCircuitBreakerReset? get _resolvedCircuitBreakerReset =>
@@ -41,6 +45,7 @@ class SaveAgentConfig {
         return saveResult.fold(
           (savedConfig) {
             _metadataCache?.invalidate();
+            _authorizationTrustInvalidator?.invalidate();
             _streamingConnectionStringCache?.invalidate();
             _resolvedCircuitBreakerReset?.resetForConfig(savedConfig);
             return Success(savedConfig);

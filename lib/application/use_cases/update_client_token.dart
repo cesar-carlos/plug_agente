@@ -1,13 +1,10 @@
 import 'dart:developer' as developer;
 
 import 'package:plug_agente/application/client_tokens/client_token_payload_parser.dart';
-import 'package:plug_agente/application/services/client_token_auth_cache_invalidation.dart';
 import 'package:plug_agente/domain/entities/client_token_create_request.dart';
 import 'package:plug_agente/domain/entities/client_token_update_result.dart';
 import 'package:plug_agente/domain/entities/token_audit_event.dart';
 import 'package:plug_agente/domain/errors/failures.dart' as domain;
-import 'package:plug_agente/domain/repositories/i_authorization_decision_cache.dart';
-import 'package:plug_agente/domain/repositories/i_client_token_policy_cache.dart';
 import 'package:plug_agente/domain/repositories/i_client_token_repository.dart';
 import 'package:plug_agente/domain/repositories/i_token_audit_store.dart';
 import 'package:result_dart/result_dart.dart';
@@ -18,16 +15,10 @@ class UpdateClientToken {
   UpdateClientToken(
     this._repository, {
     ITokenAuditStore? auditStore,
-    IAuthorizationDecisionCache? decisionCache,
-    IClientTokenPolicyCache? policyCache,
-  }) : _auditStore = auditStore,
-       _decisionCache = decisionCache,
-       _policyCache = policyCache;
+  }) : _auditStore = auditStore;
 
   final IClientTokenRepository _repository;
   final ITokenAuditStore? _auditStore;
-  final IAuthorizationDecisionCache? _decisionCache;
-  final IClientTokenPolicyCache? _policyCache;
 
   Future<Result<ClientTokenUpdateResult>> call(
     String tokenId,
@@ -72,11 +63,6 @@ class UpdateClientToken {
       );
     }
 
-    final currentTokenValue = await loadClientTokenSecretForCacheInvalidation(
-      repository: _repository,
-      tokenId: tokenId,
-      logName: _logName,
-    );
     final result = await _repository.updateToken(
       tokenId,
       request,
@@ -88,7 +74,6 @@ class UpdateClientToken {
         await _handleSuccessfulUpdate(
           tokenId: tokenId,
           clientId: request.normalizedClientId,
-          previousTokenValue: currentTokenValue,
           updateResult: updateResult,
         );
       }
@@ -99,7 +84,6 @@ class UpdateClientToken {
   Future<void> _handleSuccessfulUpdate({
     required String tokenId,
     required String clientId,
-    required String? previousTokenValue,
     required ClientTokenUpdateResult updateResult,
   }) async {
     switch (updateResult.outcome) {
@@ -107,8 +91,7 @@ class UpdateClientToken {
         // No persisted change — keep caches and audit trail untouched.
         return;
       case ClientTokenUpdateOutcome.metadataOnly:
-        // Authorization policy and credential hash are unchanged, so cached
-        // decisions remain valid. Audit only the metadata edit.
+        // The repository refreshes cached identity without rotating the credential.
         await _recordAuditEvent(
           tokenId: tokenId,
           clientId: clientId,
@@ -116,16 +99,6 @@ class UpdateClientToken {
         );
         return;
       case ClientTokenUpdateOutcome.rotated:
-        invalidateAuthCachesForClientCredential(
-          tokenValue: previousTokenValue,
-          decisionCache: _decisionCache,
-          policyCache: _policyCache,
-        );
-        invalidateAuthCachesForClientCredential(
-          tokenValue: updateResult.tokenValue,
-          decisionCache: _decisionCache,
-          policyCache: _policyCache,
-        );
         await _recordAuditEvent(
           tokenId: tokenId,
           clientId: clientId,

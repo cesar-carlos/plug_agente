@@ -1,6 +1,10 @@
 import 'package:jose/jose.dart';
+import 'package:plug_agente/core/constants/authorization_context_constants.dart';
+import 'package:plug_agente/domain/errors/failures.dart' as domain;
+import 'package:plug_agente/infrastructure/external_services/dio_jwks_key_store.dart';
+import 'package:result_dart/result_dart.dart';
 
-/// Caches `JsonWebKeyStore` instances per JWKS URL with TTL after successful use.
+/// Caches `JsonWebKeyStore` instances per JWKS URL with a fixed TTL starting at the first successful use.
 ///
 /// Extracted from `JwtJwksVerifier` for focused unit tests and reuse.
 class JwksKeyStoreCache {
@@ -20,10 +24,29 @@ class JwksKeyStoreCache {
   DateTime? _jwksCacheExpiresAt;
 
   static JsonWebKeyStore _defaultCreateKeyStore(Uri jwksUri) {
-    return JsonWebKeyStore()..addKeySetUrl(jwksUri);
+    return DioJwksKeyStore(jwksUri);
   }
 
-  JsonWebKeyStore resolve(String jwksUrl) {
+  void invalidate() {
+    _jwksCacheUrl = null;
+    _jwksCachedStore = null;
+    _jwksCacheExpiresAt = null;
+  }
+
+  Result<JsonWebKeyStore> resolve(String jwksUrl) {
+    final uri = Uri.tryParse(jwksUrl);
+    if (uri == null || !uri.isAbsolute || (uri.scheme != 'http' && uri.scheme != 'https') || uri.host.isEmpty) {
+      return Failure(
+        domain.ConfigurationFailure.withContext(
+          message: 'JWKS URL must be an absolute HTTP or HTTPS endpoint',
+          context: {
+            'authentication': true,
+            'reason': AuthorizationContextConstants.invalidJwksConfigReason,
+            'user_message': 'URL JWKS invalida. Configure um endereco HTTP ou HTTPS completo com servidor.',
+          },
+        ),
+      );
+    }
     if (jwksUrl != _jwksCacheUrl) {
       _jwksCacheUrl = null;
       _jwksCachedStore = null;
@@ -34,12 +57,13 @@ class JwksKeyStoreCache {
         _jwksCacheUrl == jwksUrl &&
         _jwksCacheExpiresAt != null &&
         now.isBefore(_jwksCacheExpiresAt!)) {
-      return _jwksCachedStore!;
+      return Success(_jwksCachedStore!);
     }
-    return _createKeyStore(Uri.parse(jwksUrl));
+    return Success(_createKeyStore(uri));
   }
 
   void remember(String jwksUrl, JsonWebKeyStore store) {
+    if (_jwksCacheUrl == jwksUrl && identical(_jwksCachedStore, store)) return;
     _jwksCacheUrl = jwksUrl;
     _jwksCachedStore = store;
     _jwksCacheExpiresAt = _now().add(jwksCacheTtl);

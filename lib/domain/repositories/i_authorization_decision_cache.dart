@@ -15,10 +15,16 @@ class AuthorizationDecisionCacheEntry {
   final String? requestId;
   final String? method;
 
-  bool get isExpired => DateTime.now().isAfter(expiresAt);
+  bool get isExpired => isExpiredAt(DateTime.now());
+
+  bool isExpiredAt(DateTime now) => !now.isBefore(expiresAt);
 }
 
 abstract class IAuthorizationDecisionCache {
+  /// Changes on explicit invalidation so pending authorizations can discard
+  /// policies resolved before a credential mutation.
+  int get revision;
+
   AuthorizationDecisionCacheEntry? get(String key);
 
   void put(String key, AuthorizationDecisionCacheEntry entry);

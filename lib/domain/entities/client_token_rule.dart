@@ -17,7 +17,21 @@ class ClientTokenRule {
   });
 
   factory ClientTokenRule.fromJson(Map<String, dynamic> json) {
-    final effectValue = (json['effect'] as String? ?? 'allow').toLowerCase();
+    final rawEffect = json.containsKey('effect') ? json['effect'] : 'allow';
+    if (rawEffect is! String) throw const FormatException('Invalid token rule effect');
+    final effectValue = rawEffect.trim().toLowerCase();
+    if (effectValue != 'allow' && effectValue != 'deny') throw const FormatException('Invalid token rule effect');
+    final resourceType = json['resource_type'];
+    if (resourceType != null &&
+        (resourceType is! String || !['table', 'view', 'unknown'].contains(resourceType.toLowerCase()))) {
+      throw const FormatException('Invalid token rule resource type');
+    }
+    if (json['resource'] != null && json['resource'] is! String) {
+      throw const FormatException('Invalid token rule resource');
+    }
+    for (final field in ['read', 'update', 'delete', 'ddl']) {
+      if (json[field] != null && json[field] is! bool) throw const FormatException('Invalid token rule permission');
+    }
     return ClientTokenRule(
       resource: DatabaseResource.fromJson(json),
       permissions: ClientPermissionSet.fromJson(json),

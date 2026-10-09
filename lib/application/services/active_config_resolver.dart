@@ -4,6 +4,7 @@ import 'package:plug_agente/core/settings/app_settings_store.dart';
 import 'package:plug_agente/domain/entities/config.dart';
 import 'package:plug_agente/domain/errors/failures.dart' as domain;
 import 'package:plug_agente/domain/repositories/i_agent_config_repository.dart';
+import 'package:plug_agente/domain/repositories/i_authorization_trust_invalidator.dart';
 import 'package:plug_agente/domain/repositories/i_odbc_circuit_breaker_reset.dart';
 import 'package:plug_agente/domain/repositories/i_query_config_source.dart';
 import 'package:result_dart/result_dart.dart';
@@ -15,8 +16,10 @@ class ActiveConfigResolver implements IQueryConfigSource {
     IOdbcCircuitBreakerReset? circuitBreakerReset,
     IOdbcCircuitBreakerReset? Function()? circuitBreakerResetProvider,
     ActiveConfigMetadataCache? metadataCache,
+    IAuthorizationTrustInvalidator? authorizationTrustInvalidator,
   }) : _circuitBreakerReset = circuitBreakerReset,
        _circuitBreakerResetProvider = circuitBreakerResetProvider,
+       _authorizationTrustInvalidator = authorizationTrustInvalidator,
        _metadataCache = metadataCache;
 
   final IAgentConfigRepository _repository;
@@ -24,6 +27,7 @@ class ActiveConfigResolver implements IQueryConfigSource {
   final IOdbcCircuitBreakerReset? _circuitBreakerReset;
   final IOdbcCircuitBreakerReset? Function()? _circuitBreakerResetProvider;
   final ActiveConfigMetadataCache? _metadataCache;
+  final IAuthorizationTrustInvalidator? _authorizationTrustInvalidator;
 
   IOdbcCircuitBreakerReset? get _resolvedCircuitBreakerReset =>
       _circuitBreakerReset ?? _circuitBreakerResetProvider?.call();
@@ -63,6 +67,7 @@ class ActiveConfigResolver implements IQueryConfigSource {
       normalized,
     );
     _metadataCache?.invalidate();
+    _authorizationTrustInvalidator?.invalidate();
     final configResult = await _repository.getById(normalized);
     if (configResult.isSuccess()) {
       _resolvedCircuitBreakerReset?.resetForConfig(configResult.getOrThrow());
@@ -72,6 +77,7 @@ class ActiveConfigResolver implements IQueryConfigSource {
   Future<void> clearActiveConfigId() async {
     await _settingsStore.remove(AppConstants.activeConfigIdSettingsKey);
     _metadataCache?.invalidate();
+    _authorizationTrustInvalidator?.invalidate();
   }
 
   Future<Result<Config>> resolveExplicit(

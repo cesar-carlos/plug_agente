@@ -10,9 +10,10 @@ class AgentOperationalReadinessAssembler {
     required HubConnectionPhase hubPhase,
     required bool hubConnected,
     required List<ClientTokenSummary> clientTokens,
+    int? activeClientTokenCount,
     String? schedulerIssueReason,
   }) {
-    final activeCount = clientTokens.where((token) => !token.isRevoked).length;
+    final activeCount = activeClientTokenCount ?? clientTokens.where((token) => !token.isRevoked).length;
 
     return AgentOperationalReadinessSnapshot(
       hubConnected: hubConnected,

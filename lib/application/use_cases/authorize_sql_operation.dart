@@ -7,6 +7,7 @@ import 'package:plug_agente/domain/entities/client_token_policy.dart';
 import 'package:plug_agente/domain/errors/failures.dart' as domain;
 import 'package:plug_agente/domain/repositories/i_authorization_cache_metrics.dart';
 import 'package:plug_agente/domain/repositories/i_authorization_decision_cache.dart';
+import 'package:plug_agente/domain/services/client_token_lifetime_validator.dart';
 import 'package:plug_agente/domain/value_objects/client_permission_set.dart';
 import 'package:plug_agente/domain/value_objects/database_resource.dart';
 import 'package:result_dart/result_dart.dart';
@@ -20,7 +21,9 @@ class AuthorizeSqlOperation {
     IAuthorizationDecisionCache? decisionCache,
     IAuthorizationCacheMetrics? cacheMetrics,
     Duration decisionTtl = const Duration(seconds: 30),
-  }) : _decisionCache = decisionCache,
+    DateTime Function()? now,
+  }) : _now = now ?? DateTime.now,
+       _decisionCache = decisionCache,
        _cacheMetrics = cacheMetrics,
        _decisionTtl = decisionTtl;
 
@@ -29,6 +32,7 @@ class AuthorizeSqlOperation {
   final IAuthorizationDecisionCache? _decisionCache;
   final IAuthorizationCacheMetrics? _cacheMetrics;
   final Duration _decisionTtl;
+  final DateTime Function() _now;
 
   Future<Result<void>> call({
     required String token,
@@ -60,6 +64,7 @@ class AuthorizeSqlOperation {
             .toList(growable: false);
 
         final cache = _decisionCache;
+        final cacheRevision = cache?.revision;
         final missIndices = <int>[];
         final deniedAccesses = <ClassifiedSqlResource>{};
         final reasonByDeniedName = <String, String>{};
@@ -108,8 +113,20 @@ class AuthorizeSqlOperation {
         }
 
         final policyResult = await _tokenValidationService.validate(token);
+        if (cache != null && cache.revision != cacheRevision) {
+          return call(
+            token: token,
+            sql: sql,
+            requestDatabase: requestDatabase,
+            requestId: requestId,
+            method: method,
+            preparedSql: preparedSql,
+          );
+        }
         return policyResult.fold(
           (policy) {
+            final lifetime = ClientTokenLifetimeValidator.validate(policy, now: _now());
+            if (lifetime.isError()) return Failure(lifetime.exceptionOrNull()!);
             final databaseConstraintFailure = _validateDatabaseConstraint(
               policy: policy,
               requestDatabase: normalizedRequestDatabase,
@@ -122,6 +139,7 @@ class AuthorizeSqlOperation {
                   key: decisionKeys[i],
                   allowed: false,
                   clientId: policy.clientId,
+                  credentialExpiresAt: policy.credentialExpiresAt,
                   reason: reason,
                   requestId: requestId,
                   method: method,
@@ -136,6 +154,7 @@ class AuthorizeSqlOperation {
                   key: decisionKeys[i],
                   allowed: true,
                   clientId: policy.clientId,
+                  credentialExpiresAt: policy.credentialExpiresAt,
                   requestId: requestId,
                   method: method,
                 );
@@ -165,6 +184,7 @@ class AuthorizeSqlOperation {
                   key: decisionKeys[i],
                   allowed: true,
                   clientId: policy.clientId,
+                  credentialExpiresAt: policy.credentialExpiresAt,
                   requestId: requestId,
                   method: method,
                 );
@@ -177,6 +197,7 @@ class AuthorizeSqlOperation {
                   key: decisionKeys[i],
                   allowed: false,
                   clientId: policy.clientId,
+                  credentialExpiresAt: policy.credentialExpiresAt,
                   reason: reason,
                   requestId: requestId,
                   method: method,
@@ -212,7 +233,7 @@ class AuthorizeSqlOperation {
                       'reason': AuthorizationContextConstants.unexpectedFailureTypeReason,
                     },
                   );
-            if (!_isTransientTokenResolverFailure(error)) {
+            if (_canCacheTokenResolverFailure(error)) {
               for (final i in missIndices) {
                 _cacheDecision(
                   key: decisionKeys[i],
@@ -410,11 +431,18 @@ class AuthorizeSqlOperation {
     String? reason,
     String? requestId,
     String? method,
+    DateTime? credentialExpiresAt,
   }) {
     final cache = _decisionCache;
     if (cache == null) {
       return;
     }
+    final now = _now();
+    var expiresAt = now.add(_decisionTtl);
+    if (credentialExpiresAt != null && credentialExpiresAt.isBefore(expiresAt)) {
+      expiresAt = credentialExpiresAt;
+    }
+    if (!now.isBefore(expiresAt)) return;
     cache.put(
       key,
       AuthorizationDecisionCacheEntry(
@@ -423,7 +451,7 @@ class AuthorizeSqlOperation {
         reason: reason,
         requestId: requestId,
         method: method,
-        expiresAt: DateTime.now().add(_decisionTtl),
+        expiresAt: expiresAt,
       ),
     );
   }
@@ -499,14 +527,15 @@ class AuthorizeSqlOperation {
     );
   }
 
-  bool _isTransientTokenResolverFailure(domain.Failure failure) {
-    if (failure is domain.NetworkFailure) {
-      return true;
-    }
-    if (failure.context['authorization'] == true) {
+  bool _canCacheTokenResolverFailure(domain.Failure failure) {
+    final reason = failure.context['reason'];
+    if (failure is domain.NetworkFailure ||
+        reason == AuthorizationContextConstants.tokenExpiredReason ||
+        reason == AuthorizationContextConstants.tokenNotYetValidReason) {
       return false;
     }
-    return failure.isTransient;
+    if (failure.context['authorization'] == true) return true;
+    return !failure.isTransient;
   }
 
   domain.ConfigurationFailure _buildUnsupportedSqlFailure(Object failure) {

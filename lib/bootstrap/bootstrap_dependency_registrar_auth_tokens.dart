@@ -26,6 +26,8 @@ void _registerAuthTokens(GetIt getIt) {
     ..registerLazySingleton(
       () => ListClientTokens(getIt<IClientTokenRepository>()),
     )
+    ..registerLazySingleton(() => ListClientTokenPage(getIt<IClientTokenRepository>()))
+    ..registerLazySingleton(() => CountActiveClientTokens(getIt<IClientTokenRepository>()))
     ..registerLazySingleton(
       () => GetClientTokenSecret(getIt<IClientTokenRepository>()),
     )
@@ -33,26 +35,18 @@ void _registerAuthTokens(GetIt getIt) {
       () => UpdateClientToken(
         getIt<IClientTokenRepository>(),
         auditStore: getIt<ITokenAuditStore>(),
-        decisionCache: getIt<IAuthorizationDecisionCache>(),
-        policyCache: getIt<IClientTokenPolicyCache>(),
       ),
     )
     ..registerLazySingleton(
       () => RevokeClientToken(
         getIt<IClientTokenRepository>(),
         auditStore: getIt<ITokenAuditStore>(),
-        decisionCache: getIt<IAuthorizationDecisionCache>(),
-        policyCache: getIt<IClientTokenPolicyCache>(),
-        revokedTokenStore: getIt<IRevokedTokenStore>(),
-        featureFlags: getIt<FeatureFlags>(),
       ),
     )
     ..registerLazySingleton(
       () => DeleteClientToken(
         getIt<IClientTokenRepository>(),
         auditStore: getIt<ITokenAuditStore>(),
-        decisionCache: getIt<IAuthorizationDecisionCache>(),
-        policyCache: getIt<IClientTokenPolicyCache>(),
       ),
     )
     ..registerLazySingleton(

@@ -12,7 +12,10 @@ import 'package:plug_agente/presentation/pages/config/widgets/client_token/clien
 import 'package:plug_agente/presentation/pages/config/widgets/client_token_rule_dialog.dart';
 import 'package:plug_agente/presentation/pages/config/widgets/client_token_rule_file_service.dart';
 import 'package:plug_agente/presentation/providers/client_token_provider.dart';
+import 'package:plug_agente/presentation/providers/presentation_operation_failures.dart';
 import 'package:plug_agente/shared/widgets/common/feedback/settings_feedback.dart';
+
+typedef ClientTokenSubmitFeedback = ({bool isCreation, ClientTokenUpdateOutcome? outcome, String? tokenValue});
 
 class ClientTokenSectionCoordinator {
   ClientTokenSectionCoordinator({
@@ -22,6 +25,7 @@ class ClientTokenSectionCoordinator {
 
   final ClientTokenSectionController controller;
   final ScrollController? scrollController;
+  int _scrollGeneration = 0;
 
   static String formErrorMessage(AppLocalizations l10n, ClientTokenFormErrorKey? key) {
     return switch (key) {
@@ -58,9 +62,7 @@ class ClientTokenSectionCoordinator {
     if (restored != null) {
       controller.applyRestoredListPreferences(restored);
     }
-    if (!provider.hasLoaded) {
-      await provider.loadTokens(query: controller.buildListQuery());
-    }
+    await provider.loadTokens(query: controller.buildListQuery());
   }
 
   Future<void> openAddRuleModal(BuildContext context) async {
@@ -206,55 +208,48 @@ class ClientTokenSectionCoordinator {
   }
 
   Future<void> handleSubmitToken(BuildContext context, ClientTokenProvider provider) async {
-    controller.clearFormError();
+    if (controller.isSubmitting || provider.isTokenMutationInProgress) return;
+    controller.isSubmitting = true;
     controller.notifyCreateTokenDialogChanged();
-
-    final navigator = Navigator.of(context, rootNavigator: true);
-    provider.clearError();
-    provider.clearLastCreatedToken();
-
-    final request = controller.buildSubmitRequest();
-    if (request == null) {
-      return;
-    }
-
-    final previousOffset = currentScrollOffset();
-    final currentEditingTokenId = controller.editingTokenId;
-    final submitResult = currentEditingTokenId == null
-        ? await provider.createToken(
-            request,
-            refreshTokens: false,
-          )
-        : await provider.updateToken(
-            currentEditingTokenId,
-            request,
-            refreshTokens: false,
-            expectedVersion: controller.editingTokenVersion,
-          );
-
-    if (submitResult.isSuccess() && context.mounted) {
-      if (controller.autoRefreshAfterCreate) {
-        await refreshTokensPreservingPosition(context, provider, previousOffset);
-      }
-      if (!context.mounted) {
-        return;
-      }
+    try {
       controller.clearFormError();
+      provider.clearError();
+      final request = controller.buildSubmitRequest();
+      if (request == null) return;
+      final previousOffset = currentScrollOffset();
+      final editingId = controller.editingTokenId;
+      final result = editingId == null
+          ? await provider.createToken(request, refreshTokens: controller.autoRefreshAfterCreate)
+          : await provider.updateToken(
+              editingId,
+              request,
+              refreshTokens: controller.autoRefreshAfterCreate,
+              expectedVersion: controller.editingTokenVersion,
+            );
+      if (!context.mounted || result.isError()) return;
+      final feedback = (
+        isCreation: editingId == null,
+        outcome: provider.lastUpdateOutcome,
+        tokenValue: provider.lastCreatedToken,
+      );
+      controller.clearTokenDraftForm();
+      Navigator.of(context, rootNavigator: true).pop(feedback);
+      restoreScrollPosition(previousOffset);
+    } finally {
+      controller.isSubmitting = false;
       controller.notifyCreateTokenDialogChanged();
-      if (provider.error.isEmpty) {
-        final outcome = provider.lastUpdateOutcome;
-        final rotatedTokenValue = provider.lastCreatedToken;
-        controller.clearTokenDraftForm();
-        navigator.pop();
-        if (currentEditingTokenId != null) {
-          showEditOutcomeFeedback(
-            context: context,
-            outcome: outcome,
-            rotatedTokenValue: rotatedTokenValue,
-          );
-        }
-      }
     }
+  }
+
+  void restoreScrollPosition(double? previousOffset, {int? generation}) {
+    if (previousOffset == null) return;
+    final expectedGeneration = generation ?? ++_scrollGeneration;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (expectedGeneration != _scrollGeneration) return;
+      final scroll = scrollController;
+      if (scroll == null || !scroll.hasClients) return;
+      scroll.jumpTo(previousOffset.clamp(scroll.position.minScrollExtent, scroll.position.maxScrollExtent));
+    });
   }
 
   void showEditOutcomeFeedback({
@@ -324,32 +319,6 @@ class ClientTokenSectionCoordinator {
     return controller.offset;
   }
 
-  Future<void> refreshTokensPreservingPosition(
-    BuildContext context,
-    ClientTokenProvider provider,
-    double? previousOffset,
-  ) async {
-    final refreshed = await provider.loadTokens(
-      silent: true,
-      query: controller.buildListQuery(),
-    );
-    if (!refreshed.isSuccess() || previousOffset == null || !context.mounted) {
-      return;
-    }
-
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      final scroll = scrollController;
-      if (scroll == null || !scroll.hasClients) {
-        return;
-      }
-      final clampedOffset = previousOffset.clamp(
-        scroll.position.minScrollExtent,
-        scroll.position.maxScrollExtent,
-      );
-      scroll.jumpTo(clampedOffset);
-    });
-  }
-
   Future<void> handleCopyToken(
     BuildContext context,
     ClientTokenProvider provider,
@@ -389,6 +358,7 @@ class ClientTokenSectionCoordinator {
         );
       },
       (failure) {
+        if (PresentationOperationFailures.isSilent(failure)) return;
         displayInfoBar(
           context,
           builder: (context, close) => InfoBar(
@@ -420,11 +390,11 @@ class ClientTokenSectionCoordinator {
     if (!context.mounted) {
       return;
     }
-    if (provider.error.isNotEmpty) {
+    if (provider.mutationError.isNotEmpty) {
       await SettingsFeedback.showError(
         context: context,
         title: l10n.modalTitleError,
-        message: provider.error,
+        message: provider.mutationError,
         onConfirm: () => provider.clearError(),
       );
     }
@@ -449,20 +419,47 @@ class ClientTokenSectionCoordinator {
     if (!context.mounted) {
       return;
     }
-    if (provider.error.isNotEmpty) {
+    if (provider.mutationError.isNotEmpty) {
       await SettingsFeedback.showError(
         context: context,
         title: l10n.modalTitleError,
-        message: provider.error,
+        message: provider.mutationError,
         onConfirm: () => provider.clearError(),
       );
     }
   }
 
   Future<void> reloadTokensForCurrentFilters(ClientTokenProvider provider) async {
-    await provider.loadTokens(
+    final generation = ++_scrollGeneration;
+    final result = await provider.loadTokens(
       silent: true,
       query: controller.buildListQuery(),
     );
+    if (result.isSuccess()) restoreScrollPosition(0, generation: generation);
+  }
+
+  Future<void> refreshList(ClientTokenProvider provider) async {
+    final generation = ++_scrollGeneration;
+    final page = provider.currentPage;
+    final previousOffset = currentScrollOffset();
+    final result = await provider.loadTokens(query: controller.buildListQuery(page: page));
+    await provider.refreshActiveTokenCount();
+    if (result.isSuccess()) {
+      restoreScrollPosition(provider.currentPage == page ? previousOffset : 0, generation: generation);
+    }
+  }
+
+  Future<void> changePage(ClientTokenProvider provider, int page) async {
+    final generation = ++_scrollGeneration;
+    final result = await provider.loadTokens(query: controller.buildListQuery(page: page));
+    if (result.isSuccess()) restoreScrollPosition(0, generation: generation);
+  }
+
+  Future<void> changePageSize(ClientTokenProvider provider, int size) async {
+    final generation = ++_scrollGeneration;
+    controller.pageSize = size;
+    await controller.saveListPreferences();
+    final result = await provider.loadTokens(query: controller.buildListQuery());
+    if (result.isSuccess()) restoreScrollPosition(0, generation: generation);
   }
 }

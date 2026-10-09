@@ -1790,8 +1790,8 @@
   "ctButtonCreateToken": "Create token",
   "ctButtonNewToken": "New token",
   "ctButtonRefreshList": "Refresh list",
-  "ctButtonAutoRefreshOn": "Auto refresh: on",
-  "ctButtonAutoRefreshOff": "Auto refresh: off",
+  "ctButtonAutoRefreshOn": "Refresh after saving: on",
+  "ctButtonAutoRefreshOff": "Refresh after saving: off",
   "ctButtonViewDetails": "View details",
   "ctButtonCopyClientToken": "Copy token",
   "ctTooltipCopyClientToken": "Copy client token",
@@ -2114,5 +2114,22 @@
   "updateRecoveryRetryFailed": "The service has not confirmed recovery. Check the updater service and try reconciling again.",
   "updateRecoveryDescription": "The agent cannot resume its operations. Check the updater service and reconcile to restart safely.",
   "updateMaintenanceDescription": "The agent is finishing its work for the update. Actions and settings are temporarily unavailable.",
-  "updateReconcileAction": "Reconcile operation"
+  "updateReconcileAction": "Reconcile operation",
+  "ctSavedListStale": "Changes saved; list out of date",
+  "ctListStale": "Refresh the list to display the saved changes.",
+  "ctPreferencesSaveFailed": "Preferences could not be persisted. Your current selection is still applied.",
+  "ctPaginationSummary": "Page {page} of {totalPages} · {totalCount} tokens",
+  "@ctPaginationSummary": {
+    "placeholders": {
+      "page": {
+        "type": "int"
+      },
+      "totalPages": {
+        "type": "int"
+      },
+      "totalCount": {
+        "type": "int"
+      }
+    }
+  }
 }

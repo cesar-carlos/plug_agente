@@ -22,6 +22,7 @@ void _registerActionsInfrastructure(GetIt getIt) {
         circuitBreakerResetProvider: () =>
             getIt.isRegistered<IOdbcCircuitBreakerReset>() ? getIt<IOdbcCircuitBreakerReset>() : null,
         metadataCache: getIt<ActiveConfigMetadataCache>(),
+        authorizationTrustInvalidator: getIt<IAuthorizationTrustInvalidator>(),
       ),
     )
     ..registerLazySingleton(ProtocolNegotiator.new)

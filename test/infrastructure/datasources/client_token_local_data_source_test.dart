@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:drift/drift.dart' show Value;
@@ -11,6 +12,25 @@ import 'package:plug_agente/domain/value_objects/client_permission_set.dart';
 import 'package:plug_agente/domain/value_objects/database_resource.dart';
 import 'package:plug_agente/infrastructure/datasources/client_token_local_data_source.dart';
 import 'package:plug_agente/infrastructure/repositories/agent_config_drift_database.dart';
+
+class _PausedTokenDataSource extends ClientTokenLocalDataSource {
+  _PausedTokenDataSource(super._database);
+
+  final snapshotReady = Completer<void>();
+  final releaseSnapshot = Completer<void>();
+  bool pauseNextRead = true;
+
+  @override
+  Future<ClientTokenCacheData?> findRowById(String tokenId) async {
+    final row = await super.findRowById(tokenId);
+    if (pauseNextRead) {
+      pauseNextRead = false;
+      snapshotReady.complete();
+      await releaseSnapshot.future;
+    }
+    return row;
+  }
+}
 
 void main() {
   group('ClientTokenLocalDataSource', () {
@@ -244,6 +264,49 @@ void main() {
       expect(await ds.findRowById('token-1'), isNull);
     });
 
+    test('repeated revocation preserves the confirmed version and timestamp', () async {
+      final db = AppDatabase(executor: NativeDatabase.memory());
+      addTearDown(db.close);
+      final ds = ClientTokenLocalDataSource(db);
+      await insertSummary(ds, summary: baseSummary());
+      expect(await ds.markTokenRevoked('token-1'), isTrue);
+      final revoked = (await ds.findRowById('token-1'))!;
+      expect(await ds.markTokenRevoked('token-1'), isTrue);
+      final repeated = (await ds.findRowById('token-1'))!;
+      expect(repeated.version, revoked.version);
+      expect(repeated.updatedAt, revoked.updatedAt);
+    });
+
+    for (final action in ['delete', 'revoke']) {
+      test('$action holds the SQLite transaction across the row snapshot and write', () async {
+        final db = AppDatabase(executor: NativeDatabase.memory());
+        addTearDown(db.close);
+        final ds = _PausedTokenDataSource(db);
+        await insertSummary(ds, summary: baseSummary());
+        final mutation = action == 'delete' ? ds.deleteToken('token-1') : ds.markTokenRevoked('token-1');
+        await ds.snapshotReady.future;
+        final competingUpdate = ds.applyTokenUpdate(
+          tokenId: 'token-1',
+          expectedVersion: 1,
+          companion: const ClientTokenCacheTableCompanion(
+            tokenHash: Value('rotated-hash'),
+            version: Value(2),
+          ),
+        );
+        await Future<void>.delayed(Duration.zero);
+        ds.releaseSnapshot.complete();
+        final result = await mutation;
+        expect(await competingUpdate, 0);
+        if (action == 'delete') {
+          expect((result! as ClientTokenCacheData).tokenHash, 'hash-1');
+          expect(await ds.findRowById('token-1'), isNull);
+        } else {
+          expect(result, isTrue);
+          expect((await ds.findRowById('token-1'))!.isRevoked, isTrue);
+        }
+      });
+    }
+
     test('markTokenRevoked returns false when id missing', () async {
       final db = AppDatabase(executor: NativeDatabase.memory());
       addTearDown(db.close);
@@ -261,6 +324,8 @@ void main() {
       await ds.updatePersistedTokenValue(
         tokenId: 'token-1',
         tokenValue: '__secure_storage__',
+        expectedTokenHash: 'hash-1',
+        expectedVersion: 1,
       );
 
       final row = await ds.findRowById('token-1');

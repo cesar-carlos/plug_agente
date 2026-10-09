@@ -19,6 +19,7 @@ import 'package:plug_agente/application/use_cases/cancel_notification.dart';
 import 'package:plug_agente/application/use_cases/check_hub_availability.dart';
 import 'package:plug_agente/application/use_cases/check_odbc_driver.dart';
 import 'package:plug_agente/application/use_cases/connect_to_hub.dart';
+import 'package:plug_agente/application/use_cases/count_active_client_tokens.dart';
 import 'package:plug_agente/application/use_cases/create_client_token.dart';
 import 'package:plug_agente/application/use_cases/delete_agent_action_definition.dart';
 import 'package:plug_agente/application/use_cases/delete_agent_action_secret.dart';
@@ -33,7 +34,7 @@ import 'package:plug_agente/application/use_cases/import_agent_actions_bundle.da
 import 'package:plug_agente/application/use_cases/list_agent_action_definitions.dart';
 import 'package:plug_agente/application/use_cases/list_agent_action_executions.dart';
 import 'package:plug_agente/application/use_cases/list_agent_action_triggers.dart';
-import 'package:plug_agente/application/use_cases/list_client_tokens.dart';
+import 'package:plug_agente/application/use_cases/list_client_token_page.dart';
 import 'package:plug_agente/application/use_cases/list_developer_data7_connections.dart';
 import 'package:plug_agente/application/use_cases/list_recent_agent_action_remote_audit.dart';
 import 'package:plug_agente/application/use_cases/load_agent_config.dart';
@@ -166,12 +167,13 @@ List<SingleChildWidget> buildAppRootProviders() {
       create: (context) => ClientTokenProvider(
         getIt<CreateClientToken>(),
         getIt<UpdateClientToken>(),
-        getIt<ListClientTokens>(),
+        getIt<ListClientTokenPage>(),
         getIt<GetClientTokenSecret>(),
         getIt<RevokeClientToken>(),
         getIt<DeleteClientToken>(),
+        countActiveClientTokens: getIt<CountActiveClientTokens>(),
         tokenAuditStore: getIt<ITokenAuditStore>(),
-      ),
+      )..refreshActiveTokenCount(),
     ),
     ChangeNotifierProxyProvider2<ConnectionProvider, ClientTokenProvider, AgentOperationalReadinessProvider>(
       create: (context) => AgentOperationalReadinessProvider(

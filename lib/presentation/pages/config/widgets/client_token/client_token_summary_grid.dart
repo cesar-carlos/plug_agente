@@ -98,6 +98,7 @@ class ClientTokenSummaryGrid extends StatelessWidget {
     return AppDataGridScrollable<ClientTokenSummary>(
       columns: clientTokenGridColumns(l10n),
       rows: tokens,
+      rowKey: (token) => ValueKey(token.id),
       scrollController: scrollController,
       rowCells: (token) => [
         Tooltip(

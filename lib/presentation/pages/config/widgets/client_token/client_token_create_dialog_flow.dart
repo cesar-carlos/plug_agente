@@ -12,7 +12,7 @@ import 'package:plug_agente/presentation/pages/config/widgets/client_token/clien
 import 'package:plug_agente/presentation/providers/client_token_provider.dart';
 import 'package:provider/provider.dart';
 
-Future<void> showClientTokenCreateDialog({
+Future<ClientTokenSubmitFeedback?> showClientTokenCreateDialog({
   required BuildContext context,
   required ClientTokenSectionController controller,
   required ClientTokenSectionCoordinator coordinator,
@@ -30,7 +30,7 @@ Future<void> showClientTokenCreateDialog({
   controller.attachDialogControllerListeners();
   controller.markCreateTokenDialogOpen(true);
   try {
-    await showGeneralDialog<void>(
+    return await showGeneralDialog<ClientTokenSubmitFeedback>(
       context: context,
       barrierLabel: l10n.ctDialogDismissCreateToken,
       barrierColor: Colors.black.withValues(
@@ -68,6 +68,7 @@ Future<void> showClientTokenCreateDialog({
             return ChangeNotifierProvider<ClientTokenProvider>.value(
               value: provider,
               child: ClientTokenCreateDialogShell(
+                isSubmitting: controller.isSubmitting,
                 navigatorContext: dialogContext,
                 agentFocusNode: controller.createTokenDialogAgentFocusNode,
                 dialogWidth: dialogWidth,
@@ -99,7 +100,7 @@ Future<void> showClientTokenCreateDialog({
                           globalCanDelete: controller.globalCanDelete,
                           globalCanDdl: controller.globalCanDdl,
                           formError: formError,
-                          providerError: tokenProvider.error,
+                          providerError: tokenProvider.mutationError,
                           lastCreatedToken: tokenProvider.lastCreatedToken,
                           onToggleAllTables: (value) {
                             controller.allTables = value;
@@ -137,7 +138,7 @@ Future<void> showClientTokenCreateDialog({
                       ),
                       const SizedBox(height: AppSpacing.lg),
                       ClientTokenCreateDialogFooter(
-                        isCreating: tokenProvider.isCreating,
+                        isCreating: tokenProvider.isCreating || controller.isSubmitting,
                         canSubmit: hasChanges,
                         submitLabel: isEditingToken
                             ? AppLocalizations.of(dialogContext)!.ctButtonSaveTokenChanges

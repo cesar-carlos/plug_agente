@@ -1,11 +1,14 @@
 import 'dart:convert';
-import 'dart:developer' as developer;
 
 import 'package:drift/drift.dart';
+import 'package:plug_agente/core/constants/authorization_context_constants.dart';
 import 'package:plug_agente/core/utils/client_token_storage.dart';
 import 'package:plug_agente/domain/entities/client_token_list_query.dart';
+import 'package:plug_agente/domain/entities/client_token_page.dart';
 import 'package:plug_agente/domain/entities/client_token_rule.dart';
+import 'package:plug_agente/domain/entities/client_token_runtime_restrictions.dart';
 import 'package:plug_agente/domain/entities/client_token_summary.dart';
+import 'package:plug_agente/domain/errors/failures.dart' as domain;
 import 'package:plug_agente/domain/value_objects/client_permission_set.dart';
 import 'package:plug_agente/infrastructure/repositories/agent_config_drift_database.dart';
 
@@ -20,20 +23,7 @@ class ClientTokenLocalDataSource {
     final effectiveQuery = query ?? const ClientTokenListQuery();
     final statement = _database.select(_database.clientTokenCacheTable);
 
-    final normalizedClientFilter = effectiveQuery.clientIdContains.trim();
-    if (normalizedClientFilter.isNotEmpty) {
-      final escaped = normalizedClientFilter.replaceAll(r'\', r'\\').replaceAll('%', r'\%').replaceAll('_', r'\_');
-      statement.where(
-        (table) =>
-            table.clientId.like('%$escaped%', escapeChar: r'\') | table.name.like('%$escaped%', escapeChar: r'\'),
-      );
-    }
-
-    if (effectiveQuery.status == ClientTokenStatusFilter.active) {
-      statement.where((table) => table.isRevoked.equals(false));
-    } else if (effectiveQuery.status == ClientTokenStatusFilter.revoked) {
-      statement.where((table) => table.isRevoked.equals(true));
-    }
+    statement.where((table) => _filter(table, effectiveQuery));
 
     statement.orderBy([
       switch (effectiveQuery.sort) {
@@ -56,6 +46,7 @@ class ClientTokenLocalDataSource {
         expression: table.createdAt,
         mode: OrderingMode.desc,
       ),
+      (table) => OrderingTerm(expression: table.id),
     ]);
 
     if (effectiveQuery.hasPagination) {
@@ -64,6 +55,44 @@ class ClientTokenLocalDataSource {
 
     final rows = await statement.get();
     return rows.map(mapRowToSummaryWithoutTokenValue).toList();
+  }
+
+  Expression<bool> _filter($ClientTokenCacheTableTable table, ClientTokenListQuery query) {
+    Expression<bool> filter = const Constant(true);
+    final value = query.clientIdContains.trim();
+    if (value.isNotEmpty) {
+      final escaped = value.replaceAll(r'\', r'\\').replaceAll('%', r'\%').replaceAll('_', r'\_');
+      filter = table.clientId.like('%$escaped%', escapeChar: r'\') | table.name.like('%$escaped%', escapeChar: r'\');
+    }
+    return switch (query.status) {
+      ClientTokenStatusFilter.all => filter,
+      ClientTokenStatusFilter.active => filter & table.isRevoked.equals(false),
+      ClientTokenStatusFilter.revoked => filter & table.isRevoked.equals(true),
+    };
+  }
+
+  Future<int> _count(ClientTokenListQuery query) async {
+    final table = _database.clientTokenCacheTable;
+    final count = table.id.count();
+    final statement = _database.selectOnly(table)
+      ..addColumns([count])
+      ..where(_filter(table, query));
+    return (await statement.getSingle()).read(count)!;
+  }
+
+  Future<int> countActiveTokens() => _count(const ClientTokenListQuery(status: ClientTokenStatusFilter.active));
+
+  Future<ClientTokenPage> listTokenPage({required ClientTokenListQuery query}) {
+    return _database.transaction(() async {
+      final total = await _count(query);
+      final size = query.pageSize ?? ClientTokenListQuery.defaultPageSize;
+      final lastPage = total == 0 ? 1 : (total / size).ceil();
+      final page = (query.page ?? 1).clamp(1, lastPage);
+      final items = await listTokens(
+        query: query.copyWith(page: page, pageSize: size),
+      );
+      return ClientTokenPage(items: items, page: page, pageSize: size, totalCount: total);
+    });
   }
 
   Future<ClientTokenCacheData?> findRowById(String tokenId) {
@@ -145,68 +174,89 @@ class ClientTokenLocalDataSource {
         .write(companion);
   }
 
-  Future<bool> markTokenRevoked(String tokenId) async {
-    final current = await findRowById(tokenId);
-    if (current == null) {
-      return false;
-    }
-    final now = DateTime.now().toUtc();
-    final affectedRows = await applyTokenUpdate(
-      tokenId: tokenId,
-      expectedVersion: current.version,
-      companion: ClientTokenCacheTableCompanion(
-        isRevoked: const Value(true),
-        version: Value(current.version + 1),
-        updatedAt: Value(now),
-        syncedAt: Value(now),
-      ),
-    );
-    return affectedRows > 0;
+  Future<bool> markTokenRevoked(String tokenId) async => await revokeTokenRow(tokenId) != null;
+
+  Future<ClientTokenCacheData?> revokeTokenRow(String tokenId) {
+    return _database.transaction(() async {
+      final current = await findRowById(tokenId);
+      if (current == null || current.isRevoked) return current;
+      final now = DateTime.now().toUtc();
+      final affectedRows = await applyTokenUpdate(
+        tokenId: tokenId,
+        expectedVersion: current.version,
+        companion: ClientTokenCacheTableCompanion(
+          isRevoked: const Value(true),
+          version: Value(current.version + 1),
+          updatedAt: Value(now),
+          syncedAt: Value(now),
+        ),
+      );
+      return affectedRows > 0 ? current : null;
+    });
   }
 
-  Future<ClientTokenCacheData?> deleteToken(String tokenId) async {
-    final current = await findRowById(tokenId);
-    final affectedRows = await (_database.delete(
-      _database.clientTokenCacheTable,
-    )..where((table) => table.id.equals(tokenId))).go();
-    if (affectedRows > 0) {
-      return current;
-    }
-    return null;
+  Future<ClientTokenCacheData?> deleteToken(String tokenId) {
+    return _database.transaction(() async {
+      final current = await findRowById(tokenId);
+      if (current == null) return null;
+      final affectedRows = await (_database.delete(
+        _database.clientTokenCacheTable,
+      )..where((table) => table.id.equals(tokenId) & table.version.equals(current.version))).go();
+      return affectedRows > 0 ? current : null;
+    });
   }
 
-  Future<void> updatePersistedTokenValue({
+  Future<int> updatePersistedTokenValue({
     required String tokenId,
     required String? tokenValue,
+    required String expectedTokenHash,
+    required int expectedVersion,
   }) {
-    return (_database.update(_database.clientTokenCacheTable)..where((table) => table.id.equals(tokenId))).write(
-      ClientTokenCacheTableCompanion(
-        tokenValue: Value(tokenValue),
-      ),
-    );
+    return (_database.update(_database.clientTokenCacheTable)..where(
+          (table) =>
+              table.id.equals(tokenId) &
+              table.tokenHash.equals(expectedTokenHash) &
+              table.version.equals(expectedVersion),
+        ))
+        .write(ClientTokenCacheTableCompanion(tokenValue: Value(tokenValue)));
+  }
+
+  Future<void> runIfTokenHashUnreferenced(String tokenHash, Future<void> Function() action) {
+    return _database.transaction(() async {
+      if (await findRowByHash(tokenHash) == null) await action();
+    });
   }
 
   ClientTokenSummary mapRowToSummaryWithoutTokenValue(ClientTokenCacheData row) {
-    return ClientTokenSummary(
-      id: row.id,
-      clientId: row.clientId,
-      name: row.name,
-      createdAt: row.createdAt,
-      isRevoked: row.isRevoked,
-      agentId: row.agentId,
-      version: row.version,
-      updatedAt: row.updatedAt,
-      payload: _decodePayload(row.payloadJson),
-      allTables: row.allTables,
-      allViews: row.allViews,
-      globalPermissions: _decodeGlobalPermissions(
-        row.globalPermissionsJson,
-        legacyAllPermissions: row.allPermissions,
-        legacyAllTables: row.allTables,
-        legacyAllViews: row.allViews,
-      ),
-      rules: _decodeRules(row.rulesJson),
-    );
+    try {
+      return ClientTokenSummary(
+        id: row.id,
+        clientId: row.clientId,
+        name: row.name,
+        createdAt: row.createdAt,
+        isRevoked: row.isRevoked,
+        agentId: row.agentId,
+        version: row.version,
+        updatedAt: row.updatedAt,
+        payload: _decodePayload(row.payloadJson),
+        allTables: row.allTables,
+        allViews: row.allViews,
+        globalPermissions: _decodeGlobalPermissions(row.globalPermissionsJson),
+        rules: _decodeRules(row.rulesJson),
+      );
+    } on FormatException {
+      throw domain.ConfigurationFailure.withContext(
+        message:
+            'A política salva deste token está inválida. Revogue-o e crie outro token com as permissões desejadas.',
+        code: 'CLIENT_TOKEN_POLICY_INVALID',
+        context: {
+          'operation': 'decode_client_token_policy',
+          'token_id': row.id,
+          'reason': AuthorizationContextConstants.invalidPolicyReason,
+          'user_message': 'Política de token inválida. Revogue o token e crie outro para recuperar o acesso.',
+        },
+      );
+    }
   }
 
   ClientTokenCacheTableCompanion _toCompanion(
@@ -238,74 +288,34 @@ class ClientTokenLocalDataSource {
     );
   }
 
-  Map<String, dynamic> _decodePayload(String payloadJson) {
+  Object? _decodeJson(String value) {
     try {
-      final decoded = jsonDecode(payloadJson);
-      if (decoded is Map<String, dynamic>) {
-        return decoded;
-      }
-      return const <String, dynamic>{};
-    } on FormatException catch (error, stackTrace) {
-      developer.log(
-        'Invalid payload JSON in token cache',
-        name: 'client_token_local_data_source',
-        error: error,
-        stackTrace: stackTrace,
-      );
-      return const <String, dynamic>{};
+      return jsonDecode(value);
+    } on FormatException {
+      // Never attach the persisted JSON to exceptions or logs.
+      throw const FormatException('Invalid token policy JSON');
     }
+  }
+
+  Map<String, dynamic> _decodePayload(String payloadJson) {
+    final decoded = _decodeJson(payloadJson);
+    if (decoded is! Map<String, dynamic> || !ClientTokenRuntimeRestrictions.isValidPayload(decoded)) {
+      throw const FormatException('Invalid token payload');
+    }
+    return decoded;
   }
 
   List<ClientTokenRule> _decodeRules(String rulesJson) {
-    try {
-      final decoded = jsonDecode(rulesJson);
-      if (decoded is! List<dynamic>) {
-        return const <ClientTokenRule>[];
-      }
-
-      return decoded.whereType<Map<String, dynamic>>().map(ClientTokenRule.fromJson).toList();
-    } on FormatException catch (error, stackTrace) {
-      developer.log(
-        'Invalid rules JSON in token cache',
-        name: 'client_token_local_data_source',
-        error: error,
-        stackTrace: stackTrace,
-      );
-      return const <ClientTokenRule>[];
+    final decoded = _decodeJson(rulesJson);
+    if (decoded is! List || decoded.any((rule) => rule is! Map<String, dynamic>)) {
+      throw const FormatException('Invalid token rules');
     }
+    return decoded.cast<Map<String, dynamic>>().map(ClientTokenRule.fromJson).toList();
   }
 
-  ClientPermissionSet _decodeGlobalPermissions(
-    String globalPermissionsJson, {
-    required bool legacyAllPermissions,
-    required bool legacyAllTables,
-    required bool legacyAllViews,
-  }) {
-    try {
-      final decoded = jsonDecode(globalPermissionsJson);
-      if (decoded is Map<String, dynamic>) {
-        return ClientPermissionSet.fromJson(decoded);
-      }
-      if (decoded is Map<dynamic, dynamic>) {
-        return ClientPermissionSet.fromJson(
-          Map<String, dynamic>.from(decoded),
-        );
-      }
-    } on FormatException catch (error, stackTrace) {
-      developer.log(
-        'Invalid global permissions JSON in token cache',
-        name: 'client_token_local_data_source',
-        error: error,
-        stackTrace: stackTrace,
-      );
-    }
-
-    if (legacyAllPermissions) {
-      return ClientPermissionSet.fullAccess;
-    }
-    if (legacyAllTables || legacyAllViews) {
-      return ClientPermissionSet.legacyScopedAccess;
-    }
-    return ClientPermissionSet.none;
+  ClientPermissionSet _decodeGlobalPermissions(String globalPermissionsJson) {
+    final decoded = _decodeJson(globalPermissionsJson);
+    if (decoded is! Map<String, dynamic>) throw const FormatException('Invalid token permissions');
+    return ClientPermissionSet.fromJson(decoded);
   }
 }

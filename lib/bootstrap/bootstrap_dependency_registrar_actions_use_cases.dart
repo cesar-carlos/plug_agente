@@ -9,6 +9,7 @@ void _registerActionsUseCases(GetIt getIt) {
         circuitBreakerResetProvider: () =>
             getIt.isRegistered<IOdbcCircuitBreakerReset>() ? getIt<IOdbcCircuitBreakerReset>() : null,
         metadataCache: getIt<ActiveConfigMetadataCache>(),
+        authorizationTrustInvalidator: getIt<IAuthorizationTrustInvalidator>(),
         streamingConnectionStringCache: getIt<SqlStreamingConnectionStringCache>(),
       ),
     )

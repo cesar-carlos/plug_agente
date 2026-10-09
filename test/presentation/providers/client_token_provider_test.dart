@@ -20,6 +20,8 @@ import 'package:plug_agente/domain/value_objects/database_resource.dart';
 import 'package:plug_agente/presentation/providers/client_token_provider.dart';
 import 'package:result_dart/result_dart.dart';
 
+import '../../helpers/client_token_test_loaders.dart';
+
 class MockCreateClientToken extends Mock implements CreateClientToken {}
 
 class MockListClientTokens extends Mock implements ListClientTokens {}
@@ -50,6 +52,9 @@ void main() {
     setUp(() {
       mockCreateClientToken = MockCreateClientToken();
       mockListClientTokens = MockListClientTokens();
+      when(
+        () => mockListClientTokens(query: any(named: 'query')),
+      ).thenAnswer((_) async => const Success(<ClientTokenSummary>[]));
       mockUpdateClientToken = MockUpdateClientToken();
       mockGetClientTokenSecret = MockGetClientTokenSecret();
       mockRevokeClientToken = MockRevokeClientToken();
@@ -57,10 +62,11 @@ void main() {
       provider = ClientTokenProvider(
         mockCreateClientToken,
         mockUpdateClientToken,
-        mockListClientTokens,
+        ClientTokenTestPageLoader(mockListClientTokens),
         mockGetClientTokenSecret,
         mockRevokeClientToken,
         mockDeleteClientToken,
+        countActiveClientTokens: FixedClientTokenTestCounter(),
       );
       when(
         () => mockGetClientTokenSecret(any()),
@@ -465,6 +471,9 @@ void main() {
         () => mockRevokeClientToken('token-1'),
       ).thenAnswer((_) async => const Success(unit));
 
+      when(
+        () => mockListClientTokens(query: any(named: 'query')),
+      ).thenAnswer((_) async => const Success(<ClientTokenSummary>[]));
       final result = await provider.revokeToken('token-1');
 
       expect(result.isSuccess(), isTrue);
@@ -486,6 +495,53 @@ void main() {
 
       revokeCompleter.complete(const Success(unit));
       expect((await revokeFuture).isSuccess(), isTrue);
+    });
+
+    for (final interruption in ['mutation', 'dispose']) {
+      test('discards a secret read completed after $interruption', () async {
+        final secretCompleter = Completer<Result<ClientTokenSecretLookup>>();
+        when(() => mockGetClientTokenSecret('token-1')).thenAnswer((_) => secretCompleter.future);
+        final secretFuture = provider.getTokenSecret('token-1');
+        if (interruption == 'dispose') {
+          provider.dispose();
+        } else {
+          when(() => mockDeleteClientToken('token-1')).thenAnswer((_) async => const Success(unit));
+          expect((await provider.deleteToken('token-1')).isSuccess(), isTrue);
+        }
+        secretCompleter.complete(const Success(ClientTokenSecretLookup(tokenValue: 'obsolete-secret')));
+        final result = await secretFuture;
+        expect(result.exceptionOrNull(), isA<domain.ValidationFailure>());
+        expect((result.exceptionOrNull()! as domain.Failure).code, 'SUPERSEDED');
+        expect(provider.isCopyingTokenSecret, isFalse);
+      });
+    }
+
+    test('repeated revoke preserves optimistic version when page refresh fails', () async {
+      final confirmedDate = DateTime.utc(2026);
+      when(() => mockListClientTokens(query: any(named: 'query'))).thenAnswer(
+        (_) async => Success([
+          ClientTokenSummary(
+            id: 'token-1',
+            clientId: 'client-1',
+            createdAt: confirmedDate,
+            isRevoked: true,
+            version: 5,
+            updatedAt: confirmedDate,
+            allTables: true,
+            allViews: true,
+            rules: const [],
+          ),
+        ]),
+      );
+      await provider.loadTokens();
+      when(() => mockRevokeClientToken('token-1')).thenAnswer((_) async => const Success(unit));
+      when(
+        () => mockListClientTokens(query: any(named: 'query')),
+      ).thenAnswer((_) async => Failure(domain.DatabaseFailure('Refresh unavailable')));
+      expect((await provider.revokeToken('token-1')).isSuccess(), isTrue);
+      expect(provider.tokens.single.version, 5);
+      expect(provider.tokens.single.updatedAt, confirmedDate);
+      expect(provider.isListStale, isTrue);
     });
 
     test('should expose copying state while token secret is loading', () async {

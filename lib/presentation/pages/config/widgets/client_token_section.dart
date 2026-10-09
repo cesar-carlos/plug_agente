@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:fluent_ui/fluent_ui.dart';
+import 'package:flutter/services.dart';
 import 'package:plug_agente/core/settings/app_settings_store.dart';
 import 'package:plug_agente/core/theme/theme.dart';
 import 'package:plug_agente/domain/entities/client_token_summary.dart';
@@ -34,6 +35,16 @@ class _ClientTokenSectionState extends State<ClientTokenSection> {
   late final ClientTokenSectionController _controller;
   late final ClientTokenSectionCoordinator _coordinator;
   var _controllerInitialized = false;
+  ClientTokenSubmitFeedback? _savedFeedback;
+  late final ScrollController _listScrollController;
+  late final bool _ownsScrollController;
+
+  @override
+  void initState() {
+    super.initState();
+    _ownsScrollController = widget.scrollController == null;
+    _listScrollController = widget.scrollController ?? ScrollController();
+  }
 
   @override
   void didChangeDependencies() {
@@ -50,7 +61,7 @@ class _ClientTokenSectionState extends State<ClientTokenSection> {
       );
       _coordinator = ClientTokenSectionCoordinator(
         controller: _controller,
-        scrollController: widget.scrollController,
+        scrollController: _listScrollController,
       );
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (!mounted) {
@@ -73,6 +84,7 @@ class _ClientTokenSectionState extends State<ClientTokenSection> {
     if (_controllerInitialized) {
       _controller.dispose();
     }
+    if (_ownsScrollController) _listScrollController.dispose();
     super.dispose();
   }
 
@@ -81,7 +93,7 @@ class _ClientTokenSectionState extends State<ClientTokenSection> {
       return;
     }
     final provider = context.read<ClientTokenProvider>();
-    await showClientTokenCreateDialog(
+    final feedback = await showClientTokenCreateDialog(
       context: context,
       controller: _controller,
       coordinator: _coordinator,
@@ -89,6 +101,17 @@ class _ClientTokenSectionState extends State<ClientTokenSection> {
       baseToken: baseToken,
     );
     if (mounted) {
+      if (feedback != null) {
+        if (feedback.tokenValue != null) {
+          _savedFeedback = feedback;
+        } else {
+          _coordinator.showEditOutcomeFeedback(
+            context: context,
+            outcome: feedback.outcome,
+            rotatedTokenValue: feedback.tokenValue,
+          );
+        }
+      }
       setState(() {});
     }
   }
@@ -103,6 +126,11 @@ class _ClientTokenSectionState extends State<ClientTokenSection> {
         bool hasLoaded,
         bool isMutating,
         String error,
+        String listError,
+        bool isListStale,
+        int page,
+        int pageSize,
+        int totalCount,
         String? revokingId,
         String? deletingId,
         String? copyingId,
@@ -113,7 +141,12 @@ class _ClientTokenSectionState extends State<ClientTokenSection> {
         isLoading: provider.isLoading,
         hasLoaded: provider.hasLoaded,
         isMutating: provider.isTokenMutationInProgress,
-        error: provider.error,
+        error: provider.mutationError,
+        listError: provider.listError,
+        isListStale: provider.isListStale,
+        page: provider.currentPage,
+        pageSize: provider.pageSize,
+        totalCount: provider.totalCount,
         revokingId: provider.revokingTokenId,
         deletingId: provider.deletingTokenId,
         copyingId: provider.copyingTokenSecretId,
@@ -143,6 +176,20 @@ class _ClientTokenSectionState extends State<ClientTokenSection> {
                   ),
                 ],
               ),
+              if (_savedFeedback?.tokenValue case final String tokenValue) ...[
+                const SizedBox(height: AppSpacing.sm),
+                InfoBar(
+                  title: Text(_savedFeedback!.isCreation ? l10n.ctMsgTokenCreatedCopyNow : l10n.ctMsgTokenRotated),
+                  content: SelectableText(tokenValue),
+                  severity: InfoBarSeverity.success,
+                  onClose: () => setState(() => _savedFeedback = null),
+                  action: FilledButton(
+                    onPressed: () => Clipboard.setData(ClipboardData(text: tokenValue)),
+                    child: Text(l10n.ctButtonCopyToken),
+                  ),
+                ),
+                const SizedBox(height: AppSpacing.sm),
+              ],
               if (state.error.isNotEmpty) ...[
                 InlineFeedbackCard(
                   severity: InfoBarSeverity.error,
@@ -152,6 +199,21 @@ class _ClientTokenSectionState extends State<ClientTokenSection> {
                 ),
                 const SizedBox(height: AppSpacing.sm),
               ],
+              if (state.listError.isNotEmpty || state.isListStale) ...[
+                InlineFeedbackCard(
+                  severity: state.hasLoaded ? InfoBarSeverity.warning : InfoBarSeverity.error,
+                  title: state.isListStale ? l10n.ctSavedListStale : l10n.modalTitleError,
+                  message: state.listError.isNotEmpty ? state.listError : l10n.ctListStale,
+                  onRetry: state.hasLoaded && !isListInteractionLocked
+                      ? () => _coordinator.refreshList(provider)
+                      : null,
+                ),
+                const SizedBox(height: AppSpacing.sm),
+              ],
+              if (_controller.hasPreferenceWarning) ...[
+                InlineFeedbackCard(severity: InfoBarSeverity.warning, message: l10n.ctPreferencesSaveFailed),
+                const SizedBox(height: AppSpacing.sm),
+              ],
               const SizedBox(height: AppSpacing.sm),
               ClientTokenListPanel(
                 listedTokens: listedTokens,
@@ -159,7 +221,7 @@ class _ClientTokenSectionState extends State<ClientTokenSection> {
                 isListInteractionLocked: isListInteractionLocked,
                 hasLoaded: state.hasLoaded,
                 isLoading: state.isLoading,
-                hasLoadError: state.error.isNotEmpty,
+                hasLoadError: state.listError.isNotEmpty,
                 hasActiveFilters: _controller.hasActiveFilters(),
                 clientFilterController: _controller.listClientFilterController,
                 tokenStatusFilter: _controller.tokenStatusFilter,
@@ -187,13 +249,18 @@ class _ClientTokenSectionState extends State<ClientTokenSection> {
                   await _coordinator.reloadTokensForCurrentFilters(provider);
                 },
                 onClearFilters: () => _coordinator.clearTokenFilters(provider),
-                onRefresh: () => provider.loadTokens(query: _controller.buildListQuery()),
+                onRefresh: () => _coordinator.refreshList(provider),
                 onToggleAutoRefresh: () async {
                   _controller.toggleAutoRefreshAfterCreate();
                   await _controller.saveListPreferences();
                 },
-                onRetryLoad: () => provider.loadTokens(query: _controller.buildListQuery()),
-                scrollController: widget.scrollController,
+                onRetryLoad: () => _coordinator.refreshList(provider),
+                page: state.page,
+                pageSize: _controller.pageSize,
+                totalCount: state.totalCount,
+                onPageChanged: (page) => _coordinator.changePage(provider, page),
+                onPageSizeChanged: (size) => _coordinator.changePageSize(provider, size),
+                scrollController: _listScrollController,
                 isRevokingToken: provider.isRevokingToken,
                 isDeletingToken: provider.isDeletingToken,
                 isCopyingTokenSecret: provider.isCopyingTokenSecretFor,

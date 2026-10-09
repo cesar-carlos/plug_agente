@@ -49,7 +49,7 @@ void main() {
         globalPermissionsJson: jsonEncode(ClientPermissionSet.fullAccess.toJson()),
         rulesJson: '[]',
         syncedAt: DateTime.utc(2026),
-        tokenHash: 'hash',
+        tokenHash: hashStoredClientToken('secret'),
       );
       when(() => mockDataSource.findRowById(tokenId)).thenAnswer((_) async => row);
       when(() => mockDataSource.mapRowToSummaryWithoutTokenValue(row)).thenReturn(
@@ -87,7 +87,7 @@ void main() {
       );
     });
 
-    test('getTokenById returns ServerFailure on datasource exception', () async {
+    test('getTokenById returns DatabaseFailure on datasource exception', () async {
       const tokenId = 'token-db-error';
       when(() => mockDataSource.findRowById(tokenId)).thenThrow(Exception('db down'));
 
@@ -96,7 +96,7 @@ void main() {
       expect(result.isError(), isTrue);
       result.fold(
         (_) => fail('Expected failure'),
-        (failure) => expect(failure, isA<domain.ServerFailure>()),
+        (failure) => expect(failure, isA<domain.DatabaseFailure>()),
       );
     });
 
@@ -154,7 +154,7 @@ void main() {
       );
     });
 
-    test('getTokenByHash returns ServerFailure on datasource exception', () async {
+    test('getTokenByHash returns DatabaseFailure on datasource exception', () async {
       const tokenHash = 'hash-db-error';
       when(() => mockDataSource.findRowByHash(tokenHash)).thenThrow(Exception('db down'));
 
@@ -163,7 +163,7 @@ void main() {
       expect(result.isError(), isTrue);
       result.fold(
         (_) => fail('Expected failure'),
-        (failure) => expect(failure, isA<domain.ServerFailure>()),
+        (failure) => expect(failure, isA<domain.DatabaseFailure>()),
       );
     });
   });
@@ -189,7 +189,7 @@ void main() {
       final dataSource = ClientTokenLocalDataSource(db);
       return ClientTokenRepository(
         dataSource,
-        secretStore: secretStore,
+        secretStore: secretStore ?? _FakeTokenSecretStore(),
       );
     }
 
@@ -455,25 +455,13 @@ void main() {
       expect(secretStore.readSecretSync(tokenHash), equals(tokenValue));
     });
 
-    test('createToken with unavailable secret store persists plaintext token value', () async {
+    test('createToken fails without secure storage and never persists plaintext', () async {
       final db = AppDatabase(executor: NativeDatabase.memory());
       addTearDown(db.close);
-      final dataSource = ClientTokenLocalDataSource(db);
-      final repository = ClientTokenRepository(
-        dataSource,
-        secretStore: NoopTokenSecretStore(),
-      );
-
-      final opaque = (await repository.createToken(baseRequest())).getOrNull()!;
-      final row = await db.select(db.clientTokenCacheTable).getSingle();
-
-      expect(row.tokenValue, opaque);
-      expect(row.tokenValue, isNot('__secure_storage__'));
-      final list = (await repository.listTokens()).getOrNull()!;
-      expect(
-        (await repository.getTokenSecret(list.single.id)).getOrNull()!.tokenValue,
-        equals(opaque),
-      );
+      final repository = ClientTokenRepository(ClientTokenLocalDataSource(db), secretStore: NoopTokenSecretStore());
+      final result = await repository.createToken(baseRequest());
+      expect(result.exceptionOrNull(), isA<domain.ConfigurationFailure>());
+      expect(await db.select(db.clientTokenCacheTable).get(), isEmpty);
     });
 
     test('replaceTokens does not update secrets when database transaction fails', () async {

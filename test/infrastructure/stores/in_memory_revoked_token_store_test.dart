@@ -1,8 +1,19 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:plug_agente/core/utils/client_token_credential.dart';
 import 'package:plug_agente/infrastructure/stores/in_memory_revoked_token_store.dart';
 
 void main() {
   group('InMemoryRevokedTokenStore', () {
+    test('accepts persisted credential hashes and normalizes bearer credentials consistently', () {
+      final store = InMemoryRevokedTokenStore();
+      store.addCredentialHash(hashClientCredentialToken('secret-token'));
+      expect(store.isRevoked('secret-token'), isTrue);
+      expect(store.isRevoked(' Bearer secret-token '), isTrue);
+      expect(store.isRevoked('another-token'), isFalse);
+      store.add(' Bearer other-token ');
+      expect(store.isRevoked('other-token'), isTrue);
+    });
+
     test('should return false when token not added', () {
       final store = InMemoryRevokedTokenStore();
       expect(store.isRevoked('token-123'), isFalse);

@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:checks/checks.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
@@ -7,6 +9,7 @@ import 'package:plug_agente/application/use_cases/get_client_token_policy.dart';
 import 'package:plug_agente/core/config/feature_flags.dart';
 import 'package:plug_agente/core/constants/agent_action_rpc_constants.dart';
 import 'package:plug_agente/core/constants/rpc_client_token_constants.dart';
+import 'package:plug_agente/core/constants/rpc_sql_budget_constants.dart';
 import 'package:plug_agente/domain/entities/client_token_policy.dart';
 import 'package:plug_agente/domain/protocol/protocol.dart';
 import 'package:result_dart/result_dart.dart';
@@ -59,6 +62,116 @@ void main() {
         getClientTokenPolicy: mockGetPolicy,
         authorizeSqlOperation: mockAuthorize,
       );
+    });
+
+    test('policy resolution times out before SQL authorization and its late completion does not dispatch', () async {
+      when(() => mockFeatureFlags.enableSocketTimeoutByStage).thenReturn(true);
+      final completion = Completer<Result<ClientTokenPolicy>>();
+      when(() => mockGetPolicy(any())).thenAnswer((_) => completion.future);
+      service = AgentActionRemoteAuthorizationService(
+        featureFlags: mockFeatureFlags,
+        getClientTokenPolicy: mockGetPolicy,
+        authorizeSqlOperation: mockAuthorize,
+        authorizationStageBudget: const Duration(milliseconds: 20),
+      );
+      final result = await service
+          .authorizeIfNeeded(
+            request: const RpcRequest(
+              jsonrpc: '2.0',
+              id: 1,
+              method: AgentActionRpcConstants.agentActionRunRpcMethodName,
+            ),
+            clientToken: 'tok',
+            authorizationSql: AgentActionRpcConstants.clientTokenAuthorizationSqlAgentActionRun,
+            requiredAgentActionScope: AgentActionRpcConstants.agentActionsRunScope,
+            actionIdForAllowlist: 'action',
+          )
+          .timeout(const Duration(seconds: 2));
+      expect(result.denied, isNotNull);
+      final data = result.denied!.error!.data as Map<String, dynamic>;
+      expect(data['odbc_reason'], RpcSqlBudgetConstants.authorizationTimeoutReason);
+      expect(data['stage'], 'authorization');
+      completion.complete(
+        const Success(
+          ClientTokenPolicy(clientId: 'c', allTables: true, allViews: true, allPermissions: true, rules: []),
+        ),
+      );
+      await Future<void>.delayed(Duration.zero);
+      verifyNever(
+        () => mockAuthorize(
+          token: any(named: 'token'),
+          sql: any(named: 'sql'),
+          requestId: any(named: 'requestId'),
+          method: any(named: 'method'),
+        ),
+      );
+    });
+
+    test('a zero authorization budget does not start policy resolution', () async {
+      when(() => mockFeatureFlags.enableSocketTimeoutByStage).thenReturn(true);
+      service = AgentActionRemoteAuthorizationService(
+        featureFlags: mockFeatureFlags,
+        getClientTokenPolicy: mockGetPolicy,
+        authorizeSqlOperation: mockAuthorize,
+        authorizationStageBudget: Duration.zero,
+      );
+      final result = await service.authorizeIfNeeded(
+        request: const RpcRequest(jsonrpc: '2.0', id: 1, method: AgentActionRpcConstants.agentActionRunRpcMethodName),
+        clientToken: 'tok',
+        authorizationSql: AgentActionRpcConstants.clientTokenAuthorizationSqlAgentActionRun,
+        requiredAgentActionScope: AgentActionRpcConstants.agentActionsRunScope,
+        actionIdForAllowlist: 'action',
+      );
+      expect(result.denied, isNotNull);
+      final data = result.denied!.error!.data as Map<String, dynamic>;
+      expect(data['odbc_reason'], RpcSqlBudgetConstants.authorizationBudgetExhaustedReason);
+      verifyNever(() => mockGetPolicy(any()));
+    });
+
+    test('SQL authorization uses the remaining shared budget', () async {
+      when(() => mockFeatureFlags.enableSocketTimeoutByStage).thenReturn(true);
+      var now = DateTime.utc(2026);
+      when(() => mockGetPolicy(any())).thenAnswer((_) async {
+        now = now.add(const Duration(milliseconds: 80));
+        return const Success(
+          ClientTokenPolicy(clientId: 'c', allTables: true, allViews: true, allPermissions: true, rules: []),
+        );
+      });
+      final completion = Completer<Result<void>>();
+      when(
+        () => mockAuthorize(
+          token: any(named: 'token'),
+          sql: any(named: 'sql'),
+          requestId: any(named: 'requestId'),
+          method: any(named: 'method'),
+        ),
+      ).thenAnswer((_) => completion.future);
+      service = AgentActionRemoteAuthorizationService(
+        featureFlags: mockFeatureFlags,
+        getClientTokenPolicy: mockGetPolicy,
+        authorizeSqlOperation: mockAuthorize,
+        authorizationStageBudget: const Duration(milliseconds: 100),
+        now: () => now,
+      );
+      final result = await service
+          .authorizeIfNeeded(
+            request: const RpcRequest(
+              jsonrpc: '2.0',
+              id: 1,
+              method: AgentActionRpcConstants.agentActionRunRpcMethodName,
+            ),
+            clientToken: 'tok',
+            authorizationSql: AgentActionRpcConstants.clientTokenAuthorizationSqlAgentActionRun,
+            requiredAgentActionScope: AgentActionRpcConstants.agentActionsRunScope,
+            actionIdForAllowlist: 'action',
+          )
+          .timeout(const Duration(seconds: 2));
+      expect(result.denied, isNotNull);
+      expect(
+        (result.denied!.error!.data as Map<String, dynamic>)['odbc_reason'],
+        RpcSqlBudgetConstants.authorizationTimeoutReason,
+      );
+      completion.complete(const Success(unit));
     });
 
     test('should deny when client token is missing and authorization is required', () async {

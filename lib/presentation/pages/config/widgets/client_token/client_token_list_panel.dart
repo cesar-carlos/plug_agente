@@ -39,6 +39,11 @@ class ClientTokenListPanel extends StatelessWidget {
     required this.onEdit,
     required this.onRevoke,
     required this.onDelete,
+    required this.page,
+    required this.pageSize,
+    required this.totalCount,
+    required this.onPageChanged,
+    required this.onPageSizeChanged,
     this.scrollController,
     super.key,
   });
@@ -72,6 +77,11 @@ class ClientTokenListPanel extends StatelessWidget {
   final ValueChanged<ClientTokenSummary> onRevoke;
   final ValueChanged<ClientTokenSummary> onDelete;
   final ScrollController? scrollController;
+  final int page;
+  final int pageSize;
+  final int totalCount;
+  final ValueChanged<int> onPageChanged;
+  final ValueChanged<int> onPageSizeChanged;
 
   @override
   Widget build(BuildContext context) {
@@ -142,6 +152,75 @@ class ClientTokenListPanel extends StatelessWidget {
               onDelete: onDelete,
             ),
           ),
+        if (hasLoaded) ...[
+          const SizedBox(height: AppSpacing.sm),
+          _ClientTokenPagination(
+            page: page,
+            pageSize: pageSize,
+            totalCount: totalCount,
+            enabled: !isListInteractionLocked && !isLoading,
+            onPageChanged: onPageChanged,
+            onPageSizeChanged: onPageSizeChanged,
+          ),
+        ],
+      ],
+    );
+  }
+}
+
+class _ClientTokenPagination extends StatelessWidget {
+  const _ClientTokenPagination({
+    required this.page,
+    required this.pageSize,
+    required this.totalCount,
+    required this.enabled,
+    required this.onPageChanged,
+    required this.onPageSizeChanged,
+  });
+
+  final int page;
+  final int pageSize;
+  final int totalCount;
+  final bool enabled;
+  final ValueChanged<int> onPageChanged;
+  final ValueChanged<int> onPageSizeChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    final totalPages = totalCount == 0 ? 1 : (totalCount / pageSize).ceil();
+    return Wrap(
+      spacing: AppSpacing.md,
+      runSpacing: AppSpacing.sm,
+      crossAxisAlignment: WrapCrossAlignment.center,
+      children: [
+        Text(l10n.ctPaginationSummary(page, totalPages, totalCount)),
+        SizedBox(
+          width: 160,
+          child: ComboBox<int>(
+            isExpanded: true,
+            value: pageSize,
+            placeholder: Text(l10n.queryPaginationPageSize),
+            items: ClientTokenListQuery.supportedPageSizes
+                .map((size) => ComboBoxItem<int>(value: size, child: Text('$size')))
+                .toList(),
+            onChanged: enabled
+                ? (size) {
+                    if (size != null) onPageSizeChanged(size);
+                  }
+                : null,
+          ),
+        ),
+        AppButton(
+          label: l10n.queryPaginationPrevious,
+          isPrimary: false,
+          onPressed: enabled && page > 1 ? () => onPageChanged(page - 1) : null,
+        ),
+        AppButton(
+          label: l10n.queryPaginationNext,
+          isPrimary: false,
+          onPressed: enabled && page < totalPages ? () => onPageChanged(page + 1) : null,
+        ),
       ],
     );
   }

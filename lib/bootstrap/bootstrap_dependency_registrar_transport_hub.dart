@@ -128,6 +128,13 @@ void _registerTransportHub(GetIt getIt) {
     ..registerLazySingleton<IViaCepLookup>(() => getIt<ViaCepClient>())
     ..registerLazySingleton(() => LookupAgentCnpj(getIt<IOpenCnpjLookup>()))
     ..registerLazySingleton(() => LookupAgentCep(getIt<IViaCepLookup>()))
+    ..registerLazySingleton<IAuthorizationTrustInvalidator>(
+      () => AuthorizationTrustInvalidator(
+        decisionCache: getIt<IAuthorizationDecisionCache>(),
+        policyCache: getIt<IClientTokenPolicyCache>(),
+        verifier: getIt<JwtJwksVerifier>(),
+      ),
+    )
     ..registerLazySingleton<IAuthorizationPolicyResolver>(
       () => AuthorizationPolicyResolver(
         getIt<FeatureFlags>(),
@@ -175,6 +182,10 @@ void _registerTransportHub(GetIt getIt) {
         getIt<ClientTokenLocalDataSource>(),
         maintenanceGate: getIt<IUpdateMaintenanceGate>(),
         secretStore: getIt<ITokenSecretStore>(),
+        decisionCache: getIt<IAuthorizationDecisionCache>(),
+        policyCache: getIt<IClientTokenPolicyCache>(),
+        revokedTokenStore: getIt<IRevokedTokenStore>(),
+        featureFlags: getIt<FeatureFlags>(),
       ),
     )
     ..registerLazySingleton(

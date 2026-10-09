@@ -13,6 +13,7 @@ import 'package:plug_agente/domain/repositories/i_client_token_repository.dart';
 import 'package:plug_agente/domain/repositories/i_token_audit_store.dart';
 import 'package:plug_agente/domain/value_objects/client_permission_set.dart';
 import 'package:plug_agente/domain/value_objects/database_resource.dart';
+import 'package:plug_agente/infrastructure/cache/client_token_policy_memory_cache.dart';
 import 'package:plug_agente/infrastructure/external_services/jwt_jwks_verifier.dart';
 import 'package:plug_agente/infrastructure/services/authorization_policy_resolver.dart';
 import 'package:plug_agente/infrastructure/stores/in_memory_revoked_token_store.dart';
@@ -86,6 +87,95 @@ void main() {
         );
       },
     );
+
+    final malformedPayloads = <String, Map<String, dynamic>>{
+      'policy container': {'policy': 'sensitive-value'},
+      'client identifier': {'client_id': 42},
+      'rules container': {'client_id': 'client', 'rules': 'sensitive-value'},
+      'rule entry': {
+        'client_id': 'client',
+        'rules': [null],
+      },
+      'rule permission': {
+        'client_id': 'client',
+        'rules': [
+          {'read': 'sensitive-value'},
+        ],
+      },
+      'global permission container': {'client_id': 'client', 'all_tables': true, 'global_permissions': <Object?>[]},
+      'global permission value': {
+        'client_id': 'client',
+        'global_permissions': {'read': 'sensitive-value'},
+      },
+      'token identifier': {'client_id': 'client', 'jti': 42},
+      'issued time range': {'client_id': 'client', 'iat': 1e100},
+      'issued time integer underflow': {'client_id': 'client', 'iat': -9223372036854775808},
+      'revoked value': {'client_id': 'client', 'revoked': 'false'},
+    };
+    for (final entry in malformedPayloads.entries) {
+      test('rejects malformed ${entry.key} through Result and clears pending cache lookup', () async {
+        when(() => mockFeatureFlags.enableSocketJwksValidation).thenReturn(true);
+        when(() => mockJwksVerifier.verify('malformed-policy')).thenAnswer((_) async => Success(entry.value));
+        final cache = ClientTokenPolicyMemoryCache();
+        resolver = AuthorizationPolicyResolver(
+          mockFeatureFlags,
+          jwksVerifier: mockJwksVerifier,
+          policyCache: cache,
+          tokenAuditStore: mockTokenAuditStore,
+        );
+
+        for (var attempt = 0; attempt < 2; attempt++) {
+          final result = await resolver.resolvePolicy('malformed-policy');
+          final failure = result.exceptionOrNull()! as domain.ConfigurationFailure;
+          expect(failure.context['reason'], AuthorizationContextConstants.invalidPolicyReason);
+          expect(failure.message, isNot(contains('sensitive-value')));
+          final hash = hashClientCredentialToken('malformed-policy');
+          expect(cache.get(hash), isNull);
+          expect(cache.hasPendingResolution(hash), isFalse);
+        }
+        verify(() => mockJwksVerifier.verify('malformed-policy')).called(2);
+        final events = verify(() => mockTokenAuditStore.record(captureAny())).captured.cast<TokenAuditEvent>();
+        expect(events, hasLength(2));
+        expect(events.every((event) => !event.metadata.toString().contains('sensitive-value')), isTrue);
+      });
+    }
+
+    for (final auditFails in [false, true]) {
+      test('records one session revocation and preserves denial when auditFails=$auditFails', () async {
+        when(() => mockFeatureFlags.enableSocketRevokedTokenInSession).thenReturn(true);
+        when(() => mockClientTokenRepository.getTokenPolicySummaryByHash(any())).thenAnswer(
+          (_) async => Success(
+            ClientTokenSummary(
+              id: 'revoked-id',
+              clientId: 'client',
+              createdAt: DateTime.utc(2026),
+              isRevoked: true,
+              allTables: true,
+              allViews: false,
+              rules: const [],
+            ),
+          ),
+        );
+        if (auditFails) {
+          when(() => mockTokenAuditStore.record(any())).thenAnswer((_) async => throw Exception('audit unavailable'));
+        }
+        final store = InMemoryRevokedTokenStore();
+        resolver = AuthorizationPolicyResolver(
+          mockFeatureFlags,
+          clientTokenRepository: mockClientTokenRepository,
+          tokenAuditStore: mockTokenAuditStore,
+          revokedTokenStore: store,
+        );
+
+        final result = await resolver.resolvePolicy('revoked-credential');
+        final failure = result.exceptionOrNull()! as domain.ConfigurationFailure;
+        expect(failure.context['reason'], AuthorizationContextConstants.tokenRevokedReason);
+        expect(store.isRevoked('revoked-credential'), isTrue);
+        final events = verify(() => mockTokenAuditStore.record(captureAny())).captured.cast<TokenAuditEvent>();
+        expect(events.where((event) => event.eventType == TokenAuditEventType.revokedInSession), hasLength(1));
+        expect(events.where((event) => event.eventType == TokenAuditEventType.authorizationDenied), hasLength(1));
+      });
+    }
 
     test('should return failure for malformed token', () async {
       final result = await resolver.resolvePolicy('invalid-token');
@@ -290,42 +380,48 @@ void main() {
       },
     );
 
-    test(
-      'should map repository DB errors to authentication failure without decode fallback',
-      () async {
-        const opaqueToken = 'db-error-token';
-        final tokenHash = hashClientCredentialToken(opaqueToken);
+    for (final legacyFailure in [false, true]) {
+      test(
+        'maps repository DB errors to authentication failure without JWKS fallback (legacy=$legacyFailure)',
+        () async {
+          const opaqueToken = 'db-error-token';
+          final tokenHash = hashClientCredentialToken(opaqueToken);
 
-        when(() => mockClientTokenRepository.getTokenPolicySummaryByHash(tokenHash)).thenAnswer(
-          (_) async => Failure(
-            domain.ServerFailure.withContext(
-              message: 'Failed to load local client token',
-              context: const {'operation': 'get_local_client_token_by_hash'},
-            ),
-          ),
-        );
+          final cause = Exception('SQLite unavailable');
+          final storageFailure = legacyFailure
+              ? domain.ServerFailure.withContext(message: 'Legacy database failure', cause: cause)
+              : domain.DatabaseFailure.withContext(message: 'Database failure', cause: cause);
+          when(() => mockFeatureFlags.enableSocketJwksValidation).thenReturn(true);
+          when(() => mockClientTokenRepository.getTokenPolicySummaryByHash(tokenHash)).thenAnswer(
+            (_) async => Failure(storageFailure),
+          );
 
-        resolver = AuthorizationPolicyResolver(
-          mockFeatureFlags,
-          clientTokenRepository: mockClientTokenRepository,
-        );
+          resolver = AuthorizationPolicyResolver(
+            mockFeatureFlags,
+            clientTokenRepository: mockClientTokenRepository,
+            jwksVerifier: mockJwksVerifier,
+          );
 
-        final result = await resolver.resolvePolicy(opaqueToken);
+          final result = await resolver.resolvePolicy(opaqueToken);
 
-        expect(result.isError(), isTrue);
-        result.fold(
-          (_) => fail('Expected failure'),
-          (failure) {
-            final authFailure = failure as domain.Failure;
-            expect(
-              authFailure.context['reason'],
-              equals(AuthorizationContextConstants.unauthorizedReason),
-            );
-            expect(authFailure.context['authentication'], isTrue);
-          },
-        );
-      },
-    );
+          expect(result.isError(), isTrue);
+          result.fold(
+            (_) => fail('Expected failure'),
+            (failure) {
+              final authFailure = failure as domain.Failure;
+              expect(
+                authFailure.context['reason'],
+                equals(AuthorizationContextConstants.unauthorizedReason),
+              );
+              expect(authFailure.context['authentication'], isTrue);
+              expect(authFailure.cause, same(cause));
+              expect(authFailure.context['user_message'], contains('armazenamento local'));
+            },
+          );
+          verifyNever(() => mockJwksVerifier.verify(any()));
+        },
+      );
+    }
 
     test(
       'should fallback to JWKS when local token is not found and JWKS is enabled',

@@ -95,6 +95,7 @@ import 'package:plug_agente/application/use_cases/cleanup_expired_agent_action_r
 import 'package:plug_agente/application/use_cases/cleanup_expired_elevated_bridge_artifacts.dart';
 import 'package:plug_agente/application/use_cases/cleanup_expired_rpc_idempotency_cache.dart';
 import 'package:plug_agente/application/use_cases/connect_to_hub.dart';
+import 'package:plug_agente/application/use_cases/count_active_client_tokens.dart';
 import 'package:plug_agente/application/use_cases/create_client_token.dart';
 import 'package:plug_agente/application/use_cases/delete_agent_action_definition.dart';
 import 'package:plug_agente/application/use_cases/delete_agent_action_secret.dart';
@@ -115,6 +116,7 @@ import 'package:plug_agente/application/use_cases/import_agent_actions_bundle.da
 import 'package:plug_agente/application/use_cases/list_agent_action_definitions.dart';
 import 'package:plug_agente/application/use_cases/list_agent_action_executions.dart';
 import 'package:plug_agente/application/use_cases/list_agent_action_triggers.dart';
+import 'package:plug_agente/application/use_cases/list_client_token_page.dart';
 import 'package:plug_agente/application/use_cases/list_client_tokens.dart';
 import 'package:plug_agente/application/use_cases/list_developer_data7_connections.dart';
 import 'package:plug_agente/application/use_cases/list_recent_agent_action_remote_audit.dart';
@@ -193,6 +195,7 @@ import 'package:plug_agente/domain/repositories/i_authorization_cache_metrics.da
 import 'package:plug_agente/domain/repositories/i_authorization_decision_cache.dart';
 import 'package:plug_agente/domain/repositories/i_authorization_metrics_collector.dart';
 import 'package:plug_agente/domain/repositories/i_authorization_policy_resolver.dart';
+import 'package:plug_agente/domain/repositories/i_authorization_trust_invalidator.dart';
 import 'package:plug_agente/domain/repositories/i_auto_update_metrics_collector.dart';
 import 'package:plug_agente/domain/repositories/i_client_token_policy_cache.dart';
 import 'package:plug_agente/domain/repositories/i_client_token_repository.dart';
@@ -304,6 +307,7 @@ import 'package:plug_agente/infrastructure/retry/retry_manager.dart';
 import 'package:plug_agente/infrastructure/runtime/windows_uac_detector.dart';
 import 'package:plug_agente/infrastructure/security/payload_signer.dart';
 import 'package:plug_agente/infrastructure/services/authorization_policy_resolver.dart';
+import 'package:plug_agente/infrastructure/services/authorization_trust_invalidator.dart';
 import 'package:plug_agente/infrastructure/services/auto_start_service.dart';
 import 'package:plug_agente/infrastructure/services/dio_silent_update_installer.dart';
 import 'package:plug_agente/infrastructure/services/file_installer_autostart_request_store.dart';

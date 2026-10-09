@@ -10,6 +10,8 @@ import 'package:plug_agente/application/use_cases/get_client_token_secret.dart';
 import 'package:plug_agente/application/use_cases/list_client_tokens.dart';
 import 'package:plug_agente/application/use_cases/revoke_client_token.dart';
 import 'package:plug_agente/application/use_cases/update_client_token.dart';
+import 'package:plug_agente/core/di/service_locator.dart';
+import 'package:plug_agente/core/settings/app_settings_store.dart';
 import 'package:plug_agente/domain/entities/client_token_create_request.dart';
 import 'package:plug_agente/domain/entities/client_token_list_query.dart';
 import 'package:plug_agente/domain/entities/client_token_rule.dart';
@@ -17,11 +19,14 @@ import 'package:plug_agente/domain/entities/client_token_secret_lookup.dart';
 import 'package:plug_agente/domain/entities/client_token_summary.dart';
 import 'package:plug_agente/domain/errors/failures.dart' as domain;
 import 'package:plug_agente/l10n/app_localizations.dart';
+import 'package:plug_agente/presentation/pages/config/widgets/client_token_list_preferences.dart';
 import 'package:plug_agente/presentation/pages/config/widgets/client_token_section.dart';
 import 'package:plug_agente/presentation/providers/client_token_provider.dart';
 import 'package:plug_agente/shared/widgets/common/actions/app_button.dart';
 import 'package:provider/provider.dart';
 import 'package:result_dart/result_dart.dart';
+
+import '../../../../helpers/client_token_test_loaders.dart';
 
 class MockCreateClientToken extends Mock implements CreateClientToken {}
 
@@ -76,10 +81,11 @@ void main() {
       provider = ClientTokenProvider(
         mockCreateClientToken,
         mockUpdateClientToken,
-        mockListClientTokens,
+        ClientTokenTestPageLoader(mockListClientTokens),
         mockGetClientTokenSecret,
         mockRevokeClientToken,
         mockDeleteClientToken,
+        countActiveClientTokens: FixedClientTokenTestCounter(),
       );
       when(
         () => mockGetClientTokenSecret(any()),
@@ -105,6 +111,123 @@ void main() {
         expect(find.text(ptL10n.ctMsgNoTokenFound), findsNothing);
       },
     );
+
+    testWidgets('saved create closes form even if refresh fails and retry never creates again', (tester) async {
+      when(() => mockCreateClientToken(any())).thenAnswer((_) async => const Success('created-secret'));
+      await tester.binding.setSurfaceSize(const Size(1600, 1200));
+      await tester.pumpWidget(_buildWidget(provider));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text(ptL10n.ctButtonNewToken));
+      await tester.pumpAndSettle();
+      await tester.ensureVisible(find.text(ptL10n.ctFlagAllTables));
+      await tester.tap(find.text(ptL10n.ctFlagAllTables));
+      await tester.pumpAndSettle();
+      await tester.ensureVisible(find.text(ptL10n.ctPermissionRead));
+      await tester.tap(find.text(ptL10n.ctPermissionRead));
+      await tester.pumpAndSettle();
+      when(
+        () => mockListClientTokens(query: any(named: 'query')),
+      ).thenAnswer((_) async => Failure(domain.DatabaseFailure('refresh failed')));
+      await tester.ensureVisible(find.text(ptL10n.ctButtonCreateToken));
+      await tester.tap(find.text(ptL10n.ctButtonCreateToken));
+      await tester.pumpAndSettle();
+      expect(find.text(ptL10n.ctDialogCreateTokenTitle), findsNothing);
+      expect(find.text(ptL10n.ctSavedListStale), findsOneWidget);
+      expect(find.text('created-secret'), findsOneWidget);
+      when(
+        () => mockListClientTokens(query: any(named: 'query')),
+      ).thenAnswer((_) async => const Success(<ClientTokenSummary>[]));
+      await tester.tap(find.text(ptL10n.btnRetry));
+      await tester.pumpAndSettle();
+      expect(find.text(ptL10n.ctSavedListStale), findsNothing);
+      verify(() => mockCreateClientToken(any())).called(1);
+      await tester.pump(const Duration(seconds: 4));
+      await tester.pumpAndSettle();
+    });
+
+    testWidgets('restores controls and queries preferences even with an already loaded provider', (tester) async {
+      await provider.loadTokens();
+      final store = InMemoryAppSettingsStore({
+        ClientTokenListPreferenceKeys.clientFilter: 'saved-client',
+        ClientTokenListPreferenceKeys.statusFilter: 'revoked',
+        ClientTokenListPreferenceKeys.sortFilter: 'client_asc',
+        ClientTokenListPreferenceKeys.pageSize: 100,
+        ClientTokenListPreferenceKeys.autoRefreshAfterCreate: false,
+      });
+      getIt.registerSingleton<IAppSettingsStore>(store);
+      addTearDown(() => getIt.unregister<IAppSettingsStore>());
+      clearInteractions(mockListClientTokens);
+      await tester.binding.setSurfaceSize(const Size(1600, 1200));
+      await tester.pumpWidget(_buildWidget(provider));
+      await tester.pumpAndSettle();
+      expect(tester.widget<TextBox>(find.byType(TextBox).first).controller!.text, 'saved-client');
+      expect(find.text(ptL10n.ctFilterStatusRevoked), findsOneWidget);
+      expect(find.text(ptL10n.ctSortClientAsc), findsOneWidget);
+      expect(find.text(ptL10n.ctButtonAutoRefreshOff), findsOneWidget);
+      final query =
+          verify(() => mockListClientTokens(query: captureAny(named: 'query'))).captured.single as ClientTokenListQuery;
+      expect(query.clientIdContains, 'saved-client');
+      expect(query.status, ClientTokenStatusFilter.revoked);
+      expect(query.sort, ClientTokenSortOption.clientAsc);
+      expect(query.page, 1);
+      expect(query.pageSize, 100);
+    });
+
+    testWidgets('preference failure warns but still queries the selected filter once', (tester) async {
+      final store = _FailingSettingsStore();
+      getIt.registerSingleton<IAppSettingsStore>(store);
+      addTearDown(() => getIt.unregister<IAppSettingsStore>());
+      await tester.binding.setSurfaceSize(const Size(1600, 1200));
+      await tester.pumpWidget(_buildWidget(provider));
+      await tester.pumpAndSettle();
+      clearInteractions(mockListClientTokens);
+      await tester.enterText(find.byType(TextBox).first, 'selected-client');
+      await tester.pump(const Duration(seconds: 1));
+      await tester.pumpAndSettle();
+      expect(find.text(ptL10n.ctPreferencesSaveFailed), findsOneWidget);
+      final query =
+          verify(() => mockListClientTokens(query: captureAny(named: 'query'))).captured.single as ClientTokenListQuery;
+      expect(query.clientIdContains, 'selected-client');
+      expect(store.batches, 1);
+    });
+
+    testWidgets('next page and page size issue bounded queries and reset the page', (tester) async {
+      final tokens = List.generate(
+        101,
+        (index) => ClientTokenSummary(
+          id: 'id-$index',
+          clientId: 'client-$index',
+          createdAt: DateTime.utc(2026),
+          isRevoked: false,
+          allTables: true,
+          allViews: true,
+          rules: const [],
+        ),
+      );
+      when(() => mockListClientTokens(query: any(named: 'query'))).thenAnswer((_) async => Success(tokens));
+      await tester.binding.setSurfaceSize(const Size(1600, 1200));
+      await tester.pumpWidget(_buildWidget(provider));
+      await tester.pumpAndSettle();
+      expect(provider.tokens, hasLength(50));
+      final scroll = tester.widget<ListView>(find.byType(ListView).last).controller!;
+      scroll.jumpTo(120);
+      await tester.pumpAndSettle();
+      await tester.tap(find.text(ptL10n.ctButtonRefreshList));
+      await tester.pumpAndSettle();
+      expect(scroll.offset, 120);
+      await tester.tap(find.text(ptL10n.queryPaginationNext));
+      await tester.pumpAndSettle();
+      expect(provider.currentPage, 2);
+      expect(scroll.offset, 0);
+      expect(provider.tokens.first.id, 'id-50');
+      final sizePicker = tester.widget<ComboBox<int>>(find.byType(ComboBox<int>));
+      sizePicker.onChanged!(25);
+      await tester.pumpAndSettle();
+      expect(provider.currentPage, 1);
+      expect(provider.tokens, hasLength(25));
+      expect(provider.totalCount, 101);
+      expect(provider.tokens.first.id, 'id-0');
+    });
 
     testWidgets('should add rule and render it in rules grid', (tester) async {
       await tester.binding.setSurfaceSize(const Size(1600, 1200));
@@ -277,6 +400,8 @@ void main() {
         expect(captured.globalPermissions.canUpdate, isFalse);
         expect(captured.globalPermissions.canDelete, isFalse);
         expect(captured.globalPermissions.canDdl, isFalse);
+        await tester.pump(const Duration(seconds: 4));
+        await tester.pumpAndSettle();
       },
     );
 
@@ -541,12 +666,20 @@ void main() {
         );
         expect(newTokenButton.onPressed, isNull);
 
+        // Simulate a second Enter callback in the same submission cycle.
+        final agentBox = tester.widget<TextBox>(
+          find.byWidgetPredicate((widget) => widget is TextBox && widget.placeholder == ptL10n.ctHintAgentId),
+        );
+        agentBox.onSubmitted?.call('agent');
         await tester.sendKeyEvent(LogicalKeyboardKey.escape);
         await tester.pump();
+        verify(() => mockCreateClientToken(any())).called(1);
 
         expect(find.text(ptL10n.ctDialogCreateTokenTitle), findsOneWidget);
 
         completer.complete(const Success('new-token'));
+        await tester.pumpAndSettle();
+        await tester.pump(const Duration(seconds: 4));
         await tester.pumpAndSettle();
       },
     );
@@ -584,6 +717,8 @@ void main() {
         await tester.pumpAndSettle();
 
         verify(() => mockCreateClientToken(any())).called(1);
+        await tester.pump(const Duration(seconds: 4));
+        await tester.pumpAndSettle();
       },
     );
   });
@@ -606,4 +741,13 @@ Widget _buildWidget(ClientTokenProvider provider) {
       ),
     ),
   );
+}
+
+class _FailingSettingsStore extends InMemoryAppSettingsStore {
+  int batches = 0;
+  @override
+  Future<void> setValues(Map<String, Object> values) async {
+    batches++;
+    throw Exception('injected preferences failure');
+  }
 }

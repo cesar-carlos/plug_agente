@@ -70,6 +70,7 @@ class AgentOperationalReadinessProvider extends ChangeNotifier {
       hubPhase: _mapHubPhase(connection.status),
       hubConnected: connection.isConnected,
       clientTokens: clientTokens.tokens,
+      activeClientTokenCount: clientTokens.activeTokenCount,
       schedulerIssueReason: _triggerScheduler?.lastStartIssueReason,
     );
     if (nextSnapshot == _snapshot) {

@@ -11,6 +11,7 @@ import 'package:plug_agente/domain/entities/client_token_policy.dart';
 import 'package:plug_agente/domain/entities/client_token_policy_agent_action_authorization.dart';
 import 'package:plug_agente/domain/errors/failures.dart' as domain;
 import 'package:plug_agente/domain/protocol/protocol.dart';
+import 'package:plug_agente/domain/services/client_token_lifetime_validator.dart';
 import 'package:result_dart/result_dart.dart';
 
 /// Authorizes remote `agent.action.*` RPC via client-token policy scopes/allowlist
@@ -22,13 +23,16 @@ class AgentActionRemoteAuthorizationService {
     required AuthorizeSqlOperation authorizeSqlOperation,
     Duration authorizationStageBudget = const Duration(seconds: 5),
     void Function()? onPermissionDenied,
-  }) : _featureFlags = featureFlags,
+    DateTime Function()? now,
+  }) : _now = now ?? DateTime.now,
+       _featureFlags = featureFlags,
        _getClientTokenPolicy = getClientTokenPolicy,
        _authorizeSqlOperation = authorizeSqlOperation,
        _authorizationStageBudget = authorizationStageBudget,
        _onPermissionDenied = onPermissionDenied;
 
   final FeatureFlags _featureFlags;
+  final DateTime Function() _now;
   final GetClientTokenPolicy _getClientTokenPolicy;
   final AuthorizeSqlOperation _authorizeSqlOperation;
   final Duration _authorizationStageBudget;
@@ -49,8 +53,13 @@ class AgentActionRemoteAuthorizationService {
       return (denied: _missingClientTokenResponse(request), policy: null);
     }
 
-    final deadline = _featureFlags.enableSocketTimeoutByStage ? DateTime.now().add(_authorizationStageBudget) : null;
-    final policyResult = await _getClientTokenPolicy.call(trimmed);
+    final deadline = _featureFlags.enableSocketTimeoutByStage ? _now().add(_authorizationStageBudget) : null;
+    final policyResult = await _runAuthorizationWithBudget(
+      operation: () => _getClientTokenPolicy.call(trimmed),
+      deadline: deadline,
+      requestId: request.id?.toString(),
+      method: request.method,
+    );
     if (!policyResult.isSuccess()) {
       final raw = policyResult.exceptionOrNull()!;
       final domainFailure = raw is domain.Failure
@@ -68,6 +77,8 @@ class AgentActionRemoteAuthorizationService {
     }
 
     final policy = policyResult.getOrThrow();
+    final initialLifetime = _expiredCredentialResponse(request, policy);
+    if (initialLifetime != null) return (denied: initialLifetime, policy: policy);
     if (!ClientTokenPolicyAgentActionAuthorization.grantsRemoteAgentAction(
       policyPayload: policy.payload,
       requiredScope: requiredAgentActionScope,
@@ -84,9 +95,13 @@ class AgentActionRemoteAuthorizationService {
       );
     }
 
-    final authResult = await _authorizeSqlWithBudget(
-      token: trimmed,
-      sql: authorizationSql,
+    final authResult = await _runAuthorizationWithBudget(
+      operation: () async => (await _authorizeSqlOperation(
+        token: trimmed,
+        sql: authorizationSql,
+        requestId: request.id?.toString(),
+        method: request.method,
+      )).map((_) => unit),
       requestId: request.id?.toString(),
       method: request.method,
       deadline: deadline,
@@ -101,7 +116,21 @@ class AgentActionRemoteAuthorizationService {
       return (denied: RpcResponse.error(id: request.id, error: rpcError), policy: policy);
     }
 
-    return (denied: null, policy: policy);
+    return (denied: _expiredCredentialResponse(request, policy), policy: policy);
+  }
+
+  RpcResponse? _expiredCredentialResponse(RpcRequest request, ClientTokenPolicy policy) {
+    final result = ClientTokenLifetimeValidator.validate(policy, now: _now());
+    final failure = result.exceptionOrNull();
+    if (failure == null) return null;
+    return RpcResponse.error(
+      id: request.id,
+      error: FailureToRpcErrorMapper.map(
+        failure as domain.Failure,
+        instance: request.id?.toString(),
+        useTimeoutByStage: _featureFlags.enableSocketTimeoutByStage,
+      ),
+    );
   }
 
   /// Resolves policy for audit rows when authorization did not run but remote audit is on.
@@ -189,9 +218,8 @@ class AgentActionRemoteAuthorizationService {
     );
   }
 
-  Future<Result<void>> _authorizeSqlWithBudget({
-    required String token,
-    required String sql,
+  Future<Result<T>> _runAuthorizationWithBudget<T extends Object>({
+    required Future<Result<T>> Function() operation,
     required String? requestId,
     required String method,
     required DateTime? deadline,
@@ -220,19 +248,9 @@ class AgentActionRemoteAuthorizationService {
 
     try {
       if (timeout == null) {
-        return await _authorizeSqlOperation(
-          token: token,
-          sql: sql,
-          requestId: requestId,
-          method: method,
-        );
+        return await operation();
       }
-      return await _authorizeSqlOperation(
-        token: token,
-        sql: sql,
-        requestId: requestId,
-        method: method,
-      ).timeout(timeout);
+      return await operation().timeout(timeout);
     } on TimeoutException catch (error) {
       return Failure(
         domain.ConfigurationFailure.withContext(
@@ -259,7 +277,7 @@ class AgentActionRemoteAuthorizationService {
     if (deadline == null) {
       return null;
     }
-    final remaining = deadline.difference(DateTime.now());
+    final remaining = deadline.difference(_now());
     if (remaining <= Duration.zero) {
       return Duration.zero;
     }

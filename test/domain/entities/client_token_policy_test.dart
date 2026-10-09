@@ -7,6 +7,34 @@ import 'package:plug_agente/domain/value_objects/client_permission_set.dart';
 import 'package:plug_agente/domain/value_objects/database_resource.dart';
 
 void main() {
+  test('verified lifetime is runtime metadata and cannot be supplied through policy JSON', () {
+    final policy = ClientTokenPolicy(
+      clientId: 'client',
+      allTables: true,
+      allViews: true,
+      allPermissions: true,
+      rules: const [],
+      credentialExpiresAt: DateTime.utc(2026, 10, 8),
+    );
+    const expected = ClientTokenPolicy(
+      clientId: 'client',
+      allTables: true,
+      allViews: true,
+      allPermissions: true,
+      rules: [],
+    );
+    expect(policy.toJson(), expected.toJson());
+    expect(policy.toRpcResultJson(), expected.toRpcResultJson());
+    expect(
+      ClientTokenPolicy.fromJson({
+        ...policy.toJson(),
+        'credential_expires_at': '2099-01-01',
+        'exp': 9999999999,
+      }).credentialExpiresAt,
+      isNull,
+    );
+  });
+
   group('ClientTokenPolicy.toRpcResultJson', () {
     test('should redact sensitive payload keys', () {
       const policy = ClientTokenPolicy(

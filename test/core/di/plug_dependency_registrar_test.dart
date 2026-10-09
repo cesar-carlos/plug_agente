@@ -4,6 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:get_it/get_it.dart';
 import 'package:mocktail/mocktail.dart';
 import 'package:odbc_fast/odbc_fast.dart' as odbc;
+import 'package:plug_agente/application/services/active_config_resolver.dart';
 import 'package:plug_agente/application/services/hub_session_coordinator.dart';
 import 'package:plug_agente/application/use_cases/connect_to_hub.dart';
 import 'package:plug_agente/application/use_cases/save_agent_config.dart';
@@ -16,6 +17,7 @@ import 'package:plug_agente/core/runtime/odbc_runtime_tuning.dart';
 import 'package:plug_agente/core/settings/app_settings_store.dart' show GlobalAppSettingsStore, IAppSettingsStore;
 import 'package:plug_agente/core/storage/global_storage_path_resolver.dart';
 import 'package:plug_agente/domain/repositories/i_agent_config_repository.dart';
+import 'package:plug_agente/domain/repositories/i_authorization_trust_invalidator.dart';
 import 'package:plug_agente/domain/repositories/i_odbc_connection_settings.dart';
 import 'package:plug_agente/domain/repositories/i_transport_client.dart';
 import 'package:plug_agente/infrastructure/repositories/agent_config_drift_database.dart';
@@ -106,6 +108,12 @@ void main() {
     expect(sl.isRegistered<IAgentConfigRepository>(), isTrue);
     expect(sl.isRegistered<ITransportClient>(), isTrue);
     expect(sl<ConnectToHub>(), isA<ConnectToHub>());
+  });
+
+  test('configuration services resolve their shared authorization invalidator without cycles', () {
+    expect(sl<IAuthorizationTrustInvalidator>(), same(sl<IAuthorizationTrustInvalidator>()));
+    expect(sl<ActiveConfigResolver>(), isA<ActiveConfigResolver>());
+    expect(sl<SaveAgentConfig>(), isA<SaveAgentConfig>());
   });
 
   test('registers critical application singletons after full graph registration', () {

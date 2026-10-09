@@ -6,6 +6,7 @@ import 'package:plug_agente/domain/entities/client_token_runtime_restrictions.da
 abstract final class ClientTokenPolicyAgentActionAuthorization {
   /// When false, scope/allowlist checks are skipped (legacy tokens without agent-action metadata).
   static bool payloadDeclaresAgentActionScopeMetadata(Map<String, dynamic> payload) {
+    if (!ClientTokenRuntimeRestrictions.isValidPayload(payload)) return true;
     return ClientTokenRuntimeRestrictions.fromPayload(payload).declaresAgentActionMetadata;
   }
 
@@ -18,6 +19,7 @@ abstract final class ClientTokenPolicyAgentActionAuthorization {
     required String requiredScope,
     required String actionId,
   }) {
+    if (!ClientTokenRuntimeRestrictions.isValidPayload(policyPayload)) return false;
     if (!payloadDeclaresAgentActionScopeMetadata(policyPayload)) {
       return true;
     }

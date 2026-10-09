@@ -5,10 +5,16 @@ import 'package:plug_agente/domain/repositories/i_authorization_decision_cache.d
 /// In-memory LRU-bounded cache: [get] refreshes recency; evicts oldest when
 /// over [maxEntries].
 class InMemoryAuthorizationDecisionCache implements IAuthorizationDecisionCache {
-  InMemoryAuthorizationDecisionCache({this.maxEntries = 8192})
-    : _entries = LinkedHashMap<String, AuthorizationDecisionCacheEntry>();
+  InMemoryAuthorizationDecisionCache({this.maxEntries = 8192, DateTime Function()? now})
+    : _now = now ?? DateTime.now,
+      _entries = LinkedHashMap<String, AuthorizationDecisionCacheEntry>();
+
+  int _revision = 0;
+  @override
+  int get revision => _revision;
 
   final int maxEntries;
+  final DateTime Function() _now;
   final LinkedHashMap<String, AuthorizationDecisionCacheEntry> _entries;
 
   @override
@@ -17,7 +23,7 @@ class InMemoryAuthorizationDecisionCache implements IAuthorizationDecisionCache 
     if (entry == null) {
       return null;
     }
-    if (entry.isExpired) {
+    if (entry.isExpiredAt(_now())) {
       return null;
     }
     _entries[key] = entry;
@@ -37,7 +43,8 @@ class InMemoryAuthorizationDecisionCache implements IAuthorizationDecisionCache 
     // expired entries on access, but entries that are never re-read would
     // otherwise stay until count-based eviction.
     if (_entries.length > maxEntries) {
-      _entries.removeWhere((_, e) => e.isExpired);
+      final now = _now();
+      _entries.removeWhere((_, e) => e.isExpiredAt(now));
     }
     while (_entries.length > maxEntries) {
       _entries.remove(_entries.keys.first);
@@ -46,11 +53,13 @@ class InMemoryAuthorizationDecisionCache implements IAuthorizationDecisionCache 
 
   @override
   void invalidate(String key) {
+    _revision++;
     _entries.remove(key);
   }
 
   @override
   void invalidateForCredentialHash(String credentialHash) {
+    _revision++;
     final prefix = '$credentialHash|';
     final toRemove = _entries.keys.where((k) => k.startsWith(prefix)).toList();
     toRemove.forEach(_entries.remove);
@@ -58,6 +67,7 @@ class InMemoryAuthorizationDecisionCache implements IAuthorizationDecisionCache 
 
   @override
   void invalidateAll() {
+    _revision++;
     _entries.clear();
   }
 }

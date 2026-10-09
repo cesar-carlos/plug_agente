@@ -1790,8 +1790,8 @@
   "ctButtonCreateToken": "Criar token",
   "ctButtonNewToken": "Novo token",
   "ctButtonRefreshList": "Atualizar lista",
-  "ctButtonAutoRefreshOn": "Atualização automática: ligada",
-  "ctButtonAutoRefreshOff": "Atualização automática: desligada",
+  "ctButtonAutoRefreshOn": "Atualizar após salvar: ligado",
+  "ctButtonAutoRefreshOff": "Atualizar após salvar: desligado",
   "ctButtonViewDetails": "Ver detalhes",
   "ctButtonCopyClientToken": "Copiar token",
   "ctTooltipCopyClientToken": "Copiar token do cliente",
@@ -2114,5 +2114,22 @@
   "updateRecoveryRetryFailed": "O serviço não confirmou a recuperação. Verifique o serviço de atualização e tente reconciliar novamente.",
   "updateRecoveryDescription": "O agente não pode retomar suas operações. Verifique o serviço de atualização e reconcilie para reiniciar com segurança.",
   "updateMaintenanceDescription": "O agente está concluindo o trabalho para atualizar. Ações e configurações estão temporariamente indisponíveis.",
-  "updateReconcileAction": "Reconciliar operação"
+  "updateReconcileAction": "Reconciliar operação",
+  "ctSavedListStale": "Alteração salva; lista desatualizada",
+  "ctListStale": "Atualize a lista para refletir as alterações salvas.",
+  "ctPreferencesSaveFailed": "Não foi possível persistir as preferências. A seleção atual continua aplicada.",
+  "ctPaginationSummary": "Página {page} de {totalPages} · {totalCount} tokens",
+  "@ctPaginationSummary": {
+    "placeholders": {
+      "page": {
+        "type": "int"
+      },
+      "totalPages": {
+        "type": "int"
+      },
+      "totalCount": {
+        "type": "int"
+      }
+    }
+  }
 }

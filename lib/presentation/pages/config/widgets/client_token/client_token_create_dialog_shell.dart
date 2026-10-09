@@ -22,6 +22,7 @@ class ClientTokenCreateDialogShell extends StatefulWidget {
     required this.theme,
     required this.isEditingToken,
     required this.body,
+    this.isSubmitting = false,
     super.key,
   });
 
@@ -31,6 +32,7 @@ class ClientTokenCreateDialogShell extends StatefulWidget {
   final double dialogOuterMaxHeight;
   final FluentThemeData theme;
   final bool isEditingToken;
+  final bool isSubmitting;
   final Widget Function(BuildContext context, ClientTokenProvider provider) body;
 
   @override
@@ -52,9 +54,8 @@ class _ClientTokenCreateDialogShellState extends State<ClientTokenCreateDialogSh
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
-    final isCreating = context.select<ClientTokenProvider, bool>(
-      (p) => p.isCreating,
-    );
+    final providerIsCreating = context.select<ClientTokenProvider, bool>((p) => p.isCreating);
+    final isCreating = widget.isSubmitting || providerIsCreating;
     return PopScope(
       canPop: !isCreating,
       child: CallbackShortcuts(
@@ -111,7 +112,13 @@ class _ClientTokenCreateDialogShellState extends State<ClientTokenCreateDialogSh
                       Expanded(
                         child: Consumer<ClientTokenProvider>(
                           builder: (context, tokenProvider, _) {
-                            return widget.body(context, tokenProvider);
+                            return AbsorbPointer(
+                              absorbing: isCreating,
+                              child: ExcludeFocus(
+                                excluding: isCreating,
+                                child: widget.body(context, tokenProvider),
+                              ),
+                            );
                           },
                         ),
                       ),

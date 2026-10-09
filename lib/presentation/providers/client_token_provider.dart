@@ -1,10 +1,11 @@
 import 'dart:developer' as developer;
 
 import 'package:flutter/foundation.dart';
+import 'package:plug_agente/application/use_cases/count_active_client_tokens.dart';
 import 'package:plug_agente/application/use_cases/create_client_token.dart';
 import 'package:plug_agente/application/use_cases/delete_client_token.dart';
 import 'package:plug_agente/application/use_cases/get_client_token_secret.dart';
-import 'package:plug_agente/application/use_cases/list_client_tokens.dart';
+import 'package:plug_agente/application/use_cases/list_client_token_page.dart';
 import 'package:plug_agente/application/use_cases/revoke_client_token.dart';
 import 'package:plug_agente/application/use_cases/update_client_token.dart';
 import 'package:plug_agente/domain/entities/client_token_create_request.dart';
@@ -13,160 +14,212 @@ import 'package:plug_agente/domain/entities/client_token_secret_lookup.dart';
 import 'package:plug_agente/domain/entities/client_token_summary.dart';
 import 'package:plug_agente/domain/entities/client_token_update_result.dart';
 import 'package:plug_agente/domain/entities/token_audit_event.dart';
-import 'package:plug_agente/domain/errors/failures.dart' as domain;
 import 'package:plug_agente/domain/repositories/i_token_audit_store.dart';
 import 'package:plug_agente/presentation/providers/presentation_error_state.dart';
 import 'package:plug_agente/presentation/providers/presentation_operation_failures.dart';
 import 'package:result_dart/result_dart.dart';
 
+enum _TokenMutation { save, revoke, delete }
+
 class ClientTokenProvider extends ChangeNotifier {
   ClientTokenProvider(
     this._createClientToken,
     this._updateClientToken,
-    this._listClientTokens,
+    this._listClientTokenPage,
     this._getClientTokenSecret,
     this._revokeClientToken,
     this._deleteClientToken, {
+    required CountActiveClientTokens countActiveClientTokens,
     ITokenAuditStore? tokenAuditStore,
-  }) : _tokenAuditStore = tokenAuditStore;
+  }) : _countActiveClientTokens = countActiveClientTokens,
+       _tokenAuditStore = tokenAuditStore;
 
   final CreateClientToken _createClientToken;
   final UpdateClientToken _updateClientToken;
-  final ListClientTokens _listClientTokens;
+  final ListClientTokenPage _listClientTokenPage;
   final GetClientTokenSecret _getClientTokenSecret;
   final RevokeClientToken _revokeClientToken;
   final DeleteClientToken _deleteClientToken;
+  final CountActiveClientTokens _countActiveClientTokens;
   final ITokenAuditStore? _tokenAuditStore;
 
-  List<ClientTokenSummary> _tokens = const <ClientTokenSummary>[];
+  List<ClientTokenSummary> _tokens = const [];
   bool _isLoading = false;
-  bool _isCreating = false;
-  bool _isRevoking = false;
-  bool _isDeleting = false;
-  bool _isCopyingTokenSecret = false;
-  String? _revokingTokenId;
-  String? _deletingTokenId;
+  bool _hasLoaded = false;
+  bool _isListStale = false;
+  bool _disposed = false;
+  _TokenMutation? _mutation;
+  String? _mutationTokenId;
   String? _copyingTokenSecretId;
-  PresentationErrorState? _errorState;
+  PresentationErrorState? _listErrorState;
+  PresentationErrorState? _mutationErrorState;
+  PresentationErrorState? _statsErrorState;
   String? _lastCreatedToken;
   ClientTokenUpdateOutcome? _lastUpdateOutcome;
-  bool _hasLoaded = false;
-  ClientTokenListQuery _lastListQuery = const ClientTokenListQuery();
+  ClientTokenListQuery _lastListQuery = const ClientTokenListQuery(page: 1, pageSize: 50);
   int _loadGeneration = 0;
-  int? _visibleLoadingGeneration;
+  int _dataRevision = 0;
+  int _statsGeneration = 0;
+  int _currentPage = 1;
+  int _pageSize = ClientTokenListQuery.defaultPageSize;
+  int _totalCount = 0;
+  int _activeTokenCount = 0;
 
   List<ClientTokenSummary> get tokens => _tokens;
   bool get isLoading => _isLoading;
-  bool get isCreating => _isCreating;
-  bool get isRevoking => _isRevoking;
-  bool get isDeleting => _isDeleting;
-  bool get isCopyingTokenSecret => _isCopyingTokenSecret;
-  String? get revokingTokenId => _revokingTokenId;
-  String? get deletingTokenId => _deletingTokenId;
-  String? get copyingTokenSecretId => _copyingTokenSecretId;
-  PresentationErrorState? get errorState => _errorState;
-  String get error => _errorState?.message ?? '';
-  bool get errorCanRetry => _errorState?.canRetry ?? false;
-  String? get lastCreatedToken => _lastCreatedToken;
-
-  /// Outcome of the most recent successful update. `null` outside of a
-  /// recently-completed edit cycle. Consumed by the UI to decide between
-  /// "rotated", "metadata only" and "no change" feedback.
-  ClientTokenUpdateOutcome? get lastUpdateOutcome => _lastUpdateOutcome;
   bool get hasLoaded => _hasLoaded;
-  bool get isListMutationInProgress => _isRevoking || _isDeleting;
-  bool get isTokenMutationInProgress => _isCreating || _isRevoking || _isDeleting;
+  bool get isListStale => _isListStale;
+  bool get isCreating => _mutation == _TokenMutation.save;
+  bool get isRevoking => _mutation == _TokenMutation.revoke;
+  bool get isDeleting => _mutation == _TokenMutation.delete;
+  bool get isCopyingTokenSecret => _copyingTokenSecretId != null;
+  String? get revokingTokenId => isRevoking ? _mutationTokenId : null;
+  String? get deletingTokenId => isDeleting ? _mutationTokenId : null;
+  String? get copyingTokenSecretId => _copyingTokenSecretId;
+  PresentationErrorState? get errorState => _mutationErrorState ?? _listErrorState ?? _statsErrorState;
+  String get error => errorState?.message ?? '';
+  String get mutationError => _mutationErrorState?.message ?? '';
+  String get listError => (_listErrorState ?? _statsErrorState)?.message ?? '';
+  bool get errorCanRetry => errorState?.canRetry ?? false;
+  String? get lastCreatedToken => _lastCreatedToken;
+  ClientTokenUpdateOutcome? get lastUpdateOutcome => _lastUpdateOutcome;
+  bool get isListMutationInProgress => isTokenMutationInProgress;
+  bool get isTokenMutationInProgress => _mutation != null;
+  int get currentPage => _currentPage;
+  int get pageSize => _pageSize;
+  int get totalCount => _totalCount;
+  int get activeTokenCount => _activeTokenCount;
+  bool get hasPreviousPage => _currentPage > 1;
+  bool get hasNextPage => _currentPage * _pageSize < _totalCount;
 
-  Future<Result<void>> loadTokens({
-    bool silent = false,
-    ClientTokenListQuery? query,
-  }) async {
-    final effectiveQuery = query ?? _lastListQuery;
-    _lastListQuery = effectiveQuery;
+  @override
+  void notifyListeners() {
+    if (!_disposed) super.notifyListeners();
+  }
+
+  @override
+  void dispose() {
+    _disposed = true;
+    _loadGeneration++;
+    _statsGeneration++;
+    super.dispose();
+  }
+
+  Future<Result<void>> loadTokens({bool silent = false, ClientTokenListQuery? query}) {
+    if (isTokenMutationInProgress || _disposed) {
+      return Future.value(Failure(PresentationOperationFailures.operationBlocked));
+    }
+    return _loadTokens(silent: silent, query: query ?? _lastListQuery);
+  }
+
+  Future<Result<void>> _loadTokens({required bool silent, required ClientTokenListQuery query}) async {
+    _lastListQuery = query.copyWith(page: query.page ?? 1, pageSize: query.pageSize ?? _pageSize);
     final generation = ++_loadGeneration;
-
+    final revision = _dataRevision;
     if (!silent) {
       _isLoading = true;
-      _visibleLoadingGeneration = generation;
-      _clearErrorState();
+      _listErrorState = null;
       notifyListeners();
     }
-
-    final result = await _listClientTokens(query: effectiveQuery);
-
-    if (generation != _loadGeneration) {
+    final result = await _listClientTokenPage(query: _lastListQuery);
+    if (_disposed || generation != _loadGeneration || revision != _dataRevision) {
       return Failure(PresentationOperationFailures.superseded);
     }
-
+    _isLoading = false;
     if (result.isError()) {
-      final failure = result.exceptionOrNull()!;
-      _applyFailure(failure);
-      _finishVisibleLoading();
+      _listErrorState = PresentationErrorState.fromFailure(result.exceptionOrNull()!);
       notifyListeners();
-      return Failure(failure);
+      return Failure(result.exceptionOrNull()!);
     }
-
-    _tokens = result.getOrThrow();
-    _clearErrorState();
+    final page = result.getOrThrow();
+    _tokens = List.unmodifiable(page.items);
+    _currentPage = page.page;
+    _pageSize = page.pageSize;
+    _totalCount = page.totalCount;
+    _lastListQuery = _lastListQuery.copyWith(page: page.page, pageSize: page.pageSize);
+    _listErrorState = null;
     _hasLoaded = true;
-    _finishVisibleLoading();
+    _isListStale = false;
     notifyListeners();
     return const Success(unit);
   }
 
-  Future<Result<void>> createToken(
-    ClientTokenCreateRequest request, {
-    bool refreshTokens = true,
-  }) async {
-    _isCreating = true;
-    _clearErrorState();
-    _lastCreatedToken = null;
-    notifyListeners();
-
-    final result = await _createClientToken(request);
-
-    late final Result<void> outcome;
-    if (result.isError()) {
-      final failure = result.exceptionOrNull()!;
-      _applyFailure(failure);
-      outcome = Failure(failure);
-    } else {
-      _lastCreatedToken = result.getOrThrow();
-      _clearErrorState();
-      outcome = refreshTokens ? await _refreshAfterMutation() : const Success(unit);
+  Future<Result<void>> refreshActiveTokenCount() {
+    if (isTokenMutationInProgress || _disposed) {
+      return Future.value(Failure(PresentationOperationFailures.operationBlocked));
     }
-
-    _isCreating = false;
-    notifyListeners();
-    return outcome;
+    return _refreshActiveTokenCount();
   }
 
-  Future<Result<void>> revokeToken(String tokenId) async {
-    if (isListMutationInProgress) {
+  Future<Result<void>> _refreshActiveTokenCount() async {
+    final generation = ++_statsGeneration;
+    final revision = _dataRevision;
+    final result = await _countActiveClientTokens();
+    if (_disposed || generation != _statsGeneration || revision != _dataRevision) {
+      return Failure(PresentationOperationFailures.superseded);
+    }
+    if (result.isError()) {
+      _statsErrorState = PresentationErrorState.fromFailure(result.exceptionOrNull()!);
+      notifyListeners();
+      return Failure(result.exceptionOrNull()!);
+    }
+    _activeTokenCount = result.getOrThrow();
+    _statsErrorState = null;
+    notifyListeners();
+    return const Success(unit);
+  }
+
+  Future<Result<void>> _mutate({
+    required _TokenMutation mutation,
+    required Future<Result<void>> Function() write,
+    required bool refreshTokens,
+    bool Function()? hasChanges,
+    String? tokenId,
+  }) async {
+    if (isTokenMutationInProgress || _disposed) {
       return Failure(PresentationOperationFailures.operationBlocked);
     }
-    _isRevoking = true;
-    _revokingTokenId = tokenId;
-    _clearErrorState();
+    _mutation = mutation;
+    _mutationTokenId = tokenId;
+    _mutationErrorState = null;
+    _dataRevision++;
+    _loadGeneration++;
+    _statsGeneration++;
+    _isLoading = false;
     notifyListeners();
-
-    final result = await _revokeClientToken(tokenId);
-
-    late final Result<void> outcome;
-    if (result.isError()) {
-      final failure = result.exceptionOrNull()!;
-      _applyFailure(failure);
-      outcome = Failure(failure);
-    } else {
-      _clearErrorState();
-      _markTokenRevokedInMemory(tokenId);
-      outcome = const Success(unit);
+    try {
+      final result = await write();
+      if (result.isError()) {
+        _mutationErrorState = PresentationErrorState.fromFailure(result.exceptionOrNull()!);
+        return result;
+      }
+      if (hasChanges != null && !hasChanges()) return const Success(unit);
+      _isListStale = true;
+      await _refreshActiveTokenCount();
+      if (refreshTokens && !_disposed) {
+        await _loadTokens(silent: true, query: _lastListQuery);
+      }
+      return const Success(unit);
+    } finally {
+      _mutation = null;
+      _mutationTokenId = null;
+      notifyListeners();
     }
+  }
 
-    _isRevoking = false;
-    _revokingTokenId = null;
-    notifyListeners();
-    return outcome;
+  Future<Result<void>> createToken(ClientTokenCreateRequest request, {bool refreshTokens = true}) {
+    return _mutate(
+      mutation: _TokenMutation.save,
+      refreshTokens: refreshTokens,
+      write: () async {
+        _lastCreatedToken = null;
+        _lastUpdateOutcome = null;
+        final result = await _createClientToken(request);
+        if (result.isError()) return Failure(result.exceptionOrNull()!);
+        _lastCreatedToken = result.getOrThrow();
+        return const Success(unit);
+      },
+    );
   }
 
   Future<Result<void>> updateToken(
@@ -174,158 +227,128 @@ class ClientTokenProvider extends ChangeNotifier {
     ClientTokenCreateRequest request, {
     bool refreshTokens = true,
     int? expectedVersion,
-  }) async {
-    _isCreating = true;
-    _clearErrorState();
-    _lastCreatedToken = null;
-    _lastUpdateOutcome = null;
-    notifyListeners();
-
-    final result = await _updateClientToken(
-      tokenId,
-      request,
-      expectedVersion: expectedVersion,
+  }) {
+    var changed = true;
+    return _mutate(
+      mutation: _TokenMutation.save,
+      tokenId: tokenId,
+      refreshTokens: refreshTokens,
+      hasChanges: () => changed,
+      write: () async {
+        _lastCreatedToken = null;
+        _lastUpdateOutcome = null;
+        final result = await _updateClientToken(tokenId, request, expectedVersion: expectedVersion);
+        if (result.isError()) return Failure(result.exceptionOrNull()!);
+        final updated = result.getOrThrow();
+        changed = updated.outcome != ClientTokenUpdateOutcome.unchanged;
+        _lastUpdateOutcome = updated.outcome;
+        _lastCreatedToken = updated.didRotateToken ? updated.tokenValue : null;
+        if (updated.outcome != ClientTokenUpdateOutcome.unchanged) {
+          _tokens = List.unmodifiable(
+            _tokens.map(
+              (token) => token.id != tokenId
+                  ? token
+                  : token.copyWith(
+                      clientId: request.normalizedClientId,
+                      name: request.normalizedName,
+                      agentId: request.normalizedAgentId,
+                      payload: request.payload,
+                      allTables: request.allTables,
+                      allViews: request.allViews,
+                      globalPermissions: request.effectiveGlobalPermissions,
+                      rules: request.effectiveRules,
+                      tokenValue: updated.didRotateToken ? null : token.tokenValue,
+                      version: updated.version,
+                      updatedAt: updated.updatedAt,
+                    ),
+            ),
+          );
+        }
+        return const Success(unit);
+      },
     );
-
-    late final Result<void> outcome;
-    if (result.isError()) {
-      final failure = result.exceptionOrNull()!;
-      _applyFailure(failure);
-      outcome = Failure(failure);
-    } else {
-      final updateResult = result.getOrThrow();
-      _clearErrorState();
-      _lastUpdateOutcome = updateResult.outcome;
-      _lastCreatedToken = updateResult.didRotateToken ? updateResult.tokenValue : null;
-      if (updateResult.outcome == ClientTokenUpdateOutcome.unchanged) {
-        outcome = const Success(unit);
-      } else {
-        final patched = _applyUpdatedTokenInMemory(
-          tokenId: tokenId,
-          request: request,
-          nextVersion: updateResult.version,
-          updatedAt: updateResult.updatedAt,
-          didRotateToken: updateResult.didRotateToken,
-        );
-        outcome = refreshTokens && !patched ? await _refreshAfterMutation() : const Success(unit);
-      }
-    }
-
-    _isCreating = false;
-    notifyListeners();
-    return outcome;
   }
 
-  void clearLastUpdateOutcome() {
-    if (_lastUpdateOutcome == null) {
-      return;
-    }
-    _lastUpdateOutcome = null;
-    notifyListeners();
-  }
+  Future<Result<void>> revokeToken(String tokenId) => _mutate(
+    mutation: _TokenMutation.revoke,
+    tokenId: tokenId,
+    refreshTokens: true,
+    write: () async {
+      final result = await _revokeClientToken(tokenId);
+      if (result.isError()) return result;
+      _tokens = List.unmodifiable(
+        _tokens
+            .map(
+              (token) => token.id != tokenId || token.isRevoked
+                  ? token
+                  : token.copyWith(
+                      isRevoked: true,
+                      version: token.version + 1,
+                      updatedAt: DateTime.now().toUtc(),
+                    ),
+            )
+            .where((token) => _lastListQuery.status != ClientTokenStatusFilter.active || !token.isRevoked),
+      );
+      return const Success(unit);
+    },
+  );
 
-  bool isRevokingToken(String tokenId) {
-    return _isRevoking && _revokingTokenId == tokenId;
-  }
+  Future<Result<void>> deleteToken(String tokenId) => _mutate(
+    mutation: _TokenMutation.delete,
+    tokenId: tokenId,
+    refreshTokens: true,
+    write: () async {
+      final result = await _deleteClientToken(tokenId);
+      if (result.isSuccess()) _tokens = List.unmodifiable(_tokens.where((token) => token.id != tokenId));
+      return result;
+    },
+  );
 
-  Future<Result<void>> deleteToken(String tokenId) async {
-    if (isListMutationInProgress) {
-      return Failure(PresentationOperationFailures.operationBlocked);
-    }
-    _isDeleting = true;
-    _deletingTokenId = tokenId;
-    _clearErrorState();
-    notifyListeners();
-
-    final result = await _deleteClientToken(tokenId);
-
-    late final Result<void> outcome;
-    if (result.isError()) {
-      final failure = result.exceptionOrNull()!;
-      _applyFailure(failure);
-      outcome = Failure(failure);
-    } else {
-      _clearErrorState();
-      _tokens = _tokens.where((token) => token.id != tokenId).toList();
-      outcome = const Success(unit);
-    }
-
-    _isDeleting = false;
-    _deletingTokenId = null;
-    notifyListeners();
-    return outcome;
-  }
-
-  bool isDeletingToken(String tokenId) {
-    return _isDeleting && _deletingTokenId == tokenId;
-  }
-
-  bool isCopyingTokenSecretFor(String tokenId) {
-    return _isCopyingTokenSecret && _copyingTokenSecretId == tokenId;
-  }
+  bool isRevokingToken(String tokenId) => revokingTokenId == tokenId;
+  bool isDeletingToken(String tokenId) => deletingTokenId == tokenId;
+  bool isCopyingTokenSecretFor(String tokenId) => _copyingTokenSecretId == tokenId;
 
   Future<Result<ClientTokenSecretLookup>> getTokenSecret(String tokenId) async {
-    if (_isCopyingTokenSecret) {
-      return Failure(
-        domain.ValidationFailure('Client token secret copy is already in progress'),
-      );
+    if (isCopyingTokenSecret || isTokenMutationInProgress || _disposed) {
+      return Failure(PresentationOperationFailures.operationBlocked);
     }
-
-    _isCopyingTokenSecret = true;
     _copyingTokenSecretId = tokenId;
+    final revision = _dataRevision;
     notifyListeners();
-
     try {
-      return await _getClientTokenSecret(tokenId);
+      final result = await _getClientTokenSecret(tokenId);
+      if (_disposed || revision != _dataRevision) {
+        return Failure(PresentationOperationFailures.superseded);
+      }
+      return result;
     } finally {
-      _isCopyingTokenSecret = false;
       _copyingTokenSecretId = null;
       notifyListeners();
     }
   }
 
   void clearError() {
-    if (_errorState == null) {
-      return;
-    }
-    _clearErrorState();
+    _mutationErrorState = null;
+    _listErrorState = null;
+    _statsErrorState = null;
     notifyListeners();
   }
 
   void clearLastCreatedToken() {
-    if (_lastCreatedToken == null) {
-      return;
-    }
     _lastCreatedToken = null;
     notifyListeners();
   }
 
-  Future<Result<void>> _refreshAfterMutation() async {
-    final result = await loadTokens(silent: true);
-    if (result.isError() && PresentationOperationFailures.isSilent(result.exceptionOrNull()!)) {
-      return const Success(unit);
-    }
-    return result;
+  void clearLastUpdateOutcome() {
+    _lastUpdateOutcome = null;
+    notifyListeners();
   }
 
-  void _finishVisibleLoading() {
-    if (_visibleLoadingGeneration == null) {
-      return;
-    }
-    _visibleLoadingGeneration = null;
-    _isLoading = false;
-  }
-
-  Future<void> recordCopiedToken({
-    required String tokenId,
-    required String clientId,
-  }) async {
-    final auditStore = _tokenAuditStore;
-    if (auditStore == null) {
-      return;
-    }
+  Future<void> recordCopiedToken({required String tokenId, required String clientId}) async {
+    final store = _tokenAuditStore;
+    if (store == null) return;
     try {
-      await auditStore.record(
+      await store.record(
         TokenAuditEvent(
           eventType: TokenAuditEventType.copy,
           timestamp: DateTime.now().toUtc(),
@@ -333,127 +356,13 @@ class ClientTokenProvider extends ChangeNotifier {
           clientId: clientId,
         ),
       );
-    } on Exception catch (e, stackTrace) {
+    } on Exception catch (error, stackTrace) {
       developer.log(
-        'Token copy audit record failed (must not impact UI flow)',
+        'Token copy audit record failed',
         name: 'client_token_provider',
-        error: e,
+        error: error,
         stackTrace: stackTrace,
       );
     }
-  }
-
-  void _applyFailure(Object failure) {
-    _errorState = PresentationErrorState.fromFailure(failure);
-  }
-
-  void _clearErrorState() {
-    _errorState = null;
-  }
-
-  bool _applyUpdatedTokenInMemory({
-    required String tokenId,
-    required ClientTokenCreateRequest request,
-    required int nextVersion,
-    required DateTime updatedAt,
-    required bool didRotateToken,
-  }) {
-    final index = _tokens.indexWhere((token) => token.id == tokenId);
-    if (index < 0) {
-      return false;
-    }
-
-    final current = _tokens[index];
-    final agentId = request.agentId?.trim();
-    // When the token did not rotate, keep the previously cached tokenValue
-    // (typically null on list views). When it rotated, force a re-fetch by
-    // clearing the in-memory copy so the UI never displays a stale secret.
-    final next = current.copyWith(
-      clientId: request.clientId.trim(),
-      name: request.name.trim(),
-      agentId: agentId == null || agentId.isEmpty ? null : agentId,
-      payload: request.payload,
-      allTables: request.allTables,
-      allViews: request.allViews,
-      globalPermissions: request.effectiveGlobalPermissions,
-      rules: request.effectiveRules,
-      tokenValue: didRotateToken ? null : current.tokenValue,
-      version: nextVersion,
-      updatedAt: updatedAt,
-    );
-
-    final mutable = List<ClientTokenSummary>.from(_tokens);
-    mutable[index] = next;
-    _tokens = _applyQueryToTokens(mutable, _lastListQuery);
-    return true;
-  }
-
-  void _markTokenRevokedInMemory(String tokenId) {
-    final index = _tokens.indexWhere((token) => token.id == tokenId);
-    if (index < 0) {
-      return;
-    }
-    final current = _tokens[index];
-    final mutable = List<ClientTokenSummary>.from(_tokens);
-    mutable[index] = current.copyWith(
-      isRevoked: true,
-      version: current.version + 1,
-      updatedAt: DateTime.now().toUtc(),
-    );
-    _tokens = _applyQueryToTokens(mutable, _lastListQuery);
-  }
-
-  List<ClientTokenSummary> _applyQueryToTokens(
-    List<ClientTokenSummary> tokens,
-    ClientTokenListQuery query,
-  ) {
-    final normalizedClientFilter = query.clientIdContains.trim().toLowerCase();
-
-    final filtered = tokens.where((token) {
-      if (normalizedClientFilter.isNotEmpty) {
-        final matchesClientId = token.clientId.toLowerCase().contains(
-          normalizedClientFilter,
-        );
-        final matchesName = token.name.toLowerCase().contains(
-          normalizedClientFilter,
-        );
-        if (!matchesClientId && !matchesName) {
-          return false;
-        }
-      }
-
-      return switch (query.status) {
-        ClientTokenStatusFilter.all => true,
-        ClientTokenStatusFilter.active => !token.isRevoked,
-        ClientTokenStatusFilter.revoked => token.isRevoked,
-      };
-    }).toList();
-
-    filtered.sort((left, right) {
-      final bySelectedSort = switch (query.sort) {
-        ClientTokenSortOption.newest => right.createdAt.compareTo(left.createdAt),
-        ClientTokenSortOption.oldest => left.createdAt.compareTo(right.createdAt),
-        ClientTokenSortOption.clientAsc => left.clientId.toLowerCase().compareTo(
-          right.clientId.toLowerCase(),
-        ),
-        ClientTokenSortOption.clientDesc => right.clientId.toLowerCase().compareTo(
-          left.clientId.toLowerCase(),
-        ),
-      };
-
-      if (bySelectedSort != 0) {
-        return bySelectedSort;
-      }
-
-      return right.createdAt.compareTo(left.createdAt);
-    });
-
-    if (!query.hasPagination) {
-      return filtered;
-    }
-
-    final start = query.offset.clamp(0, filtered.length);
-    final end = (start + query.pageSize!).clamp(0, filtered.length);
-    return filtered.sublist(start, end);
   }
 }

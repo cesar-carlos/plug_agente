@@ -10,6 +10,11 @@ class ClientPermissionSet {
   });
 
   factory ClientPermissionSet.fromJson(Map<String, dynamic> json) {
+    for (final field in ['read', 'update', 'delete', 'ddl']) {
+      if (json.containsKey(field) && json[field] is! bool) {
+        throw const FormatException('Invalid token permission');
+      }
+    }
     return ClientPermissionSet(
       canRead: json['read'] as bool? ?? false,
       canUpdate: json['update'] as bool? ?? false,

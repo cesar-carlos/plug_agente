@@ -9,4 +9,7 @@ abstract class IRevokedTokenStore {
 
   /// Adds [token] to the revoked set for the session TTL.
   void add(String token);
+
+  /// Adds the persisted SHA-256 credential hash without loading its secret.
+  void addCredentialHash(String credentialHash);
 }

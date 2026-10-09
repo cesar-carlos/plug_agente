@@ -1,6 +1,7 @@
 import 'package:fluent_ui/fluent_ui.dart';
 import 'package:plug_agente/core/theme/theme.dart';
 import 'package:plug_agente/l10n/app_localizations.dart';
+import 'package:plug_agente/shared/widgets/common/actions/app_button.dart';
 
 class InlineFeedbackCard extends StatelessWidget {
   const InlineFeedbackCard({
@@ -10,6 +11,7 @@ class InlineFeedbackCard extends StatelessWidget {
     this.message,
     this.content,
     this.onDismiss,
+    this.onRetry,
   }) : assert(
          message != null || content != null,
          'Provide a message or content for InlineFeedbackCard.',
@@ -20,6 +22,7 @@ class InlineFeedbackCard extends StatelessWidget {
   final String? message;
   final Widget? content;
   final VoidCallback? onDismiss;
+  final VoidCallback? onRetry;
 
   AppFeedbackTone _tone() {
     return switch (severity) {
@@ -82,6 +85,10 @@ class InlineFeedbackCard extends StatelessWidget {
                           color: severity == InfoBarSeverity.error ? feedbackColors.foreground : null,
                         ),
                       ),
+                    if (onRetry != null) ...[
+                      const SizedBox(height: AppSpacing.sm),
+                      AppButton(label: AppLocalizations.of(context)!.btnRetry, isPrimary: false, onPressed: onRetry),
+                    ],
                   ],
                 ),
               ),

@@ -31,4 +31,8 @@ abstract final class AuthorizationContextConstants {
   static const String databaseMismatchReason = 'database_mismatch';
 
   static const String missingPermissionReason = 'missing_permission';
+
+  static const String policyResolutionBusyReason = 'policy_resolution_busy';
+  static const String policyResolutionTimeoutReason = 'policy_resolution_timeout';
+  static const String policyResolutionFailedReason = 'policy_resolution_failed';
 }
