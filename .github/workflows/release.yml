@@ -58,6 +58,7 @@ permissions:
 
 concurrency:
   group: publish-windows-release-${{ inputs.version }}
+  queue: max
   cancel-in-progress: false
 
 jobs:
@@ -67,6 +68,7 @@ jobs:
     runs-on: windows-2022
     concurrency:
       group: plug-main-mutation
+      queue: max
       cancel-in-progress: false
     env:
       VERSION_SHORT: ${{ inputs.version }}
@@ -96,10 +98,7 @@ jobs:
       - name: Early release preflight
         shell: bash
         run: |
-          ARGS=(--early --version "${{ env.VERSION_SHORT }}" --require-iscc --check-secrets --signing-provider "${{ inputs.signing_provider || 'pfx' }}")
-          if [ "${{ inputs.dry_run }}" = "true" ]; then
-            ARGS+=(--allow-existing-tag)
-          fi
+          ARGS=(--early --version "$VERSION_SHORT" --require-iscc --check-secrets --signing-provider "${{ inputs.signing_provider }}" --allow-existing-tag)
           python tool/release/release_preflight.py "${ARGS[@]}"
 
       - name: Require production release gates
@@ -152,11 +151,11 @@ jobs:
       - name: Verify version synchronization
         shell: bash
         run: |
-          ARGS=(--version "${{ env.VERSION_SHORT }}" --allow-dirty)
-          if [ "${{ inputs.dry_run }}" = "true" ]; then
-            ARGS+=(--allow-existing-tag)
-          fi
+          ARGS=(--version "$VERSION_SHORT" --allow-dirty --allow-existing-tag)
           python tool/release/release_preflight.py "${ARGS[@]}"
+
+      - name: Verify existing release tag source
+        run: python -m tool.release.publish_release --check-tag
 
       - name: Release quality gate
         if: inputs.run_tests
@@ -318,7 +317,7 @@ jobs:
       - name: Test native updater contracts
         shell: pwsh
         run: |
-          ctest --test-dir build/windows/x64/updater -C Release --output-on-failure
+          ctest --test-dir build/windows/x64/updater -C Release --output-on-failure --no-tests=error --output-junit "$env:RUNNER_TEMP/updater-contracts.xml"
           if ($LASTEXITCODE -ne 0) { throw "Native updater contract tests failed." }
 
       - name: Commit version bump
@@ -328,12 +327,13 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add pubspec.yaml installer/setup.iss lib/core/constants/app_version.g.dart
-          git diff --staged --quiet && {
-            echo "No version changes to commit."
-            exit 1
-          }
-          git commit -m "chore: bump version to ${VERSION_SHORT}"
-          git push origin main
+          if git rev-parse --verify --quiet "refs/tags/${RELEASE_TAG}^{commit}" >/dev/null; then
+            echo "Reusing the existing release tag source."
+          elif git diff --staged --quiet; then
+            echo "Version files are already synchronized; reusing the current commit."
+          else
+            git commit -m "chore: bump version to ${VERSION_SHORT}"
+          fi
 
       - name: Generate signed updater manifest
         if: ${{ !inputs.dry_run }}
@@ -342,35 +342,15 @@ jobs:
           APPCAST_SIGNING_PRIVATE_KEY: ${{ secrets.APPCAST_SIGNING_PRIVATE_KEY }}
         run: |
           SCHEMA=$(python -c "import re; from pathlib import Path; print(re.search(r'int get schemaVersion => ([0-9]+)', Path('lib/infrastructure/repositories/agent_config_drift_database.dart').read_text()).group(1))")
-          python -m tool.updater.manifest --installer "installer/dist/PlugAgente-Setup-${VERSION_SHORT}.exe" --version "$FULL_VERSION" --channel "$RELEASE_CHANNEL" --schema "$SCHEMA" --source-commit "$(git rev-parse HEAD)" --output "installer/dist/PlugAgente-Manifest-${VERSION_SHORT}.json"
+          SOURCE_COMMIT=$(python -m tool.release.publish_release --source-commit)
+          python -m tool.updater.manifest --installer "installer/dist/PlugAgente-Setup-${VERSION_SHORT}.exe" --version "$FULL_VERSION" --channel "$RELEASE_CHANNEL" --schema "$SCHEMA" --source-commit "$SOURCE_COMMIT" --output "installer/dist/PlugAgente-Manifest-${VERSION_SHORT}.json"
 
-      - name: Create and push tag
+      - name: Verify manifest and publish release
         if: ${{ !inputs.dry_run }}
-        shell: bash
-        run: |
-          git tag "${RELEASE_TAG}"
-          git push origin "${RELEASE_TAG}"
-
-      - name: Publish GitHub Release
-        if: ${{ !inputs.dry_run }}
-        shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
-        run: |
-          PRERELEASE_FLAG=""
-          LATEST_FLAG="--latest"
-          if [ "${{ inputs.prerelease }}" = "true" ]; then
-            PRERELEASE_FLAG="--prerelease"
-            LATEST_FLAG="--latest=false"
-          fi
-          gh release create "${RELEASE_TAG}" \
-            "installer/dist/PlugAgente-Setup-${VERSION_SHORT}.exe" \
-            "installer/dist/PlugAgente-Manifest-${VERSION_SHORT}.json" \
-            --title "Version ${VERSION_SHORT}" \
-            --generate-notes \
-            --verify-tag \
-            ${LATEST_FLAG} \
-            ${PRERELEASE_FLAG}
+          AUTO_UPDATE_FEED_PUBLIC_KEY: ${{ secrets.AUTO_UPDATE_FEED_PUBLIC_KEY }}
+        run: python -m tool.release.publish_release
 
       - name: Dry run summary
         if: inputs.dry_run
@@ -380,6 +360,20 @@ jobs:
           echo "Installer generated at installer/dist/PlugAgente-Setup-${VERSION_SHORT}.exe."
           echo "No commit, tag, or GitHub Release was created."
 
+      - name: Preserve release installer and diagnostics
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: windows-release-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            installer/dist/PlugAgente-Setup-*.exe
+            installer/dist/PlugAgente-Manifest-*.json
+            build/release-preflight/*.log
+            build/windows/x64/updater/Testing/Temporary/LastTest.log
+            ${{ runner.temp }}/updater-contracts.xml
+          if-no-files-found: warn
+          retention-days: 14
+
   publish-appcast:
     if: ${{ !inputs.dry_run }}
     needs: publish
@@ -387,6 +381,7 @@ jobs:
     with:
       release_tag: v${{ inputs.version }}
       rollout_percentage: "5"
+      preserve_existing_rollout: true
       channel: ${{ inputs.prerelease && 'beta' || 'stable' }}
       require_authenticode: ${{ inputs.signing_provider != 'manifest' }}
     secrets: inherit

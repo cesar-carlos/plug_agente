@@ -28,7 +28,10 @@ jobs:
         run: go install github.com/rhysd/actionlint/cmd/actionlint@v1.7.12
 
       - name: Lint workflows
-        run: '"$HOME/go/bin/actionlint"'
+        # actionlint 1.7.12 predates GitHub's concurrency.queue support.
+        run: >-
+          "$HOME/go/bin/actionlint"
+          -ignore '^unexpected key "queue" for "concurrency" section\.'
 
   analyze:
     runs-on: ubuntu-latest
@@ -255,7 +258,18 @@ jobs:
           python-version: "3.11"
 
       - name: Install appcast tooling dependencies
-        run: python3 -m pip install --quiet "cryptography>=42.0.0"
+        run: python3 -m pip install --quiet "cryptography>=42.0.0" "PyYAML>=6.0,<7"
+
+      - name: Validate workflow regressions and release publication
+        run: python3 -m unittest tool.tests.test_workflow_regressions tool.release.test_publish_release -v
+
+      - name: Set up Node for alert tests
+        uses: actions/setup-node@v6
+        with:
+          node-version: '24'
+
+      - name: Test scheduled workflow alerts
+        run: node --test tool/ci/test_scheduled_workflow_alert.cjs
 
       - name: Validate appcast tooling
         run: python3 -m unittest tool.appcast.test_appcast_manager tool.appcast.test_validate_release tool.appcast.test_appcast_signing -v
@@ -298,11 +312,24 @@ jobs:
           flutter pub get
           python tool/odbc/prepare_package_native.py --github-env "${{ github.env }}"
 
-      - name: Prepare published package native engine
-        run: python tool/odbc/prepare_package_native.py --github-env "$env:GITHUB_ENV"
-
       - name: Build Windows debug bundle
         run: flutter build windows --debug
+
+      - name: Test native updater contracts
+        shell: pwsh
+        run: |
+          ctest --test-dir build/windows/x64/updater -C Debug --output-on-failure --no-tests=error --output-junit "$env:RUNNER_TEMP/updater-contracts.xml"
+          if ($LASTEXITCODE -ne 0) { throw 'Native updater contract tests failed.' }
+
+      - name: Upload native updater contract diagnostics
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: windows-updater-contracts-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            build/windows/x64/updater/Testing/Temporary/LastTest.log
+            ${{ runner.temp }}/updater-contracts.xml
+          if-no-files-found: warn
 
       - name: Verify published native engine in the bundle
         run: python tool/odbc/prepare_package_native.py --verify-bundle build/windows/x64/runner/Debug

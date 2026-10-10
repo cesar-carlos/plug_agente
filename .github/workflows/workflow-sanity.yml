@@ -8,6 +8,8 @@ on:
       - '.github/actionlint.yaml'
       - 'tool/appcast/**'
       - 'tool/ci/**'
+      - 'tool/release/**'
+      - 'tool/tests/test_workflow_regressions.py'
       - 'tool/tests/test_validate_ci_configuration.py'
       - 'analysis_options.yaml'
   pull_request:
@@ -16,6 +18,8 @@ on:
       - '.github/actionlint.yaml'
       - 'tool/appcast/**'
       - 'tool/ci/**'
+      - 'tool/release/**'
+      - 'tool/tests/test_workflow_regressions.py'
       - 'tool/tests/test_validate_ci_configuration.py'
       - 'analysis_options.yaml'
   workflow_dispatch:
@@ -38,8 +42,19 @@ jobs:
       - name: Validate CI configuration
         run: python3 tool/ci/validate_ci_configuration.py
 
+      - name: Install workflow test dependencies
+        run: python3 -m pip install --quiet "cryptography>=42.0.0" "PyYAML>=6.0,<7"
+
       - name: Run CI configuration tests
-        run: python3 -m unittest tool.tests.test_validate_ci_configuration -v
+        run: python3 -m unittest tool.tests.test_validate_ci_configuration tool.tests.test_workflow_regressions tool.release.test_publish_release -v
+
+      - name: Set up Node
+        uses: actions/setup-node@v6
+        with:
+          node-version: '24'
+
+      - name: Test scheduled workflow alerts
+        run: node --test tool/ci/test_scheduled_workflow_alert.cjs
 
       - name: Set up Go
         uses: actions/setup-go@v7
@@ -50,4 +65,7 @@ jobs:
         run: go install github.com/rhysd/actionlint/cmd/actionlint@v1.7.12
 
       - name: Lint workflows
-        run: '"$HOME/go/bin/actionlint"'
+        # actionlint 1.7.12 predates GitHub's concurrency.queue support.
+        run: >-
+          "$HOME/go/bin/actionlint"
+          -ignore '^unexpected key "queue" for "concurrency" section\.'

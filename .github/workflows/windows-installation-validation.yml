@@ -88,6 +88,7 @@ jobs:
       - name: Authenticate manifests and bind each installer to its release
         shell: python
         env:
+          PYTHONPATH: ${{ github.workspace }}
           AUTO_UPDATE_FEED_PUBLIC_KEY: ${{ secrets.AUTO_UPDATE_FEED_PUBLIC_KEY }}
           INITIAL_URL: ${{ inputs.installer_url }}
           UPGRADE_URL: ${{ inputs.upgrade_url }}

@@ -21,7 +21,7 @@ import time
 import urllib.parse
 import urllib.request
 import xml.etree.ElementTree as et
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -571,9 +571,17 @@ def build_context_from_args(args: argparse.Namespace) -> AppcastContext:
 def command_update(args: argparse.Namespace) -> int:
     context = build_context_from_args(args)
     tree = load_or_create_tree(args.appcast)
+    if args.preserve_existing_rollout:
+        channel = tree.getroot().find("channel")
+        existing = _find_matching_item(channel, context) if channel is not None else None
+        if existing is not None:
+            context = replace(context, rollout_percentage=_plug_rollout_percentage(existing.find("enclosure")))
     signing_key = getattr(args, "signing_private_key", None) or None
     update_appcast_tree(tree, context, signing_private_key_b64=signing_key)
     write_appcast_tree(tree, args.appcast)
+    if args.github_output:
+        with args.github_output.open("a", encoding="utf-8") as output:
+            output.write(f"rollout_percentage={context.expected_rollout_percentage}\n")
     signed = " (signed)" if signing_key else ""
     print(f"Successfully updated {args.appcast} with version {context.version}{signed}")
     return 0
@@ -644,6 +652,8 @@ def build_parser() -> argparse.ArgumentParser:
 
     update_parser = subparsers.add_parser("update")
     update_parser.add_argument("--appcast", type=Path, required=True)
+    update_parser.add_argument("--preserve-existing-rollout", action="store_true")
+    update_parser.add_argument("--github-output", type=Path)
     update_parser.add_argument(
         "--signing-private-key",
         default="",

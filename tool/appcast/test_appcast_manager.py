@@ -4,9 +4,12 @@ import sys
 import tempfile
 import threading
 import unittest
+from contextlib import redirect_stdout
+from dataclasses import replace
 from datetime import datetime, timezone
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
+from io import StringIO
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
@@ -14,6 +17,54 @@ from tool.appcast import appcast_manager
 
 
 class AppcastManagerTests(unittest.TestCase):
+    def update_rollout_with_cli(self, existing_rollout, requested_rollout, *, preserve, existing_channel="stable"):
+        from tool.appcast.appcast_signing import generate_keypair
+
+        private, public = generate_keypair()
+        context = self.build_context()
+        with tempfile.TemporaryDirectory() as temporary:
+            path = Path(temporary) / "appcast.xml"
+            output = Path(temporary) / "github-output.txt"
+            if existing_rollout is not None:
+                tree = appcast_manager.et.ElementTree(appcast_manager._base_rss_root())
+                appcast_manager.update_appcast_tree(tree, replace(context, channel=existing_channel,
+                    rollout_percentage=existing_rollout), signing_private_key_b64=private)
+                appcast_manager.write_appcast_tree(tree, path)
+            arguments = ["update", "--appcast", str(path), "--version-short", context.version_short,
+                         "--full-version", context.full_version, "--asset-url", context.asset_url,
+                         "--asset-size", context.asset_size, "--asset-sha256", context.asset_sha256,
+                         "--rollout-percentage", str(requested_rollout), "--signing-private-key", private,
+                         "--github-output", str(output)]
+            if preserve:
+                arguments.append("--preserve-existing-rollout")
+            with redirect_stdout(StringIO()):
+                self.assertEqual(appcast_manager.main(arguments), 0)
+            tree = appcast_manager.et.parse(path)
+            actual_rollout = appcast_manager._plug_rollout_percentage(tree.getroot().find("channel/item/enclosure"))
+            expected_context = replace(context, rollout_percentage=actual_rollout, release_body="")
+            appcast_manager.validate_appcast_tree(tree, expected_context, public)
+            self.assertEqual(output.read_text(), f"rollout_percentage={actual_rollout}\n")
+            return actual_rollout
+
+    def test_cli_retry_preserves_promoted_and_paused_rollout(self):
+        for existing in (0, 50, 100):
+            with self.subTest(existing=existing):
+                actual = self.update_rollout_with_cli(existing, 5, preserve=True)
+                self.assertEqual(actual, existing)
+
+    def test_cli_new_release_uses_requested_initial_rollout(self):
+        self.assertEqual(self.update_rollout_with_cli(None, 5, preserve=True), 5)
+
+    def test_cli_explicit_manual_change_can_promote_or_pause_rollout(self):
+        for requested in (0, 5, 100):
+            with self.subTest(requested=requested):
+                actual = self.update_rollout_with_cli(50, requested, preserve=False)
+                self.assertEqual(actual, requested)
+
+    def test_cli_does_not_inherit_rollout_from_another_channel(self):
+        actual = self.update_rollout_with_cli(100, 5, preserve=True, existing_channel="beta")
+        self.assertEqual(actual, 5)
+
     def test_manifest_binding_is_signed_and_tampering_is_detected(self) -> None:
         from dataclasses import replace
         from tool.appcast.appcast_signing import generate_keypair
