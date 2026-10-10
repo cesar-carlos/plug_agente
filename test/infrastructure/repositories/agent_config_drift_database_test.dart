@@ -41,6 +41,58 @@ void main() {
       expect(rows, isEmpty);
     });
 
+    test('opening an existing v30 database adds pagination indexes without changing rows or schema', () async {
+      final directory = await Directory.systemTemp.createTemp('token_pagination_indexes_');
+      final dbPath = '${directory.path}\\agent_config.db';
+      addTearDown(() async {
+        expect(directory.absolute.path.startsWith(Directory.systemTemp.absolute.path), isTrue);
+        await directory.delete(recursive: true);
+      });
+      final original = AppDatabase(databaseFilePath: dbPath);
+      await original.getAllConfigs();
+      await original.customStatement(
+        "INSERT INTO client_token_cache_table (id, client_id, created_at, synced_at) VALUES ('retained', 'client', 0, 0)",
+      );
+      for (final status in ['', 'status_']) {
+        for (final direction in ['asc', 'desc']) {
+          await original.customStatement('DROP INDEX idx_client_token_${status}created_id_$direction');
+          await original.customStatement('DROP INDEX idx_client_token_${status}client_lower_id_$direction');
+        }
+      }
+      await original.customStatement(
+        'CREATE INDEX idx_client_token_client_created ON client_token_cache_table(client_id, created_at DESC)',
+      );
+      await original.customStatement(
+        'CREATE INDEX idx_client_token_status_created ON client_token_cache_table(is_revoked, created_at DESC)',
+      );
+      await original.close();
+      for (var attempt = 0; attempt < 2; attempt++) {
+        final reopened = AppDatabase(databaseFilePath: dbPath);
+        try {
+          expect((await reopened.select(reopened.clientTokenCacheTable).get()).single.id, 'retained');
+          expect(await _readUserVersion(reopened), 30);
+          final indexes = await reopened.customSelect("PRAGMA index_list('client_token_cache_table')").get();
+          expect(
+            indexes.map((row) => row.read<String>('name')),
+            containsAll([
+              'idx_client_token_created_id_asc',
+              'idx_client_token_created_id_desc',
+              'idx_client_token_status_created_id_asc',
+              'idx_client_token_status_created_id_desc',
+              'idx_client_token_client_lower_id_asc',
+              'idx_client_token_client_lower_id_desc',
+              'idx_client_token_status_client_lower_id_asc',
+              'idx_client_token_status_client_lower_id_desc',
+            ]),
+          );
+          expect(indexes.map((row) => row.read<String>('name')), isNot(contains('idx_client_token_client_created')));
+          expect(indexes.map((row) => row.read<String>('name')), isNot(contains('idx_client_token_status_created')));
+        } finally {
+          await reopened.close();
+        }
+      }
+    });
+
     test('saveConfig getConfigById getCurrentConfig deleteConfig round-trip', () async {
       final db = AppDatabase(executor: NativeDatabase.memory());
       addTearDown(db.close);

@@ -346,20 +346,32 @@ mixin _AppDatabaseMigrationHelpers on _$AppDatabase {
     );
   }
 
-  Future<void> createClientTokenIndexes() async {
-    await customStatement(
-      '''
-      CREATE INDEX IF NOT EXISTS idx_client_token_client_created
-      ON client_token_cache_table(client_id, created_at DESC)
-      ''',
-    );
-    await customStatement(
-      '''
-      CREATE INDEX IF NOT EXISTS idx_client_token_status_created
-      ON client_token_cache_table(is_revoked, created_at DESC)
-      ''',
-    );
+  Future<void> createClientTokenPaginationIndexes() async {
+    for (final direction in ['DESC', 'ASC']) {
+      final suffix = direction.toLowerCase();
+      await customStatement(
+        'CREATE INDEX IF NOT EXISTS idx_client_token_created_id_$suffix '
+        'ON client_token_cache_table(created_at $direction, id ASC)',
+      );
+      await customStatement(
+        'CREATE INDEX IF NOT EXISTS idx_client_token_status_created_id_$suffix '
+        'ON client_token_cache_table(is_revoked, created_at $direction, id ASC)',
+      );
+      await customStatement(
+        'CREATE INDEX IF NOT EXISTS idx_client_token_client_lower_id_$suffix '
+        'ON client_token_cache_table(LOWER(client_id) $direction, created_at DESC, id ASC)',
+      );
+      await customStatement(
+        'CREATE INDEX IF NOT EXISTS idx_client_token_status_client_lower_id_$suffix '
+        'ON client_token_cache_table(is_revoked, LOWER(client_id) $direction, created_at DESC, id ASC)',
+      );
+    }
+    // Replaced by indexes that also match the case-insensitive ordering and ID tie-break.
+    await customStatement('DROP INDEX IF EXISTS idx_client_token_client_created');
+    await customStatement('DROP INDEX IF EXISTS idx_client_token_status_created');
   }
+
+  Future<void> createClientTokenIndexes() => createClientTokenPaginationIndexes();
 
   Future<void> createAgentActionCapturedOutputChunkIndexes() async {
     await customStatement(

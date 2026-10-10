@@ -2,6 +2,7 @@ import 'dart:developer' as developer;
 
 import 'package:plug_agente/application/client_tokens/client_token_payload_parser.dart';
 import 'package:plug_agente/domain/entities/client_token_create_request.dart';
+import 'package:plug_agente/domain/entities/client_token_creation_result.dart';
 import 'package:plug_agente/domain/entities/token_audit_event.dart';
 import 'package:plug_agente/domain/errors/failures.dart' as domain;
 import 'package:plug_agente/domain/repositories/i_client_token_repository.dart';
@@ -17,7 +18,17 @@ class CreateClientToken {
   final IClientTokenRepository _repository;
   final ITokenAuditStore? _auditStore;
 
-  Future<Result<String>> call(ClientTokenCreateRequest request) async {
+  Future<Result<String>> call(ClientTokenCreateRequest request) =>
+      _create(request, () => _repository.createToken(request));
+
+  Future<Result<ClientTokenCreationResult>> createWithIdentity(ClientTokenCreateRequest request) =>
+      _create(request, () => _repository.createTokenWithIdentity(request), tokenIdOf: (created) => created.tokenId);
+
+  Future<Result<T>> _create<T extends Object>(
+    ClientTokenCreateRequest request,
+    Future<Result<T>> Function() write, {
+    String Function(T)? tokenIdOf,
+  }) async {
     if (request.clientId.trim().isEmpty) {
       return Failure(domain.ValidationFailure('client_id is required'));
     }
@@ -52,14 +63,14 @@ class CreateClientToken {
       );
     }
 
-    final result = await _repository.createToken(request);
+    final result = await write();
     if (result.isSuccess()) {
-      await _recordCreateAuditEvent(request);
+      await _recordCreateAuditEvent(request, tokenId: tokenIdOf?.call(result.getOrThrow()));
     }
     return result;
   }
 
-  Future<void> _recordCreateAuditEvent(ClientTokenCreateRequest request) async {
+  Future<void> _recordCreateAuditEvent(ClientTokenCreateRequest request, {String? tokenId}) async {
     if (_auditStore == null) {
       return;
     }
@@ -69,6 +80,7 @@ class CreateClientToken {
           eventType: TokenAuditEventType.create,
           timestamp: DateTime.now().toUtc(),
           clientId: request.clientId,
+          tokenId: tokenId,
           metadata: {'agent_id': request.agentId},
         ),
       );

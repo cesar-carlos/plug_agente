@@ -1,3 +1,5 @@
+import 'package:meta/meta.dart';
+
 enum ClientTokenStatusFilter {
   all,
   active,
@@ -11,6 +13,7 @@ enum ClientTokenSortOption {
   clientDesc,
 }
 
+@immutable
 class ClientTokenListQuery {
   const ClientTokenListQuery({
     this.clientIdContains = '',
@@ -32,6 +35,18 @@ class ClientTokenListQuery {
   bool get hasPagination => page != null && pageSize != null && page! > 0 && pageSize! > 0;
 
   int get offset => hasPagination ? (page! - 1) * pageSize! : 0;
+
+  @override
+  bool operator ==(Object other) =>
+      other is ClientTokenListQuery &&
+      clientIdContains.trim() == other.clientIdContains.trim() &&
+      status == other.status &&
+      sort == other.sort &&
+      page == other.page &&
+      pageSize == other.pageSize;
+
+  @override
+  int get hashCode => Object.hash(clientIdContains.trim(), status, sort, page, pageSize);
 
   ClientTokenListQuery copyWith({int? page, int? pageSize}) => ClientTokenListQuery(
     clientIdContains: clientIdContains,

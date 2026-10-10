@@ -104,6 +104,168 @@ void main() {
     await db.close();
   });
 
+  test('creation returns the persisted identity without a follow-up lookup', () async {
+    final created = (await CreateClientToken(repository).createWithIdentity(_request)).getOrThrow();
+    final row = (await source.findRowById(created.tokenId))!;
+    expect(row.tokenHash, hashStoredClientToken(created.tokenValue));
+    expect(row.version, created.version);
+    expect(row.tokenValue, isNot(created.tokenValue));
+    expect((await repository.countActiveTokens()).getOrThrow(), 1);
+  });
+
+  for (final action in ['revoke', 'delete']) {
+    test('$action invalidates off-page feedback even when the reconciliation query fails', () async {
+      expect((await provider.createToken(_request, refreshTokens: false)).isSuccess(), isTrue);
+      final feedback = provider.secretFeedback!;
+      await provider.applyListQuery(const ClientTokenListQuery(clientIdContains: 'no-match'));
+      expect(provider.tokens, isEmpty);
+      expect(provider.secretFeedback, same(feedback));
+      source.failPages = true;
+      final result = action == 'revoke'
+          ? await provider.revokeToken(feedback.tokenId)
+          : await provider.deleteToken(feedback.tokenId);
+      expect(result.isSuccess(), isTrue);
+      expect(provider.secretFeedback, isNull);
+      expect(provider.lastCreatedToken, isNull);
+      expect(provider.isListStale, isTrue);
+      expect(provider.hasListLoadError, isTrue);
+    });
+
+    test('failed $action preserves feedback until the write is confirmed', () async {
+      await provider.createToken(_request, refreshTokens: false);
+      final feedback = provider.secretFeedback!;
+      final operation = action == 'revoke' ? 'UPDATE' : 'DELETE';
+      await db.customStatement(
+        "CREATE TRIGGER reject_mutation BEFORE $operation ON client_token_cache_table BEGIN SELECT RAISE(ABORT, 'injected write failure'); END",
+      );
+      final result = action == 'revoke'
+          ? await provider.revokeToken(feedback.tokenId)
+          : await provider.deleteToken(feedback.tokenId);
+      expect(result.exceptionOrNull(), isA<domain.DatabaseFailure>());
+      expect(provider.secretFeedback, same(feedback));
+      expect(provider.isSecretFeedbackCurrent(feedback), isTrue);
+    });
+  }
+
+  test('an unrelated deletion preserves the visible secret feedback', () async {
+    final other = (await repository.createTokenWithIdentity(_request)).getOrThrow();
+    await provider.createToken(_request);
+    final feedback = provider.secretFeedback!;
+    await provider.deleteToken(other.tokenId);
+    expect(provider.secretFeedback, same(feedback));
+  });
+
+  test('metadata edits preserve the current secret and update its audit identity', () async {
+    await provider.createToken(_request, refreshTokens: false);
+    final previous = provider.secretFeedback!;
+    const renamed = ClientTokenCreateRequest(
+      clientId: 'renamed',
+      allTables: true,
+      allViews: true,
+      allPermissions: true,
+      rules: [],
+    );
+    await provider.updateToken(previous.tokenId, renamed, expectedVersion: previous.version, refreshTokens: false);
+    expect(provider.secretFeedback!.tokenValue, previous.tokenValue);
+    expect(provider.secretFeedback!.clientId, 'renamed');
+    expect(provider.secretFeedback!.version, previous.version + 1);
+    expect(provider.isSecretFeedbackCurrent(previous), isFalse);
+  });
+
+  test('rotation replaces feedback and a failed rotation preserves the previous credential', () async {
+    await provider.createToken(_request, refreshTokens: false);
+    final previous = provider.secretFeedback!;
+    const policy = ClientTokenCreateRequest(
+      clientId: 'client',
+      allTables: true,
+      allViews: false,
+      globalPermissions: ClientPermissionSet.fullAccess,
+      rules: [],
+    );
+    source.failUpdates = true;
+    expect((await provider.updateToken(previous.tokenId, policy, expectedVersion: 1)).isError(), isTrue);
+    expect(provider.secretFeedback, same(previous));
+    source.failUpdates = false;
+    expect((await provider.updateToken(previous.tokenId, policy, expectedVersion: 1)).isSuccess(), isTrue);
+    expect(provider.secretFeedback!.tokenId, previous.tokenId);
+    expect(provider.secretFeedback!.tokenValue, isNot(previous.tokenValue));
+    expect(provider.secretFeedback!.isCreation, isFalse);
+    expect(provider.isSecretFeedbackCurrent(previous), isFalse);
+  });
+
+  test('reloading a revoked credential invalidates its feedback without reading secrets', () async {
+    await provider.createToken(_request, refreshTokens: false);
+    final feedback = provider.secretFeedback!;
+    await repository.revokeToken(feedback.tokenId);
+    final reads = secrets.reads;
+    await provider.loadTokens();
+    expect(provider.secretFeedback, isNull);
+    expect(secrets.reads, reads);
+  });
+
+  test('dismissal releases both copies of the displayed credential', () async {
+    await provider.createToken(_request, refreshTokens: false);
+    provider.dismissSecretFeedback();
+    expect(provider.secretFeedback, isNull);
+    expect(provider.lastCreatedToken, isNull);
+  });
+
+  test('clearing mutation errors preserves page and global-count failures', () async {
+    source.failCounts = true;
+    await provider.refreshActiveTokenCount();
+    source.failPages = true;
+    await provider.loadTokens();
+    secrets.available = false;
+    await provider.createToken(_request);
+    expect(provider.mutationError, isNotEmpty);
+    provider.clearMutationError();
+    expect(provider.mutationError, isEmpty);
+    expect(provider.hasListLoadError, isTrue);
+    source.failPages = false;
+    await provider.loadTokens();
+    expect(provider.hasListLoadError, isFalse);
+    expect(provider.listError, isNotEmpty);
+    source.failCounts = false;
+    await provider.refreshActiveTokenCount();
+    expect(provider.listError, isEmpty);
+  });
+
+  for (final column in ['payload_json', 'rules_json', 'global_permissions_json']) {
+    test('administration recovers corrupt $column without accepting its authorization policy', () async {
+      final badSecret = (await repository.createToken(_request)).getOrThrow();
+      await repository.createToken(_request);
+      final badHash = hashStoredClientToken(badSecret);
+      final bad = (await source.findRowByHash(badHash))!;
+      await db.customStatement('UPDATE client_token_cache_table SET $column = ? WHERE id = ?', [
+        'invalid JSON',
+        bad.id,
+      ]);
+      secrets.reads = 0;
+      expect((await provider.loadTokens()).isSuccess(), isTrue);
+      expect(provider.totalCount, 2);
+      final entry = provider.tokens.singleWhere((token) => token.id == bad.id);
+      expect(entry.hasInvalidPolicy, isTrue);
+      expect(entry.globalPermissions, ClientPermissionSet.none);
+      expect(entry.allTables || entry.allViews || entry.allPermissions, isFalse);
+      expect(entry.rules, isEmpty);
+      expect(entry.tokenValue, isNull);
+      expect(entry.copyWith(isRevoked: true).hasInvalidPolicy, isTrue);
+      expect(provider.tokens.where((token) => !token.hasInvalidPolicy), hasLength(1));
+      final denied = await repository.getTokenPolicySummaryByHash(badHash);
+      expect(denied.exceptionOrNull(), isA<domain.ConfigurationFailure>());
+      expect((denied.exceptionOrNull()! as domain.ConfigurationFailure).code, 'CLIENT_TOKEN_POLICY_INVALID');
+      expect((await repository.listTokens()).exceptionOrNull(), isA<domain.ConfigurationFailure>());
+      expect(secrets.reads, 0);
+      expect((await provider.revokeToken(bad.id)).isSuccess(), isTrue);
+      expect(provider.tokens.singleWhere((token) => token.id == bad.id).isRevoked, isTrue);
+      expect(provider.activeTokenCount, 1);
+      expect((await provider.deleteToken(bad.id)).isSuccess(), isTrue);
+      expect(provider.totalCount, 1);
+      expect(provider.tokens.single.hasInvalidPolicy, isFalse);
+      expect(await source.findRowById(bad.id), isNull);
+    });
+  }
+
   for (final fault in ['write', 'read', 'unconfirmed', 'unavailable']) {
     test('secure storage $fault failure never confirms a new SQLite credential', () async {
       secrets.failWrite = fault == 'write';
@@ -349,6 +511,66 @@ void main() {
     expect(provider.isListStale, isFalse);
   });
 
+  for (final failWrite in [false, true]) {
+    test('latest filter is reconciled after ${failWrite ? 'failed' : 'successful'} mutation with SQLite', () async {
+      await repository.createToken(_request);
+      await provider.loadTokens();
+      final release = Completer<void>();
+      final writing = Completer<void>();
+      secrets.failWrite = failWrite;
+      secrets.beforeWrite = () async {
+        writing.complete();
+        await release.future;
+      };
+      final mutation = provider.createToken(_request, refreshTokens: false);
+      await writing.future;
+      final superseded = provider.applyListQuery(const ClientTokenListQuery(clientIdContains: 'client'));
+      final latest = provider.applyListQuery(const ClientTokenListQuery(clientIdContains: 'not-present'));
+      expect((await superseded).exceptionOrNull().toString(), contains('SUPERSEDED'));
+      expect((await provider.loadTokens()).exceptionOrNull().toString(), contains('OPERATION_BLOCKED'));
+      release.complete();
+      expect((await mutation).isError(), failWrite);
+      expect((await latest).isSuccess(), isTrue);
+      expect(provider.tokens, isEmpty);
+      expect(provider.currentPage, 1);
+      expect(provider.isQueryPending, isFalse);
+      expect(provider.isTokenMutationInProgress, isFalse);
+      expect((await repository.listTokens()).getOrThrow(), hasLength(failWrite ? 1 : 2));
+    });
+  }
+
+  test('a mutation with automatic refresh off reapplies a filter already in flight', () async {
+    await repository.createToken(_request);
+    await provider.loadTokens();
+    final release = Completer<void>();
+    source.delayPage = release;
+    source.snapshotReady = Completer<void>();
+    final oldFilter = provider.applyListQuery(const ClientTokenListQuery(clientIdContains: 'not-present'));
+    await source.snapshotReady!.future;
+    expect((await provider.createToken(_request, refreshTokens: false)).isSuccess(), isTrue);
+    expect(provider.tokens, isEmpty);
+    expect(provider.activeTokenCount, 2);
+    expect(provider.isListStale, isFalse);
+    release.complete();
+    expect((await oldFilter).exceptionOrNull().toString(), contains('SUPERSEDED'));
+    expect(provider.tokens, isEmpty);
+  });
+
+  test('filter queued during an internal refresh supersedes its delayed snapshot', () async {
+    await repository.createToken(_request);
+    final release = Completer<void>();
+    source.delayPage = release;
+    source.snapshotReady = Completer<void>();
+    final mutation = provider.createToken(_request);
+    await source.snapshotReady!.future;
+    final filtered = provider.applyListQuery(const ClientTokenListQuery(clientIdContains: 'not-present'));
+    release.complete();
+    expect((await mutation).isSuccess(), isTrue);
+    expect((await filtered).isSuccess(), isTrue);
+    expect(provider.tokens, isEmpty);
+    expect(provider.activeTokenCount, 2);
+  });
+
   test('newer list query wins without stale completion changing loading or data', () async {
     await repository.createToken(_request);
     final release = Completer<void>();
@@ -377,6 +599,7 @@ void main() {
     expect(provider.listError, isNotEmpty);
     expect(provider.activeTokenCount, 1);
     expect(provider.tokens, hasLength(2));
+    expect(provider.hasListLoadError, isFalse);
     source.failCounts = false;
     await provider.refreshActiveTokenCount();
     expect(provider.activeTokenCount, 2);

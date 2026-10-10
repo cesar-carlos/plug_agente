@@ -44,6 +44,7 @@ class ClientTokenListPanel extends StatelessWidget {
     required this.totalCount,
     required this.onPageChanged,
     required this.onPageSizeChanged,
+    this.isPageNavigationLocked = false,
     this.scrollController,
     super.key,
   });
@@ -82,6 +83,7 @@ class ClientTokenListPanel extends StatelessWidget {
   final int totalCount;
   final ValueChanged<int> onPageChanged;
   final ValueChanged<int> onPageSizeChanged;
+  final bool isPageNavigationLocked;
 
   @override
   Widget build(BuildContext context) {
@@ -158,7 +160,7 @@ class ClientTokenListPanel extends StatelessWidget {
             page: page,
             pageSize: pageSize,
             totalCount: totalCount,
-            enabled: !isListInteractionLocked && !isLoading,
+            enabled: !isListInteractionLocked && !isLoading && !isPageNavigationLocked && !hasLoadError,
             onPageChanged: onPageChanged,
             onPageSizeChanged: onPageSizeChanged,
           ),

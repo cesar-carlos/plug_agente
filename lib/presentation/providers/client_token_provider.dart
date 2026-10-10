@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:developer' as developer;
 
 import 'package:flutter/foundation.dart';
@@ -15,6 +16,7 @@ import 'package:plug_agente/domain/entities/client_token_summary.dart';
 import 'package:plug_agente/domain/entities/client_token_update_result.dart';
 import 'package:plug_agente/domain/entities/token_audit_event.dart';
 import 'package:plug_agente/domain/repositories/i_token_audit_store.dart';
+import 'package:plug_agente/presentation/providers/client_token_secret_feedback.dart';
 import 'package:plug_agente/presentation/providers/presentation_error_state.dart';
 import 'package:plug_agente/presentation/providers/presentation_operation_failures.dart';
 import 'package:result_dart/result_dart.dart';
@@ -45,6 +47,7 @@ class ClientTokenProvider extends ChangeNotifier {
 
   List<ClientTokenSummary> _tokens = const [];
   bool _isLoading = false;
+  bool _isQueryPending = false;
   bool _hasLoaded = false;
   bool _isListStale = false;
   bool _disposed = false;
@@ -56,7 +59,9 @@ class ClientTokenProvider extends ChangeNotifier {
   PresentationErrorState? _statsErrorState;
   String? _lastCreatedToken;
   ClientTokenUpdateOutcome? _lastUpdateOutcome;
+  ClientTokenSecretFeedback? _secretFeedback;
   ClientTokenListQuery _lastListQuery = const ClientTokenListQuery(page: 1, pageSize: 50);
+  ClientTokenListQuery? _loadedListQuery;
   int _loadGeneration = 0;
   int _dataRevision = 0;
   int _statsGeneration = 0;
@@ -64,9 +69,11 @@ class ClientTokenProvider extends ChangeNotifier {
   int _pageSize = ClientTokenListQuery.defaultPageSize;
   int _totalCount = 0;
   int _activeTokenCount = 0;
+  ({ClientTokenListQuery query, Completer<Result<void>>? completion})? _deferredListQuery;
 
   List<ClientTokenSummary> get tokens => _tokens;
   bool get isLoading => _isLoading;
+  bool get isQueryPending => _isQueryPending;
   bool get hasLoaded => _hasLoaded;
   bool get isListStale => _isListStale;
   bool get isCreating => _mutation == _TokenMutation.save;
@@ -80,12 +87,15 @@ class ClientTokenProvider extends ChangeNotifier {
   String get error => errorState?.message ?? '';
   String get mutationError => _mutationErrorState?.message ?? '';
   String get listError => (_listErrorState ?? _statsErrorState)?.message ?? '';
+  bool get hasListLoadError => _listErrorState != null;
   bool get errorCanRetry => errorState?.canRetry ?? false;
   String? get lastCreatedToken => _lastCreatedToken;
   ClientTokenUpdateOutcome? get lastUpdateOutcome => _lastUpdateOutcome;
+  ClientTokenSecretFeedback? get secretFeedback => _secretFeedback;
   bool get isListMutationInProgress => isTokenMutationInProgress;
   bool get isTokenMutationInProgress => _mutation != null;
   int get currentPage => _currentPage;
+  ClientTokenListQuery? get loadedListQuery => _loadedListQuery;
   int get pageSize => _pageSize;
   int get totalCount => _totalCount;
   int get activeTokenCount => _activeTokenCount;
@@ -102,7 +112,30 @@ class ClientTokenProvider extends ChangeNotifier {
     _disposed = true;
     _loadGeneration++;
     _statsGeneration++;
+    _deferredListQuery?.completion?.complete(Failure(PresentationOperationFailures.operationBlocked));
+    _deferredListQuery = null;
     super.dispose();
+  }
+
+  Future<Result<void>> applyListQuery(ClientTokenListQuery query) {
+    if (_disposed) return Future.value(Failure(PresentationOperationFailures.operationBlocked));
+    if (!isTokenMutationInProgress) return loadTokens(silent: true, query: query);
+    _deferredListQuery?.completion?.complete(Failure(PresentationOperationFailures.superseded));
+    final completion = Completer<Result<void>>();
+    _deferredListQuery = (query: query, completion: completion);
+    _loadGeneration++;
+    _isQueryPending = true;
+    notifyListeners();
+    return completion.future;
+  }
+
+  Future<void> _loadDeferredListQueries() async {
+    while (!_disposed && _deferredListQuery != null) {
+      final pending = _deferredListQuery!;
+      _deferredListQuery = null;
+      final result = await _loadTokens(silent: true, query: pending.query);
+      pending.completion?.complete(result);
+    }
   }
 
   Future<Result<void>> loadTokens({bool silent = false, ClientTokenListQuery? query}) {
@@ -113,19 +146,22 @@ class ClientTokenProvider extends ChangeNotifier {
   }
 
   Future<Result<void>> _loadTokens({required bool silent, required ClientTokenListQuery query}) async {
-    _lastListQuery = query.copyWith(page: query.page ?? 1, pageSize: query.pageSize ?? _pageSize);
+    final normalizedQuery = query.copyWith(page: query.page ?? 1, pageSize: query.pageSize ?? _pageSize);
+    _lastListQuery = normalizedQuery;
     final generation = ++_loadGeneration;
     final revision = _dataRevision;
+    _isQueryPending = true;
     if (!silent) {
       _isLoading = true;
       _listErrorState = null;
-      notifyListeners();
     }
-    final result = await _listClientTokenPage(query: _lastListQuery);
+    notifyListeners();
+    final result = await _listClientTokenPage(query: normalizedQuery);
     if (_disposed || generation != _loadGeneration || revision != _dataRevision) {
       return Failure(PresentationOperationFailures.superseded);
     }
     _isLoading = false;
+    _isQueryPending = false;
     if (result.isError()) {
       _listErrorState = PresentationErrorState.fromFailure(result.exceptionOrNull()!);
       notifyListeners();
@@ -133,10 +169,12 @@ class ClientTokenProvider extends ChangeNotifier {
     }
     final page = result.getOrThrow();
     _tokens = List.unmodifiable(page.items);
+    _reconcileSecretFeedback();
     _currentPage = page.page;
     _pageSize = page.pageSize;
     _totalCount = page.totalCount;
-    _lastListQuery = _lastListQuery.copyWith(page: page.page, pageSize: page.pageSize);
+    _lastListQuery = normalizedQuery.copyWith(page: page.page, pageSize: page.pageSize);
+    _loadedListQuery = _lastListQuery;
     _listErrorState = null;
     _hasLoaded = true;
     _isListStale = false;
@@ -179,6 +217,7 @@ class ClientTokenProvider extends ChangeNotifier {
     if (isTokenMutationInProgress || _disposed) {
       return Failure(PresentationOperationFailures.operationBlocked);
     }
+    if (_isQueryPending) _deferredListQuery = (query: _lastListQuery, completion: null);
     _mutation = mutation;
     _mutationTokenId = tokenId;
     _mutationErrorState = null;
@@ -186,6 +225,7 @@ class ClientTokenProvider extends ChangeNotifier {
     _loadGeneration++;
     _statsGeneration++;
     _isLoading = false;
+    _isQueryPending = _deferredListQuery != null;
     notifyListeners();
     try {
       final result = await write();
@@ -196,14 +236,18 @@ class ClientTokenProvider extends ChangeNotifier {
       if (hasChanges != null && !hasChanges()) return const Success(unit);
       _isListStale = true;
       await _refreshActiveTokenCount();
-      if (refreshTokens && !_disposed) {
+      if (refreshTokens && !_disposed && _deferredListQuery == null) {
         await _loadTokens(silent: true, query: _lastListQuery);
       }
       return const Success(unit);
     } finally {
-      _mutation = null;
-      _mutationTokenId = null;
-      notifyListeners();
+      try {
+        await _loadDeferredListQueries();
+      } finally {
+        _mutation = null;
+        _mutationTokenId = null;
+        notifyListeners();
+      }
     }
   }
 
@@ -214,9 +258,17 @@ class ClientTokenProvider extends ChangeNotifier {
       write: () async {
         _lastCreatedToken = null;
         _lastUpdateOutcome = null;
-        final result = await _createClientToken(request);
+        final result = await _createClientToken.createWithIdentity(request);
         if (result.isError()) return Failure(result.exceptionOrNull()!);
-        _lastCreatedToken = result.getOrThrow();
+        final created = result.getOrThrow();
+        _lastCreatedToken = created.tokenValue;
+        _secretFeedback = ClientTokenSecretFeedback(
+          tokenId: created.tokenId,
+          clientId: request.normalizedClientId,
+          tokenValue: created.tokenValue,
+          version: created.version,
+          isCreation: true,
+        );
         return const Success(unit);
       },
     );
@@ -243,6 +295,28 @@ class ClientTokenProvider extends ChangeNotifier {
         changed = updated.outcome != ClientTokenUpdateOutcome.unchanged;
         _lastUpdateOutcome = updated.outcome;
         _lastCreatedToken = updated.didRotateToken ? updated.tokenValue : null;
+        if (updated.didRotateToken && updated.tokenValue != null) {
+          _secretFeedback = ClientTokenSecretFeedback(
+            tokenId: tokenId,
+            clientId: request.normalizedClientId,
+            tokenValue: updated.tokenValue!,
+            version: updated.version,
+            isCreation: false,
+          );
+        } else if (changed && _secretFeedback?.tokenId == tokenId) {
+          final previous = _secretFeedback!;
+          if (updated.version == previous.version + 1 && updated.outcome == ClientTokenUpdateOutcome.metadataOnly) {
+            _secretFeedback = ClientTokenSecretFeedback(
+              tokenId: tokenId,
+              clientId: request.normalizedClientId,
+              tokenValue: previous.tokenValue,
+              version: updated.version,
+              isCreation: previous.isCreation,
+            );
+          } else {
+            _invalidateSecretFeedback(tokenId);
+          }
+        }
         if (updated.outcome != ClientTokenUpdateOutcome.unchanged) {
           _tokens = List.unmodifiable(
             _tokens.map(
@@ -276,6 +350,7 @@ class ClientTokenProvider extends ChangeNotifier {
     write: () async {
       final result = await _revokeClientToken(tokenId);
       if (result.isError()) return result;
+      _invalidateSecretFeedback(tokenId);
       _tokens = List.unmodifiable(
         _tokens
             .map(
@@ -299,7 +374,10 @@ class ClientTokenProvider extends ChangeNotifier {
     refreshTokens: true,
     write: () async {
       final result = await _deleteClientToken(tokenId);
-      if (result.isSuccess()) _tokens = List.unmodifiable(_tokens.where((token) => token.id != tokenId));
+      if (result.isSuccess()) {
+        _invalidateSecretFeedback(tokenId);
+        _tokens = List.unmodifiable(_tokens.where((token) => token.id != tokenId));
+      }
       return result;
     },
   );
@@ -327,11 +405,37 @@ class ClientTokenProvider extends ChangeNotifier {
     }
   }
 
-  void clearError() {
+  void clearMutationError() {
     _mutationErrorState = null;
-    _listErrorState = null;
-    _statsErrorState = null;
     notifyListeners();
+  }
+
+  bool isSecretFeedbackCurrent(ClientTokenSecretFeedback feedback) =>
+      !_disposed && !isTokenMutationInProgress && identical(_secretFeedback, feedback);
+
+  void dismissSecretFeedback() {
+    final feedback = _secretFeedback;
+    if (feedback == null) return;
+    _invalidateSecretFeedback(feedback.tokenId);
+    notifyListeners();
+  }
+
+  void _invalidateSecretFeedback(String tokenId) {
+    if (_secretFeedback?.tokenId != tokenId) return;
+    if (_lastCreatedToken == _secretFeedback!.tokenValue) _lastCreatedToken = null;
+    _secretFeedback = null;
+  }
+
+  void _reconcileSecretFeedback() {
+    final feedback = _secretFeedback;
+    if (feedback == null) return;
+    for (final token in _tokens) {
+      if (token.id != feedback.tokenId) continue;
+      if (token.isRevoked || token.hasInvalidPolicy || token.version != feedback.version) {
+        _invalidateSecretFeedback(token.id);
+      }
+      return;
+    }
   }
 
   void clearLastCreatedToken() {

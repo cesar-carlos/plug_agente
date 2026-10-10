@@ -7,6 +7,7 @@ import 'package:plug_agente/core/config/feature_flags.dart';
 import 'package:plug_agente/core/constants/authorization_context_constants.dart';
 import 'package:plug_agente/core/utils/client_token_storage.dart';
 import 'package:plug_agente/domain/entities/client_token_create_request.dart';
+import 'package:plug_agente/domain/entities/client_token_creation_result.dart';
 import 'package:plug_agente/domain/entities/client_token_list_query.dart';
 import 'package:plug_agente/domain/entities/client_token_page.dart';
 import 'package:plug_agente/domain/entities/client_token_secret_lookup.dart';
@@ -239,7 +240,11 @@ class ClientTokenRepository implements IClientTokenRepository {
   }
 
   @override
-  Future<Result<String>> createToken(ClientTokenCreateRequest request) async {
+  Future<Result<String>> createToken(ClientTokenCreateRequest request) async =>
+      (await createTokenWithIdentity(request)).map((created) => created.tokenValue);
+
+  @override
+  Future<Result<ClientTokenCreationResult>> createTokenWithIdentity(ClientTokenCreateRequest request) async {
     return _withAdmission(() async {
       try {
         final token = await _createToken(request);
@@ -495,7 +500,7 @@ class ClientTokenRepository implements IClientTokenRepository {
 
   String hashTokenForLookup(String token) => hashStoredClientToken(token);
 
-  Future<String> _createToken(ClientTokenCreateRequest request) async {
+  Future<ClientTokenCreationResult> _createToken(ClientTokenCreateRequest request) async {
     final now = DateTime.now().toUtc();
     final tokenId = buildClientTokenId(_random);
     final opaqueToken = generateOpaqueClientToken(_random);
@@ -533,7 +538,7 @@ class ClientTokenRepository implements IClientTokenRepository {
     }
 
     _invalidateAuthCaches(tokenHash);
-    return opaqueToken;
+    return ClientTokenCreationResult(tokenId: tokenId, tokenValue: opaqueToken, version: summary.version);
   }
 
   Future<ClientTokenUpdateResult?> _updateToken(

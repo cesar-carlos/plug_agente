@@ -32,6 +32,7 @@ class ClientTokenListPreferences {
 
   final IAppSettingsStore? Function() _resolveStore;
   domain.ConfigurationFailure? lastFailure;
+  int _saveGeneration = 0;
 
   /// Reads the persisted preferences, or `null` when no store is available
   /// (so the caller keeps its current defaults). Read failures are logged and
@@ -67,6 +68,7 @@ class ClientTokenListPreferences {
   }
 
   Future<Result<void>> save(ClientTokenListPreferencesData data) async {
+    final generation = ++_saveGeneration;
     lastFailure = null;
     final store = _resolveStore();
     if (store == null) {
@@ -80,6 +82,7 @@ class ClientTokenListPreferences {
         ClientTokenListPreferenceKeys.autoRefreshAfterCreate: data.autoRefreshAfterCreate,
         ClientTokenListPreferenceKeys.pageSize: _validPageSize(data.pageSize),
       });
+      if (generation == _saveGeneration) lastFailure = null;
       return const Success(unit);
     } on Exception catch (error, stackTrace) {
       developer.log(
@@ -93,7 +96,7 @@ class ClientTokenListPreferences {
         cause: error,
         context: const {'operation': 'save_client_token_preferences'},
       );
-      lastFailure = failure;
+      if (generation == _saveGeneration) lastFailure = failure;
       return Failure(failure);
     }
   }

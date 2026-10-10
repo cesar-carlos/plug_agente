@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:plug_agente/core/settings/app_settings_store.dart';
 import 'package:plug_agente/domain/entities/client_token_list_query.dart';
@@ -7,6 +9,41 @@ import 'package:plug_agente/presentation/pages/config/widgets/client_token_list_
 
 void main() {
   group('ClientTokenListPreferences', () {
+    for (final latestFails in [false, true]) {
+      for (final reverseCompletion in [false, true]) {
+        test('latest preferences determine the warning (failure=$latestFails, reverse=$reverseCompletion)', () async {
+          final store = _ControlledSettingsStore();
+          final prefs = ClientTokenListPreferences(() => store);
+          const data = (
+            clientFilter: 'latest',
+            statusFilter: ClientTokenStatusFilter.all,
+            sortOption: ClientTokenSortOption.newest,
+            autoRefreshAfterCreate: true,
+            pageSize: 100,
+          );
+          final first = prefs.save(data);
+          final latest = prefs.save(data);
+          void release(int index) {
+            final fails = index == 1 ? latestFails : !latestFails;
+            if (fails) {
+              store.writes[index].completeError(Exception('injected write failure'));
+            } else {
+              store.writes[index].complete();
+            }
+          }
+
+          final firstIndex = reverseCompletion ? 1 : 0;
+          release(firstIndex);
+          final initialResult = await (firstIndex == 0 ? first : latest);
+          expect(initialResult.isError(), firstIndex == 1 ? latestFails : !latestFails);
+          release(1 - firstIndex);
+          await (firstIndex == 0 ? latest : first);
+          expect(prefs.lastFailure, latestFails ? isA<ConfigurationFailure>() : isNull);
+          if (!latestFails) expect(store.getInt(ClientTokenListPreferenceKeys.pageSize), 100);
+        });
+      }
+    }
+
     test('should return null when no store is available', () {
       final prefs = ClientTokenListPreferences(_noStore);
 
@@ -151,6 +188,17 @@ class _RecordingSettingsStore extends InMemoryAppSettingsStore {
     batches++;
     keys = values.keys.toSet();
     if (fail) throw Exception('injected settings failure');
+    await super.setValues(values);
+  }
+}
+
+class _ControlledSettingsStore extends InMemoryAppSettingsStore {
+  final writes = <Completer<void>>[];
+  @override
+  Future<void> setValues(Map<String, Object> values) async {
+    final write = Completer<void>();
+    writes.add(write);
+    await write.future;
     await super.setValues(values);
   }
 }

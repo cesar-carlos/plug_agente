@@ -12,6 +12,7 @@ import 'package:plug_agente/presentation/pages/config/widgets/client_token/clien
 import 'package:plug_agente/presentation/pages/config/widgets/client_token_rule_dialog.dart';
 import 'package:plug_agente/presentation/pages/config/widgets/client_token_rule_file_service.dart';
 import 'package:plug_agente/presentation/providers/client_token_provider.dart';
+import 'package:plug_agente/presentation/providers/client_token_secret_feedback.dart';
 import 'package:plug_agente/presentation/providers/presentation_operation_failures.dart';
 import 'package:plug_agente/shared/widgets/common/feedback/settings_feedback.dart';
 
@@ -26,6 +27,7 @@ class ClientTokenSectionCoordinator {
   final ClientTokenSectionController controller;
   final ScrollController? scrollController;
   int _scrollGeneration = 0;
+  bool _isRefreshingList = false;
 
   static String formErrorMessage(AppLocalizations l10n, ClientTokenFormErrorKey? key) {
     return switch (key) {
@@ -62,7 +64,7 @@ class ClientTokenSectionCoordinator {
     if (restored != null) {
       controller.applyRestoredListPreferences(restored);
     }
-    await provider.loadTokens(query: controller.buildListQuery());
+    await provider.applyListQuery(controller.buildListQuery());
   }
 
   Future<void> openAddRuleModal(BuildContext context) async {
@@ -213,10 +215,12 @@ class ClientTokenSectionCoordinator {
     controller.notifyCreateTokenDialogChanged();
     try {
       controller.clearFormError();
-      provider.clearError();
+      provider.clearMutationError();
       final request = controller.buildSubmitRequest();
       if (request == null) return;
       final previousOffset = currentScrollOffset();
+      final previousQuery = provider.loadedListQuery;
+      final scrollGeneration = _scrollGeneration;
       final editingId = controller.editingTokenId;
       final result = editingId == null
           ? await provider.createToken(request, refreshTokens: controller.autoRefreshAfterCreate)
@@ -234,7 +238,10 @@ class ClientTokenSectionCoordinator {
       );
       controller.clearTokenDraftForm();
       Navigator.of(context, rootNavigator: true).pop(feedback);
-      restoreScrollPosition(previousOffset);
+      restoreScrollPosition(
+        previousQuery == provider.loadedListQuery ? previousOffset : 0,
+        generation: scrollGeneration,
+      );
     } finally {
       controller.isSubmitting = false;
       controller.notifyCreateTokenDialogChanged();
@@ -255,7 +262,6 @@ class ClientTokenSectionCoordinator {
   void showEditOutcomeFeedback({
     required BuildContext context,
     required ClientTokenUpdateOutcome? outcome,
-    required String? rotatedTokenValue,
   }) {
     if (!context.mounted || outcome == null) {
       return;
@@ -282,32 +288,13 @@ class ClientTokenSectionCoordinator {
         );
         return;
       case ClientTokenUpdateOutcome.rotated:
-        if (rotatedTokenValue == null || rotatedTokenValue.isEmpty) {
-          return;
-        }
-        displayInfoBar(
-          context,
-          builder: (context, close) => InfoBar(
-            title: Text(l10n.ctMsgTokenRotated),
-            content: SelectableText(rotatedTokenValue),
-            severity: InfoBarSeverity.success,
-            onClose: close,
-            action: FilledButton(
-              onPressed: () {
-                Clipboard.setData(ClipboardData(text: rotatedTokenValue));
-                close();
-              },
-              child: Text(l10n.ctButtonCopyToken),
-            ),
-          ),
-        );
         return;
     }
   }
 
   Future<void> clearTokenFilters(ClientTokenProvider provider) async {
     controller.clearTokenFilters();
-    await controller.saveListPreferences();
+    unawaited(controller.saveListPreferences());
     await reloadTokensForCurrentFilters(provider);
   }
 
@@ -330,8 +317,8 @@ class ClientTokenSectionCoordinator {
       return;
     }
 
-    result.fold(
-      (lookup) {
+    await result.fold<Future<void>>(
+      (lookup) async {
         final tokenValue = lookup.tokenValue;
         if (!lookup.isAvailable) {
           displayInfoBar(
@@ -344,20 +331,15 @@ class ClientTokenSectionCoordinator {
           return;
         }
 
-        Clipboard.setData(ClipboardData(text: tokenValue!));
-        provider.recordCopiedToken(
+        await _copyTokenValue(
+          context,
+          provider,
           tokenId: token.id,
           clientId: token.clientId,
-        );
-        displayInfoBar(
-          context,
-          builder: (context, close) => InfoBar(
-            title: Text(l10n.ctInfoClientTokenCopied),
-            severity: InfoBarSeverity.success,
-          ),
+          tokenValue: tokenValue!,
         );
       },
-      (failure) {
+      (failure) async {
         if (PresentationOperationFailures.isSilent(failure)) return;
         displayInfoBar(
           context,
@@ -369,6 +351,57 @@ class ClientTokenSectionCoordinator {
         );
       },
     );
+  }
+
+  Future<void> handleCopySecretFeedback(
+    BuildContext context,
+    ClientTokenProvider provider,
+    ClientTokenSecretFeedback feedback,
+  ) async {
+    if (!provider.isSecretFeedbackCurrent(feedback) || provider.isCopyingTokenSecret) return;
+    await _copyTokenValue(
+      context,
+      provider,
+      tokenId: feedback.tokenId,
+      clientId: feedback.clientId,
+      tokenValue: feedback.tokenValue,
+    );
+  }
+
+  Future<void> _copyTokenValue(
+    BuildContext context,
+    ClientTokenProvider provider, {
+    required String tokenId,
+    required String clientId,
+    required String tokenValue,
+  }) async {
+    if (!context.mounted) return;
+    final l10n = AppLocalizations.of(context)!;
+    try {
+      await Clipboard.setData(ClipboardData(text: tokenValue));
+    } on PlatformException {
+      developer.log('Copying client token to clipboard failed', name: 'client_token_section');
+      if (context.mounted) {
+        displayInfoBar(
+          context,
+          builder: (context, close) => InfoBar(
+            title: Text(l10n.ctInfoClientTokenCopyFailed),
+            severity: InfoBarSeverity.error,
+          ),
+        );
+      }
+      return;
+    }
+    await provider.recordCopiedToken(tokenId: tokenId, clientId: clientId);
+    if (context.mounted) {
+      displayInfoBar(
+        context,
+        builder: (context, close) => InfoBar(
+          title: Text(l10n.ctInfoClientTokenCopied),
+          severity: InfoBarSeverity.success,
+        ),
+      );
+    }
   }
 
   Future<void> handleRevoke(
@@ -395,7 +428,7 @@ class ClientTokenSectionCoordinator {
         context: context,
         title: l10n.modalTitleError,
         message: provider.mutationError,
-        onConfirm: () => provider.clearError(),
+        onConfirm: () => provider.clearMutationError(),
       );
     }
   }
@@ -424,42 +457,60 @@ class ClientTokenSectionCoordinator {
         context: context,
         title: l10n.modalTitleError,
         message: provider.mutationError,
-        onConfirm: () => provider.clearError(),
+        onConfirm: () => provider.clearMutationError(),
       );
     }
   }
 
   Future<void> reloadTokensForCurrentFilters(ClientTokenProvider provider) async {
     final generation = ++_scrollGeneration;
-    final result = await provider.loadTokens(
-      silent: true,
-      query: controller.buildListQuery(),
-    );
+    final result = await provider.applyListQuery(controller.buildListQuery());
     if (result.isSuccess()) restoreScrollPosition(0, generation: generation);
   }
 
   Future<void> refreshList(ClientTokenProvider provider) async {
-    final generation = ++_scrollGeneration;
-    final page = provider.currentPage;
-    final previousOffset = currentScrollOffset();
-    final result = await provider.loadTokens(query: controller.buildListQuery(page: page));
-    await provider.refreshActiveTokenCount();
-    if (result.isSuccess()) {
-      restoreScrollPosition(provider.currentPage == page ? previousOffset : 0, generation: generation);
+    if (_isRefreshingList ||
+        provider.isQueryPending ||
+        provider.isTokenMutationInProgress ||
+        controller.hasPendingClientFilter) {
+      return;
+    }
+    _isRefreshingList = true;
+    try {
+      final generation = ++_scrollGeneration;
+      final previousQuery = provider.loadedListQuery;
+      final previousOffset = currentScrollOffset();
+      final result = await provider.loadTokens();
+      await provider.refreshActiveTokenCount();
+      if (result.isSuccess()) {
+        restoreScrollPosition(previousQuery == provider.loadedListQuery ? previousOffset : 0, generation: generation);
+      }
+    } finally {
+      _isRefreshingList = false;
     }
   }
 
   Future<void> changePage(ClientTokenProvider provider, int page) async {
+    final loadedQuery = provider.loadedListQuery;
+    if (loadedQuery == null ||
+        provider.hasListLoadError ||
+        provider.isQueryPending ||
+        provider.isTokenMutationInProgress ||
+        controller.hasPendingClientFilter) {
+      return;
+    }
     final generation = ++_scrollGeneration;
-    final result = await provider.loadTokens(query: controller.buildListQuery(page: page));
+    final result = await provider.loadTokens(query: loadedQuery.copyWith(page: page));
     if (result.isSuccess()) restoreScrollPosition(0, generation: generation);
   }
 
   Future<void> changePageSize(ClientTokenProvider provider, int size) async {
+    if (provider.isQueryPending || provider.isTokenMutationInProgress) return;
     final generation = ++_scrollGeneration;
+    controller.cancelClientFilterDebounce();
     controller.pageSize = size;
-    await controller.saveListPreferences();
-    final result = await provider.loadTokens(query: controller.buildListQuery());
+    unawaited(controller.saveListPreferences());
+    final result = await provider.applyListQuery(controller.buildListQuery());
     if (result.isSuccess()) restoreScrollPosition(0, generation: generation);
   }
 }

@@ -1,9 +1,11 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
+import 'package:plug_agente/application/use_cases/create_client_token.dart';
 import 'package:plug_agente/application/use_cases/delete_client_token.dart';
 import 'package:plug_agente/application/use_cases/revoke_client_token.dart';
 import 'package:plug_agente/application/use_cases/update_client_token.dart';
 import 'package:plug_agente/domain/entities/client_token_create_request.dart';
+import 'package:plug_agente/domain/entities/client_token_creation_result.dart';
 import 'package:plug_agente/domain/entities/client_token_update_result.dart';
 import 'package:plug_agente/domain/entities/token_audit_event.dart';
 import 'package:plug_agente/domain/errors/failures.dart' as domain;
@@ -30,6 +32,47 @@ void main() {
   });
 
   group('Token mutation use cases', () {
+    test('creation with identity audits the persisted ID without a secret lookup', () async {
+      const valid = ClientTokenCreateRequest(
+        clientId: 'client',
+        allTables: true,
+        allViews: false,
+        allPermissions: true,
+        rules: [],
+      );
+      const created = ClientTokenCreationResult(tokenId: 'id', tokenValue: 'new-secret');
+      when(() => repository.createTokenWithIdentity(valid)).thenAnswer((_) async => const Success(created));
+      final result = await CreateClientToken(repository, auditStore: audit).createWithIdentity(valid);
+      expect(result.getOrThrow(), same(created));
+      verifyNever(() => repository.getTokenSecret(any()));
+      final event = verify(() => audit.record(captureAny())).captured.single as TokenAuditEvent;
+      expect(event.tokenId, 'id');
+      expect(event.eventType, TokenAuditEventType.create);
+      expect(event.toJson().toString(), isNot(contains(created.tokenValue)));
+    });
+
+    test('creation with identity validates before writing and preserves storage failures', () async {
+      final useCase = CreateClientToken(repository, auditStore: audit);
+      expect(
+        (await useCase.createWithIdentity(
+          const ClientTokenCreateRequest(clientId: '', allTables: false, allViews: false, rules: []),
+        )).exceptionOrNull(),
+        isA<domain.ValidationFailure>(),
+      );
+      verifyNever(() => repository.createTokenWithIdentity(any()));
+      const valid = ClientTokenCreateRequest(
+        clientId: 'client',
+        allTables: true,
+        allViews: false,
+        allPermissions: true,
+        rules: [],
+      );
+      final failure = domain.ConfigurationFailure('Secure storage unavailable');
+      when(() => repository.createTokenWithIdentity(valid)).thenAnswer((_) async => Failure(failure));
+      expect((await useCase.createWithIdentity(valid)).exceptionOrNull(), same(failure));
+      verifyNever(() => audit.record(any()));
+    });
+
     for (final action in ['revoke', 'delete']) {
       test('$action delegates mutation without reading secrets and audits after success', () async {
         when(() => repository.revokeToken('id')).thenAnswer((_) async => const Success(unit));

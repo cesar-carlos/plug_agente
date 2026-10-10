@@ -19,11 +19,12 @@ Future<ClientTokenSubmitFeedback?> showClientTokenCreateDialog({
   required ClientTokenProvider provider,
   ClientTokenSummary? baseToken,
 }) async {
+  if (baseToken?.hasInvalidPolicy ?? false) return null;
   final l10n = AppLocalizations.of(context)!;
   final isEditingToken = baseToken != null;
 
   controller.loadTokenIntoForm(baseToken);
-  provider.clearError();
+  provider.clearMutationError();
   provider.clearLastCreatedToken();
   provider.clearLastUpdateOutcome();
 

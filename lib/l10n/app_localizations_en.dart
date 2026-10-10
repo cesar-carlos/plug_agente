@@ -4266,6 +4266,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get ctInfoClientTokenCopied => 'Client token copied';
 
   @override
+  String get ctInfoClientTokenCopyFailed => 'Could not copy the token. Please try again.';
+
+  @override
   String get ctInfoClientTokenLoadFailed => 'Could not load this token secret';
 
   @override
@@ -5066,4 +5069,11 @@ class AppLocalizationsEn extends AppLocalizations {
   String ctPaginationSummary(int page, int totalPages, int totalCount) {
     return 'Page $page of $totalPages · $totalCount tokens';
   }
+
+  @override
+  String get ctPolicyInvalid => 'Invalid policy';
+
+  @override
+  String get ctPolicyInvalidRecovery =>
+      'Some tokens have an invalid saved policy and cannot authorize access. Revoke or delete the marked tokens, then create replacements with the required permissions.';
 }

@@ -65,6 +65,7 @@ class ClientTokenSummaryGrid extends StatelessWidget {
   }
 
   String _buildScopeLabel(ClientTokenSummary token, AppLocalizations l10n) {
+    if (token.hasInvalidPolicy) return l10n.ctPolicyInvalid;
     if (token.allPermissions) {
       final label = l10n.ctScopeAllSqlPermissions;
       return token.runtimeRestrictions.hasRestrictions ? '$label · ${l10n.ctRuntimeRestrictionsActive}' : label;

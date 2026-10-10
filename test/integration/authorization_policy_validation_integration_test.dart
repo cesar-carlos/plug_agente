@@ -159,27 +159,30 @@ void main() {
     final token = sign({'client_id': 'client', 'all_permissions': true, 'rules': <Map<String, dynamic>>[]});
     expect((await runRemote(token)).denied, isNull);
   });
-  test('malformed local stored restrictions cannot be authorized either', () async {
-    final tokens = _Tokens();
-    when(() => tokens.getTokenPolicySummaryByHash(any())).thenAnswer(
-      (_) async => Success(
-        ClientTokenSummary(
-          id: 'local',
-          clientId: 'client',
-          createdAt: DateTime.utc(2026),
-          isRevoked: false,
-          allTables: true,
-          allViews: true,
-          allPermissions: true,
-          rules: const [],
-          payload: const {'database': 42},
+  for (final invalidSnapshot in [false, true]) {
+    test('invalid local policy cannot authorize (administrative snapshot=$invalidSnapshot)', () async {
+      final tokens = _Tokens();
+      when(() => tokens.getTokenPolicySummaryByHash(any())).thenAnswer(
+        (_) async => Success(
+          ClientTokenSummary(
+            id: 'local',
+            clientId: 'client',
+            createdAt: DateTime.utc(2026),
+            isRevoked: false,
+            allTables: true,
+            allViews: true,
+            allPermissions: true,
+            rules: const [],
+            hasInvalidPolicy: invalidSnapshot,
+            payload: invalidSnapshot ? const {} : const {'database': 42},
+          ),
         ),
-      ),
-    );
-    final localResolver = AuthorizationPolicyResolver(flags, clientTokenRepository: tokens);
-    final failure = (await localResolver.resolvePolicy('opaque')).exceptionOrNull()! as domain.ConfigurationFailure;
-    expect(failure.context['reason'], AuthorizationContextConstants.invalidPolicyReason);
-  });
+      );
+      final localResolver = AuthorizationPolicyResolver(flags, clientTokenRepository: tokens);
+      final failure = (await localResolver.resolvePolicy('opaque')).exceptionOrNull()! as domain.ConfigurationFailure;
+      expect(failure.context['reason'], AuthorizationContextConstants.invalidPolicyReason);
+    });
+  }
   test('RPC timeouts retain bounded backing work and retries recover without cached transient denial', () async {
     final pending = <Completer<Result<ClientTokenSummary>>>[];
     final tokens = _Tokens();

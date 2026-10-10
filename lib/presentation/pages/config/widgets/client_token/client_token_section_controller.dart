@@ -55,6 +55,7 @@ class ClientTokenSectionController {
   final FocusNode createTokenDialogAgentFocusNode = FocusNode();
 
   Timer? _clientFilterDebounceTimer;
+  bool get hasPendingClientFilter => _clientFilterDebounceTimer?.isActive ?? false;
   var _isCreateTokenDialogOpen = false;
   var _dialogControllerListenersAttached = false;
   var _disposed = false;
@@ -428,16 +429,26 @@ class ClientTokenSectionController {
     _clientFilterDebounceTimer?.cancel();
     _clientFilterDebounceTimer = Timer(
       AppConstants.clientTokenDebounceDelay,
-      onDebounced,
+      () {
+        _onSectionChanged();
+        onDebounced();
+      },
     );
+    _onSectionChanged();
+  }
+
+  void cancelClientFilterDebounce() {
+    _clientFilterDebounceTimer?.cancel();
   }
 
   void updateTokenStatusFilter(ClientTokenStatusFilter value) {
+    cancelClientFilterDebounce();
     tokenStatusFilter = value;
     _onSectionChanged();
   }
 
   void updateTokenSortOption(ClientTokenSortOption value) {
+    cancelClientFilterDebounce();
     tokenSortOption = value;
     _onSectionChanged();
   }

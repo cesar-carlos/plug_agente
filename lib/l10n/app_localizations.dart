@@ -7952,6 +7952,12 @@ abstract class AppLocalizations {
   /// **'Client token copied'**
   String get ctInfoClientTokenCopied;
 
+  /// No description provided for @ctInfoClientTokenCopyFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not copy the token. Please try again.'**
+  String get ctInfoClientTokenCopyFailed;
+
   /// No description provided for @ctInfoClientTokenLoadFailed.
   ///
   /// In en, this message translates to:
@@ -9433,6 +9439,18 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Page {page} of {totalPages} · {totalCount} tokens'**
   String ctPaginationSummary(int page, int totalPages, int totalCount);
+
+  /// No description provided for @ctPolicyInvalid.
+  ///
+  /// In en, this message translates to:
+  /// **'Invalid policy'**
+  String get ctPolicyInvalid;
+
+  /// No description provided for @ctPolicyInvalidRecovery.
+  ///
+  /// In en, this message translates to:
+  /// **'Some tokens have an invalid saved policy and cannot authorize access. Revoke or delete the marked tokens, then create replacements with the required permissions.'**
+  String get ctPolicyInvalidRecovery;
 }
 
 class _AppLocalizationsDelegate extends LocalizationsDelegate<AppLocalizations> {

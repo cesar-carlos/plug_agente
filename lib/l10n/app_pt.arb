@@ -1796,6 +1796,7 @@
   "ctButtonCopyClientToken": "Copiar token",
   "ctTooltipCopyClientToken": "Copiar token do cliente",
   "ctInfoClientTokenCopied": "Token do cliente copiado",
+  "ctInfoClientTokenCopyFailed": "Não foi possível copiar o token. Tente novamente.",
   "ctInfoClientTokenLoadFailed": "Nao foi possivel carregar o segredo deste token",
   "ctInfoClientTokenUnavailable": "Token indisponivel para este registro. Gere um novo token para copiar o valor secreto.",
   "ctButtonEdit": "Editar",
@@ -2131,5 +2132,7 @@
         "type": "int"
       }
     }
-  }
+  },
+  "ctPolicyInvalid": "Política inválida",
+  "ctPolicyInvalidRecovery": "Alguns tokens têm a política salva inválida e não podem autorizar acesso. Revogue ou exclua os tokens identificados e crie outros com as permissões necessárias."
 }

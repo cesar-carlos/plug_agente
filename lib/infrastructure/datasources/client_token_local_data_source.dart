@@ -19,8 +19,13 @@ class ClientTokenLocalDataSource {
 
   Future<List<ClientTokenSummary>> listTokens({
     ClientTokenListQuery? query,
+  }) => _listTokens(query: query ?? const ClientTokenListQuery());
+
+  Future<List<ClientTokenSummary>> _listTokens({
+    required ClientTokenListQuery query,
+    bool allowPolicyRecovery = false,
   }) async {
-    final effectiveQuery = query ?? const ClientTokenListQuery();
+    final effectiveQuery = query;
     final statement = _database.select(_database.clientTokenCacheTable);
 
     statement.where((table) => _filter(table, effectiveQuery));
@@ -42,10 +47,12 @@ class ClientTokenLocalDataSource {
           mode: OrderingMode.desc,
         ),
       },
-      (table) => OrderingTerm(
-        expression: table.createdAt,
-        mode: OrderingMode.desc,
-      ),
+      if (effectiveQuery.sort == ClientTokenSortOption.clientAsc ||
+          effectiveQuery.sort == ClientTokenSortOption.clientDesc)
+        (table) => OrderingTerm(
+          expression: table.createdAt,
+          mode: OrderingMode.desc,
+        ),
       (table) => OrderingTerm(expression: table.id),
     ]);
 
@@ -54,7 +61,7 @@ class ClientTokenLocalDataSource {
     }
 
     final rows = await statement.get();
-    return rows.map(mapRowToSummaryWithoutTokenValue).toList();
+    return rows.map(allowPolicyRecovery ? _mapRowForAdministration : mapRowToSummaryWithoutTokenValue).toList();
   }
 
   Expression<bool> _filter($ClientTokenCacheTableTable table, ClientTokenListQuery query) {
@@ -88,8 +95,9 @@ class ClientTokenLocalDataSource {
       final size = query.pageSize ?? ClientTokenListQuery.defaultPageSize;
       final lastPage = total == 0 ? 1 : (total / size).ceil();
       final page = (query.page ?? 1).clamp(1, lastPage);
-      final items = await listTokens(
+      final items = await _listTokens(
         query: query.copyWith(page: page, pageSize: size),
+        allowPolicyRecovery: true,
       );
       return ClientTokenPage(items: items, page: page, pageSize: size, totalCount: total);
     });
@@ -255,6 +263,30 @@ class ClientTokenLocalDataSource {
           'reason': AuthorizationContextConstants.invalidPolicyReason,
           'user_message': 'Política de token inválida. Revogue o token e crie outro para recuperar o acesso.',
         },
+      );
+    }
+  }
+
+  ClientTokenSummary _mapRowForAdministration(ClientTokenCacheData row) {
+    try {
+      return mapRowToSummaryWithoutTokenValue(row);
+    } on domain.ConfigurationFailure catch (failure) {
+      if (failure.code != 'CLIENT_TOKEN_POLICY_INVALID') rethrow;
+      failure.log();
+      return ClientTokenSummary(
+        id: row.id,
+        clientId: row.clientId,
+        name: row.name,
+        createdAt: row.createdAt,
+        isRevoked: row.isRevoked,
+        agentId: row.agentId,
+        version: row.version,
+        updatedAt: row.updatedAt,
+        allTables: false,
+        allViews: false,
+        globalPermissions: ClientPermissionSet.none,
+        rules: const [],
+        hasInvalidPolicy: true,
       );
     }
   }

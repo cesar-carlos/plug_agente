@@ -87,6 +87,7 @@ class AppDatabase extends _$AppDatabase with _AppDatabaseMigrationHelpers implem
       await customStatement('PRAGMA synchronous = NORMAL');
       await customStatement('PRAGMA busy_timeout = 5000');
       await customStatement('PRAGMA wal_autocheckpoint = 1000');
+      await createClientTokenPaginationIndexes();
     },
   );
 

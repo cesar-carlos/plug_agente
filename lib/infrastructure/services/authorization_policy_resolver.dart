@@ -207,6 +207,9 @@ class AuthorizationPolicyResolver implements IAuthorizationPolicyResolver {
   Result<ClientTokenPolicy> _policyFromSummary(
     ClientTokenSummary summary,
   ) {
+    if (summary.hasInvalidPolicy) {
+      return _invalidPolicyPayload(const FormatException('Invalid token policy'));
+    }
     if (!ClientTokenRuntimeRestrictions.isValidPayload(summary.payload)) {
       return _invalidPolicyPayload(const FormatException('Invalid token runtime restrictions'));
     }

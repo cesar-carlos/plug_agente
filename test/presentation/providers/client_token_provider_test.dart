@@ -9,6 +9,7 @@ import 'package:plug_agente/application/use_cases/list_client_tokens.dart';
 import 'package:plug_agente/application/use_cases/revoke_client_token.dart';
 import 'package:plug_agente/application/use_cases/update_client_token.dart';
 import 'package:plug_agente/domain/entities/client_token_create_request.dart';
+import 'package:plug_agente/domain/entities/client_token_creation_result.dart';
 import 'package:plug_agente/domain/entities/client_token_list_query.dart';
 import 'package:plug_agente/domain/entities/client_token_rule.dart';
 import 'package:plug_agente/domain/entities/client_token_secret_lookup.dart';
@@ -198,6 +199,29 @@ void main() {
       expect(provider.isLoading, isFalse);
     });
 
+    test('disposing completes a filter deferred behind a mutation without notifying listeners', () async {
+      final writing = Completer<Result<ClientTokenCreationResult>>();
+      when(() => mockCreateClientToken.createWithIdentity(any())).thenAnswer((_) => writing.future);
+      final mutation = provider.createToken(_buildRequest());
+      final filtered = provider.applyListQuery(const ClientTokenListQuery(clientIdContains: 'client'));
+      provider.dispose();
+      expect((await filtered).isError(), isTrue);
+      writing.complete(const Success(ClientTokenCreationResult(tokenId: 'token-1', tokenValue: 'created')));
+      expect((await mutation).isSuccess(), isTrue);
+      verifyNever(() => mockListClientTokens(query: any(named: 'query')));
+    });
+
+    test('silent refresh exposes a pending query without changing its visible loading contract', () async {
+      final query = Completer<Result<List<ClientTokenSummary>>>();
+      when(() => mockListClientTokens(query: any(named: 'query'))).thenAnswer((_) => query.future);
+      final loading = provider.loadTokens(silent: true);
+      expect(provider.isLoading, isFalse);
+      expect(provider.isQueryPending, isTrue);
+      query.complete(const Success([]));
+      expect((await loading).isSuccess(), isTrue);
+      expect(provider.isQueryPending, isFalse);
+    });
+
     test('should expose failure message on initial load', () async {
       when(
         () => mockListClientTokens(query: any(named: 'query')),
@@ -215,8 +239,8 @@ void main() {
 
     test('should create token and refresh list', () async {
       when(
-        () => mockCreateClientToken(any()),
-      ).thenAnswer((_) async => const Success('new-token'));
+        () => mockCreateClientToken.createWithIdentity(any()),
+      ).thenAnswer((_) async => const Success(ClientTokenCreationResult(tokenId: 'token-1', tokenValue: 'new-token')));
       when(
         () => mockListClientTokens(query: any(named: 'query')),
       ).thenAnswer(
@@ -261,7 +285,7 @@ void main() {
     });
 
     test('should expose failure message when create fails', () async {
-      when(() => mockCreateClientToken(any())).thenAnswer(
+      when(() => mockCreateClientToken.createWithIdentity(any())).thenAnswer(
         (_) async => Failure(domain.ValidationFailure('invalid request')),
       );
 

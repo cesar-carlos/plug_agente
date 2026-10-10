@@ -46,7 +46,7 @@ class ClientTokenRowActions extends StatelessWidget {
             label: l10n.ctButtonEdit,
             child: IconButton(
               icon: const Icon(FluentIcons.edit),
-              onPressed: actionsEnabled ? onEdit : null,
+              onPressed: actionsEnabled && !token.hasInvalidPolicy ? onEdit : null,
             ),
           ),
         ),
@@ -80,7 +80,7 @@ class ClientTokenRowActions extends StatelessWidget {
                   )
                 : IconButton(
                     icon: const Icon(FluentIcons.copy),
-                    onPressed: actionsEnabled ? onCopyClientToken : null,
+                    onPressed: actionsEnabled && !token.hasInvalidPolicy ? onCopyClientToken : null,
                   ),
           ),
         ),

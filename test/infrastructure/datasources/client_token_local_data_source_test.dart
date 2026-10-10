@@ -1,7 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 
-import 'package:drift/drift.dart' show Value;
+import 'package:drift/drift.dart' show ApplyInterceptor, Value;
 import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:plug_agente/core/utils/client_token_storage.dart';
@@ -12,6 +12,8 @@ import 'package:plug_agente/domain/value_objects/client_permission_set.dart';
 import 'package:plug_agente/domain/value_objects/database_resource.dart';
 import 'package:plug_agente/infrastructure/datasources/client_token_local_data_source.dart';
 import 'package:plug_agente/infrastructure/repositories/agent_config_drift_database.dart';
+
+import '../../helpers/token_page_query_recorder.dart';
 
 class _PausedTokenDataSource extends ClientTokenLocalDataSource {
   _PausedTokenDataSource(super._database);
@@ -216,6 +218,50 @@ void main() {
       expect(page2.length, 1);
       expect(page1.single.id, isNot(equals(page2.single.id)));
     });
+
+    for (final sort in ClientTokenSortOption.values) {
+      for (final status in ClientTokenStatusFilter.values) {
+        test('$sort $status pages use indexes and preserve the ID tie-break without sorting', () async {
+          final recorder = TokenPageQueryRecorder();
+          final db = AppDatabase(executor: NativeDatabase.memory().interceptWith(recorder));
+          addTearDown(db.close);
+          final source = ClientTokenLocalDataSource(db);
+          await db.batch(
+            (batch) => batch.insertAll(
+              db.clientTokenCacheTable,
+              List.generate(
+                102,
+                (index) => ClientTokenCacheTableCompanion.insert(
+                  id: 'id-${index.toString().padLeft(3, '0')}',
+                  clientId: index < 51 ? 'Alpha' : 'alpha',
+                  tokenHash: Value('hash-$index'),
+                  createdAt: DateTime.utc(2026, 1, index < 51 ? 1 : 2),
+                  syncedAt: DateTime.utc(2026),
+                  isRevoked: Value(index.isOdd),
+                ),
+              ),
+            ),
+          );
+          final query = ClientTokenListQuery(sort: sort, status: status, page: 2, pageSize: 25);
+          final page = await source.listTokenPage(query: query);
+          final plans = await recorder.explainPageQuery(db.executor);
+          expect(plans.join(' '), contains('USING INDEX idx_client_token_'));
+          expect(plans.join(' '), isNot(contains('TEMP B-TREE')));
+          final all = await source.listTokens(
+            query: ClientTokenListQuery(sort: sort, status: status),
+          );
+          expect(page.items.map((item) => item.id), all.skip(25).take(25).map((item) => item.id));
+          expect(page.totalCount, all.length);
+          for (var index = 1; index < all.length; index++) {
+            final previous = all[index - 1];
+            final current = all[index];
+            final dateComparison = previous.createdAt.compareTo(current.createdAt);
+            expect(sort == ClientTokenSortOption.oldest ? dateComparison <= 0 : dateComparison >= 0, isTrue);
+            if (dateComparison == 0) expect(previous.id.compareTo(current.id), lessThan(0));
+          }
+        });
+      }
+    }
 
     test('replaceTokenRows upserts without clearing unrelated cache rows', () async {
       final db = AppDatabase(executor: NativeDatabase.memory());

@@ -20,6 +20,7 @@ class ClientTokenSummary {
     this.agentId,
     this.payload = const <String, dynamic>{},
     this.tokenValue,
+    this.hasInvalidPolicy = false,
   }) : allTables = allTables || (allPermissions ?? false),
        allViews = allViews || (allPermissions ?? false),
        globalPermissions =
@@ -83,6 +84,10 @@ class ClientTokenSummary {
   final ClientPermissionSet globalPermissions;
   final List<ClientTokenRule> rules;
 
+  /// Administrative metadata only. Invalid policies must never authorize access.
+  /// This flag is local and is not part of the transport serialization.
+  final bool hasInvalidPolicy;
+
   bool get allPermissions => allTables && allViews && globalPermissions.isFullAccess;
 
   ClientTokenRuntimeRestrictions get runtimeRestrictions => ClientTokenRuntimeRestrictions.fromPayload(payload);
@@ -128,6 +133,7 @@ class ClientTokenSummary {
       allViews: allViews ?? this.allViews,
       globalPermissions: globalPermissions ?? this.globalPermissions,
       rules: rules ?? this.rules,
+      hasInvalidPolicy: hasInvalidPolicy,
     );
   }
 
