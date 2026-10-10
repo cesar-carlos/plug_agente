@@ -21,14 +21,23 @@ module.exports = async function scheduledWorkflowAlert({ github, context, core }
     return;
   }
 
+  if (latest.conclusion !== 'success' && (recentRuns.length !== 2 || !recentRuns.every(candidate =>
+    candidate.status === 'completed' && failures.has(candidate.conclusion)))) {
+    core.info('Fewer than two consecutive scheduled failures; alert not opened.');
+    return;
+  }
+
   const title = `[CI] ${run.name}: scheduled runs are failing`;
-  const issues = await github.paginate(github.rest.issues.listForRepo, {
+  let existingIssue;
+  for await (const { data: issues } of github.paginate.iterator(github.rest.issues.listForRepo, {
     owner: context.repo.owner,
     repo: context.repo.repo,
     state: 'open',
     per_page: 100,
-  });
-  const existingIssue = issues.find(issue => !issue.pull_request && issue.title === title);
+  })) {
+    existingIssue = issues.find(issue => !issue.pull_request && issue.title === title);
+    if (existingIssue) break;
+  }
   if (latest.conclusion === 'success') {
     if (existingIssue) {
       await github.rest.issues.update({
@@ -42,11 +51,6 @@ module.exports = async function scheduledWorkflowAlert({ github, context, core }
     return;
   }
 
-  if (recentRuns.length !== 2 || !recentRuns.every(candidate =>
-    candidate.status === 'completed' && failures.has(candidate.conclusion))) {
-    core.info('Fewer than two consecutive scheduled failures; alert not opened.');
-    return;
-  }
   if (existingIssue) {
     core.warning(`An alert is already open: #${existingIssue.number}`);
     return;

@@ -10,7 +10,7 @@ from unittest.mock import patch
 
 from tool.appcast.appcast_signing import generate_keypair
 from tool.release import publish_release as publication
-from tool.updater.manifest import DEFAULT_CAPABILITIES, sign
+from tool.updater.manifest import DEFAULT_CAPABILITIES, sign, verify
 
 
 class ReleasePublicationTests(unittest.TestCase):
@@ -40,6 +40,7 @@ class ReleasePublicationTests(unittest.TestCase):
         self.fail_upload = False
         self.tamper_download = False
         self.replace_download = False
+        self.replace_manifest = False
         self.fail_push = False
         self.real_command = publication.command
 
@@ -99,6 +100,11 @@ class ReleasePublicationTests(unittest.TestCase):
                 (destination / self.release.asset_names[0]).write_bytes(b"corrupt upload")
             if self.replace_download:
                 self.write_artifacts(destination, content=b"different but correctly signed installer")
+            if self.replace_manifest:
+                manifest = destination / self.release.asset_names[1]
+                payload = verify(json.loads(manifest.read_text()), [self.release.public_keys])
+                payload["data"]["schema"] += 1
+                manifest.write_text(json.dumps(sign(payload, self.private)))
         elif operation == "edit":
             self.metadata["draft"] = False
         else:
@@ -200,6 +206,22 @@ class ReleasePublicationTests(unittest.TestCase):
     def test_upload_must_match_local_artifacts_even_when_replacement_is_correctly_signed(self):
         self.replace_download = True
         with self.assertRaisesRegex(ValueError, "Uploaded asset differs"):
+            self.publish()
+        self.assertTrue(self.metadata["draft"])
+        self.assertFalse(any(args[:3] == ["gh", "release", "edit"] for args in self.commands))
+
+    def test_installer_hashes_are_computed_once_per_local_and_downloaded_asset(self):
+        with patch.object(hashlib, "file_digest", wraps=hashlib.file_digest) as digest:
+            self.publish()
+        installer_reads = [call.args[0].name for call in digest.call_args_list
+                           if Path(call.args[0].name).name == self.release.asset_names[0]]
+        self.assertEqual(len(installer_reads), 2)
+        self.assertEqual(len(set(installer_reads)), 2)
+        self.assertFalse(self.metadata["draft"])
+
+    def test_a_different_valid_manifest_cannot_replace_the_verified_local_manifest(self):
+        self.replace_manifest = True
+        with self.assertRaisesRegex(ValueError, self.release.asset_names[1]):
             self.publish()
         self.assertTrue(self.metadata["draft"])
         self.assertFalse(any(args[:3] == ["gh", "release", "edit"] for args in self.commands))

@@ -99,16 +99,11 @@ jobs:
         run: python3 -m pip install --quiet "cryptography>=42.0.0" "jsonschema>=4.0.0"
 
       - name: Run appcast tooling unit tests
-        run: python3 -m unittest tool.appcast.test_appcast_manager tool.appcast.test_validate_release tool.appcast.test_appcast_signing tool.appcast.test_validate_launcher_status tool.updater.test_manifest tool.updater.test_verify_release tool.updater.test_installer -v
-
-      - name: Ensure appcast signing tests did not skip
-        shell: bash
         run: |
-          set -e
-          output="$(python3 -m unittest tool.appcast.test_appcast_signing -v 2>&1)"
-          if echo "$output" | grep -q 'skipped='; then
-            echo "tool.appcast.test_appcast_signing reported skipped tests:" >&2
-            echo "$output" >&2
+          set -euo pipefail
+          python3 -m unittest tool.appcast.test_appcast_manager tool.appcast.test_validate_release tool.appcast.test_appcast_signing tool.appcast.test_validate_launcher_status tool.updater.test_manifest tool.updater.test_verify_release tool.updater.test_installer -v 2>&1 | tee "$RUNNER_TEMP/appcast-tests.log"
+          if grep -q 'skipped=' "$RUNNER_TEMP/appcast-tests.log"; then
+            echo "Required appcast tests were skipped." >&2
             exit 1
           fi
 
@@ -232,15 +227,6 @@ jobs:
             echo "version=$VERSION_SHORT"
             echo "full_version=$FULL_VERSION"
           } >> "$GITHUB_OUTPUT"
-
-      - name: Setup Flutter
-        uses: subosito/flutter-action@v2
-        with:
-          channel: stable
-          cache: true
-
-      - name: Install Flutter dependencies
-        run: flutter pub get
 
       - name: Get asset info
         id: asset

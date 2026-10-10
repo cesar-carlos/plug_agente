@@ -8,14 +8,22 @@ const run = (id, conclusion, extra = {}) => ({
   workflow_id: 7, html_url: `https://github.com/owner/project/actions/runs/${id}`, ...extra,
 });
 
-async function execute(completion, recentRuns, issues = [{ title, number: 42 }], apiFailure = false) {
-  const updates = [], creations = [], queries = [];
+async function execute(completion, recentRuns, issues = [{ title, number: 42 }], apiFailure = false,
+                       paginationFailure = false) {
+  const updates = [], creations = [], queries = [], issuePages = [];
   const listForRepo = () => { throw new Error('Issue lookup must use pagination'); };
   const github = {
-    paginate: async (method, parameters) => {
-      assert.equal(method, listForRepo);
-      assert.equal(parameters.state, 'open');
-      return issues;
+    paginate: {
+      iterator: async function* (method, parameters) {
+        assert.equal(method, listForRepo);
+        assert.equal(parameters.state, 'open');
+        if (paginationFailure) throw new Error('Issues API unavailable');
+        for (let offset = 0; offset < Math.max(issues.length, 1); offset += parameters.per_page) {
+          const page = issues.slice(offset, offset + parameters.per_page);
+          issuePages.push(page);
+          yield { data: page };
+        }
+      },
     },
     rest: {
       actions: {
@@ -36,7 +44,7 @@ async function execute(completion, recentRuns, issues = [{ title, number: 42 }],
   };
   const context = { repo: { owner: 'owner', repo: 'project' }, payload: { workflow_run: completion } };
   await scheduledWorkflowAlert({ github, context, core: { info() {}, warning() {} } });
-  return { updates, creations, queries };
+  return { updates, creations, queries, issuePages };
 }
 
 test('an old successful rerun cannot close an alert for newer failures', async () => {
@@ -75,6 +83,7 @@ test('one failure after a success does not open an alert', async () => {
   const current = run(12, 'failure');
   const result = await execute(current, [current, run(11, 'success')], []);
   assert.equal(result.creations.length, 0);
+  assert.equal(result.issuePages.length, 0);
 });
 
 test('cancellation does not close an existing alert', async () => {
@@ -88,6 +97,33 @@ test('an existing alert found beyond the first page is reused', async () => {
   const issues = Array.from({ length: 100 }, (_, index) => ({ title: `Other issue ${index}`, number: index + 1 }));
   issues.push({ title, number: 142 });
   const result = await execute(current, [current, run(11, 'failure')], issues);
+  assert.equal(result.creations.length, 0);
+  assert.equal(result.issuePages.length, 2);
+});
+
+test('pagination stops when the alert is found even if more issues exist', async () => {
+  const current = run(12, 'success');
+  const issues = [{ title, number: 42 }, ...Array.from({ length: 200 }, (_, index) =>
+    ({ title: `Other issue ${index}`, number: index + 100 }))];
+  const result = await execute(current, [current, run(11, 'failure')], issues);
+  assert.equal(result.issuePages.length, 1);
+  assert.equal(result.updates[0].issue_number, 42);
+});
+
+test('success without an alert scans remaining pages without creating or closing an issue', async () => {
+  const current = run(12, 'success');
+  const issues = Array.from({ length: 101 }, (_, index) => ({ title: `Other issue ${index}`, number: index }));
+  const result = await execute(current, [current, run(11, 'failure')], issues);
+  assert.equal(result.issuePages.length, 2);
+  assert.equal(result.updates.length, 0);
+  assert.equal(result.creations.length, 0);
+});
+
+test('a first failed scheduled run does not query issues', async () => {
+  const current = run(12, 'failure');
+  const result = await execute(current, [current]);
+  assert.equal(result.issuePages.length, 0);
+  assert.equal(result.updates.length, 0);
   assert.equal(result.creations.length, 0);
 });
 
@@ -106,4 +142,9 @@ test('old failures cannot open an alert after a newer success', async () => {
 
 test('API errors fail visibly without changing issues', async () => {
   await assert.rejects(execute(run(12, 'success'), [], [], true), /Actions API unavailable/);
+});
+
+test('issue pagination errors fail visibly', async () => {
+  const current = run(12, 'success');
+  await assert.rejects(execute(current, [current], [], false, true), /Issues API unavailable/);
 });

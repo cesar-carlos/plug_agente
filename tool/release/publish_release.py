@@ -99,32 +99,35 @@ def release_metadata(release: Release, root: Path) -> dict | None:
     return data
 
 
-def verify_assets(release: Release, directory: Path, commit: str) -> None:
+def verify_assets(release: Release, directory: Path, commit: str) -> dict[str, str]:
     if not release.public_keys.strip():
         raise ValueError("AUTO_UPDATE_FEED_PUBLIC_KEY is required to publish")
     installer, manifest = (directory / name for name in release.asset_names)
-    verify_release(manifest, installer, release.public_keys, release.full_version, release.channel, commit)
+    payload = verify_release(manifest, installer, release.public_keys, release.full_version, release.channel, commit)
+    with manifest.open("rb") as source:
+        manifest_digest = hashlib.file_digest(source, "sha256").hexdigest()
+    return {installer.name: payload["installer"]["sha256"], manifest.name: manifest_digest}
 
 
-def verify_uploaded_assets(release: Release, root: Path, commit: str, local: Path | None = None) -> None:
+def verify_uploaded_assets(release: Release, root: Path, commit: str,
+                           expected_digests: dict[str, str] | None = None) -> None:
     with tempfile.TemporaryDirectory() as temporary:
         destination = Path(temporary)
         command(["gh", "release", "download", release.tag, "--repo", release.repository,
                  "--dir", str(destination), "--pattern", release.asset_names[0],
                  "--pattern", release.asset_names[1]], root)
-        verify_assets(release, destination, commit)
-        if local is not None:
+        uploaded_digests = verify_assets(release, destination, commit)
+        if expected_digests is not None:
             for name in release.asset_names:
-                with (local / name).open("rb") as original, (destination / name).open("rb") as uploaded:
-                    if hashlib.file_digest(original, "sha256").digest() != hashlib.file_digest(uploaded, "sha256").digest():
-                        raise ValueError(f"Uploaded asset differs from verified local artifact: {name}")
+                if expected_digests[name] != uploaded_digests[name]:
+                    raise ValueError(f"Uploaded asset differs from verified local artifact: {name}")
 
 
 def publish(release: Release, root: Path = PROJECT_ROOT) -> None:
     existing_source = tagged_source(release, root)
     commit = existing_source or command(["git", "rev-parse", "HEAD"], root).stdout.strip()
     artifacts = root / "installer/dist"
-    verify_assets(release, artifacts, commit)
+    local_digests = verify_assets(release, artifacts, commit)
     metadata = release_metadata(release, root)
     if metadata is not None and not metadata["draft"]:
         if existing_source is None:
@@ -148,7 +151,7 @@ def publish(release: Release, root: Path = PROJECT_ROOT) -> None:
         command(arguments, root)
     command(["gh", "release", "upload", release.tag, "--repo", release.repository,
              *(str(artifacts / name) for name in release.asset_names), "--clobber"], root)
-    verify_uploaded_assets(release, root, commit, artifacts)
+    verify_uploaded_assets(release, root, commit, local_digests)
     command(["gh", "release", "edit", release.tag, "--repo", release.repository,
              "--draft=false", "--latest" if release.channel == "stable" else "--latest=false"], root)
     print(f"Published and verified release {release.tag}")

@@ -3,7 +3,7 @@ import unittest
 
 import yaml
 
-from tool.ci.validate_ci_configuration import validate_configuration
+from tool.ci.validate_ci_configuration import collect_unittest_modules, validate_configuration
 
 ROOT = Path(__file__).resolve().parents[2]
 
@@ -13,6 +13,33 @@ def workflow(name):
 
 
 class WorkflowRegressionTests(unittest.TestCase):
+    def test_feed_publication_does_not_install_unused_flutter_dependencies(self):
+        steps = workflow("update-appcast.yml")["jobs"]["update-appcast"]["steps"]
+        self.assertFalse(any("flutter-action" in step.get("uses", "") or
+                             "flutter pub get" in step.get("run", "") for step in steps))
+
+    def test_ci_workflows_do_not_duplicate_lint_or_unit_test_modules(self):
+        sources = [(ROOT / ".github/workflows" / name).read_text(encoding="utf-8")
+                   for name in ("flutter_ci.yml", "workflow-sanity.yml")]
+        modules = [set(collect_unittest_modules(source)) for source in sources]
+        self.assertFalse(modules[0] & modules[1])
+        self.assertIn("tool.release.test_publish_release", modules[0])
+        self.assertIn("tool.tests.test_validate_ci_configuration", modules[1])
+        self.assertEqual(sum(source.count("go install github.com/rhysd/actionlint/") for source in sources), 1)
+        self.assertEqual(sum(source.count("node --test tool/ci/test_scheduled_workflow_alert.cjs") for source in sources), 1)
+
+    def test_feed_tests_run_signing_suite_once_and_reject_failures_and_skips(self):
+        for name in ("update-appcast.yml", "validate-appcast.yml"):
+            with self.subTest(workflow=name):
+                commands = [step.get("run", "") for job in workflow(name)["jobs"].values()
+                            for step in job.get("steps", [])]
+                self.assertEqual(sum(command.count("tool.appcast.test_appcast_signing") for command in commands), 1)
+                tests = next(command for command in commands if "tool.appcast.test_appcast_signing" in command)
+                self.assertIn("set -euo pipefail", tests)
+                self.assertIn("tee", tests)
+                self.assertIn("grep -q 'skipped='", tests)
+                self.assertIn("exit 1", tests)
+
     def test_all_workflow_unittest_modules_are_available(self):
         self.assertEqual(validate_configuration(ROOT), [])
 
