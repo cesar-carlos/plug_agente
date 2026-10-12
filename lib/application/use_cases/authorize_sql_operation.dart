@@ -63,7 +63,7 @@ class AuthorizeSqlOperation {
             )
             .toList(growable: false);
 
-        final cache = _decisionCache;
+        final cache = method == 'sql.execute.verified' ? null : _decisionCache;
         final cacheRevision = cache?.revision;
         final missIndices = <int>[];
         final deniedAccesses = <ClassifiedSqlResource>{};
@@ -125,6 +125,14 @@ class AuthorizeSqlOperation {
         }
         return policyResult.fold(
           (policy) {
+            if (method == 'sql.execute.verified' && (policy.isRevoked || policy.payloadDatabaseConstraint == null)) {
+              return Failure(
+                domain.DatabaseFailure.withContext(
+                  code: 'AUTHORIZATION_DENIED',
+                  message: 'Verified source requires active policy with a mandatory database.',
+                ),
+              );
+            }
             final lifetime = ClientTokenLifetimeValidator.validate(policy, now: _now());
             if (lifetime.isError()) return Failure(lifetime.exceptionOrNull()!);
             final databaseConstraintFailure = _validateDatabaseConstraint(

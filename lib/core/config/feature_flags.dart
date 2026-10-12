@@ -7,6 +7,11 @@ class FeatureFlags {
 
   final IAppSettingsStore _prefs;
 
+  /// Opt-in for dedicated homologation only while coordinated release is blocked.
+  bool get enableSqlOperations => _prefs.getBool('feature_enable_sql_operations') ?? false;
+
+  Future<void> setEnableSqlOperations(bool value) => _prefs.setBool('feature_enable_sql_operations', value);
+
   // Keys
   static const _keyEnableBinaryPayload = 'feature_enable_binary_payload';
   static const _keyEnableCompression = 'feature_enable_compression';
@@ -37,8 +42,7 @@ class FeatureFlags {
   static const _keyEnableOdbcExperimentalDriverAdaptivePooling =
       'feature_enable_odbc_experimental_driver_adaptive_pooling';
   static const _keyHubPersistentRetryMaxFailedTicks = 'feature_hub_persistent_retry_max_failed_ticks';
-  static const _keyHubPersistentUnreachableMaxFailedTicks =
-      'feature_hub_persistent_unreachable_max_failed_ticks';
+  static const _keyHubPersistentUnreachableMaxFailedTicks = 'feature_hub_persistent_unreachable_max_failed_ticks';
   static const _keyHubPersistentRetryIntervalSeconds = 'feature_hub_persistent_retry_interval_seconds';
   static const _keyEnableHubHardReloginRecovery = 'feature_enable_hub_hard_relogin_recovery';
   static const _keyHubHardReloginFailureThreshold = 'feature_hub_hard_relogin_failure_threshold';

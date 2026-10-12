@@ -1,6 +1,7 @@
 import 'package:plug_agente/core/constants/rpc_batch_constants.dart';
 import 'package:plug_agente/core/constants/rpc_batch_negotiation.dart';
 import 'package:plug_agente/domain/protocol/protocol_capabilities.dart';
+import 'package:plug_agente/domain/protocol/sql_operation_capability.dart';
 import 'package:plug_agente/domain/protocol/transport_extension_negotiation.dart';
 import 'package:plug_agente/domain/repositories/i_protocol_negotiator.dart';
 
@@ -258,6 +259,16 @@ class ProtocolNegotiator implements IProtocolNegotiator {
       negotiated[TransportExtensionNegotiation.healthPiggyback] = healthPiggyback;
     }
 
+    for (final extension in ['sourceDiscovery', 'sourceIdentity']) {
+      if (agentExtensions[extension] == 1 && serverExtensions[extension] == 1) {
+        negotiated[extension] = 1;
+      }
+    }
+    final sqlOperations = SqlOperationCapability.negotiate(
+      agentExtensions[SqlOperationCapability.key],
+      serverExtensions[SqlOperationCapability.key],
+    );
+    if (sqlOperations != null) negotiated[SqlOperationCapability.key] = sqlOperations;
     return negotiated;
   }
 

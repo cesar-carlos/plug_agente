@@ -4,6 +4,7 @@ import 'package:plug_agente/core/constants/rpc_batch_negotiation.dart';
 import 'package:plug_agente/domain/actions/action_enums.dart';
 import 'package:plug_agente/domain/actions/action_local_runner.dart';
 import 'package:plug_agente/domain/protocol/protocol.dart';
+import 'package:plug_agente/domain/protocol/sql_operation_capability.dart';
 import 'package:plug_agente/domain/repositories/i_agent_actions_remote_capability_provider.dart';
 import 'package:plug_agente/infrastructure/security/payload_signer.dart';
 
@@ -36,6 +37,7 @@ final class TransportLocalCapabilitiesBuilder {
       signatureRequired: localRequiresIncomingSignature,
       signatureAlgorithms: localSignatureAlgorithms,
       streamingResults: _featureFlags.enableSocketStreamingChunks || _featureFlags.enableSocketStreamingFromDb,
+      sqlOperations: _featureFlags.enableSqlOperations ? SqlOperationCapability.advertisement : null,
       agentActions: _featureFlags.enableAgentActions && _featureFlags.enableRemoteAgentActions
           ? _agentActionsCapability()
           : null,

@@ -1,6 +1,5 @@
 import 'dart:async';
 import 'dart:developer' as developer;
-
 import 'package:odbc_fast/odbc_fast.dart';
 import 'package:plug_agente/core/config/feature_flags.dart';
 import 'package:plug_agente/core/constants/connection_constants.dart';
@@ -49,7 +48,9 @@ import 'package:plug_agente/infrastructure/external_services/odbc_query_runner.d
 import 'package:plug_agente/infrastructure/external_services/odbc_read_only_batch_parallel_executor.dart';
 import 'package:plug_agente/infrastructure/external_services/odbc_result_encoding_executor.dart';
 import 'package:plug_agente/infrastructure/external_services/odbc_runtime_lifecycle.dart';
+import 'package:plug_agente/infrastructure/external_services/odbc_source_discovery.dart';
 import 'package:plug_agente/infrastructure/external_services/odbc_statement_executor.dart';
+import 'package:plug_agente/infrastructure/external_services/odbc_verified_query.dart';
 import 'package:plug_agente/infrastructure/metrics/metrics_collector.dart';
 import 'package:plug_agente/infrastructure/pool/adaptive_odbc_connection_pool.dart';
 import 'package:plug_agente/infrastructure/pool/connection_acquire_options_mapper.dart';
@@ -382,6 +383,14 @@ class OdbcDatabaseGateway
 
         return configResult.fold(
           (config) async {
+            if (request.expectedSource != null) {
+              if (database == null || database.isEmpty || cancellationToken?.isCancelled == true) {
+                return Failure(domain.ValidationFailure('Verified query requires an active database request.'));
+              }
+              return OdbcVerifiedQuery(
+                OdbcSourceDiscovery(_service, _connectionStringSource, _connectionManager.directConnectionLimiter),
+              ).execute(request, config, database, timeout ?? const Duration(seconds: 30));
+            }
             final localConfig = _buildDatabaseConfig(config);
             final connectionString = _resolveCachedConnectionString(
               config,

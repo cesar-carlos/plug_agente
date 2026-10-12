@@ -1,0 +1,395 @@
+{
+  "additionalProperties": false,
+  "properties": {
+    "auth": {
+      "maxLength": 65536,
+      "minLength": 1,
+      "type": "string"
+    },
+    "clientToken": {
+      "maxLength": 65536,
+      "minLength": 1,
+      "type": "string"
+    },
+    "client_token": {
+      "maxLength": 65536,
+      "minLength": 1,
+      "type": "string"
+    },
+    "contractVersion": {
+      "enum": [
+        1
+      ],
+      "type": "number"
+    },
+    "database": {
+      "maxLength": 200,
+      "minLength": 1,
+      "type": "string"
+    },
+    "fingerprint": {
+      "pattern": "^[a-f0-9]{64}$",
+      "type": "string"
+    },
+    "maxAffectedRows": {
+      "exclusiveMinimum": 0,
+      "maximum": 100000,
+      "type": "integer"
+    },
+    "operationId": {
+      "format": "uuid",
+      "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+      "type": "string"
+    },
+    "sourcePhysicalId": {
+      "pattern": "^[a-f0-9]{64}$",
+      "type": "string"
+    },
+    "steps": {
+      "items": {
+        "additionalProperties": false,
+        "properties": {
+          "affectedRows": {
+            "additionalProperties": false,
+            "properties": {
+              "max": {
+                "maximum": 100000,
+                "minimum": 0,
+                "type": "integer"
+              },
+              "min": {
+                "maximum": 9007199254740991,
+                "minimum": 0,
+                "type": "integer"
+              }
+            },
+            "required": [
+              "min",
+              "max"
+            ],
+            "type": "object"
+          },
+          "effect": {
+            "enum": [
+              "select",
+              "insert",
+              "update",
+              "delete"
+            ],
+            "type": "string"
+          },
+          "expectedRows": {
+            "additionalProperties": false,
+            "properties": {
+              "max": {
+                "maximum": 100000,
+                "minimum": 0,
+                "type": "integer"
+              },
+              "min": {
+                "maximum": 9007199254740991,
+                "minimum": 0,
+                "type": "integer"
+              }
+            },
+            "required": [
+              "min",
+              "max"
+            ],
+            "type": "object"
+          },
+          "id": {
+            "maxLength": 100,
+            "pattern": "^[A-Za-z_][A-Za-z0-9_]*$",
+            "type": "string"
+          },
+          "outputs": {
+            "additionalProperties": {
+              "enum": [
+                "string",
+                "decimal",
+                "date",
+                "uuid",
+                "integer",
+                "boolean",
+                "null"
+              ],
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "params": {
+            "additionalProperties": {
+              "oneOf": [
+                {
+                  "additionalProperties": false,
+                  "properties": {
+                    "kind": {
+                      "enum": [
+                        "value"
+                      ],
+                      "type": "string"
+                    },
+                    "scalar": {
+                      "oneOf": [
+                        {
+                          "additionalProperties": false,
+                          "properties": {
+                            "type": {
+                              "enum": [
+                                "string"
+                              ],
+                              "type": "string"
+                            },
+                            "value": {
+                              "maxLength": 65536,
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "type",
+                            "value"
+                          ],
+                          "type": "object"
+                        },
+                        {
+                          "additionalProperties": false,
+                          "properties": {
+                            "type": {
+                              "enum": [
+                                "decimal"
+                              ],
+                              "type": "string"
+                            },
+                            "value": {
+                              "maxLength": 128,
+                              "pattern": "^-?\\d+(\\.\\d+)?$",
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "type",
+                            "value"
+                          ],
+                          "type": "object"
+                        },
+                        {
+                          "additionalProperties": false,
+                          "properties": {
+                            "type": {
+                              "enum": [
+                                "integer"
+                              ],
+                              "type": "string"
+                            },
+                            "value": {
+                              "maxLength": 32,
+                              "pattern": "^-?\\d+$",
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "type",
+                            "value"
+                          ],
+                          "type": "object"
+                        },
+                        {
+                          "additionalProperties": false,
+                          "properties": {
+                            "type": {
+                              "enum": [
+                                "date"
+                              ],
+                              "type": "string"
+                            },
+                            "value": {
+                              "anyOf": [
+                                {
+                                  "format": "date",
+                                  "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$",
+                                  "type": "string"
+                                },
+                                {
+                                  "format": "date-time",
+                                  "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$",
+                                  "type": "string"
+                                }
+                              ]
+                            }
+                          },
+                          "required": [
+                            "type",
+                            "value"
+                          ],
+                          "type": "object"
+                        },
+                        {
+                          "additionalProperties": false,
+                          "properties": {
+                            "type": {
+                              "enum": [
+                                "uuid"
+                              ],
+                              "type": "string"
+                            },
+                            "value": {
+                              "format": "uuid",
+                              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "type",
+                            "value"
+                          ],
+                          "type": "object"
+                        },
+                        {
+                          "additionalProperties": false,
+                          "properties": {
+                            "type": {
+                              "enum": [
+                                "boolean"
+                              ],
+                              "type": "string"
+                            },
+                            "value": {
+                              "type": "boolean"
+                            }
+                          },
+                          "required": [
+                            "type",
+                            "value"
+                          ],
+                          "type": "object"
+                        },
+                        {
+                          "additionalProperties": false,
+                          "properties": {
+                            "type": {
+                              "enum": [
+                                "null"
+                              ],
+                              "type": "string"
+                            },
+                            "value": {
+                              "enum": [
+                                null
+                              ],
+                              "type": "null"
+                            }
+                          },
+                          "required": [
+                            "type",
+                            "value"
+                          ],
+                          "type": "object"
+                        }
+                      ]
+                    }
+                  },
+                  "required": [
+                    "kind",
+                    "scalar"
+                  ],
+                  "type": "object"
+                },
+                {
+                  "additionalProperties": false,
+                  "properties": {
+                    "kind": {
+                      "enum": [
+                        "step_output"
+                      ],
+                      "type": "string"
+                    },
+                    "output": {
+                      "maxLength": 100,
+                      "pattern": "^[A-Za-z_][A-Za-z0-9_]*$",
+                      "type": "string"
+                    },
+                    "stepId": {
+                      "maxLength": 100,
+                      "pattern": "^[A-Za-z_][A-Za-z0-9_]*$",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "kind",
+                    "stepId",
+                    "output"
+                  ],
+                  "type": "object"
+                }
+              ]
+            },
+            "type": "object"
+          },
+          "sql": {
+            "maxLength": 1048576,
+            "minLength": 1,
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "effect",
+          "sql",
+          "params",
+          "outputs"
+        ],
+        "type": "object"
+      },
+      "maxItems": 32,
+      "minItems": 1,
+      "type": "array"
+    },
+    "timeoutMs": {
+      "exclusiveMinimum": 0,
+      "maximum": 300000,
+      "type": "integer"
+    },
+    "expectedSource": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "version",
+        "dialect",
+        "identityHash"
+      ],
+      "properties": {
+        "version": {
+          "type": "integer",
+          "const": 1
+        },
+        "dialect": {
+          "type": "string",
+          "enum": [
+            "postgres",
+            "mssql",
+            "sybase",
+            "firebird"
+          ]
+        },
+        "identityHash": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        }
+      }
+    }
+  },
+  "required": [
+    "contractVersion",
+    "operationId",
+    "fingerprint",
+    "sourcePhysicalId",
+    "database",
+    "steps",
+    "maxAffectedRows",
+    "timeoutMs"
+  ],
+  "type": "object",
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "rpc.params.sql-operation-execute.schema.json"
+}

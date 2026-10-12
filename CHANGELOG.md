@@ -5,6 +5,19 @@ and version bump instructions remain in `docs/install/release_guide.md`.
 
 ## Unreleased
 
+### Fixed — verified SQL in the MCP chain
+
+- Strict sql.execute ingress accepts expectedSource v1; malformed identities
+  remain invalid. Executing-connection checks and live policy still gate SQL.
+- Verified materialized queries, including chunked delivery, explicitly report
+  completeness without turning omitted legacy flags into proof. Preserve upstream
+  truncation. Incomplete/mistyped remote profiles return typed validation errors
+  instead of terminating a Socket.IO callback with unchecked casts.
+- Add the explicit four-engine MCP/hub/agent companion with private fixtures,
+  real ODBC/policy/journal, approval, revocation and post-commit confirmation loss.
+  This does not certify full desktop/Prisma bootstrap or release acceptance.
+
+
 ### Fixed — ODBC decoder, connection cleanup and streaming
 
 - Compressed columnar decoding in `dart_odbc_fast` releases native buffers

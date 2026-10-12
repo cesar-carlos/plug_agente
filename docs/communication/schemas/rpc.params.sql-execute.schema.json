@@ -4,7 +4,9 @@
   "title": "sql.execute params",
   "description": "Parameters for the sql.execute RPC method",
   "type": "object",
-  "required": ["sql"],
+  "required": [
+    "sql"
+  ],
   "properties": {
     "sql": {
       "type": "string",
@@ -64,7 +66,10 @@
         },
         "execution_mode": {
           "type": "string",
-          "enum": ["managed", "preserve"],
+          "enum": [
+            "managed",
+            "preserve"
+          ],
           "description": "SQL handling mode. managed lets the agent rewrite SQL for managed pagination when requested. preserve executes the SQL exactly as sent and disables managed pagination rewriting."
         },
         "preserve_sql": {
@@ -84,65 +89,147 @@
       "additionalProperties": false,
       "allOf": [
         {
-          "if": { "required": ["page"] },
-          "then": { "required": ["page_size"] }
+          "if": {
+            "required": [
+              "page"
+            ]
+          },
+          "then": {
+            "required": [
+              "page_size"
+            ]
+          }
         },
         {
-          "if": { "required": ["page_size"] },
-          "then": { "required": ["page"] }
+          "if": {
+            "required": [
+              "page_size"
+            ]
+          },
+          "then": {
+            "required": [
+              "page"
+            ]
+          }
         },
         {
-          "if": { "required": ["cursor"] },
+          "if": {
+            "required": [
+              "cursor"
+            ]
+          },
           "then": {
             "not": {
               "anyOf": [
-                { "required": ["page"] },
-                { "required": ["page_size"] }
+                {
+                  "required": [
+                    "page"
+                  ]
+                },
+                {
+                  "required": [
+                    "page_size"
+                  ]
+                }
               ]
             }
           }
         },
         {
           "if": {
-            "properties": { "preserve_sql": { "const": true } },
-            "required": ["preserve_sql"]
+            "properties": {
+              "preserve_sql": {
+                "const": true
+              }
+            },
+            "required": [
+              "preserve_sql"
+            ]
           },
           "then": {
             "not": {
               "anyOf": [
-                { "required": ["page"] },
-                { "required": ["page_size"] },
-                { "required": ["cursor"] }
+                {
+                  "required": [
+                    "page"
+                  ]
+                },
+                {
+                  "required": [
+                    "page_size"
+                  ]
+                },
+                {
+                  "required": [
+                    "cursor"
+                  ]
+                }
               ]
             }
           }
         },
         {
           "if": {
-            "properties": { "execution_mode": { "const": "preserve" } },
-            "required": ["execution_mode"]
+            "properties": {
+              "execution_mode": {
+                "const": "preserve"
+              }
+            },
+            "required": [
+              "execution_mode"
+            ]
           },
           "then": {
             "not": {
               "anyOf": [
-                { "required": ["page"] },
-                { "required": ["page_size"] },
-                { "required": ["cursor"] }
+                {
+                  "required": [
+                    "page"
+                  ]
+                },
+                {
+                  "required": [
+                    "page_size"
+                  ]
+                },
+                {
+                  "required": [
+                    "cursor"
+                  ]
+                }
               ]
             }
           }
         },
         {
           "if": {
-            "properties": { "multi_result": { "const": true } },
-            "required": ["multi_result"]
+            "properties": {
+              "multi_result": {
+                "const": true
+              }
+            },
+            "required": [
+              "multi_result"
+            ]
           },
           "then": {
             "not": {
               "anyOf": [
-                { "required": ["page"] },
-                { "required": ["page_size"] },
-                { "required": ["cursor"] }
+                {
+                  "required": [
+                    "page"
+                  ]
+                },
+                {
+                  "required": [
+                    "page_size"
+                  ]
+                },
+                {
+                  "required": [
+                    "cursor"
+                  ]
+                }
               ]
             }
           }
@@ -152,6 +239,34 @@
     "database": {
       "type": "string",
       "description": "Optional target database override for this request. When the resolved client token payload contains payload.database, this field becomes required and must match it exactly after trim + case-insensitive normalization."
+    },
+    "expectedSource": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "version",
+        "dialect",
+        "identityHash"
+      ],
+      "properties": {
+        "version": {
+          "type": "integer",
+          "const": 1
+        },
+        "dialect": {
+          "type": "string",
+          "enum": [
+            "postgres",
+            "mssql",
+            "sybase",
+            "firebird"
+          ]
+        },
+        "identityHash": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        }
+      }
     }
   },
   "allOf": [
@@ -161,15 +276,25 @@
           "options": {
             "type": "object",
             "properties": {
-              "multi_result": { "const": true }
+              "multi_result": {
+                "const": true
+              }
             },
-            "required": ["multi_result"]
+            "required": [
+              "multi_result"
+            ]
           }
         },
-        "required": ["options"]
+        "required": [
+          "options"
+        ]
       },
       "then": {
-        "not": { "required": ["params"] }
+        "not": {
+          "required": [
+            "params"
+          ]
+        }
       }
     }
   ],

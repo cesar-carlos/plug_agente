@@ -105,7 +105,8 @@ class SqlRpcMaterializedStreamingExecutor {
       'rows': <Map<String, dynamic>>[],
       'row_count': 0,
       'returned_rows': rows.length,
-      if (wasTruncated) 'truncated': true,
+      if (wasTruncated || normalized.wasTruncated || queryRequest.expectedSource != null)
+        'truncated': wasTruncated || normalized.wasTruncated,
       if (normalized.columnMetadata != null) 'column_metadata': normalized.columnMetadata,
       if (normalized.pagination != null) 'pagination': buildPaginationResult(normalized.pagination!),
     };

@@ -10,6 +10,11 @@ void _registerPersistence(GetIt getIt) {
     settings.writeAdmission = getIt<UpdateMaintenanceAdmission>().checkSettingsWrite;
   }
   getIt
+    ..registerLazySingleton<SqlOperationJournalRuntime>(
+      () => SqlOperationJournalRuntime(getIt<GlobalStorageContext>().sqlOperationJournalFilePath),
+      dispose: (runtime) => runtime.close(),
+    )
+    ..registerLazySingleton<ISqlOperationJournal>(() => getIt<SqlOperationJournalRuntime>().journal)
     ..registerLazySingleton(
       () => AppDatabase(
         databaseFilePath: getIt<GlobalStorageContext>().databaseFilePath,

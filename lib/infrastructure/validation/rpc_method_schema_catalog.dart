@@ -7,6 +7,10 @@ class RpcMethodSchemaCatalog {
   const RpcMethodSchemaCatalog();
 
   static const Map<String, String> _paramsSchemaByMethod = <String, String>{
+    'sql.describeSource': TransportSchemaIds.paramsSourceDiscovery,
+    'sql.operation.execute': TransportSchemaIds.paramsSqlOperationExecute,
+    'sql.operation.get': TransportSchemaIds.paramsSqlOperationReference,
+    'sql.operation.cancel': TransportSchemaIds.paramsSqlOperationReference,
     'sql.execute': TransportSchemaIds.paramsSqlExecute,
     'sql.executeBatch': TransportSchemaIds.paramsSqlExecuteBatch,
     'sql.bulkInsert': TransportSchemaIds.paramsSqlBulkInsert,
@@ -21,6 +25,10 @@ class RpcMethodSchemaCatalog {
   };
 
   static const Map<String, String> _resultSchemaByMethod = <String, String>{
+    'sql.describeSource': TransportSchemaIds.resultSourceDiscovery,
+    'sql.operation.execute': TransportSchemaIds.resultSqlOperation,
+    'sql.operation.get': TransportSchemaIds.resultSqlOperation,
+    'sql.operation.cancel': TransportSchemaIds.resultSqlOperation,
     'sql.execute': TransportSchemaIds.resultSqlExecute,
     'sql.executeBatch': TransportSchemaIds.resultSqlExecuteBatch,
     'sql.bulkInsert': TransportSchemaIds.resultSqlBulkInsert,

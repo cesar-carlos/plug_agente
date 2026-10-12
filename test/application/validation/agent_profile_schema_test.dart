@@ -7,6 +7,13 @@ import 'package:plug_agente/domain/errors/failures.dart' as domain;
 
 void main() {
   group('AgentProfile', () {
+    test('should return typed validation failure for incomplete remote profile', () {
+      for (final document in [null, 123, '', 'invalid']) {
+        final result = AgentProfile.fromRpcPayload({'name': 'Incomplete hub fixture', 'document': document});
+        expect(result.isError(), isTrue);
+        expect(result.exceptionOrNull(), isA<domain.ValidationFailure>());
+      }
+    });
     test('should normalize valid form fields', () {
       final result = AgentProfile.fromFormFields(
         name: 'Empresa Exemplo',

@@ -261,6 +261,92 @@
           "additionalProperties": true
         }
       }
+    },
+    {
+      "name": "sql.operation.execute",
+      "summary": "Execute a durably journaled single-source transaction.",
+      "description": "Contract v1. Requires live Client token policy bound to agent and database. Requires negotiated sqlOperations v1 and explicit agent homologation opt-in (default off). Production release remains blocked pending full acceptance. Never retry unknown outcomes.",
+      "paramStructure": "by-name",
+      "params": [
+        {
+          "name": "params",
+          "required": true,
+          "schema": {
+            "$ref": "./schemas/rpc.params.sql-operation-execute.schema.json"
+          }
+        }
+      ],
+      "result": {
+        "name": "result",
+        "schema": {
+          "$ref": "./schemas/rpc.result.sql-operation.schema.json"
+        }
+      },
+      "x-release-status": "blocked"
+    },
+    {
+      "name": "sql.operation.get",
+      "summary": "Read durable operation state.",
+      "description": "Contract v1. Requires live Client token policy bound to agent and database. Requires negotiated sqlOperations v1 and explicit agent homologation opt-in (default off). Production release remains blocked pending full acceptance. Never retry unknown outcomes.",
+      "paramStructure": "by-name",
+      "params": [
+        {
+          "name": "params",
+          "required": true,
+          "schema": {
+            "$ref": "./schemas/rpc.params.sql-operation-reference.schema.json"
+          }
+        }
+      ],
+      "result": {
+        "name": "result",
+        "schema": {
+          "$ref": "./schemas/rpc.result.sql-operation.schema.json"
+        }
+      },
+      "x-release-status": "blocked"
+    },
+    {
+      "name": "sql.operation.cancel",
+      "summary": "Request cancellation; acceptance does not prove rollback.",
+      "description": "Contract v1. Requires live Client token policy bound to agent and database. Requires negotiated sqlOperations v1 and explicit agent homologation opt-in (default off). Production release remains blocked pending full acceptance. Never retry unknown outcomes.",
+      "paramStructure": "by-name",
+      "params": [
+        {
+          "name": "params",
+          "required": true,
+          "schema": {
+            "$ref": "./schemas/rpc.params.sql-operation-reference.schema.json"
+          }
+        }
+      ],
+      "result": {
+        "name": "result",
+        "schema": {
+          "$ref": "./schemas/rpc.result.sql-operation.schema.json"
+        }
+      },
+      "x-release-status": "blocked"
+    },
+    {
+      "name": "sql.describeSource",
+      "summary": "Read fixed live DBMS/source metadata; requires negotiated sourceDiscovery v1 and database-constrained client token. Native identity is required except an explicitly DBA-provisioned UUID for SQL Anywhere (identityKind provisioned). Runtime never creates or repairs the reserved marker. Locator identities do not prove replacement safety; distinct copies require offline re-enrollment.",
+      "paramStructure": "by-name",
+      "params": [
+        {
+          "name": "params",
+          "required": true,
+          "schema": {
+            "$ref": "./schemas/rpc.params.source-discovery.schema.json"
+          }
+        }
+      ],
+      "result": {
+        "name": "result",
+        "schema": {
+          "$ref": "./schemas/rpc.result.source-discovery.schema.json"
+        }
+      }
     }
   ]
 }

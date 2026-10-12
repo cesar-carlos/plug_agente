@@ -95,6 +95,9 @@ jobs:
         with:
           python-version: "3.11"
 
+      - name: Require coordinated persona-v2 acceptance
+        run: python tool/release/check_persona_release.py
+
       - name: Install Python dependencies
         run: python3 -m pip install --quiet "cryptography>=42.0.0" "jsonschema>=4.0.0"
 

@@ -25,6 +25,44 @@ void main() {
         check(result.isSuccess()).isTrue();
       });
 
+      test('accepts enrolled source identity v1 on sql.execute', () {
+        for (final dialect in ['postgres', 'mssql', 'sybase', 'firebird']) {
+          final result = validator.validateSingle({
+            'jsonrpc': '2.0',
+            'method': 'sql.execute',
+            'id': 'verified',
+            'params': {
+              'sql': 'SELECT 1',
+              'expectedSource': {
+                'version': 1,
+                'dialect': dialect,
+                'identityHash': 'a' * 64,
+              },
+            },
+          });
+          expect(result.isSuccess(), isTrue, reason: dialect);
+        }
+      });
+      test('rejects malformed enrolled identity before dispatch', () {
+        for (final identity in <Object?>[
+          null,
+          <String, dynamic>{},
+          {'version': 2, 'dialect': 'mssql', 'identityHash': 'a' * 64},
+          {'version': 1, 'dialect': 'unknown', 'identityHash': 'a' * 64},
+          {'version': 1, 'dialect': 'mssql', 'identityHash': 'short'},
+          {'version': 1, 'dialect': 'mssql', 'identityHash': 'a' * 64, 'extra': true},
+        ]) {
+          final result = validator.validateSingle({
+            'jsonrpc': '2.0',
+            'method': 'sql.execute',
+            'id': 'verified',
+            'params': {'sql': 'SELECT 1', 'expectedSource': identity},
+          });
+          expect(result.isError(), isTrue);
+          expect(result.exceptionOrNull(), isA<domain.ValidationFailure>());
+        }
+      });
+
       test('should succeed for notification (null id)', () {
         final data = <String, dynamic>{
           'jsonrpc': '2.0',

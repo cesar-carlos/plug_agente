@@ -23,6 +23,11 @@ class TransportSchemaIds {
   static const String agentCapabilities = 'agent.capabilities.schema.json';
   static const String agentReady = 'agent.ready.schema.json';
   static const String agentProfile = 'agent.profile.schema.json';
+  static const String paramsSourceDiscovery = 'rpc.params.source-discovery.schema.json';
+  static const String resultSourceDiscovery = 'rpc.result.source-discovery.schema.json';
+  static const String paramsSqlOperationExecute = 'rpc.params.sql-operation-execute.schema.json';
+  static const String paramsSqlOperationReference = 'rpc.params.sql-operation-reference.schema.json';
+  static const String resultSqlOperation = 'rpc.result.sql-operation.schema.json';
   static const String paramsSqlExecute = 'rpc.params.sql-execute.schema.json';
   static const String paramsSqlExecuteBatch = 'rpc.params.sql-execute-batch.schema.json';
   static const String paramsSqlBulkInsert = 'rpc.params.sql-bulk-insert.schema.json';
@@ -59,6 +64,11 @@ class TransportSchemaIds {
     agentCapabilities,
     agentReady,
     agentProfile,
+    paramsSourceDiscovery,
+    resultSourceDiscovery,
+    paramsSqlOperationExecute,
+    paramsSqlOperationReference,
+    resultSqlOperation,
     paramsSqlExecute,
     paramsSqlExecuteBatch,
     paramsSqlBulkInsert,

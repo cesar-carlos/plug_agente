@@ -150,3 +150,20 @@ subdocs correspondentes. Testes que dependem de variaveis nao definidas sao
   `SOCKET_TRANSPORT_BENCHMARK_*`, `PAYLOAD_FRAME_BENCHMARK_*`) nao entram no
   `E2EEnv` nem no `check_e2e_env.dart`. Runner e opt-ins em
   [e2e_odbc.md](e2e_odbc.md#benchmarks).
+
+
+### Persona SQL mandatory homologation
+
+The dedicated tool/homologation/sql_operation_four_engines_test.dart matrix
+requires an explicit private fixture manifest for all four engines. Unlike
+optional legacy E2E tests, a missing environment is a failure, not a skip.
+It never reads .env or registered user sources. Run through the MCP
+scripts/run-four-engine-homologation.ps1 after creating dedicated databases;
+see docs/communication/sql_operations.md for scope and restrictions.
+
+SQL Anywhere fixtures must first be provisioned explicitly by the fixture DBA
+with tool/sql_anywhere_source_identity.sql. The matrix never creates/repairs
+that marker. The dedicated sql_anywhere_source_identity_test.dart runner also
+tests minimum grants, restart, restore preserving UUID and offline copy re-enrollment.
+MCP script run-sql-anywhere-identity-homologation.ps1 creates only a new private
+temporary fixture; never point these tests at a registered source.

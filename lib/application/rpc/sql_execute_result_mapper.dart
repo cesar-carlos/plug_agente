@@ -21,6 +21,7 @@ class SqlExecuteResultMapper {
     required SqlHandlingMode sqlHandlingMode,
     required int effectiveMaxRows,
     bool forceMultiResultEnvelope = false,
+    bool verifiedSource = false,
   }) {
     final resultData = <String, dynamic>{
       'execution_id': response.id,
@@ -34,8 +35,10 @@ class SqlExecuteResultMapper {
     };
 
     RpcWireMap.putOptionalInt(resultData, 'affected_rows', response.affectedRows);
-    if (wasTruncated) {
-      resultData['truncated'] = true;
+    // A verified-source consumer requires an explicit completeness proof.
+    // Preserve the optional flag contract for unrelated legacy requests.
+    if (wasTruncated || response.wasTruncated || verifiedSource) {
+      resultData['truncated'] = wasTruncated || response.wasTruncated;
     }
     if (response.columnMetadata != null) {
       resultData['column_metadata'] = response.columnMetadata;

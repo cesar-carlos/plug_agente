@@ -34,6 +34,22 @@ void main() {
       );
     });
 
+    test('verified queries never reuse legacy allow decisions or a policy without mandatory database', () async {
+      when(() => resolver.resolvePolicy(any())).thenAnswer((_) async => Success(_buildFullAccessPolicy()));
+      expect(
+        (await useCase.call(token: 'token', sql: 'SELECT id FROM orders', requestDatabase: 'fixture')).isSuccess(),
+        isTrue,
+      );
+      clearInteractions(resolver);
+      final verified = await useCase.call(
+        token: 'token',
+        sql: 'SELECT id FROM orders',
+        requestDatabase: 'fixture',
+        method: 'sql.execute.verified',
+      );
+      expect(verified.isError(), isTrue);
+      verify(() => resolver.resolvePolicy('token')).called(1);
+    });
     test(
       'should authorize documented JOIN when global read is enabled',
       () async {

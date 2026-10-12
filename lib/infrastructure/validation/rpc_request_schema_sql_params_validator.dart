@@ -1,3 +1,4 @@
+import 'package:plug_agente/domain/entities/expected_source.dart';
 import 'package:plug_agente/infrastructure/validation/rpc_request_schema_validation_support.dart';
 import 'package:result_dart/result_dart.dart';
 
@@ -27,6 +28,7 @@ final class RpcRequestSchemaSqlParamsValidator {
       'idempotency_key',
       'options',
       'database',
+      'expectedSource',
     };
     final extraKeys = params.keys.where((key) => !allowedKeys.contains(key));
     if (extraKeys.isNotEmpty) {
@@ -34,6 +36,14 @@ final class RpcRequestSchemaSqlParamsValidator {
         'Field "params" contains unsupported properties: '
         '${extraKeys.join(", ")}',
       );
+    }
+
+    if (params.containsKey('expectedSource')) {
+      try {
+        ExpectedSource.fromJson(params['expectedSource']);
+      } on Object {
+        return RpcRequestSchemaValidationSupport.invalidParams('Invalid expected source identity.');
+      }
     }
 
     final sql = params['sql'];

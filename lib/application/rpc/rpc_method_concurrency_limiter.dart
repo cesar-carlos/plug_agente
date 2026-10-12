@@ -36,6 +36,9 @@ class RpcMethodConcurrencyLimiter {
   }
 
   static Map<String, int> get _defaultLimits => <String, int>{
+    'sql.operation.execute': 10,
+    'sql.operation.get': 40,
+    'sql.operation.cancel': 40,
     'sql.bulkInsert': 10,
     'sql.executeBatch': 20,
     'sql.execute': ConnectionConstants.rpcSqlExecuteConcurrencySoftLimit,

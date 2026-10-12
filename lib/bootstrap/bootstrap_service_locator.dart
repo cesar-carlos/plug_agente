@@ -37,6 +37,7 @@ import 'package:plug_agente/infrastructure/security/payload_signing_key_resolver
 import 'package:plug_agente/infrastructure/settings/odbc_connection_settings.dart';
 import 'package:plug_agente/infrastructure/storage/global_storage_acl_bootstrap.dart';
 import 'package:plug_agente/infrastructure/stores/flutter_secure_payload_signing_key_store.dart';
+import 'package:plug_agente/infrastructure/stores/sql_operation_journal_runtime.dart';
 import 'package:plug_agente/infrastructure/validation/json_schema_validator.dart';
 import 'package:plug_agente/infrastructure/validation/schema_loader.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -106,7 +107,7 @@ void _logOdbcRuntimeTuningWarnings(OdbcRuntimeTuning tuning) {
   if (tuning.asyncMaxPendingRequests < sqlQueueMaxWorkers) {
     developer.log(
       'ODBC async pending limit is lower than SQL queue worker count — '
-        'waitForSlot may hold dispatched requests until the backpressure timeout '
+      'waitForSlot may hold dispatched requests until the backpressure timeout '
       '(asyncMaxPendingRequests: ${tuning.asyncMaxPendingRequests}, '
       'sqlQueueMaxWorkers: $sqlQueueMaxWorkers)',
       name: 'bootstrap_service_locator',
@@ -121,7 +122,7 @@ void _logOdbcRuntimeTuningWarnings(OdbcRuntimeTuning tuning) {
   )) {
     developer.log(
       'SQL queue max size exceeds ODBC async pending limit — '
-        'queued requests may wait on waitForSlot until the backpressure timeout '
+      'queued requests may wait on waitForSlot until the backpressure timeout '
       '(sqlQueueMaxSize: $sqlQueueMaxSize, '
       'asyncMaxPendingRequests: ${tuning.asyncMaxPendingRequests})',
       name: 'bootstrap_service_locator',
@@ -328,6 +329,7 @@ Future<void> setupDependencies({
   try {
     final database = getIt<AppDatabase>();
     await database.customStatement('PRAGMA foreign_keys = ON');
+    (await getIt<SqlOperationJournalRuntime>().initialize()).getOrThrow();
   } on GlobalStorageAccessException catch (error, stackTrace) {
     developer.log(
       'Unable to initialize global database storage',
