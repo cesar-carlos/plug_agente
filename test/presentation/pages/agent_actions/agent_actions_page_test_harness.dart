@@ -146,15 +146,11 @@ void drainPendingFlutterErrors(WidgetTester tester) {
 }
 
 Future<void> pumpUntilUiSettles(WidgetTester tester) async {
-  try {
-    await tester.pumpAndSettle(
-      const Duration(milliseconds: 50),
-      EnginePhase.sendSemanticsUpdate,
-      const Duration(seconds: 2),
-    );
-  } on FlutterError catch (error) {
-    if (!error.toString().contains('pumpAndSettle timed out')) {
-      rethrow;
+  const maxPumps = 20;
+  for (var i = 0; i < maxPumps; i++) {
+    await tester.pump(const Duration(milliseconds: 50));
+    if (!tester.binding.hasScheduledFrame) {
+      return;
     }
   }
 }
