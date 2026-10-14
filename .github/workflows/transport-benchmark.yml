@@ -16,7 +16,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           fetch-depth: 2
 
@@ -25,7 +25,7 @@ jobs:
         run: echo "TRANSPORT_BASE_REVISION=$(git rev-parse HEAD^)" >> "$GITHUB_ENV"
 
       - name: Checkout transport comparison
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           ref: ${{ env.TRANSPORT_BASE_REVISION }}
           path: transport-base
