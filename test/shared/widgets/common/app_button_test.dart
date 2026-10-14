@@ -1,7 +1,9 @@
 import 'package:fluent_ui/fluent_ui.dart';
 import 'package:flutter_test/flutter_test.dart';
-
+import 'package:plug_agente/l10n/app_localizations.dart';
 import 'package:plug_agente/shared/widgets/common/actions/app_button.dart';
+
+void _noop() {}
 
 void main() {
   group('AppButton', () {
@@ -149,13 +151,10 @@ void main() {
 
         // Assert
         expect(find.byType(ProgressRing), findsOneWidget);
-        expect(find.text('Submit'), findsNothing);
+        expect(find.text('Submit'), findsOneWidget);
       });
 
-      testWidgets('should NOT render label when isLoading is true', (
-        tester,
-      ) async {
-        // Act
+      testWidgets('keeps the label laid out while loading', (tester) async {
         await tester.pumpWidget(
           const FluentApp(
             home: ScaffoldPage(
@@ -167,14 +166,11 @@ void main() {
           ),
         );
 
-        // Assert
-        expect(find.text('Submit'), findsNothing);
+        expect(find.text('Submit'), findsOneWidget);
+        expect(find.byType(ProgressRing), findsOneWidget);
       });
 
-      testWidgets('should NOT render icon when isLoading is true', (
-        tester,
-      ) async {
-        // Act
+      testWidgets('keeps the icon laid out while loading', (tester) async {
         await tester.pumpWidget(
           const FluentApp(
             home: ScaffoldPage(
@@ -187,8 +183,8 @@ void main() {
           ),
         );
 
-        // Assert
-        expect(find.byType(Icon), findsNothing);
+        expect(find.byIcon(FluentIcons.add), findsOneWidget);
+        expect(find.byType(ProgressRing), findsOneWidget);
       });
 
       testWidgets('should disable button when isLoading is true', (
@@ -227,14 +223,7 @@ void main() {
         );
 
         // Assert
-        final sizedBox = tester.widget<SizedBox>(
-          find.descendant(
-            of: find.byType(FilledButton),
-            matching: find.byType(SizedBox),
-          ),
-        );
-        expect(sizedBox.width, 16);
-        expect(sizedBox.height, 16);
+        expect(tester.getSize(find.byType(ProgressRing)), const Size(16, 16));
       });
     });
 
@@ -318,6 +307,46 @@ void main() {
         );
 
         expect(find.bySemanticsLabel('Save, loading'), findsOneWidget);
+      });
+
+      testWidgets('uses the localized loading suffix', (tester) async {
+        await tester.pumpWidget(
+          const FluentApp(
+            locale: Locale('pt'),
+            localizationsDelegates: AppLocalizations.localizationsDelegates,
+            supportedLocales: AppLocalizations.supportedLocales,
+            home: ScaffoldPage(
+              content: AppButton(label: 'Salvar', isLoading: true),
+            ),
+          ),
+        );
+
+        expect(find.bySemanticsLabel('Salvar, carregando'), findsOneWidget);
+      });
+
+      testWidgets('keeps the idle width while loading', (tester) async {
+        const label = 'Submit action';
+
+        await tester.pumpWidget(
+          const FluentApp(
+            home: ScaffoldPage(
+              content: AppButton(label: label, onPressed: _noop),
+            ),
+          ),
+        );
+        await tester.pump();
+        final idle = tester.getSize(find.byType(FilledButton));
+
+        await tester.pumpWidget(
+          const FluentApp(
+            home: ScaffoldPage(
+              content: AppButton(label: label, isLoading: true, onPressed: _noop),
+            ),
+          ),
+        );
+        await tester.pump();
+
+        expect(tester.getSize(find.byType(FilledButton)), idle);
       });
 
       testWidgets('should use custom semanticsLabel when provided', (

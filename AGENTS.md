@@ -17,3 +17,12 @@ Carregue somente a rule tematica dona da tarefa. Se este arquivo e o indice dive
 - Nao copie o texto das rules para este arquivo. Mantenha a regra completa no arquivo dono e referencie-o.
 - Quando os temas se sobrepoem, siga o ownership definido em `rules_index.mdc`.
 - Em trabalho so de teste, leia `project_specifics.mdc` mesmo assim.
+
+## Persona-v2 SQL operations in progress
+
+See docs/communication/sql_operations.md. Journal, bootstrap/DI/shutdown, RPC and
+ODBC executor are integrated. Versioned SQL-operation negotiation and transport are
+implemented; explicit homologation opt-in is disabled by default. See the owning
+project_specifics rule and docs for limits and remaining acceptance. Never retry
+unknown operations. Production installer/appcast remain blocked; four-engine
+homologation and MCP publication/standard composition are still pending.

@@ -179,7 +179,7 @@ void main() {
     expect(repository.savedExecutions, isEmpty);
   });
 
-  test('blocks bundle transfer, run, and test while a local run is in progress', () async {
+  test('keeps other actions available while one local run is in progress', () async {
     repository.definitions['action-1'] = const AgentActionDefinition(
       id: 'action-1',
       name: 'Run command',
@@ -194,11 +194,15 @@ void main() {
     expect(provider.canTestSelected, isTrue);
 
     provider.executionsController.isRunning = true;
+    provider.executionsController.runningManualActionId = 'action-1';
 
-    expect(provider.hasBlockingLocalOperation, isTrue);
-    expect(provider.canTransferBundle, isFalse);
+    expect(provider.hasBlockingLocalOperation, isFalse);
+    expect(provider.canTransferBundle, isTrue);
     expect(provider.canRunSelected, isFalse);
-    expect(provider.canTestSelected, isFalse);
+    expect(provider.canTestSelected, isTrue);
+
+    provider.executionsController.runningManualActionId = 'other-action';
+    expect(provider.canRunSelected, isTrue);
 
     provider.executionsController.isRunning = false;
     provider.executionsController.isTesting = true;
@@ -1256,9 +1260,7 @@ void main() {
 
     const snapshotter = AgentActionDefinitionSnapshotter();
     final definition = provider.selectedDefinition!;
-    final preflightHash = snapshotter.snapshotHash(
-      definition.copyWith(state: AgentActionState.needsValidation),
-    );
+    final preflightHash = snapshotter.executionContentHash(definition);
     repository.definitions['action-1'] = definition.copyWith(
       lastPreflightSnapshotHash: preflightHash,
       lastPreflightValidatedAt: DateTime.utc(2020),
@@ -1766,6 +1768,14 @@ class _FakeAgentActionRepository implements IAgentActionRepository {
     definitions.remove(id);
     triggers.removeWhere((_, trigger) => trigger.actionId == id);
     return const Success(unit);
+  }
+
+  @override
+  Future<Result<bool>> updateTriggerRuntime(AgentActionTrigger expected, AgentActionTrigger updated) async {
+    final current = await getTrigger(expected.id);
+    if (current.isError() || !identical(current.getOrThrow(), expected)) return const Success(false);
+    final result = await saveTrigger(updated);
+    return result.fold((_) => const Success(true), Failure.new);
   }
 
   @override

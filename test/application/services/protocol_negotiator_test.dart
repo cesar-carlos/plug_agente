@@ -3,6 +3,7 @@ import 'package:plug_agente/application/services/protocol_negotiator.dart';
 import 'package:plug_agente/core/constants/protocol_version.dart';
 import 'package:plug_agente/core/constants/rpc_batch_negotiation.dart';
 import 'package:plug_agente/domain/protocol/protocol_capabilities.dart';
+import 'package:plug_agente/domain/protocol/sql_operation_capability.dart';
 import 'package:plug_agente/domain/protocol/transport_extension_negotiation.dart';
 
 void main() {
@@ -11,6 +12,44 @@ void main() {
 
     setUp(() {
       negotiator = ProtocolNegotiator();
+    });
+
+    test('SQL operation negotiation rejects incompatible/missing capabilities and intersects ceilings', () {
+      ProtocolCapabilities caps(Map<String, dynamic>? sql) =>
+          ProtocolCapabilities.defaultCapabilities(sqlOperations: sql);
+      const offer = SqlOperationCapability.advertisement;
+      for (final raw in [
+        null,
+        {...offer, 'enabled': false},
+        {...offer, 'version': 2},
+        {...offer, 'durableJournal': false},
+        {...offer, 'automaticReplay': true},
+        {...offer, 'maxSteps': 1.5},
+        {...offer, 'timeoutMs': 0},
+      ]) {
+        expect(
+          negotiator
+              .negotiate(agentCapabilities: caps(offer), serverCapabilities: caps(raw))
+              .negotiatedExtensions
+              .containsKey(SqlOperationCapability.key),
+          isFalse,
+        );
+        expect(
+          negotiator
+              .negotiate(agentCapabilities: caps(raw), serverCapabilities: caps(offer))
+              .negotiatedExtensions
+              .containsKey(SqlOperationCapability.key),
+          isFalse,
+        );
+      }
+      final config = negotiator.negotiate(
+        agentCapabilities: caps({...offer, 'maxSteps': 500}),
+        serverCapabilities: caps({...offer, 'timeoutMs': 1000}),
+      );
+      final sql = config.negotiatedExtensions[SqlOperationCapability.key] as Map;
+      expect(sql['maxSteps'], 32);
+      expect(sql['timeoutMs'], 1000);
+      expect(sql['automaticReplay'], isFalse);
     });
 
     test('should select jsonrpc-v2 when both support it and preferred', () {

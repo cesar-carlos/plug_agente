@@ -69,6 +69,8 @@ class AgentActionsDefinitionsController implements AgentActionsDefinitionsSaveHo
   bool usedDefaultDeveloperData7ConfigPath = false;
   @override
   String? lastOperationErrorMessage;
+  @override
+  Exception? lastOperationFailure;
 
   UnmodifiableListView<AgentActionDefinition>? definitionsViewCache;
   List<AgentActionDefinition>? filteredDefinitionsCache;
@@ -136,6 +138,15 @@ class AgentActionsDefinitionsController implements AgentActionsDefinitionsSaveHo
       selected,
       ...matched,
     ]);
+  }
+
+  bool definitionMatchesListFilter(AgentActionDefinition definition) {
+    return agentActionsMatchesDefinitionListFilter(
+      definition: definition,
+      typeFilter: definitionTypeFilter,
+      stateFilter: definitionStateFilter,
+      searchQuery: definitionSearchQuery,
+    );
   }
 
   void setDefinitionTypeFilter(AgentActionType? type) {
@@ -325,6 +336,7 @@ class AgentActionsDefinitionsController implements AgentActionsDefinitionsSaveHo
 
     isDeleting = true;
     lastOperationErrorMessage = null;
+    lastOperationFailure = null;
     _onStateChanged();
 
     final result = await _deleteDefinition(definition.id);
@@ -337,6 +349,7 @@ class AgentActionsDefinitionsController implements AgentActionsDefinitionsSaveHo
       },
       (failure) {
         errorMessage = _messageFor(failure);
+        lastOperationFailure = failure;
         lastOperationErrorMessage = errorMessage;
       },
     );
@@ -433,20 +446,97 @@ class AgentActionsDefinitionsController implements AgentActionsDefinitionsSaveHo
     }
   }
 
-  Future<String?> recordPreflightSuccess(AgentActionDefinition definition) async {
-    final preflightSnapshotHash = preflightContentSnapshotHash(definition);
-    final validatedAt = _now().toUtc();
-    sessionPreflightSnapshotHashes[definition.id] = preflightSnapshotHash;
-    sessionPreflightValidatedAt[definition.id] = validatedAt;
+  Future<String?> pauseDefinition(AgentActionDefinition definition) async {
+    if (definition.state == AgentActionState.paused) {
+      return null;
+    }
 
-    final result = await _saveDefinition(
-      definition.copyWith(
-        lastPreflightSnapshotHash: preflightSnapshotHash,
-        lastPreflightValidatedAt: validatedAt,
-      ),
-    );
+    lastOperationErrorMessage = null;
+    lastOperationFailure = null;
+    final current = existingDefinition(definition.id) ?? definition;
+    final result = await _saveDefinition(current.copyWith(state: AgentActionState.paused));
     return result.fold(
       (savedDefinition) {
+        definitions = definitions
+            .map((item) => item.id == savedDefinition.id ? savedDefinition : item)
+            .toList(growable: false);
+        invalidateCaches();
+        lastOperationErrorMessage = null;
+        lastOperationFailure = null;
+        _onStateChanged();
+        return null;
+      },
+      (failure) {
+        final message = _messageFor(failure);
+        lastOperationFailure = failure;
+        lastOperationErrorMessage = message;
+        _onStateChanged();
+        return message;
+      },
+    );
+  }
+
+  Future<String?> activateDefinition(AgentActionDefinition definition) async {
+    if (definition.state == AgentActionState.active || !isPreflightValidForDefinition(definition)) {
+      return null;
+    }
+
+    lastOperationErrorMessage = null;
+    lastOperationFailure = null;
+    final result = await _saveDefinition(definition.copyWith(state: AgentActionState.active));
+    return result.fold(
+      (savedDefinition) {
+        definitions = definitions
+            .map((item) => item.id == savedDefinition.id ? savedDefinition : item)
+            .toList(growable: false);
+        invalidateCaches();
+        lastOperationErrorMessage = null;
+        lastOperationFailure = null;
+        _onStateChanged();
+        return null;
+      },
+      (failure) {
+        final message = _messageFor(failure);
+        lastOperationFailure = failure;
+        lastOperationErrorMessage = message;
+        _onStateChanged();
+        return message;
+      },
+    );
+  }
+
+  Future<String?> recordPreflightSuccess(AgentActionDefinition definition) async {
+    final result = await _saveDefinition(definition, recordPreflight: true);
+    return result.fold(
+      (savedDefinition) {
+        final persistedHash = savedDefinition.lastPreflightSnapshotHash;
+        final persistedAt = savedDefinition.lastPreflightValidatedAt;
+        if (persistedHash == null || persistedHash.isEmpty || persistedAt == null) {
+          sessionPreflightSnapshotHashes.remove(savedDefinition.id);
+          sessionPreflightValidatedAt.remove(savedDefinition.id);
+          definitions = definitions
+              .map(
+                (item) => item.id == savedDefinition.id ? savedDefinition : item,
+              )
+              .toList(growable: false);
+          invalidateCaches();
+          final failure = ActionValidationFailure.withContext(
+            message: 'Action preflight was not recorded.',
+            code: AgentActionFailureCode.preflightRequiredForActive,
+            context: {
+              'action_id': savedDefinition.id,
+              'reason': 'preflight_not_recorded',
+              'user_message': 'O teste nao gravou a validacao. Execute "Testar acao" novamente.',
+            },
+          );
+          final message = _messageFor(failure);
+          lastOperationFailure = failure;
+          lastOperationErrorMessage = message;
+          _onStateChanged();
+          return message;
+        }
+        sessionPreflightSnapshotHashes[savedDefinition.id] = persistedHash;
+        sessionPreflightValidatedAt[savedDefinition.id] = persistedAt;
         definitions = definitions
             .map(
               (item) => item.id == savedDefinition.id ? savedDefinition : item,
@@ -459,6 +549,7 @@ class AgentActionsDefinitionsController implements AgentActionsDefinitionsSaveHo
       },
       (failure) {
         final message = _messageFor(failure);
+        lastOperationFailure = failure;
         lastOperationErrorMessage = message;
         _onStateChanged();
         return message;
@@ -472,8 +563,6 @@ class AgentActionsDefinitionsController implements AgentActionsDefinitionsSaveHo
   }
 
   String preflightContentSnapshotHash(AgentActionDefinition definition) {
-    return _definitionSnapshotter.snapshotHash(
-      definition.copyWith(state: AgentActionState.needsValidation),
-    );
+    return _definitionSnapshotter.executionContentHash(definition);
   }
 }

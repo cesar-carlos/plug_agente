@@ -5,7 +5,7 @@
 
 #include "constants.iss"
 #define MyAppName "Plug Agente"
-#define MyAppVersion "1.8.6"
+#define MyAppVersion "1.8.7"
 #ifndef MyAppWorkerVersion
   #if defined(SIGN_INSTALLER) || defined(ExternalSignedUninstallerDir)
     #error Signed installers require the exact MyAppWorkerVersion including build number
@@ -102,6 +102,18 @@ english.UpdaterDisableCritical=Critical error: automatic updates could not be sa
 brazilianportuguese.UpdaterDisableCritical=Erro grave: não foi possível desabilitar as atualizações automáticas com segurança. Verifique a política e as permissões do serviço antes de instalar novamente.
 english.UpdaterPreparationCritical=Critical error: the existing update service could not be safely prepared. Resolve the updater permissions or pending recovery before installing again.
 brazilianportuguese.UpdaterPreparationCritical=Erro grave: não foi possível preparar o serviço de atualização existente com segurança. Resolva as permissões do serviço ou a recuperação pendente antes de instalar novamente.
+english.UpdaterHostUpgradeRequired=The existing update service must be upgraded to use automatic updates.%n%nTo install manually without automatic updates, go back and clear "Update automatically".%n%nTo upgrade the service, close this installer, open PowerShell as administrator and run:%n%1%nKeep "Update automatically" selected.
+brazilianportuguese.UpdaterHostUpgradeRequired=O serviço de atualização existente precisa ser atualizado para usar atualizações automáticas.%n%nPara instalar manualmente sem atualizações automáticas, volte e desmarque "Atualizar automaticamente".%n%nPara atualizar o serviço, feche este instalador, abra o PowerShell como administrador e execute:%n%1%nMantenha "Atualizar automaticamente" selecionado.
+english.UpdaterHostChoiceTitle=The update service needs to be upgraded
+brazilianportuguese.UpdaterHostChoiceTitle=O serviço de atualização precisa ser atualizado
+english.UpdaterHostChoiceDescription=Choose how to continue this installation. Updating the service will stop and replace it, then enable automatic updates again.
+brazilianportuguese.UpdaterHostChoiceDescription=Escolha como continuar esta instalação. Atualizar o serviço irá pará-lo e substituí-lo, habilitando novamente as atualizações automáticas.
+english.UpdaterHostContinueManual=Continue without automatic updates
+brazilianportuguese.UpdaterHostContinueManual=Continuar sem atualização automática
+english.UpdaterHostContinueUpgrade=Update the service and continue
+brazilianportuguese.UpdaterHostContinueUpgrade=Atualizar o serviço e continuar
+english.UpdaterHostChoiceCancelled=Installation has not continued. Click Install to choose how to proceed, or Cancel to exit.
+brazilianportuguese.UpdaterHostChoiceCancelled=A instalação não continuou. Clique em Instalar para escolher como prosseguir ou em Cancelar para sair.
 english.UpdaterOperationCritical=Installation is blocked by an active update, pending recovery or an unavailable safety check. Finish the update or repair the updater service before trying again.
 brazilianportuguese.UpdaterOperationCritical=A instalação foi bloqueada por uma atualização em andamento, recuperação pendente ou falha na verificação de segurança. Conclua a atualização ou repare o serviço antes de tentar novamente.
 english.UpdaterAuthorizationSaveFailed=The updater was disabled, but its authorization status could not be saved in Windows.
@@ -174,7 +186,7 @@ brazilianportuguese.OptionalRepairCompleted=Reparo opcional e diagnósticos conc
 [Tasks]
 Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{cm:AdditionalIcons}"
 Name: "startup"; Description: "{cm:StartWithWindows}"; GroupDescription: "{cm:StartupOptionsGroup}"
-Name: "autoupdate"; Description: "{cm:AutomaticUpdate}"; GroupDescription: "{cm:UpdateOptionsGroup}"; Check: IsAdminInstallMode
+Name: "autoupdate"; Description: "{cm:AutomaticUpdate}"; GroupDescription: "{cm:UpdateOptionsGroup}"; Flags: unchecked; Check: IsAdminInstallMode
 
 #ifndef COMPILE_SCRIPT_ONLY
 #if !FileExists("..\build\windows\x64\runner\Release\msvcp140.dll") || !FileExists("..\build\windows\x64\runner\Release\vcruntime140.dll") || !FileExists("..\build\windows\x64\runner\Release\vcruntime140_1.dll")
@@ -344,8 +356,10 @@ begin
         RecoverUpdaterEnrollmentFailure(ClientPath, 'Could not save Authorized=1 in the updater registry key.');
     end;
   end
-  else if not WizardSilent() and FileExists(ClientPath) then
+  else if not WizardSilent() and UpdaterWasPresent then
   begin
+    ExtractTemporaryFile('plug_update_client.exe');
+    ClientPath := ExpandConstant('{tmp}\plug_update_client.exe');
     if not RunDependencyCommand(ClientPath, '--revoke', Details) then
       RecordInstallationIssue(ifUpdaterSafety, 'updater_revocation_failed', 'PlugAgenteUpdater',
         CustomMessage('UpdaterDisableCritical'), CustomMessage('UpdaterAuthorizationRepairAction'), Details);
@@ -567,14 +581,41 @@ begin
     WizardForm.FinishedLabel.Caption := CustomMessage('OptionalRepairCompleted');
 end;
 
+function PrepareUpdaterHostUpgrade(var Details: String): Boolean;
+begin
+  Result := False;
+  if not CanAdministrativelyUpgradeUpdaterHost(IsAdminInstallMode,
+    ExpandConstant('{param:UPDATERSERVICE|0}') = '1', WantsAutomaticUpdates()) then
+  begin
+    Details := 'Administrative updater authorization required';
+    Exit;
+  end;
+  UpdaterHostUpgradeAuthorized := True;
+  if not StoreUpdaterAuthorization(0) then
+  begin
+    Details := 'Could not save Authorized=0 before host upgrade';
+    Exit;
+  end;
+  try
+    ExtractTemporaryFile('plug_update_client.exe');
+    Result := RunDependencyCommand(ExpandConstant('{tmp}\plug_update_client.exe'), '--prepare-host-upgrade', Details);
+  except
+    Details := GetExceptionMessage;
+  end;
+  if Result then
+    UpdaterHostNeeded := True;
+end;
+
 function PrepareToInstall(var NeedsRestart: Boolean): String;
 var
-  Details, SettingsPath: String;
+  Details, SettingsPath, InstallerPath: String;
   Prepared: Boolean;
+  Choice: Integer;
 begin
   Result := '';
   NeedsRestart := False;
   CriticalInstallationError := False;
+  UpdaterHostUpgradeAuthorized := False;
   if UpdaterWasPresent or (ExpandConstant('{param:UPDATERSERVICE|0}') = '1') then
   begin
     Prepared := False;
@@ -608,37 +649,14 @@ begin
   end;
   UpdaterHostNeeded := WantsAutomaticUpdates() and not UpdaterExists();
   UpdaterClientNeeded := WantsAutomaticUpdates() and not FileExists(ExpandConstant('{commonpf}\PlugAgenteUpdater\plug_update_client.exe'));
-  if ExpandConstant('{param:UPGRADEUPDATERHOST|0}') = '1' then
+  if (ExpandConstant('{param:UPGRADEUPDATERHOST|0}') = '1') and WantsAutomaticUpdates() then
   begin
-    if not CanAdministrativelyUpgradeUpdaterHost(IsAdminInstallMode,
-      ExpandConstant('{param:UPDATERSERVICE|0}') = '1', WantsAutomaticUpdates()) then
+    if not PrepareUpdaterHostUpgrade(Details) then
     begin
-      Result := CustomMessage('UpdaterPreparationCritical');
-      RegisterCriticalInstallationError(Result);
-      Exit;
-    end;
-    UpdaterHostUpgradeAuthorized := True;
-    if not StoreUpdaterAuthorization(0) then
-    begin
-      Result := CustomMessage('UpdaterPreparationCritical');
-      RegisterCriticalInstallationError(Result);
-      Exit;
-    end;
-    try
-      ExtractTemporaryFile('plug_update_client.exe');
-      Prepared := RunDependencyCommand(ExpandConstant('{tmp}\plug_update_client.exe'), '--prepare-host-upgrade', Details);
-    except
-      Prepared := False;
-      Details := GetExceptionMessage;
-    end;
-    if not Prepared then
-    begin
-      StoreUpdaterAuthorization(0);
       Result := CustomMessage('UpdaterPreparationCritical') + #13#10 + Details;
       RegisterCriticalInstallationError(Result);
       Exit;
     end;
-    UpdaterHostNeeded := True;
   end;
   if WantsAutomaticUpdates() and UpdaterExists() and not UpdaterHostNeeded then
   begin
@@ -651,8 +669,40 @@ begin
     end;
     if not Prepared then
     begin
+      if (Pos('"host_upgrade_required"', Details) > 0) and not WizardSilent() and
+        CanAdministrativelyUpgradeUpdaterHost(IsAdminInstallMode,
+          ExpandConstant('{param:UPDATERSERVICE|0}') = '1', WantsAutomaticUpdates()) then
+      begin
+        Choice := TaskDialogMsgBox(CustomMessage('UpdaterHostChoiceTitle'),
+          CustomMessage('UpdaterHostChoiceDescription'), mbConfirmation,
+          MB_YESNOCANCEL or MB_DEFBUTTON1, [CustomMessage('UpdaterHostContinueManual'), CustomMessage('UpdaterHostContinueUpgrade')], IDNO);
+        case Choice of
+          IDYES:
+            begin
+              WizardSelectTasks('!autoupdate');
+              UpdaterClientNeeded := False;
+              Prepared := True;
+            end;
+          IDNO: Prepared := PrepareUpdaterHostUpgrade(Details);
+        else
+          begin
+            Result := CustomMessage('UpdaterHostChoiceCancelled');
+            Exit;
+          end;
+        end;
+      end;
+    end;
+    if not Prepared then
+    begin
       StoreUpdaterAuthorization(0);
-      Result := CustomMessage('UpdaterPreparationCritical') + #13#10 + Details + #13#10 + '/UPGRADEUPDATERHOST=1';
+      if Pos('"host_upgrade_required"', Details) > 0 then
+      begin
+        InstallerPath := ExpandConstant('{srcexe}');
+        StringChangeEx(InstallerPath, #39, #39 + #39, True);
+        Result := FmtMessage(CustomMessage('UpdaterHostUpgradeRequired'), ['& ' + #39 + InstallerPath + #39 + ' /UPGRADEUPDATERHOST=1']);
+      end
+      else
+        Result := CustomMessage('UpdaterPreparationCritical') + #13#10 + Details;
       RegisterCriticalInstallationError(Result);
       Exit;
     end;

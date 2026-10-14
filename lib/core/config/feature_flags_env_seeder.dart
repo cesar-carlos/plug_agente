@@ -17,6 +17,7 @@ class FeatureFlagsEnvSeeder {
   /// `ENABLE_SOCKET_BACKPRESSURE` is opt-in (default false) for backward
   /// compatibility; set to `true` in `.env` to seed backpressure on first boot.
   static const Map<String, String> _envBoolAliases = <String, String>{
+    'ENABLE_SQL_OPERATIONS': 'feature_enable_sql_operations',
     'ENABLE_SOCKET_BACKPRESSURE': 'feature_enable_socket_backpressure',
     'ENABLE_SOCKET_IDEMPOTENCY': 'feature_enable_socket_idempotency',
     'ENABLE_SOCKET_REVOKED_TOKEN_IN_SESSION': 'feature_enable_socket_revoked_token_in_session',

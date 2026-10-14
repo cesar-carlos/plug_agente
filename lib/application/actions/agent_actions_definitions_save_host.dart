@@ -9,6 +9,9 @@ abstract interface class AgentActionsDefinitionsSaveHost {
   String? get lastOperationErrorMessage;
   set lastOperationErrorMessage(String? value);
 
+  Exception? get lastOperationFailure;
+  set lastOperationFailure(Exception? value);
+
   String? get selectedActionId;
   set selectedActionId(String? value);
 

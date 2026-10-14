@@ -155,6 +155,32 @@ void main() {
       expect(result.exceptionOrNull(), isA<ActionNotFoundFailure>());
     });
 
+    test('runtime updates preserve edits and never recreate deleted triggers', () async {
+      await repository.saveDefinition(_buildMinimalDefinition('action-1'));
+      final original = (await repository.saveTrigger(
+        const AgentActionTrigger(
+          id: 'runtime-trigger',
+          actionId: 'action-1',
+          type: AgentActionTriggerType.daily,
+          schedule: AgentActionTriggerSchedule(timeOfDayMinutes: 60),
+        ),
+      )).getOrThrow();
+      final runAt = DateTime.utc(2026, 10, 14, 12);
+      final updated = original.copyWith(lastRunAt: runAt);
+      expect((await repository.updateTriggerRuntime(original, updated)).getOrThrow(), isTrue);
+      final fresh = (await repository.getTrigger(original.id)).getOrThrow();
+      expect(fresh.lastRunAt!.isAtSameMomentAs(runAt), isTrue);
+      expect((await repository.updateTriggerRuntime(original, updated)).getOrThrow(), isFalse);
+      await repository.saveTrigger(fresh.copyWith(isEnabled: false, name: 'Edited'));
+      expect((await repository.updateTriggerRuntime(fresh, fresh.copyWith(lastRunAt: runAt))).getOrThrow(), isFalse);
+      final edited = (await repository.getTrigger(original.id)).getOrThrow();
+      expect(edited.isEnabled, isFalse);
+      expect(edited.name, 'Edited');
+      await repository.deleteTrigger(original.id);
+      expect((await repository.updateTriggerRuntime(edited, updated)).getOrThrow(), isFalse);
+      expect((await repository.getTrigger(original.id)).exceptionOrNull(), isA<ActionNotFoundFailure>());
+    });
+
     test('should save, list and delete action triggers', () async {
       // Trigger.actionId now has an FK to agent_action_definition_table; the
       // parent row must exist before the trigger can be inserted.

@@ -11,6 +11,8 @@
   "agentActionsRunSelected": "Run selected",
   "agentActionsMoreActions": "More actions",
   "agentActionsTestSelected": "Test action",
+  "agentActionsTestSelectedTooltip": "Checks the path and interpreter without running the task. Execution is available after activation.",
+  "agentActionsActivateSelected": "Activate",
   "agentActionsCancelExecution": "Cancel execution",
   "agentActionsDeleteSelected": "Delete action",
   "agentActionsDeleteConfirmTitle": "Delete action",
@@ -372,6 +374,8 @@
   "agentActionsRiskLeaveProcessRunning": "Leaves process running",
   "agentActionsRiskUnsupportedType": "Unsupported editor",
   "agentActionsRiskNeedsValidation": "Needs validation",
+  "agentActionsRiskReadyForActivation": "Ready to activate",
+  "agentActionsRiskOutsideFilter": "Outside filter",
   "agentActionsRiskSecretPlaceholders": "Uses secrets",
   "agentActionsNeedsValidationTitle": "Validation required",
   "agentActionsNeedsValidationMessage": "Test this action locally before running or enabling remote execution.",
@@ -471,6 +475,7 @@
     }
   },
   "agentActionsQueueActiveIndicator": "{pending} pending · {running} running in queue",
+  "agentActionsQueueActiveIndicatorWithNames": "{pending} pending · {running} running: {names}",
   "@agentActionsQueueActiveIndicator": {
     "placeholders": {
       "pending": {
@@ -478,6 +483,19 @@
       },
       "running": {
         "type": "int"
+      }
+    }
+  },
+  "@agentActionsQueueActiveIndicatorWithNames": {
+    "placeholders": {
+      "pending": {
+        "type": "int"
+      },
+      "running": {
+        "type": "int"
+      },
+      "names": {
+        "type": "String"
       }
     }
   },
@@ -771,7 +789,7 @@
   "agentActionsTriggerHintIgnoreMissedRuns": "Turn off to run schedules that were missed while the app was closed, when the trigger type supports catch-up.",
   "agentActionsTriggerValidationTitle": "Check the trigger fields",
   "agentActionsTriggerValidationInvalidStartAt": "Enter a valid start date and time.",
-  "agentActionsTriggerValidationInvalidIntervalMinutes": "Enter a positive whole number of minutes.",
+  "agentActionsTriggerValidationInvalidIntervalMinutes": "Enter a positive interval in minutes; fractions are allowed.",
   "agentActionsTriggerValidationInvalidTimeOfDay": "Enter the time as HH:mm using a 24-hour clock.",
   "agentActionsTriggerValidationWeekdaysRequired": "Select at least one weekday.",
   "agentActionsTriggerValidationInvalidDayOfMonth": "Enter a day of month between 1 and 31.",
@@ -2018,6 +2036,10 @@
   "formPasswordDefaultHint": "Enter password",
   "formPasswordShow": "Show password",
   "formPasswordHide": "Hide password",
+  "buttonLoadingSemanticsSuffix": ", loading",
+  "@buttonLoadingSemanticsSuffix": {
+    "description": "Screen reader suffix appended to a button label while its action is in progress."
+  },
   "formPasswordRequired": "{fieldLabel} is required.",
   "@formPasswordRequired": {
     "placeholders": {
@@ -2086,9 +2108,25 @@
   "agentActionsEditorSchedule": "When to run",
   "agentActionsEditorLimits": "Limits and shutdown",
   "agentActionsEditorAdvanced": "Advanced settings",
+  "agentActionsEditorIdentityTab": "Identity",
+  "agentActionsEditorTargetTab": "Run",
+  "agentActionsEditorScheduleTab": "Schedule",
+  "agentActionsEditorLimitsTab": "Limits",
+  "agentActionsEditorAdvancedTab": "Advanced",
+  "agentActionsEditorNotificationsTab": "Notifications",
   "agentActionsEditorAdvancedSummary": "Context, environment, permissions, queue, output and remote access",
   "agentActionsEditorRequiredHint": "Required",
   "agentActionsEditorOptionalHint": "Optional",
+  "pagedViewPrevious": "Previous",
+  "pagedViewNext": "Next",
+  "pagedViewPosition": "{current} of {total}",
+  "@pagedViewPosition": {
+    "description": "Position of the current page in a paged surface.",
+    "placeholders": {
+      "current": {"type": "int"},
+      "total": {"type": "int"}
+    }
+  },
   "agentActionsEditorNameHint": "E.g. Update inventory",
   "agentActionsEditorDescriptionHint": "Describe the purpose of this action and when to use it.",
   "agentActionsEditorActivationSteps": "Save the action, use Test action to validate it, then change its state to Active. Validation checks the configuration without running the task.",
@@ -2134,5 +2172,34 @@
     }
   },
   "ctPolicyInvalid": "Invalid policy",
-  "ctPolicyInvalidRecovery": "Some tokens have an invalid saved policy and cannot authorize access. Revoke or delete the marked tokens, then create replacements with the required permissions."
+  "ctPolicyInvalidRecovery": "Some tokens have an invalid saved policy and cannot authorize access. Revoke or delete the marked tokens, then create replacements with the required permissions.",
+  "triggerInvalidTimezone": "Enter a valid IANA time zone.",
+  "triggerRearmRequired": "Confirm rescheduling to run again.",
+  "triggerRearm": "Reschedule the one-time run for the new date",
+  "triggerCategory": "Trigger category",
+  "triggerDemand": "On demand",
+  "triggerSchedule": "Schedule",
+  "triggerApplication": "Application",
+  "triggerResult": "Another action’s result",
+  "triggerManualDescription": "Runs when you start the action manually.",
+  "triggerRemoteDescription": "Accepts remote requests, subject to action authorization.",
+  "triggerOnceDescription": "Runs once at the specified date and time.",
+  "triggerIntervalDescription": "Repeats in minutes. Fractions are accepted: 1.5 means 90 seconds.",
+  "triggerDailyDescription": "Runs every day at the selected time.",
+  "triggerWeeklyDescription": "Runs on the selected weekdays.",
+  "triggerMonthlyDescription": "Runs on the chosen day; months without that day are skipped.",
+  "triggerStartDescription": "Runs when the application starts.",
+  "triggerCloseDescription": "Runs when the application closes, subject to shutdown limits.",
+  "triggerSuccessDescription": "Runs after another action succeeds.",
+  "triggerFailureDescription": "Runs after another action fails or times out.",
+  "triggerPickDateTime": "Choose date and time",
+  "triggerPickTime": "Choose time",
+  "triggerLocalDates": "Start and end dates use the computer’s local time zone.",
+  "triggerLocalTime": "Time in the computer’s local time zone",
+  "triggerNoFutureRun": "This trigger has no future run. Review its dates or rescheduling.",
+  "triggerPreviewIncomplete": "Enter a valid schedule to see the next run.",
+  "triggerPreviewDisabled": "Disabled trigger: no run will be scheduled.",
+  "triggerPreviewLocal": "Preview in the computer’s local time zone",
+  "triggerPreviewCatchUp": "Missed run: it may start as soon as the trigger is saved.",
+  "triggerApply": "Apply"
 }

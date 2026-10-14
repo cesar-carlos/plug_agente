@@ -620,9 +620,14 @@ void main() {
         state: AgentActionState.needsValidation,
       );
       controller.replaceDefinitions([definition]);
-      when(() => saveDefinition(any())).thenAnswer((invocation) async {
+      when(() => saveDefinition(any(), recordPreflight: true)).thenAnswer((invocation) async {
         final updated = invocation.positionalArguments.first as AgentActionDefinition;
-        return Success(updated.copyWith(state: AgentActionState.active));
+        return Success(
+          updated.copyWith(
+            lastPreflightSnapshotHash: 'sha256:recorded',
+            lastPreflightValidatedAt: fixedNow,
+          ),
+        );
       });
       stateChangeCount = 0;
 
@@ -630,9 +635,9 @@ void main() {
 
       expect(errorMessage, isNull);
       expect(controller.lastOperationErrorMessage, isNull);
-      expect(controller.sessionPreflightSnapshotHashes[definition.id], isNotNull);
+      expect(controller.sessionPreflightSnapshotHashes[definition.id], 'sha256:recorded');
       expect(controller.sessionPreflightValidatedAt[definition.id], fixedNow);
-      expect(controller.definitions.single.state, AgentActionState.active);
+      expect(controller.definitions.single.lastPreflightSnapshotHash, 'sha256:recorded');
       expect(stateChangeCount, greaterThanOrEqualTo(1));
     });
 
@@ -640,7 +645,7 @@ void main() {
       final definition = definitionWithValidPreflight();
       controller.replaceDefinitions([definition]);
       final failure = ActionValidationFailure('Unable to persist preflight result.');
-      when(() => saveDefinition(any())).thenAnswer((_) async => Failure(failure));
+      when(() => saveDefinition(any(), recordPreflight: true)).thenAnswer((_) async => Failure(failure));
       stateChangeCount = 0;
 
       final errorMessage = await controller.recordPreflightSuccess(definition);
@@ -648,6 +653,7 @@ void main() {
       expect(errorMessage, failure.toString());
       expect(controller.lastOperationErrorMessage, failure.toString());
       expect(controller.definitions.single.state, AgentActionState.active);
+      expect(controller.sessionPreflightSnapshotHashes, isEmpty);
       expect(stateChangeCount, greaterThanOrEqualTo(1));
     });
 

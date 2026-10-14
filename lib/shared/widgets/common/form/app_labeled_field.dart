@@ -15,6 +15,7 @@ class AppLabeledField extends StatelessWidget {
     this.helpButtonKey,
     this.reserveHelpAffordance = false,
     this.helperText,
+    this.labelMinLines = 1,
   });
 
   final String label;
@@ -26,6 +27,7 @@ class AppLabeledField extends StatelessWidget {
   final Key? helpButtonKey;
   final bool reserveHelpAffordance;
   final String? helperText;
+  final int labelMinLines;
 
   bool get _hasHelp {
     return (helpTitle?.trim().isNotEmpty ?? false) && (helpMessage?.trim().isNotEmpty ?? false);
@@ -82,12 +84,7 @@ class AppLabeledField extends StatelessWidget {
         children: [
           Row(
             children: [
-              Expanded(
-                child: Text(
-                  label,
-                  style: context.bodyStrong,
-                ),
-              ),
+              Expanded(child: _labelText(context, context.bodyStrong)),
               const SizedBox(width: AppSpacing.xs),
               const SizedBox.square(dimension: 24),
             ],
@@ -104,11 +101,9 @@ class AppLabeledField extends StatelessWidget {
       children: [
         LayoutBuilder(
           builder: (context, constraints) {
-            final labelText = Text(
-              label,
-              style: context.bodyStrong,
-            );
+            final labelText = _labelText(context, context.bodyStrong);
             return Row(
+              crossAxisAlignment: labelMinLines > 1 ? CrossAxisAlignment.end : CrossAxisAlignment.center,
               children: [
                 if (constraints.maxWidth.isFinite) Expanded(child: labelText) else Flexible(child: labelText),
                 const SizedBox(width: AppSpacing.xs),
@@ -126,6 +121,28 @@ class AppLabeledField extends StatelessWidget {
         const SizedBox(height: AppSpacing.xs),
         content,
       ],
+    );
+  }
+
+  Widget _labelText(BuildContext context, TextStyle style) {
+    final text = Text(
+      label,
+      style: style,
+      maxLines: labelMinLines > 1 ? labelMinLines : null,
+    );
+    if (labelMinLines <= 1) {
+      return text;
+    }
+
+    final fontSize = style.fontSize ?? 14;
+    final lineHeight = fontSize * (style.height ?? 1);
+    final scaledLineHeight = MediaQuery.textScalerOf(context).scale(lineHeight);
+    return SizedBox(
+      height: scaledLineHeight * labelMinLines,
+      child: Align(
+        alignment: Alignment.bottomLeft,
+        child: text,
+      ),
     );
   }
 }

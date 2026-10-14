@@ -2,17 +2,21 @@ import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:fluent_ui/fluent_ui.dart';
+import 'package:plug_agente/application/actions/action_trigger_schedule_calculator.dart';
 import 'package:plug_agente/core/theme/theme.dart';
 import 'package:plug_agente/domain/actions/actions.dart';
 import 'package:plug_agente/l10n/app_localizations.dart';
 import 'package:plug_agente/presentation/providers/agent_actions_provider.dart';
 import 'package:plug_agente/presentation/widgets/agent_actions/agent_action_confirmations.dart';
+import 'package:plug_agente/presentation/widgets/agent_actions/agent_action_trigger_datetime_field.dart';
 import 'package:plug_agente/presentation/widgets/agent_actions/agent_action_trigger_save_coordinator.dart';
 import 'package:plug_agente/presentation/widgets/agent_actions/agent_action_trigger_save_form_state.dart';
+import 'package:plug_agente/presentation/widgets/agent_actions/agent_action_trigger_type_field.dart';
 import 'package:plug_agente/presentation/widgets/agent_actions/agent_actions_select_builder.dart';
 import 'package:plug_agente/presentation/widgets/agent_actions/iana_timezone_id_field.dart';
 import 'package:plug_agente/shared/widgets/common/feedback/app_dialog_title_bar.dart';
 import 'package:plug_agente/shared/widgets/common/form/app_dropdown.dart';
+import 'package:plug_agente/shared/widgets/common/form/app_form_feedback_scope.dart';
 import 'package:plug_agente/shared/widgets/common/form/app_text_field.dart';
 
 abstract final class _AgentActionTriggerDialogKeys {
@@ -66,6 +70,11 @@ class _AgentActionTriggerSaveDialogState extends State<AgentActionTriggerSaveDia
   static const double _dialogChromeHeight = 180;
   static const double _twoColumnBreakpoint = 640;
 
+  bool _submitted = false;
+  int _focusRequest = 0;
+  final GlobalKey _errorKey = GlobalKey();
+  final GlobalKey _selectionErrorKey = GlobalKey();
+  final _selectionFocus = FocusNode();
   late final AgentActionTriggerSaveFormState _formState;
   late final AgentActionTriggerSaveCoordinator _saveCoordinator;
 
@@ -73,6 +82,9 @@ class _AgentActionTriggerSaveDialogState extends State<AgentActionTriggerSaveDia
   void initState() {
     super.initState();
     _formState = AgentActionTriggerSaveFormState(existing: widget.existing);
+    for (final controller in _formState.controllers) {
+      controller.addListener(_onFormChanged);
+    }
     _saveCoordinator = AgentActionTriggerSaveCoordinator(
       formState: _formState,
       provider: widget.provider,
@@ -84,8 +96,16 @@ class _AgentActionTriggerSaveDialogState extends State<AgentActionTriggerSaveDia
 
   @override
   void dispose() {
+    for (final controller in _formState.controllers) {
+      controller.removeListener(_onFormChanged);
+    }
+    _selectionFocus.dispose();
     _formState.dispose();
     super.dispose();
+  }
+
+  void _onFormChanged() {
+    if (mounted) setState(() {});
   }
 
   AgentActionDefinition? get _actionDefinition =>
@@ -107,6 +127,7 @@ class _AgentActionTriggerSaveDialogState extends State<AgentActionTriggerSaveDia
   }
 
   Future<void> _handleSave() async {
+    setState(() => _submitted = true);
     final ok = await _saveCoordinator.save();
     if (!mounted) {
       return;
@@ -115,7 +136,19 @@ class _AgentActionTriggerSaveDialogState extends State<AgentActionTriggerSaveDia
     if (ok) {
       Navigator.of(context).pop();
     } else {
-      setState(() {});
+      setState(() => _focusRequest++);
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        final target = _formState.selectionError != null
+            ? _selectionErrorKey.currentContext
+            : _formState.fieldErrors.isEmpty
+            ? _errorKey.currentContext
+            : null;
+        if (target != null) {
+          Scrollable.ensureVisible(target, alignment: 0.2);
+          if (_formState.selectionError != null) _selectionFocus.requestFocus();
+        }
+      });
     }
   }
 
@@ -174,7 +207,7 @@ class _AgentActionTriggerSaveDialogState extends State<AgentActionTriggerSaveDia
       children.add(field);
     }
 
-    if (_formState.parseError != null) {
+    if (_submitted && _formState.parseError != null) {
       addField(
         InfoBar(
           title: Text(l10n.agentActionsTriggerValidationTitle),
@@ -188,6 +221,7 @@ class _AgentActionTriggerSaveDialogState extends State<AgentActionTriggerSaveDia
     if (remoteError != null) {
       addField(
         InfoBar(
+          key: _errorKey,
           title: Text(l10n.agentActionsErrorTitle),
           content: Text(remoteError),
           severity: InfoBarSeverity.error,
@@ -216,28 +250,11 @@ class _AgentActionTriggerSaveDialogState extends State<AgentActionTriggerSaveDia
       ),
     );
     addField(
-      AppDropdown<AgentActionTriggerType>(
-        label: l10n.agentActionsTriggerFieldType,
+      AgentActionTriggerTypeField(
         value: _formState.type,
-        items: AgentActionTriggerType.values
-            .where((type) => (_actionDefinition?.type.supportsTrigger(type) ?? true) || type == _formState.type)
-            .map(
-              (value) => ComboBoxItem<AgentActionTriggerType>(
-                value: value,
-                enabled: _actionDefinition?.type.supportsTrigger(value) ?? true,
-                child: Text(_triggerTypeLabel(value, l10n)),
-              ),
-            )
-            .toList(growable: false),
-        onChanged: provider.isSavingTrigger
-            ? null
-            : (value) {
-                if (value == null) {
-                  return;
-                }
-
-                unawaited(_onTriggerTypeChanged(value));
-              },
+        supports: (type) => _actionDefinition?.type.supportsTrigger(type) ?? true,
+        labelFor: (type) => _triggerTypeLabel(type, l10n),
+        onChanged: provider.isSavingTrigger ? null : (type) => unawaited(_onTriggerTypeChanged(type)),
       ),
     );
 
@@ -299,7 +316,64 @@ class _AgentActionTriggerSaveDialogState extends State<AgentActionTriggerSaveDia
       );
     }
 
+    if (_formState.type == AgentActionTriggerType.once && widget.existing?.lastScheduledAt != null) {
+      addField(
+        _selectionFeedback(
+          'rearm',
+          Checkbox(
+            checked: _formState.rearmOnce,
+            content: Text(l10n.triggerRearm),
+            onChanged: provider.isSavingTrigger
+                ? null
+                : (value) => setState(() => _formState.rearmOnce = value ?? false),
+          ),
+        ),
+      );
+    }
+    if (_formState.supportsMissedRunPolicy) {
+      addField(Text(l10n.triggerLocalDates, style: context.bodyMuted));
+      addField(_buildPreview(l10n));
+    }
     return children;
+  }
+
+  Widget _selectionFeedback(String key, Widget child) {
+    if (!_submitted || _formState.selectionErrorKey != key) return child;
+    return Focus(
+      key: _selectionErrorKey,
+      focusNode: _selectionFocus,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          child,
+          Text(_formState.selectionError!, style: TextStyle(color: Colors.red)),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildPreview(AppLocalizations l10n) {
+    final built = _formState.buildTrigger(l10n: l10n, actionId: widget.actionId, existing: widget.existing);
+    var text = l10n.triggerPreviewIncomplete;
+    final trigger = built.trigger;
+    if (!_formState.isEnabled) {
+      text = l10n.triggerPreviewDisabled;
+    } else if (trigger != null) {
+      final now = DateTime.now();
+      final decision = const AgentActionTriggerScheduleCalculator().nextRun(trigger: trigger, now: now);
+      final next = decision.getOrNull()?.nextRunAt;
+      text = next == null
+          ? l10n.triggerNoFutureRun
+          : next.isBefore(now)
+          ? l10n.triggerPreviewCatchUp
+          : l10n.agentActionsTriggerNextRun(AgentActionTriggerSaveFormState.formatDateTimeForField(next));
+    }
+    return InfoBar(
+      key: const ValueKey('trigger_schedule_preview'),
+      title: Text(text),
+      content: Text(l10n.triggerPreviewLocal),
+      isLong: true,
+    );
   }
 
   List<Widget> _buildScheduleFields({
@@ -309,6 +383,12 @@ class _AgentActionTriggerSaveDialogState extends State<AgentActionTriggerSaveDia
   }) {
     final enabled = !provider.isSavingTrigger;
     final fields = <Widget>[];
+    if (_formState.type == AgentActionTriggerType.daily ||
+        _formState.type == AgentActionTriggerType.weekly ||
+        _formState.type == AgentActionTriggerType.monthly) {
+      final timezone = _formState.timezoneController.text.trim();
+      fields.add(Text(timezone.isEmpty ? l10n.triggerLocalTime : l10n.agentActionsTriggerSummaryTimeZone(timezone)));
+    }
 
     switch (_formState.type) {
       case AgentActionTriggerType.manual:
@@ -323,6 +403,7 @@ class _AgentActionTriggerSaveDialogState extends State<AgentActionTriggerSaveDia
         return [
           AppDropdown<String>(
             label: l10n.agentActionsTriggerSourceAction,
+            feedbackKey: _formState.sourceActionIdController,
             value: source.isEmpty ? null : source,
             items: [
               for (final definition in definitions) ComboBoxItem(value: definition.id, child: Text(definition.name)),
@@ -340,13 +421,13 @@ class _AgentActionTriggerSaveDialogState extends State<AgentActionTriggerSaveDia
         fields.add(
           _fieldPair(
             useTwoColumns: useTwoColumns,
-            first: AppTextField(
+            first: AgentActionTriggerDateTimeField(
               controller: _formState.startAtController,
               label: l10n.agentActionsTriggerFieldStartAt,
               enabled: enabled,
               hint: l10n.agentActionsTriggerHintDateTime,
             ),
-            second: AppTextField(
+            second: AgentActionTriggerDateTimeField(
               controller: _formState.endAtController,
               label: l10n.agentActionsTriggerFieldEndAtOptional,
               enabled: enabled,
@@ -364,7 +445,7 @@ class _AgentActionTriggerSaveDialogState extends State<AgentActionTriggerSaveDia
                 label: l10n.agentActionsTriggerFieldIntervalMinutes,
                 enabled: enabled,
               ),
-              second: AppTextField(
+              second: AgentActionTriggerDateTimeField(
                 controller: _formState.startAtController,
                 label: l10n.agentActionsTriggerFieldStartAtOptional,
                 enabled: enabled,
@@ -373,7 +454,7 @@ class _AgentActionTriggerSaveDialogState extends State<AgentActionTriggerSaveDia
             ),
           )
           ..add(
-            AppTextField(
+            AgentActionTriggerDateTimeField(
               controller: _formState.endAtController,
               label: l10n.agentActionsTriggerFieldEndAtOptional,
               enabled: enabled,
@@ -385,13 +466,14 @@ class _AgentActionTriggerSaveDialogState extends State<AgentActionTriggerSaveDia
           ..add(
             _fieldPair(
               useTwoColumns: useTwoColumns,
-              first: AppTextField(
+              first: AgentActionTriggerDateTimeField(
+                timeOnly: true,
                 controller: _formState.timeOfDayController,
                 label: l10n.agentActionsTriggerFieldTimeOfDay,
                 enabled: enabled,
                 hint: l10n.agentActionsTriggerHintTimeOfDay,
               ),
-              second: AppTextField(
+              second: AgentActionTriggerDateTimeField(
                 controller: _formState.startAtController,
                 label: l10n.agentActionsTriggerFieldStartAtOptional,
                 enabled: enabled,
@@ -400,7 +482,7 @@ class _AgentActionTriggerSaveDialogState extends State<AgentActionTriggerSaveDia
             ),
           )
           ..add(
-            AppTextField(
+            AgentActionTriggerDateTimeField(
               controller: _formState.endAtController,
               label: l10n.agentActionsTriggerFieldEndAtOptional,
               enabled: enabled,
@@ -419,13 +501,14 @@ class _AgentActionTriggerSaveDialogState extends State<AgentActionTriggerSaveDia
           ..add(
             _fieldPair(
               useTwoColumns: useTwoColumns,
-              first: AppTextField(
+              first: AgentActionTriggerDateTimeField(
+                timeOnly: true,
                 controller: _formState.timeOfDayController,
                 label: l10n.agentActionsTriggerFieldTimeOfDay,
                 enabled: enabled,
                 hint: l10n.agentActionsTriggerHintTimeOfDay,
               ),
-              second: AppTextField(
+              second: AgentActionTriggerDateTimeField(
                 controller: _formState.startAtController,
                 label: l10n.agentActionsTriggerFieldStartAtOptional,
                 enabled: enabled,
@@ -433,9 +516,9 @@ class _AgentActionTriggerSaveDialogState extends State<AgentActionTriggerSaveDia
               ),
             ),
           )
-          ..add(_buildWeekdaySelector(l10n, provider))
+          ..add(_selectionFeedback('weekdays', _buildWeekdaySelector(l10n, provider)))
           ..add(
-            AppTextField(
+            AgentActionTriggerDateTimeField(
               controller: _formState.endAtController,
               label: l10n.agentActionsTriggerFieldEndAtOptional,
               enabled: enabled,
@@ -454,7 +537,8 @@ class _AgentActionTriggerSaveDialogState extends State<AgentActionTriggerSaveDia
           ..add(
             _fieldPair(
               useTwoColumns: useTwoColumns,
-              first: AppTextField(
+              first: AgentActionTriggerDateTimeField(
+                timeOnly: true,
                 controller: _formState.timeOfDayController,
                 label: l10n.agentActionsTriggerFieldTimeOfDay,
                 enabled: enabled,
@@ -470,13 +554,13 @@ class _AgentActionTriggerSaveDialogState extends State<AgentActionTriggerSaveDia
           ..add(
             _fieldPair(
               useTwoColumns: useTwoColumns,
-              first: AppTextField(
+              first: AgentActionTriggerDateTimeField(
                 controller: _formState.startAtController,
                 label: l10n.agentActionsTriggerFieldStartAtOptional,
                 enabled: enabled,
                 hint: l10n.agentActionsTriggerHintDateTime,
               ),
-              second: AppTextField(
+              second: AgentActionTriggerDateTimeField(
                 controller: _formState.endAtController,
                 label: l10n.agentActionsTriggerFieldEndAtOptional,
                 enabled: enabled,
@@ -576,6 +660,7 @@ class _AgentActionTriggerSaveDialogState extends State<AgentActionTriggerSaveDia
       ),
       builder: (context) {
         final remoteError = provider.triggerErrorMessage;
+        _formState.buildTrigger(l10n: l10n, actionId: widget.actionId, existing: widget.existing);
 
         return ContentDialog(
           constraints: BoxConstraints(
@@ -593,38 +678,60 @@ class _AgentActionTriggerSaveDialogState extends State<AgentActionTriggerSaveDia
             key: _AgentActionTriggerDialogKeys.surface,
             width: contentSize.width,
             height: contentSize.height,
-            child: _buildDialogContent(
-              remoteError: remoteError,
-              l10n: l10n,
-              provider: provider,
+            child: AppFormFeedbackScope(
+              errors: _submitted ? Map.of(_formState.fieldErrors) : const {},
+              requiredControllers: const {},
+              requiredHint: '',
+              optionalHint: '',
+              keyedErrors: _submitted && _formState.fieldErrors.containsKey(_formState.sourceActionIdController)
+                  ? {_formState.sourceActionIdController: _formState.fieldErrors[_formState.sourceActionIdController]!}
+                  : const {},
+              focusKey: _submitted && _formState.fieldErrors.containsKey(_formState.sourceActionIdController)
+                  ? _formState.sourceActionIdController
+                  : null,
+              focusController: _submitted ? _formState.fieldErrors.keys.firstOrNull : null,
+              focusRequest: _focusRequest,
+              onChanged: (_) {},
+              child: _buildDialogContent(
+                remoteError: remoteError,
+                l10n: l10n,
+                provider: provider,
+              ),
             ),
           ),
           actions: [
-            Button(
-              onPressed: provider.isSavingTrigger ? null : () => Navigator.of(context).pop(),
-              child: Text(l10n.agentActionsTriggerCancel),
-            ),
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.end,
-              mainAxisSize: MainAxisSize.min,
+            Wrap(
+              alignment: WrapAlignment.end,
+              spacing: AppSpacing.sm,
+              runSpacing: AppSpacing.sm,
               children: [
-                FilledButton(
-                  onPressed: provider.isSavingTrigger || !provider.isFeatureEnabled ? null : _handleSave,
-                  child: provider.isSavingTrigger
-                      ? const SizedBox.square(
-                          dimension: 16,
-                          child: ProgressRing(strokeWidth: 2),
-                        )
-                      : Text(l10n.agentActionsTriggerSave),
+                Button(
+                  onPressed: provider.isSavingTrigger ? null : () => Navigator.of(context).pop(),
+                  child: Text(l10n.agentActionsTriggerCancel),
                 ),
-                if (!provider.isFeatureEnabled && !provider.isSavingTrigger) ...[
-                  const SizedBox(height: AppSpacing.xs),
-                  Text(
-                    l10n.agentActionsDisabledMessage,
-                    style: context.bodyMuted,
-                    textAlign: TextAlign.end,
-                  ),
-                ],
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    FilledButton(
+                      onPressed: provider.isSavingTrigger || !provider.isFeatureEnabled ? null : _handleSave,
+                      child: provider.isSavingTrigger
+                          ? const SizedBox.square(
+                              dimension: 16,
+                              child: ProgressRing(strokeWidth: 2),
+                            )
+                          : Text(l10n.agentActionsTriggerSave),
+                    ),
+                    if (!provider.isFeatureEnabled && !provider.isSavingTrigger) ...[
+                      const SizedBox(height: AppSpacing.xs),
+                      Text(
+                        l10n.agentActionsDisabledMessage,
+                        style: context.bodyMuted,
+                        textAlign: TextAlign.end,
+                      ),
+                    ],
+                  ],
+                ),
               ],
             ),
           ],

@@ -364,8 +364,18 @@ def validate_signatures(item: et.Element, context: AppcastContext, public_keys: 
     payload = EnclosureSignaturePayload(version=context.version, os=WINDOWS_OS_NAME, sha256=context.expected_asset_sha256,
         channel=context.expected_channel, rollout_percentage=context.expected_rollout_percentage,
         asset_url=context.asset_url, asset_size=int(context.asset_size))
-    if not verify_with_any_key(payload, enclosure.get(_plug_attr("edSignature"), ""), public_keys):
-        raise ValueError("Feed signature is absent or invalid")
+    signature = enclosure.get(_plug_attr("edSignature"), "").strip()
+    if not signature:
+        raise ValueError(
+            f"Feed signature is absent for version {context.version}: missing plug:edSignature. "
+            "The published feed must be signed through the approved release workflow; "
+            "do not disable signature verification."
+        )
+    if not verify_with_any_key(payload, signature, public_keys):
+        raise ValueError(
+            f"Feed signature is invalid for version {context.version}. "
+            "Check the published payload and the configured trusted public keys."
+        )
     if context.manifest_url:
         if enclosure.get(_plug_attr("manifestUrl")) != context.manifest_url or enclosure.get(_plug_attr("manifestSha256")) != context.manifest_sha256:
             raise ValueError("Feed manifest identity mismatch")

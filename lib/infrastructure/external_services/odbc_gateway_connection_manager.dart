@@ -172,6 +172,8 @@ final class OdbcGatewayConnectionManager implements IPoolDiscardInflightDiagnost
     }
   }
 
+  DirectOdbcConnectionLimiter get directConnectionLimiter => _directConnectionLimiter;
+
   Future<Result<DirectOdbcConnectionLease>> acquireDirectLease({
     required String operation,
     required DateTime? deadline,

@@ -95,6 +95,56 @@ void main() {
       expect(response, isNull);
     });
 
+    test('verified source forces current authorization even when legacy authorization flag is disabled', () async {
+      when(() => mockFeatureFlags.enableClientTokenAuthorization).thenReturn(false);
+      var calls = 0;
+      final gate = SqlRpcClientTokenGate(
+        featureFlags: mockFeatureFlags,
+        support: _support(
+          authorizeWithBudget:
+              ({
+                required token,
+                required sql,
+                required requestDatabase,
+                required requestId,
+                required method,
+                required deadline,
+                preparedSql,
+              }) async {
+                expect(method, 'sql.execute.verified');
+                expect(requestDatabase, 'fixture');
+                calls++;
+                return const Success(unit);
+              },
+        ),
+      );
+      expect(
+        await gate.enforce(
+          request: request,
+          clientToken: null,
+          sqlStatements: const ['SELECT id FROM fixture'],
+          investigationSqlOnDeny: 'SELECT id FROM fixture',
+          requestDatabase: 'fixture',
+          deadline: null,
+          requireLiveSource: true,
+        ),
+        isNotNull,
+      );
+      expect(calls, 0);
+      expect(
+        await gate.enforce(
+          request: request,
+          clientToken: 'technical',
+          sqlStatements: const ['SELECT id FROM fixture'],
+          investigationSqlOnDeny: 'SELECT id FROM fixture',
+          requestDatabase: 'fixture',
+          deadline: null,
+          requireLiveSource: true,
+        ),
+        isNull,
+      );
+      expect(calls, 1);
+    });
     test('returns authenticationFailed when client token is missing', () async {
       when(() => mockFeatureFlags.enableClientTokenAuthorization).thenReturn(true);
 

@@ -98,6 +98,7 @@ class RpcMethodDispatcher implements IRpcRequestDispatcher {
     Duration queryStageBudget = _defaultQueryStageBudget,
     Duration batchExecutionStageBudget = _defaultBatchExecutionStageBudget,
     Iterable<RpcMethodHandler>? handlers,
+    Iterable<RpcMethodHandler> additionalHandlers = const [],
     Future<Map<String, dynamic>> Function()? loadOpenRpcDocument,
     RpcMethodConcurrencyLimiter? methodConcurrencyLimiter,
     SqlStreamingCoordinator? sqlStreamingCoordinator,
@@ -162,11 +163,10 @@ class RpcMethodDispatcher implements IRpcRequestDispatcher {
       operationsFactory: operationsFactory,
     );
     _handlersByMethod = _buildHandlerRegistry(
-      handlers ??
-          createDefaultRpcMethodHandlers(
-            operations,
-            loadOpenRpcDocument: loadOpenRpcDocument,
-          ),
+      [
+        ...(handlers ?? createDefaultRpcMethodHandlers(operations, loadOpenRpcDocument: loadOpenRpcDocument)),
+        ...additionalHandlers,
+      ],
     );
   }
 
@@ -218,15 +218,15 @@ class RpcMethodDispatcher implements IRpcRequestDispatcher {
         rpcRequestId: request.id?.toString(),
         rpcMethod: request.method,
         body: () => handler.handle(
-        request,
-        RpcDispatchContext(
-          agentId: agentId,
-          clientToken: clientToken,
-          streamEmitter: streamEmitter,
-          limits: limits ?? _defaultLimits,
-          negotiatedExtensions: negotiatedExtensions,
+          request,
+          RpcDispatchContext(
+            agentId: agentId,
+            clientToken: clientToken,
+            streamEmitter: streamEmitter,
+            limits: limits ?? _defaultLimits,
+            negotiatedExtensions: negotiatedExtensions,
+          ),
         ),
-      ),
       );
     } finally {
       if (sqlRequestId != null) {
@@ -275,7 +275,9 @@ class RpcMethodDispatcher implements IRpcRequestDispatcher {
   }
 
   String? _sqlRequestIdForTracking(RpcRequest request) {
-    if (!request.method.startsWith('sql.') || request.method == 'sql.cancel') {
+    if (!request.method.startsWith('sql.') ||
+        request.method == 'sql.cancel' ||
+        request.method.startsWith('sql.operation.')) {
       return null;
     }
     final requestId = request.id?.toString();

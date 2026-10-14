@@ -60,6 +60,53 @@ void main() {
       expect(result.containsKey('truncated'), isFalse);
     });
 
+    test('verified sources explicitly report complete and truncated results', () {
+      for (final limited in [false, true]) {
+        final response = QueryResponse(
+          id: 'exec',
+          requestId: 'req',
+          agentId: 'agent',
+          data: const [
+            {'id': 1},
+          ],
+          timestamp: finishedAt,
+        );
+        final result = mapper.buildExecuteResultData(
+          response,
+          startedAt: startedAt,
+          finishedAt: finishedAt,
+          limitedRows: response.data,
+          wasTruncated: limited,
+          sqlHandlingMode: SqlHandlingMode.preserve,
+          effectiveMaxRows: 1,
+          verifiedSource: true,
+        );
+        expect(result['truncated'], limited);
+      }
+    });
+
+    test('preserves upstream truncation even when the mapper does not cut rows', () {
+      final response = QueryResponse(
+        id: 'exec',
+        requestId: 'req',
+        agentId: 'agent',
+        data: const [],
+        timestamp: finishedAt,
+        wasTruncated: true,
+      );
+      final result = mapper.buildExecuteResultData(
+        response,
+        startedAt: startedAt,
+        finishedAt: finishedAt,
+        limitedRows: response.data,
+        wasTruncated: false,
+        sqlHandlingMode: SqlHandlingMode.preserve,
+        effectiveMaxRows: 1,
+        verifiedSource: true,
+      );
+      expect(result['truncated'], isTrue);
+    });
+
     test('includes truncated flag and pagination when present', () {
       const pagination = QueryPaginationInfo(
         page: 1,

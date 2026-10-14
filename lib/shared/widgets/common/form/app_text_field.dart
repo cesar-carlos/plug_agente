@@ -32,6 +32,7 @@ class AppTextField extends StatefulWidget {
     this.helpButtonKey,
     this.reserveHelpAffordance = false,
     this.helperText,
+    this.labelMinLines = 1,
   });
 
   final String label;
@@ -58,6 +59,7 @@ class AppTextField extends StatefulWidget {
   final Key? helpButtonKey;
   final bool reserveHelpAffordance;
   final String? helperText;
+  final int labelMinLines;
 
   @override
   State<AppTextField> createState() => _AppTextFieldState();
@@ -139,19 +141,25 @@ class _AppTextFieldState extends State<AppTextField> {
   }
 
   void _onControllerChanged() {
-    if (_touched && mounted) {
-      setState(() {});
-    }
+    if (!mounted || !_touched) return;
+    _publishEdited(widget.controller?.text ?? '');
   }
 
   void _handleChanged(String value) {
+    widget.onChanged?.call(value);
+    final controller = widget.controller;
+    if (controller != null) {
+      AppFormFeedbackScope.maybeOf(context)?.onChanged(controller);
+    }
+    _publishEdited(value);
+  }
+
+  void _publishEdited(String value) {
+    if (_touched && value == _lastChangedValue) return;
     setState(() {
       _touched = true;
       _lastChangedValue = value;
     });
-    widget.onChanged?.call(value);
-    final controller = widget.controller;
-    if (controller != null) AppFormFeedbackScope.maybeOf(context)?.onChanged(controller);
   }
 
   Widget? _buildPrefixIcon() {
@@ -211,6 +219,7 @@ class _AppTextFieldState extends State<AppTextField> {
       helpTooltip: widget.helpTooltip,
       helpButtonKey: widget.helpButtonKey,
       reserveHelpAffordance: widget.reserveHelpAffordance,
+      labelMinLines: widget.labelMinLines,
       child: textBox,
     );
   }

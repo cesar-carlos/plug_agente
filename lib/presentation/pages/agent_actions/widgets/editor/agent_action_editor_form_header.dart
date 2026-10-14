@@ -7,6 +7,7 @@ class AgentActionEditorFormHeader extends StatelessWidget {
     required this.l10n,
     required this.title,
     required this.showChrome,
+    required this.showTitle,
     required this.saving,
     required this.canSaveAction,
     required this.validationMessage,
@@ -18,6 +19,7 @@ class AgentActionEditorFormHeader extends StatelessWidget {
   final AppLocalizations l10n;
   final String title;
   final bool showChrome;
+  final bool showTitle;
   final bool saving;
   final bool canSaveAction;
   final String? validationMessage;
@@ -26,6 +28,11 @@ class AgentActionEditorFormHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final hasValidation = validationMessage != null && validationMessage!.isNotEmpty;
+    if (!showChrome && !showTitle && !hasValidation) {
+      return const SizedBox.shrink();
+    }
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -33,7 +40,7 @@ class AgentActionEditorFormHeader extends StatelessWidget {
           const Divider(),
           const SizedBox(height: AppSpacing.md),
         ],
-        if (validationMessage != null && validationMessage!.isNotEmpty) ...[
+        if (hasValidation) ...[
           InfoBar(
             key: const ValueKey<String>('agent_action_editor_validation_message'),
             title: Text(l10n.agentActionsValidationTitle),
@@ -47,34 +54,35 @@ class AgentActionEditorFormHeader extends StatelessWidget {
           ),
           const SizedBox(height: AppSpacing.sm),
         ],
-        Row(
-          children: [
-            Expanded(
-              child: Tooltip(
-                message: title,
-                child: Text(
-                  title,
-                  style: context.sectionTitle,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
+        if (showTitle)
+          Row(
+            children: [
+              Expanded(
+                child: Tooltip(
+                  message: title,
+                  child: Text(
+                    title,
+                    style: context.sectionTitle,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
                 ),
               ),
-            ),
-            if (showChrome)
-              Button(
-                onPressed: saving || !canSaveAction ? null : onNewDraft,
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    const Icon(FluentIcons.add),
-                    const SizedBox(width: AppSpacing.xs),
-                    Text(l10n.agentActionsFormNew),
-                  ],
+              if (showChrome)
+                Button(
+                  onPressed: saving || !canSaveAction ? null : onNewDraft,
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(FluentIcons.add),
+                      const SizedBox(width: AppSpacing.xs),
+                      Text(l10n.agentActionsFormNew),
+                    ],
+                  ),
                 ),
-              ),
-          ],
-        ),
-        const SizedBox(height: AppSpacing.md),
+            ],
+          ),
+        if (showTitle) const SizedBox(height: AppSpacing.sm),
       ],
     );
   }

@@ -105,6 +105,7 @@ int _actionsToolbarListenToken(AgentActionsProvider provider) {
     provider.hasLiveQueueActivity,
     provider.liveQueuePendingCount,
     provider.liveQueueRunningCount,
+    provider.runningActionNames,
   ]);
 }
 
@@ -115,6 +116,7 @@ int _actionsListListenToken(AgentActionsProvider provider) {
     provider.isSaving,
     provider.isDeleting,
     provider.isRunning,
+    provider.runningActionSignature,
     provider.isTesting,
     provider.isTransferringBundle,
     provider.isFeatureEnabled,

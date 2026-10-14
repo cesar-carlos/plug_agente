@@ -94,9 +94,7 @@ Future<Result<AgentActionDefinition>> saveDefinitionForTest(
 
   final saved = staged.getOrThrow();
   const snapshotter = AgentActionDefinitionSnapshotter();
-  final preflightHash = snapshotter.snapshotHash(
-    saved.copyWith(state: AgentActionState.needsValidation),
-  );
+  final preflightHash = snapshotter.executionContentHash(saved);
   return useCase(
     saved.copyWith(
       state: AgentActionState.active,
@@ -209,6 +207,14 @@ class FakeAgentActionRepository implements IAgentActionRepository {
     definitions.remove(id);
     triggers.removeWhere((_, trigger) => trigger.actionId == id);
     return const Success(unit);
+  }
+
+  @override
+  Future<Result<bool>> updateTriggerRuntime(AgentActionTrigger expected, AgentActionTrigger updated) async {
+    final current = await getTrigger(expected.id);
+    if (current.isError() || !identical(current.getOrThrow(), expected)) return const Success(false);
+    final result = await saveTrigger(updated);
+    return result.fold((_) => const Success(true), Failure.new);
   }
 
   @override

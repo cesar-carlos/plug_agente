@@ -6,7 +6,6 @@ import 'package:plug_agente/l10n/app_localizations.dart';
 import 'package:plug_agente/presentation/pages/agent_actions/widgets/editor/agent_action_editor_widgets.dart';
 import 'package:plug_agente/shared/widgets/common/form/app_checkbox.dart';
 import 'package:plug_agente/shared/widgets/common/form/app_dropdown.dart';
-import 'package:plug_agente/shared/widgets/common/form/app_form_field_pair.dart';
 import 'package:plug_agente/shared/widgets/common/form/app_text_field.dart';
 
 /// Change handlers for [AgentActionExecutionPoliciesSection]. Grouped so the
@@ -107,63 +106,15 @@ class AgentActionExecutionPoliciesSection extends StatelessWidget {
             ),
           ],
           const SizedBox(height: AppSpacing.sm),
-          AppFormFieldPair(
-            first: AppDropdown<int>(
-              label: l10n.agentActionsFormMaxAttempts,
-              helpTitle: l10n.agentActionsHelpMaxAttemptsTitle,
-              helpMessage: l10n.agentActionsHelpMaxAttemptsMessage,
-              value: maxAttempts,
-              items: List<ComboBoxItem<int>>.generate(
-                visibleRetryLimit,
-                (index) {
-                  final attempts = index + 1;
-                  return ComboBoxItem<int>(
-                    value: attempts,
-                    enabled: attempts <= retryLimit,
-                    child: Text('$attempts'),
-                  );
-                },
-                growable: false,
-              ),
-              onChanged: enabled
-                  ? (value) {
-                      if (value == null) {
-                        return;
-                      }
-                      callbacks.onMaxAttemptsChanged(value);
-                    }
-                  : null,
-            ),
-            second: AppFormFieldPair(
-              breakpoint: 400,
-              first: AppTextField(
-                label: runtimeInSeconds
-                    ? l10n.agentActionsFormMaxRuntimeSeconds
-                    : l10n.agentActionsFormMaxRuntimeMinutes,
-                helpTitle: l10n.agentActionsHelpTimeoutTitle,
-                helpMessage: l10n.agentActionsHelpTimeoutMessage,
-                controller: maxRuntimeMinutesController,
-                enabled: enabled,
-                keyboardType: TextInputType.number,
-                textInputAction: TextInputAction.next,
-                onChanged: callbacks.onMaxRuntimeMinutesChanged,
-              ),
-              second: AppDropdown<bool>(
-                label: l10n.agentActionsFormRuntimeUnit,
-                helpTitle: l10n.agentActionsHelpTimeoutTitle,
-                helpMessage: l10n.agentActionsHelpTimeoutMessage,
-                value: runtimeInSeconds,
-                items: [
-                  ComboBoxItem(value: false, child: Text(l10n.agentActionsFormRuntimeUnitMinutes)),
-                  ComboBoxItem(value: true, child: Text(l10n.agentActionsFormRuntimeUnitSeconds)),
-                ],
-                onChanged: enabled
-                    ? (value) {
-                        if (value != null) callbacks.onRuntimeUnitChanged(value);
-                      }
-                    : null,
-              ),
-            ),
+          _RuntimeLimitFields(
+            l10n: l10n,
+            enabled: enabled,
+            maxAttempts: maxAttempts,
+            visibleRetryLimit: visibleRetryLimit,
+            retryLimit: retryLimit,
+            maxRuntimeMinutesController: maxRuntimeMinutesController,
+            runtimeInSeconds: runtimeInSeconds,
+            callbacks: callbacks,
           ),
           if (hasLegacyRetryLimitViolation) ...[
             const SizedBox(height: AppSpacing.xs),
@@ -322,6 +273,128 @@ class AgentActionExecutionPoliciesSection extends StatelessWidget {
           ),
         ],
       ],
+    );
+  }
+}
+
+class _RuntimeLimitFields extends StatelessWidget {
+  const _RuntimeLimitFields({
+    required this.l10n,
+    required this.enabled,
+    required this.maxAttempts,
+    required this.visibleRetryLimit,
+    required this.retryLimit,
+    required this.maxRuntimeMinutesController,
+    required this.runtimeInSeconds,
+    required this.callbacks,
+  });
+
+  static const int _labelLines = 2;
+
+  final AppLocalizations l10n;
+  final bool enabled;
+  final int maxAttempts;
+  final int visibleRetryLimit;
+  final int retryLimit;
+  final TextEditingController maxRuntimeMinutesController;
+  final bool runtimeInSeconds;
+  final AgentActionExecutionPoliciesCallbacks callbacks;
+
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final sideBySide = !AppLayout.formFieldsStack(context, constraints.maxWidth);
+        final attempts = _attemptsField(reserveLabelLines: sideBySide);
+        final runtime = _runtimeField(reserveLabelLines: sideBySide);
+        final unit = _unitField(reserveLabelLines: sideBySide);
+        if (!sideBySide) {
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              attempts,
+              const SizedBox(height: AppSpacing.sm),
+              runtime,
+              const SizedBox(height: AppSpacing.sm),
+              unit,
+            ],
+          );
+        }
+
+        return Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(child: attempts),
+            const SizedBox(width: AppSpacing.md),
+            Expanded(child: runtime),
+            const SizedBox(width: AppSpacing.md),
+            Expanded(child: unit),
+          ],
+        );
+      },
+    );
+  }
+
+  Widget _attemptsField({required bool reserveLabelLines}) {
+    return AppDropdown<int>(
+      label: l10n.agentActionsFormMaxAttempts,
+      labelMinLines: reserveLabelLines ? _labelLines : 1,
+      helpTitle: l10n.agentActionsHelpMaxAttemptsTitle,
+      helpMessage: l10n.agentActionsHelpMaxAttemptsMessage,
+      value: maxAttempts,
+      items: List<ComboBoxItem<int>>.generate(
+        visibleRetryLimit,
+        (index) {
+          final attempts = index + 1;
+          return ComboBoxItem<int>(
+            value: attempts,
+            enabled: attempts <= retryLimit,
+            child: Text('$attempts'),
+          );
+        },
+        growable: false,
+      ),
+      onChanged: enabled
+          ? (value) {
+              if (value == null) {
+                return;
+              }
+              callbacks.onMaxAttemptsChanged(value);
+            }
+          : null,
+    );
+  }
+
+  Widget _runtimeField({required bool reserveLabelLines}) {
+    return AppTextField(
+      label: runtimeInSeconds ? l10n.agentActionsFormMaxRuntimeSeconds : l10n.agentActionsFormMaxRuntimeMinutes,
+      labelMinLines: reserveLabelLines ? _labelLines : 1,
+      helpTitle: l10n.agentActionsHelpTimeoutTitle,
+      helpMessage: l10n.agentActionsHelpTimeoutMessage,
+      controller: maxRuntimeMinutesController,
+      enabled: enabled,
+      keyboardType: TextInputType.number,
+      textInputAction: TextInputAction.next,
+      onChanged: callbacks.onMaxRuntimeMinutesChanged,
+    );
+  }
+
+  Widget _unitField({required bool reserveLabelLines}) {
+    return AppDropdown<bool>(
+      label: l10n.agentActionsFormRuntimeUnit,
+      labelMinLines: reserveLabelLines ? _labelLines : 1,
+      helpTitle: l10n.agentActionsHelpTimeoutTitle,
+      helpMessage: l10n.agentActionsHelpTimeoutMessage,
+      value: runtimeInSeconds,
+      items: [
+        ComboBoxItem(value: false, child: Text(l10n.agentActionsFormRuntimeUnitMinutes)),
+        ComboBoxItem(value: true, child: Text(l10n.agentActionsFormRuntimeUnitSeconds)),
+      ],
+      onChanged: enabled
+          ? (value) {
+              if (value != null) callbacks.onRuntimeUnitChanged(value);
+            }
+          : null,
     );
   }
 }

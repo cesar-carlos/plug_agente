@@ -270,3 +270,87 @@ esta em "Desktop e Runtime".
 - [ ] Mensagens para usuario sao claras e nao vazam detalhes internos
 - [ ] Testes relevantes cobrem `Result<T>`, failures e contratos alterados
 - [ ] Mudancas de transporte respeitam a documentacao do protocolo Plug
+
+## Persona-v2 SQL operations
+
+Journal metadata lives in a separate additive Drift database with WAL and FULL
+synchronous durability. No SQL or credentials. Bootstrap/RPC/executor wiring and remaining work in
+`docs/communication/sql_operations.md`. Unknown operations never reexecute.
+The executor uses a dedicated connection/transaction, live policy per step/commit,
+locally computed content hash, direct row limits and typed scalar outputs. Timeout
+quarantines a native connection until completion; no concurrent rollback/replay.
+Maintenance drains admitted operations. Initial writes target one table per step;
+physical catalog proof is mandatory. sqlOperations v1 is a transport contract,
+not authorization or engine certification. Advertise only with explicit
+ENABLE_SQL_OPERATIONS homologation opt-in (default false); reconnect after changes.
+Intersect positive limits, require durableJournal/singleSourceTransaction and
+automaticReplay:false on both peers. Every handler checks negotiated capability
+and the live opt-in before any journal/connection work; exceeding limits is refused,
+never clamped. Preserve directlyAffectedRows:null through wire and replay storage.
+Production installer/appcast gates remain blocked until full acceptance.
+Coordinated persona-v2 acceptance includes shared-knowledge-and-compatibility in addition to the other gates. Removing it from a manifest cannot authorize an installer or appcast release.
+
+## Persona SQL homologation exception
+
+The explicitly invoked four-engine matrix under tool/homologation requires
+all four private fixtures and fails on missing environment; it must never skip
+or fall back to .env, configured sources or existing DSNs. This requirement
+overrides optional live-test skips only for that matrix. Database identity
+comes from a fixed complete metadata SELECT on the dedicated connection, not
+ODBC currentCatalog. Count identity proof and row-count queries in 32 commands.
+The matrix does not authorize enabling production operations or releasing builds.
+
+## Persona-v2 source discovery
+
+sql.describeSource v1 uses sourceDiscovery:1 negotiation and a dedicated ODBC
+metadata probe in the agent, never a direct MCP connection. Require active token,
+agent binding, mandatory policy database and unchanged configuration before/after.
+Do not accept caller SQL or infer engine from configured driver names. DBMS metadata
+must match DIALETO. Strict schemas/OpenRPC define native, provisioned and locator proofs.
+SQL Anywhere locator is insufficient for durable MCP enrollment/execution.
+Approved DV2-007 accepts only an explicitly DBA-provisioned UUID v4 in a version-1 marker in that
+engine. Runtime never creates/repairs DBA.se7e_source_identity; technical
+principal needs SELECT only on that reserved marker. Never expose it to skills.
+Distinct copies require offline re-enrollment with a new UUID before binding.
+Same-source restores preserve UUID and require reviewing pending operations;
+a clone preserving all observed metadata is not automatically distinguishable.
+expectedSource v1 plus sourceIdentity:1 negotiation bind admitted identity to the
+actual business connection: verify before/after SELECT delivery and before DML
+transaction begin. Never reconnect/replay verified SQL. Legacy unverified paths
+are not MCP v2 fallbacks. Journal scope/content include expectedSource; duplicate
+IDs never execute again. This does not replace live policy or published training.
+Full live hub/agent acceptance, including DBA restore procedures, remains blocked.
+See docs/communication/source_discovery.md. Keep deployment blocked.
+
+The explicit MCP chain companion tool/homologation/persona_chain_agent_test.dart
+uses production Socket.IO/RPC/ODBC, policy, Drift configuration/token metadata and
+durable journals. FlutterSecure adapters use the real Windows DPAPI backend in
+an exclusive temporary support directory; only directory lookup is redirected.
+Never mock encryption/storage or read/migrate the operational vault. Restart
+removes bootstrap secrets, recovers stable config/token identities and checks
+unknown journals through RPC; never recreate business fixtures or replay SQL.
+Missing/corrupt/incomplete vault refuses recovery without bootstrap fallback.
+Its case evaluator is limited to the fixed empty disposable table, not a generic
+four-engine publication runner. Never run against configured sources or in
+parallel with another Flutter runner using the same native DLL. sql.execute
+schema ingress must strictly accept expectedSource v1; verified materialized
+responses (including chunked transport) carry explicit truncated:false only when
+no truncation occurred. Preserve true upstream truncation and legacy optional
+semantics on unrelated paths. Malformed profiles return typed failures. Commit
+confirmation loss belongs only to the fixture, after real native commit. Desktop
+bootstrap, multi-process vault concurrency, TLS/Redis and real crashes during
+commit remain uncertified. Keep production opt-in blocked.
+
+## Inspeção estrutural em desenvolvimento
+
+O contrato `sourceSchema` v1 está em
+[Communication](../../docs/communication/README.md#inspeção-estrutural-sourceschema-v1).
+Manter consultas de metadados fixas por motor, recursos autorizados e prova na
+conexão executora; não usar helpers genéricos como prova física dos quatro motores.
+Nulos obrigatórios não podem ser removidos pelo saneamento do wire. Constraints
+desconhecidas não viram habilitadas; enforcement SQL Anywhere permanece desconhecido.
+Expectativas de constraints exigem sourceConstraints v1 e conferência na mesma
+conexão antes/depois do SELECT. A extensão não libera deploy. SQL Anywhere identifica recursos BASE/VIEW regulares
+por SYSTAB.table_type_str, sem classificar materialized views implicitamente. A
+fixture ampla compõe 16 recursos, usa policy explícita e altera apenas wide_07
+por ações fixas do companion; nenhum DDL do consumidor é aceito.

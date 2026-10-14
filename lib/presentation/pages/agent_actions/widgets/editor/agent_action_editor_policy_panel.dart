@@ -5,11 +5,22 @@ import 'package:plug_agente/domain/actions/actions.dart';
 import 'package:plug_agente/l10n/app_localizations.dart';
 import 'package:plug_agente/presentation/pages/agent_actions/agent_action_draft.dart';
 import 'package:plug_agente/presentation/pages/agent_actions/widgets/editor/agent_action_editor_keys.dart';
-import 'package:plug_agente/presentation/pages/agent_actions/widgets/editor/agent_action_editor_section.dart';
 import 'package:plug_agente/presentation/pages/agent_actions/widgets/editor/agent_action_editor_sections.dart';
 import 'package:plug_agente/presentation/providers/agent_actions_provider.dart';
 
-class AgentActionEditorPolicyPanel extends StatelessWidget {
+class AgentActionEditorPolicyBodies {
+  const AgentActionEditorPolicyBodies({
+    required this.limits,
+    required this.advanced,
+    required this.notifications,
+  });
+
+  final Widget limits;
+  final Widget advanced;
+  final Widget notifications;
+}
+
+class AgentActionEditorPolicyPanel {
   const AgentActionEditorPolicyPanel({
     required this.l10n,
     required this.provider,
@@ -24,10 +35,6 @@ class AgentActionEditorPolicyPanel extends StatelessWidget {
     required this.onNotifyOnSuccessChanged,
     required this.onNotifyOnFailureChanged,
     required this.onNotifyOnTimeoutChanged,
-    required this.visibleSections,
-    required this.expandedSections,
-    required this.onToggleSection,
-    super.key,
   });
 
   final AppLocalizations l10n;
@@ -43,107 +50,78 @@ class AgentActionEditorPolicyPanel extends StatelessWidget {
   final ValueChanged<bool> onNotifyOnSuccessChanged;
   final ValueChanged<bool> onNotifyOnFailureChanged;
   final ValueChanged<bool> onNotifyOnTimeoutChanged;
-  final bool Function(int sectionIndex) visibleSections;
-  final Set<int> expandedSections;
-  final ValueChanged<int> onToggleSection;
 
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        if (visibleSections(2))
-          AgentActionEditorSection(
-            key: const ValueKey('agent_action_section_limits'),
-            title: l10n.agentActionsEditorLimits,
-            expanded: expandedSections.contains(2),
-            onToggle: () => onToggleSection(2),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                _ExecutionFields(
-                  l10n: l10n,
-                  provider: provider,
-                  draft: draft,
-                  enabled: enabled,
-                  callbacks: executionCallbacks,
-                  showLimits: true,
-                ),
-                const SizedBox(height: AppSpacing.md),
-                _RuntimeFields(
-                  l10n: l10n,
-                  draft: draft,
-                  enabled: enabled,
-                  callbacks: runtimeCallbacks,
-                  showLifecycle: true,
-                  showProductionPathAllowlistWarning: showProductionPathAllowlistWarning,
-                ),
-              ],
-            ),
+  AgentActionEditorPolicyBodies bodies() {
+    return AgentActionEditorPolicyBodies(
+      limits: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          _ExecutionFields(
+            l10n: l10n,
+            provider: provider,
+            draft: draft,
+            enabled: enabled,
+            callbacks: executionCallbacks,
+            showLimits: true,
           ),
-        if (visibleSections(3))
-          AgentActionEditorSection(
-            key: const ValueKey('agent_action_section_advanced'),
-            title: l10n.agentActionsEditorAdvanced,
-            summary: l10n.agentActionsEditorAdvancedSummary,
-            expanded: expandedSections.contains(3),
-            onToggle: () => onToggleSection(3),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                _ExecutionFields(
-                  l10n: l10n,
-                  provider: provider,
-                  draft: draft,
-                  enabled: enabled,
-                  callbacks: executionCallbacks,
-                  showLimits: false,
-                ),
-                const SizedBox(height: AppSpacing.md),
-                _RuntimeFields(
-                  l10n: l10n,
-                  draft: draft,
-                  enabled: enabled,
-                  callbacks: runtimeCallbacks,
-                  showLifecycle: false,
-                  showProductionPathAllowlistWarning: showProductionPathAllowlistWarning,
-                ),
-                const SizedBox(height: AppSpacing.md),
-                if (!draft.draftType.isManualLocalOnly || (definition?.policies.remote.requiresReapproval ?? false))
-                  AgentActionRemotePolicySection(
-                    l10n: l10n,
-                    enabled: enabled && !draft.draftType.isManualLocalOnly,
-                    remoteFeatureEnabled: provider.isRemoteAgentActionsEnabled,
-                    remoteAdHocFeatureEnabled: provider.isRemoteAdHocAgentActionsEnabled,
-                    remoteEnabled: draft.remoteEnabled,
-                    remoteAdHoc: draft.remoteAdHoc,
-                    remoteApprovalGranted: draft.remoteApprovalGranted,
-                    requiresReapproval: definition?.policies.remote.requiresReapproval ?? false,
-                    reapprovalInfoBarKey: AgentActionEditorKeys.remoteReapprovalInfoBar,
-                    onRemoteEnabledChanged: onRemoteEnabledChanged,
-                    onRemoteAdHocChanged: onRemoteAdHocChanged,
-                  ),
-              ],
-            ),
+          const SizedBox(height: AppSpacing.md),
+          _RuntimeFields(
+            l10n: l10n,
+            draft: draft,
+            enabled: enabled,
+            callbacks: runtimeCallbacks,
+            showLifecycle: true,
+            showProductionPathAllowlistWarning: showProductionPathAllowlistWarning,
           ),
-        if (visibleSections(4))
-          AgentActionEditorSection(
-            key: const ValueKey('agent_action_section_notifications'),
-            title: l10n.agentActionsFormNotificationsTitle,
-            expanded: expandedSections.contains(4),
-            onToggle: () => onToggleSection(4),
-            child: AgentActionNotificationPolicySection(
+        ],
+      ),
+      advanced: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          _ExecutionFields(
+            l10n: l10n,
+            provider: provider,
+            draft: draft,
+            enabled: enabled,
+            callbacks: executionCallbacks,
+            showLimits: false,
+          ),
+          const SizedBox(height: AppSpacing.md),
+          _RuntimeFields(
+            l10n: l10n,
+            draft: draft,
+            enabled: enabled,
+            callbacks: runtimeCallbacks,
+            showLifecycle: false,
+            showProductionPathAllowlistWarning: showProductionPathAllowlistWarning,
+          ),
+          const SizedBox(height: AppSpacing.md),
+          if (!draft.draftType.isManualLocalOnly || (definition?.policies.remote.requiresReapproval ?? false))
+            AgentActionRemotePolicySection(
               l10n: l10n,
-              enabled: enabled,
-              notifyOnSuccess: draft.notifyOnSuccess,
-              notifyOnFailure: draft.notifyOnFailure,
-              notifyOnTimeout: draft.notifyOnTimeout,
-              onNotifyOnSuccessChanged: onNotifyOnSuccessChanged,
-              onNotifyOnFailureChanged: onNotifyOnFailureChanged,
-              onNotifyOnTimeoutChanged: onNotifyOnTimeoutChanged,
+              enabled: enabled && !draft.draftType.isManualLocalOnly,
+              remoteFeatureEnabled: provider.isRemoteAgentActionsEnabled,
+              remoteAdHocFeatureEnabled: provider.isRemoteAdHocAgentActionsEnabled,
+              remoteEnabled: draft.remoteEnabled,
+              remoteAdHoc: draft.remoteAdHoc,
+              remoteApprovalGranted: draft.remoteApprovalGranted,
+              requiresReapproval: definition?.policies.remote.requiresReapproval ?? false,
+              reapprovalInfoBarKey: AgentActionEditorKeys.remoteReapprovalInfoBar,
+              onRemoteEnabledChanged: onRemoteEnabledChanged,
+              onRemoteAdHocChanged: onRemoteAdHocChanged,
             ),
-          ),
-      ],
+        ],
+      ),
+      notifications: AgentActionNotificationPolicySection(
+        l10n: l10n,
+        enabled: enabled,
+        notifyOnSuccess: draft.notifyOnSuccess,
+        notifyOnFailure: draft.notifyOnFailure,
+        notifyOnTimeout: draft.notifyOnTimeout,
+        onNotifyOnSuccessChanged: onNotifyOnSuccessChanged,
+        onNotifyOnFailureChanged: onNotifyOnFailureChanged,
+        onNotifyOnTimeoutChanged: onNotifyOnTimeoutChanged,
+      ),
     );
   }
 }

@@ -21,6 +21,8 @@ import 'package:plug_agente/core/constants/rpc_sql_budget_constants.dart';
 import 'package:plug_agente/core/utils/prepared_sql.dart';
 import 'package:plug_agente/core/utils/split_sql_statements.dart' show sqlStatementsForClientTokenAuthorization;
 import 'package:plug_agente/core/utils/sql_row_truncation.dart';
+import 'package:plug_agente/domain/entities/expected_source.dart';
+import 'package:plug_agente/domain/entities/expected_structure.dart';
 import 'package:plug_agente/domain/entities/query_request.dart';
 import 'package:plug_agente/domain/errors/failures.dart' as domain;
 import 'package:plug_agente/domain/protocol/protocol.dart';
@@ -133,6 +135,46 @@ class SqlExecuteHandler {
     final multiResultRequested = resolveMultiResult(params);
     final requestParameters = paramReader.boundParams;
     final database = paramReader.database;
+    ExpectedSource? expectedSource;
+    if (params.containsKey('expectedSource')) {
+      try {
+        expectedSource = ExpectedSource.fromJson(params['expectedSource']);
+      } on Object {
+        return _support.invalidParams(request, 'Invalid expected source identity.');
+      }
+      if (negotiatedExtensions['sourceIdentity'] != 1 ||
+          database == null ||
+          database.isEmpty ||
+          clientToken == null ||
+          clientToken.isEmpty ||
+          multiResultRequested ||
+          paramReader.idempotencyKey != null ||
+          options?['prefer_db_streaming'] == true) {
+        return _support.invalidParams(
+          request,
+          'Verified source requires sourceIdentity v1, database, token and uncached single-result execution.',
+        );
+      }
+    }
+    ExpectedStructure? expectedStructure;
+    if (params.containsKey('expectedStructure')) {
+      try {
+        expectedStructure = ExpectedStructure.fromJson(params['expectedStructure']);
+        if (expectedStructure.resources.any((r) => r.constraints != null) &&
+            negotiatedExtensions['sourceConstraints'] != 1) {
+          return _support.invalidParams(request, 'sourceConstraints v1 is required.');
+        }
+        if (expectedSource == null ||
+            negotiatedExtensions['sourceSchema'] != 1 ||
+            expectedStructure.resources.any(
+              (r) => expectedSource!.dialect == 'firebird' ? r.resource.schema != null : r.resource.schema == null,
+            )) {
+          throw domain.ValidationFailure('Verified structure requires sourceSchema v1 and exact schemas.');
+        }
+      } on Object {
+        return _support.invalidParams(request, 'Invalid or unsupported structural expectation.');
+      }
+    }
     final requestedTimeoutMs = resolveRequestedTimeoutMs(params);
 
     if (multiResultRequested && requestParameters != null && requestParameters.isNotEmpty) {
@@ -187,13 +229,16 @@ class SqlExecuteHandler {
     final authDenied = await _clientTokenGate.enforce(
       request: request,
       clientToken: clientToken,
-      sqlStatements: multiResultRequested ? sqlStatementsForClientTokenAuthorization(sql) : [sql],
-      preparedStatements: multiResultRequested ? null : [prepared],
+      sqlStatements: multiResultRequested
+          ? sqlStatementsForClientTokenAuthorization(sql)
+          : [sql, ...?expectedStructure?.authorizationSql()],
+      preparedStatements: multiResultRequested || expectedStructure != null ? null : [prepared],
       investigationSqlOnDeny: sql,
       requestDatabase: database,
       deadline: deadline,
       deduplicateEquivalentSql: multiResultRequested,
       skipEmptyAfterTrim: multiResultRequested,
+      requireLiveSource: expectedSource != null,
     );
     if (authDenied != null) {
       return authDenied;
@@ -209,6 +254,8 @@ class SqlExecuteHandler {
       expectMultipleResults: multiResultRequested,
       sqlHandlingMode: sqlHandlingMode,
       sourceRpcRequestId: request.id?.toString(),
+      expectedSource: expectedSource,
+      expectedStructure: expectedStructure,
     );
 
     return _support.runIdempotentExecution(
@@ -418,6 +465,7 @@ class SqlExecuteHandler {
               sqlHandlingMode: queryRequest.sqlHandlingMode,
               effectiveMaxRows: maxRows,
               forceMultiResultEnvelope: multiResultRequested,
+              verifiedSource: expectedSource != null,
             );
 
             final rpcResponse = RpcResponse.success(

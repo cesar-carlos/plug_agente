@@ -35,8 +35,6 @@ class AgentActionNotificationPolicySection extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(l10n.agentActionsFormNotificationsTitle, style: context.sectionTitle),
-        const SizedBox(height: AppSpacing.xs),
         Text(
           l10n.agentActionsFormNotificationsDescription,
           style: context.bodyMuted,

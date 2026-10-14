@@ -32,6 +32,7 @@ class AgentActionsTriggersController {
   bool isSavingTrigger = false;
   final Set<String> deletingTriggerIds = <String>{};
   String? triggerErrorMessage;
+  int _selectionGeneration = 0;
 
   UnmodifiableListView<AgentActionTrigger>? triggersViewCache;
 
@@ -114,6 +115,7 @@ class AgentActionsTriggersController {
     required String? actionId,
     required String? selectedActionId,
   }) async {
+    final generation = ++_selectionGeneration;
     if (actionId == null) {
       if (triggers.isNotEmpty || isLoadingTriggers) {
         triggers = <AgentActionTrigger>[];
@@ -130,7 +132,7 @@ class AgentActionsTriggersController {
 
     final result = await _listTriggers(actionId: expectedActionId);
 
-    if (selectedActionId != expectedActionId) {
+    if (generation != _selectionGeneration || selectedActionId != expectedActionId) {
       return;
     }
 

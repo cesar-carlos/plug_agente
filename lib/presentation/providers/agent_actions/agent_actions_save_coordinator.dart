@@ -241,6 +241,7 @@ final class AgentActionsSaveCoordinator {
   Future<Result<void>> _saveWithReload(Future<bool> Function() save) async {
     _setErrorMessage(null);
     _definitionsController.lastOperationErrorMessage = null;
+    _definitionsController.lastOperationFailure = null;
     _executionsController.clearTestStateForSelectionChange();
     final shouldReload = await save();
     if (shouldReload) {
@@ -248,7 +249,13 @@ final class AgentActionsSaveCoordinator {
       return const Success(unit);
     }
 
+    final recordedFailure = _definitionsController.lastOperationFailure;
     final message = _definitionsController.lastOperationErrorMessage?.trim();
+    if (recordedFailure is domain.Failure) {
+      recordedFailure.log();
+      _setErrorMessage(message ?? recordedFailure.message);
+      return Failure(recordedFailure);
+    }
     if (message != null && message.isNotEmpty) {
       final failure = domain.ValidationFailure(message);
       failure.log();

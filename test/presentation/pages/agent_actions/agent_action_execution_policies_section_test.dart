@@ -61,6 +61,19 @@ void main() {
     await tester.pumpAndSettle();
   }
 
+  testWidgets('runtime limit controls share the same top edge', (tester) async {
+    await pumpPolicies(tester, supportsTermination: true);
+    final attemptsTop = tester.getTopLeft(find.byType(ComboBox<int>)).dy;
+    final unitTop = tester.getTopLeft(find.byType(ComboBox<bool>)).dy;
+    final runtimeTop = tester
+        .getTopLeft(find.byWidgetPredicate((widget) => widget is TextBox && widget.controller?.text == '1'))
+        .dy;
+
+    expect(attemptsTop, closeTo(runtimeTop, 1));
+    expect(unitTop, closeTo(runtimeTop, 1));
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('changing runtime unit preserves duration and exposes the scheduled stop field', (tester) async {
     await pumpPolicies(tester, supportsTermination: true);
     expect(find.text(l10n.agentActionsFormStopTime), findsOneWidget);

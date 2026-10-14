@@ -239,6 +239,7 @@ class AgentActionsProvider extends ChangeNotifier {
       canDeleteSelected: () => canDeleteSelected,
       canRunSelected: () => canRunSelected,
       canTestSelected: () => canTestSelected,
+      canActivateDefinition: canActivateDefinition,
       canCancelExecution: canCancelExecution,
       canTransferBundle: () => canTransferBundle,
     );
@@ -430,6 +431,34 @@ class AgentActionsProvider extends ChangeNotifier {
       _selectionCoordinator.runSelectedAction(dangerousCommandConfirmed: dangerousCommandConfirmed);
 
   Future<void> testSelectedAction() => _selectionCoordinator.testSelectedAction();
+
+  Future<void> activateDefinition(AgentActionDefinition definition) =>
+      _selectionCoordinator.activateDefinition(definition);
+
+  Future<void> stopRunningDefinition(AgentActionDefinition definition) async {
+    final executionIds = runningExecutionIdsFor(definition.id).toList(growable: false);
+    if (executionIds.isEmpty) {
+      return;
+    }
+
+    _errorMessage = null;
+    String? errorMessage;
+    for (final executionId in executionIds) {
+      final message = await _executionsController.cancelExecutionById(executionId);
+      errorMessage ??= message;
+    }
+
+    final pauseError = await _definitionsController.pauseDefinition(definition);
+    errorMessage ??= pauseError;
+    await load();
+    if (errorMessage != null) {
+      _errorMessage = errorMessage;
+      notifyListeners();
+    }
+  }
+
+  bool definitionMatchesListFilter(AgentActionDefinition definition) =>
+      _definitionsController.definitionMatchesListFilter(definition);
 
   Future<void> cancelExecution(AgentActionExecution execution) => _selectionCoordinator.cancelExecution(execution);
 

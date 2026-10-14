@@ -43,10 +43,15 @@ class ProtocolCapabilities {
     bool streamingResults = false,
     int? recommendedStreamPullWindowSize,
     int? maxStreamPullWindowSize,
+    Map<String, dynamic>? sqlOperations,
     Map<String, dynamic>? agentActions,
     Map<String, dynamic>? parallelBatchDispatch,
   }) {
     final extensions = <String, dynamic>{
+      'sourceDiscovery': 1,
+      'sourceIdentity': 1,
+      'sourceSchema': 1,
+      'sourceConstraints': 1,
       'batchSupport': true,
       'bulkInsert': true,
       'binaryPayload': binaryPayload,
@@ -77,6 +82,7 @@ class ProtocolCapabilities {
     if (binaryPayload) {
       extensions['transportFrame'] = 'payload-frame/1.0';
     }
+    if (sqlOperations != null) extensions['sqlOperations'] = sqlOperations;
     if (agentActions != null) {
       extensions['agentActions'] = agentActions;
     }

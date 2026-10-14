@@ -38,6 +38,7 @@ class AgentActionsExecutionsController {
 
   List<AgentActionExecution> executions = <AgentActionExecution>[];
   bool isRunning = false;
+  String? runningManualActionId;
   bool isTesting = false;
   final Set<String> cancellingExecutionIds = <String>{};
   String? lastTestedActionId;
@@ -162,6 +163,7 @@ class AgentActionsExecutionsController {
     required bool dangerousCommandConfirmed,
   }) async {
     isRunning = true;
+    runningManualActionId = definition.id;
     _onStateChanged();
 
     final result = await _runAction(
@@ -173,6 +175,7 @@ class AgentActionsExecutionsController {
     );
 
     isRunning = false;
+    runningManualActionId = null;
     if (result.isError()) {
       final message = _messageFor(result.exceptionOrNull()!);
       _onStateChanged();
@@ -232,6 +235,22 @@ class AgentActionsExecutionsController {
     isTesting = false;
     _onStateChanged();
     return (errorMessage: null, preflightRecorded: true);
+  }
+
+  Future<String?> cancelExecutionById(String executionId) async {
+    cancellingExecutionIds.add(executionId);
+    _onStateChanged();
+
+    final result = await _cancelExecution(executionId);
+
+    cancellingExecutionIds.remove(executionId);
+    if (result.isError()) {
+      final message = _messageFor(result.exceptionOrNull()!);
+      _onStateChanged();
+      return message;
+    }
+
+    return null;
   }
 
   Future<String?> cancelExecution(AgentActionExecution execution) async {

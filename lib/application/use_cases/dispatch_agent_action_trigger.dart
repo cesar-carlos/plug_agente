@@ -1,4 +1,5 @@
 import 'package:plug_agente/application/use_cases/run_agent_action_locally.dart';
+import 'package:plug_agente/core/constants/agent_action_gate_constants.dart';
 import 'package:plug_agente/core/constants/agent_action_trigger_constants.dart';
 import 'package:plug_agente/core/constants/agent_action_validation_constants.dart';
 import 'package:plug_agente/domain/actions/actions.dart';
@@ -67,6 +68,26 @@ class DispatchAgentActionTrigger {
             'action_id': actionId,
             'reason': AgentActionTriggerConstants.triggerDisabledReason,
             'user_message': 'O gatilho esta desativado e nao pode executar a acao.',
+          },
+        ),
+      );
+    }
+
+    final definitionResult = await _repository.getDefinition(actionId);
+    if (definitionResult.isError()) {
+      return Failure(definitionResult.exceptionOrNull()!);
+    }
+    final definition = definitionResult.getOrThrow();
+    if (!definition.canRun) {
+      return Failure(
+        ActionValidationFailure.withContext(
+          message: 'Action is not active and its trigger was not executed.',
+          context: {
+            'trigger_id': trigger.id,
+            'action_id': actionId,
+            'state': definition.state.name,
+            'reason': AgentActionGateConstants.actionNotActiveReason,
+            'user_message': 'A acao esta pausada e o gatilho nao foi executado.',
           },
         ),
       );

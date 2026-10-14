@@ -37,6 +37,8 @@ void main() {
         ),
       );
       await Future<void>.delayed(Duration.zero);
+      check(queue.isActionRunning('a')).isTrue();
+      check(queue.runningExecutionIdsFor('a')).contains('running');
 
       final pending = queue.enqueue(
         AgentActionQueueRequest<String>(
@@ -65,11 +67,13 @@ void main() {
         ),
       );
       check(rejected.isError()).isTrue();
-      check((rejected.exceptionOrNull()! as ActionQueueFailure).code)
-          .equals(AgentActionFailureCode.queueDisposed);
+      check((rejected.exceptionOrNull()! as ActionQueueFailure).code).equals(AgentActionFailureCode.queueDisposed);
       check(queue.isDisposed).isTrue();
 
       blocker.complete(const Success('done'));
+      await Future<void>.delayed(Duration.zero);
+      check(queue.isActionRunning('a')).isFalse();
+      check(queue.runningExecutionIdsFor('a')).isEmpty();
     });
 
     test('disposeGracefully waits for in-flight then rejects new work', () async {
@@ -222,8 +226,7 @@ void main() {
 
       final result = queue.cancelQueued(executionId: 'missing');
       check(result.isError()).isTrue();
-      check((result.exceptionOrNull()! as ActionQueueFailure).code)
-          .equals(AgentActionFailureCode.queueDisposed);
+      check((result.exceptionOrNull()! as ActionQueueFailure).code).equals(AgentActionFailureCode.queueDisposed);
     });
 
     test('dispose is idempotent after pending items are failed', () async {
@@ -257,8 +260,7 @@ void main() {
 
       final pendingResult = await pending;
       check(pendingResult.isError()).isTrue();
-      check((pendingResult.exceptionOrNull()! as ActionQueueFailure).code)
-          .equals(AgentActionFailureCode.queueDisposed);
+      check((pendingResult.exceptionOrNull()! as ActionQueueFailure).code).equals(AgentActionFailureCode.queueDisposed);
 
       blocker.complete(const Success('first'));
       await Future<void>.delayed(Duration.zero);
@@ -298,8 +300,7 @@ void main() {
         policies: _enqueuePolicies(),
       );
       check(result.isError()).isTrue();
-      check((result.exceptionOrNull()! as ActionQueueFailure).code)
-          .equals(AgentActionFailureCode.queueDisposed);
+      check((result.exceptionOrNull()! as ActionQueueFailure).code).equals(AgentActionFailureCode.queueDisposed);
     });
   });
 
@@ -336,8 +337,7 @@ void main() {
 
       final pendingResult = await pending;
       check(pendingResult.isError()).isTrue();
-      check((pendingResult.exceptionOrNull()! as ActionQueueFailure).code)
-          .equals(AgentActionFailureCode.queueTimeout);
+      check((pendingResult.exceptionOrNull()! as ActionQueueFailure).code).equals(AgentActionFailureCode.queueTimeout);
       check(pendingTaskStarted).isFalse();
 
       blocker.complete(const Success('done'));

@@ -129,6 +129,7 @@ class AgentActionsRuntimeController {
     isLoading = true;
     errorMessage = null;
     bootstrap.definitionsController.lastOperationErrorMessage = null;
+    bootstrap.definitionsController.lastOperationFailure = null;
     bootstrap.remoteAuditController.clearCorrelation();
     _onStateChanged();
 

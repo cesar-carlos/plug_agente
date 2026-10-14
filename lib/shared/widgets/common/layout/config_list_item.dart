@@ -1,6 +1,7 @@
 import 'package:fluent_ui/fluent_ui.dart';
 
 import 'package:plug_agente/core/theme/theme.dart';
+import 'package:plug_agente/shared/widgets/common/actions/app_pressable.dart';
 
 class ConfigListItem extends StatelessWidget {
   const ConfigListItem({
@@ -21,7 +22,7 @@ class ConfigListItem extends StatelessWidget {
   Widget build(BuildContext context) {
     final colors = context.appColors;
 
-    return Container(
+    final item = Container(
       decoration: BoxDecoration(
         color: isSelected ? colors.selectedFill : null,
         borderRadius: BorderRadius.circular(AppRadius.sm),
@@ -56,6 +57,14 @@ class ConfigListItem extends StatelessWidget {
             ),
         ],
       ),
+    );
+
+    final onTap = this.onTap;
+    if (onTap == null) return item;
+    return AppPressable(
+      onPressed: onTap,
+      semanticLabel: title,
+      child: item,
     );
   }
 }

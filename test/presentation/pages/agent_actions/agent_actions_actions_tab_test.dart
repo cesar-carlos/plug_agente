@@ -354,20 +354,17 @@ void main() {
       of: dialog,
       matching: find.byType(Scrollbar),
     );
-    final listViewFinder = find.descendant(
-      of: dialog,
-      matching: find.byType(ListView),
-    );
 
     expect(scrollbarFinder, findsOneWidget);
-    expect(listViewFinder, findsOneWidget);
 
     final scrollbar = tester.widget<Scrollbar>(scrollbarFinder);
-    final listView = tester.widget<ListView>(listViewFinder);
+    final scrollView = tester.widget<SingleChildScrollView>(
+      find.descendant(of: scrollbarFinder, matching: find.byType(SingleChildScrollView)),
+    );
 
     expect(scrollbar.controller, isNotNull);
-    expect(listView.controller, same(scrollbar.controller));
-    expect(listView.primary, isFalse);
+    expect(scrollView.controller, same(scrollbar.controller));
+    expect(scrollView.primary, isFalse);
     expect(tester.takeException(), isNull);
   });
 
@@ -571,7 +568,13 @@ void main() {
       type: AgentActionTriggerType.weekly,
       fill: (tester) async {
         await tester.enterText(agentActionFormTextBox(ptL10n.agentActionsTriggerFieldTimeOfDay), '08:30');
-        await tester.tap(find.widgetWithText(Checkbox, ptL10n.agentActionsTriggerWeekdayMon));
+        final monday = find.widgetWithText(Checkbox, ptL10n.agentActionsTriggerWeekdayMon);
+        await tester.ensureVisible(monday);
+        await tester.pumpAndSettle();
+        expect(monday.hitTestable(), findsOneWidget);
+        await tester.tap(monday.hitTestable());
+        await tester.pump();
+        expect(tester.widget<Checkbox>(monday).checked, isTrue);
       },
     ),
     (
@@ -606,6 +609,11 @@ void main() {
 
       expect(harness.repository.triggers, hasLength(1));
       expect(harness.repository.triggers.values.single.type, scenario.type);
+      if (scenario.type == AgentActionTriggerType.weekly) {
+        final schedule = harness.repository.triggers.values.single.schedule;
+        expect(schedule.weekdays, {DateTime.monday});
+        expect(schedule.timeOfDayMinutes, 8 * Duration.minutesPerHour + 30);
+      }
       expect(find.text(ptL10n.agentActionsTriggerEditorTitleNew), findsNothing);
     });
   }
@@ -991,6 +999,7 @@ void main() {
     await tester.binding.setSurfaceSize(const Size(1600, 2000));
     await harness.pumpPage(tester);
     await openSelectedActionDialog(tester);
+    await showActionEditorPage(tester, 'target');
 
     final configPathField = agentActionFormTextBox(ptL10n.agentActionsFormData7ConfigPath);
     final shortcutButton = find.ancestor(
@@ -1194,6 +1203,7 @@ void main() {
     await tester.binding.setSurfaceSize(const Size(1400, 900));
     await harness.pumpPage(tester);
     await openSelectedActionDialog(tester);
+    await showActionEditorPage(tester, 'target');
 
     await tester.enterText(
       agentActionFormTextBox(ptL10n.agentActionsFormConnectionSearch),
@@ -1490,12 +1500,12 @@ void main() {
       findsOneWidget,
     );
 
-    await tester.tap(find.byIcon(FluentIcons.cancel));
+    await tester.tap(find.byKey(const ValueKey<String>('agent_action_execution_cancel_execution-1')));
     await tester.pump();
     while (harness.provider.isLoading || harness.provider.hasCancellationInProgress('execution-1')) {
       await tester.pump(const Duration(milliseconds: 50));
     }
-    await tester.pumpAndSettle();
+    await pumpUntilUiSettles(tester);
 
     expect(
       harness.repository.executions['execution-1']?.status,
@@ -1600,6 +1610,7 @@ void main() {
     await harness.pumpPage(tester);
     await openCreateActionDialog(tester, ptL10n);
     await selectActionFormType(tester, ptL10n, ptL10n.agentActionsTypePowerShell);
+    await showActionEditorPage(tester, 'target');
 
     expect(find.text(ptL10n.agentActionsFormPowerShellModeScript), findsOneWidget);
     await tester.ensureVisible(agentActionFormComboBox(ptL10n.agentActionsFormPowerShellMode));
@@ -1626,6 +1637,7 @@ void main() {
     await harness.pumpPage(tester);
     await openCreateActionDialog(tester, ptL10n);
     await selectActionFormType(tester, ptL10n, ptL10n.agentActionsTypePowerShell);
+    await showActionEditorPage(tester, 'target');
 
     expect(find.text(ptL10n.agentActionsFormPowerShellModeCommand), findsOneWidget);
     await tester.ensureVisible(agentActionFormComboBox(ptL10n.agentActionsFormPowerShellMode));

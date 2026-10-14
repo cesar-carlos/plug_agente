@@ -6,6 +6,35 @@ void _registerRpc(
   required int Function(String key, int fallback) readNonNegativeIntEnv,
 }) {
   getIt
+    ..registerLazySingleton<ISourceDiscoveryProbe>(
+      () =>
+          OdbcSourceDiscovery(getIt<odbc.OdbcService>(), getIt<ConfigService>(), getIt<DirectOdbcConnectionLimiter>()),
+    )
+    ..registerLazySingleton<ISqlOperationAuthorizer>(
+      () => SqlOperationAuthorizer(getIt<ActiveConfigResolver>(), getIt<ClientTokenValidationService>()),
+    )
+    ..registerLazySingleton<ISqlOperationTransactionFactory>(
+      () => OdbcSqlOperationTransactionFactory(
+        getIt<odbc.OdbcService>(),
+        getIt<ConfigService>(),
+        getIt<DirectOdbcConnectionLimiter>(),
+      ),
+    )
+    ..registerLazySingleton<SqlOperationExecutor>(
+      () => SqlOperationExecutor(
+        journal: getIt<ISqlOperationJournal>(),
+        maintenanceGate: getIt<IUpdateMaintenanceGate>(),
+        authorizer: getIt<ISqlOperationAuthorizer>(),
+        transactions: getIt<ISqlOperationTransactionFactory>(),
+        uuid: getIt<Uuid>(),
+        onCleanupFailure: (operationId, failure) => developer.log(
+          'SQL operation cleanup failed',
+          name: 'sql_operations',
+          level: 900,
+          error: <String, Object>{'operationId': operationId},
+        ),
+      ),
+    )
     ..registerLazySingleton<SqlRpcMethodHandlerOperationsFactory>(
       () => SqlRpcMethodHandlerOperationsFactory(
         getIt<IStreamingNamedParameterPreparer>(),
@@ -138,6 +167,30 @@ void _registerRpc(
         odbcConnectionSettings: getIt<IOdbcConnectionSettings>(),
         inFlightAbortPort: getIt<ISqlInFlightExecutionAbortPort>(),
         operationsFactory: getIt<DefaultRpcMethodHandlerOperationsFactory>(),
+        additionalHandlers: [
+          SourceSchemaRpcHandler(
+            getIt<ActiveConfigResolver>(),
+            getIt<ClientTokenValidationService>(),
+            OdbcSourceSchema(
+              OdbcSourceDiscovery(
+                getIt<odbc.OdbcService>(),
+                getIt<ConfigService>(),
+                getIt<DirectOdbcConnectionLimiter>(),
+              ),
+            ),
+          ),
+          SourceDiscoveryRpcHandler(
+            getIt<ActiveConfigResolver>(),
+            getIt<ClientTokenValidationService>(),
+            getIt<ISourceDiscoveryProbe>(),
+          ),
+          for (final method in ['sql.operation.execute', 'sql.operation.get', 'sql.operation.cancel'])
+            SqlOperationRpcHandler(
+              method,
+              getIt<SqlOperationExecutor>(),
+              enabled: () => getIt<FeatureFlags>().enableSqlOperations,
+            ),
+        ],
       ),
     )
     ..registerLazySingleton<IRpcRequestDispatcher>(

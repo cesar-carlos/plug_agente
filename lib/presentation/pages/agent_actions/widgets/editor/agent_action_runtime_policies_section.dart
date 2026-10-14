@@ -150,7 +150,7 @@ class AgentActionRuntimePoliciesSection extends StatelessWidget {
           const SizedBox(height: AppSpacing.sm),
           LayoutBuilder(
             builder: (context, constraints) {
-              final stackFields = constraints.maxWidth < 720 * MediaQuery.textScalerOf(context).scale(1);
+              final stackFields = AppLayout.formFieldsStack(context, constraints.maxWidth);
               final maxConcurrentField = AppTextField(
                 label: l10n.agentActionsFormMaxConcurrent,
                 helpTitle: l10n.agentActionsHelpQueueTitle,
@@ -372,7 +372,7 @@ class AgentActionRuntimePoliciesSection extends StatelessWidget {
         if (showLifecycle && capturesProcessOutput) ...[
           LayoutBuilder(
             builder: (context, constraints) {
-              final stackFields = constraints.maxWidth < 720 * MediaQuery.textScalerOf(context).scale(1);
+              final stackFields = AppLayout.formFieldsStack(context, constraints.maxWidth);
               final exitCodesField = AppTextField(
                 label: l10n.agentActionsFormAcceptedExitCodes,
                 helpTitle: l10n.agentActionsHelpAcceptedExitCodesTitle,

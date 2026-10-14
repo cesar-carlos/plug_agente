@@ -195,7 +195,10 @@ class AgentActionRepository implements IAgentActionRepository {
         );
         final row = _mapper.triggerToData(timestamped, now: now);
         await _database.into(_database.agentActionTriggerTable).insertOnConflictUpdate(row);
-        return Success(_mapper.triggerFromData(row));
+        final stored = await (_database.select(
+          _database.agentActionTriggerTable,
+        )..where((table) => table.id.equals(trigger.id))).getSingle();
+        return Success(_mapper.triggerFromData(stored));
       } on Exception catch (error) {
         return Failure(
           _databaseFailure(
@@ -206,6 +209,44 @@ class AgentActionRepository implements IAgentActionRepository {
               'trigger_id': trigger.id,
               'action_id': trigger.actionId,
             },
+          ),
+        );
+      }
+    });
+  }
+
+  @override
+  Future<Result<bool>> updateTriggerRuntime(AgentActionTrigger expected, AgentActionTrigger updated) async {
+    return _withAdmission(() async {
+      try {
+        return await _database.transaction(() async {
+          final query = _database.select(_database.agentActionTriggerTable)
+            ..where((table) => table.id.equals(expected.id));
+          final current = await query.getSingleOrNull();
+          if (current == null) return const Success(false);
+          final snapshot = _mapper.triggerToData(_mapper.triggerFromData(current), now: current.updatedAt);
+          if (snapshot != _mapper.triggerToData(expected, now: current.updatedAt)) {
+            return const Success(false);
+          }
+          final row = _mapper.triggerToData(updated, now: current.updatedAt);
+          await (_database.update(
+            _database.agentActionTriggerTable,
+          )..where((table) => table.id.equals(expected.id))).write(
+            AgentActionTriggerTableCompanion(
+              scheduleJson: Value(row.scheduleJson),
+              lastRunAt: Value(row.lastRunAt),
+              lastScheduledAt: Value(row.lastScheduledAt),
+              nextRunAt: Value(row.nextRunAt),
+            ),
+          );
+          return const Success(true);
+        });
+      } on Exception catch (error) {
+        return Failure(
+          _databaseFailure(
+            'Failed to update trigger runtime',
+            cause: error,
+            context: {'operation': 'updateTriggerRuntime', 'trigger_id': expected.id},
           ),
         );
       }

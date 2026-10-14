@@ -1,3 +1,5 @@
+import 'dart:ui' show Tristate;
+
 import 'package:fluent_ui/fluent_ui.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:plug_agente/application/actions/action_execution_queue.dart';
@@ -145,9 +147,19 @@ void drainPendingFlutterErrors(WidgetTester tester) {
   while (tester.takeException() != null) {}
 }
 
+Future<void> pumpUntilUiSettles(WidgetTester tester) async {
+  const maxPumps = 20;
+  for (var i = 0; i < maxPumps; i++) {
+    await tester.pump(const Duration(milliseconds: 50));
+    if (!tester.binding.hasScheduledFrame) {
+      return;
+    }
+  }
+}
+
 Future<void> openTab(WidgetTester tester, String label) async {
   await tester.tap(find.text(label).first);
-  await tester.pumpAndSettle();
+  await pumpUntilUiSettles(tester);
 }
 
 Future<void> openCreateActionDialog(WidgetTester tester, AppLocalizations l10n, {bool expandPolicies = true}) async {
@@ -157,21 +169,25 @@ Future<void> openCreateActionDialog(WidgetTester tester, AppLocalizations l10n, 
   if (expandPolicies) await expandActionEditorPolicies(tester);
 }
 
-Future<void> expandActionEditorPolicies(WidgetTester tester) async {
-  for (final section in ['advanced', 'notifications']) {
-    final header = find
-        .descendant(of: find.byKey(ValueKey('agent_action_section_$section')), matching: find.byType(Button))
-        .first;
-    FocusManager.instance.primaryFocus?.unfocus();
-    await tester.pumpAndSettle();
-    await tester.ensureVisible(header);
-    await tester.pumpAndSettle();
-    await tester.tap(header);
-    await tester.pumpAndSettle();
-  }
-  final name = find.byType(AppTextField).first;
-  await tester.ensureVisible(name);
+bool isAppPageSelected(WidgetTester tester, String section) {
+  return tester.getSemantics(find.byKey(ValueKey('app_page_$section'))).flagsCollection.isSelected == Tristate.isTrue;
+}
+
+Future<void> showActionEditorPage(WidgetTester tester, String section) async {
+  final button = find.byKey(ValueKey('app_page_$section'));
+  FocusManager.instance.primaryFocus?.unfocus();
   await tester.pumpAndSettle();
+  await tester.ensureVisible(button);
+  await tester.pumpAndSettle();
+  await tester.tap(button);
+  await tester.pumpAndSettle();
+}
+
+Future<void> expandActionEditorPolicies(WidgetTester tester) async {
+  for (final section in ['target', 'schedule', 'limits', 'advanced', 'notifications']) {
+    await showActionEditorPage(tester, section);
+  }
+  await showActionEditorPage(tester, 'identity');
 }
 
 Future<void> selectActionFormType(WidgetTester tester, AppLocalizations l10n, String typeLabel) async {
@@ -182,6 +198,7 @@ Future<void> selectActionFormType(WidgetTester tester, AppLocalizations l10n, St
 }
 
 Future<void> selectPowerShellMode(WidgetTester tester, AppLocalizations l10n, String modeLabel) async {
+  await showActionEditorPage(tester, 'target');
   FocusManager.instance.primaryFocus?.unfocus();
   await tester.pumpAndSettle();
   await tester.ensureVisible(agentActionFormComboBox(l10n.agentActionsFormPowerShellMode));
@@ -193,6 +210,7 @@ Future<void> selectPowerShellMode(WidgetTester tester, AppLocalizations l10n, St
 }
 
 Future<void> selectPowerShellExecutable(WidgetTester tester, AppLocalizations l10n, String executableLabel) async {
+  await showActionEditorPage(tester, 'target');
   FocusManager.instance.primaryFocus?.unfocus();
   await tester.pumpAndSettle();
   await tester.ensureVisible(agentActionFormComboBox(l10n.agentActionsFormPowerShellExecutable));
@@ -239,6 +257,17 @@ Future<void> openCreateTriggerDialog(WidgetTester tester, AppLocalizations l10n)
 }
 
 Future<void> selectTriggerType(WidgetTester tester, AppLocalizations l10n, String typeLabel) async {
+  final category = [l10n.agentActionsTriggerTypeManual, l10n.agentActionsTriggerTypeRemote].contains(typeLabel)
+      ? l10n.triggerDemand
+      : [l10n.agentActionsTriggerTypeAppStart, l10n.agentActionsTriggerTypeAppClose].contains(typeLabel)
+      ? l10n.triggerApplication
+      : [l10n.agentActionsTriggerTypeActionSucceeded, l10n.agentActionsTriggerTypeActionFailed].contains(typeLabel)
+      ? l10n.triggerResult
+      : l10n.triggerSchedule;
+  await tester.tap(formComboBox(l10n.triggerCategory));
+  await tester.pumpAndSettle();
+  await tester.tap(find.text(category).last);
+  await tester.pumpAndSettle();
   await tester.tap(formComboBox(l10n.agentActionsTriggerFieldType));
   await tester.pumpAndSettle();
   await tester.tap(find.text(typeLabel).last);
@@ -427,7 +456,7 @@ class AgentActionsPageHarness {
     while (provider.isLoading) {
       await tester.pump(const Duration(milliseconds: 50));
     }
-    await tester.pumpAndSettle();
+    await pumpUntilUiSettles(tester);
   }
 
   Widget buildWidget() {
@@ -875,6 +904,14 @@ class FakeAgentActionRepository implements IAgentActionRepository {
     definitions.remove(id);
     triggers.removeWhere((_, trigger) => trigger.actionId == id);
     return const Success(unit);
+  }
+
+  @override
+  Future<Result<bool>> updateTriggerRuntime(AgentActionTrigger expected, AgentActionTrigger updated) async {
+    final current = await getTrigger(expected.id);
+    if (current.isError() || !identical(current.getOrThrow(), expected)) return const Success(false);
+    final result = await saveTrigger(updated);
+    return result.fold((_) => const Success(true), Failure.new);
   }
 
   @override

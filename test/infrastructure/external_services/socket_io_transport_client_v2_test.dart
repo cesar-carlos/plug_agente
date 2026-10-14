@@ -205,6 +205,7 @@ void main() {
       mockNegotiator = MockProtocolNegotiator();
       mockDispatcher = MockRpcRequestDispatcher();
       mockFeatureFlags = MockFeatureFlags();
+      when(() => mockFeatureFlags.enableSqlOperations).thenReturn(false);
       mockSocket = MockSocket();
       mockManager = MockManager();
       metricsCollector = ProtocolMetricsCollector();

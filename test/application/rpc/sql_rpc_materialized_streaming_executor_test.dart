@@ -1,6 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:plug_agente/application/rpc/sql_rpc_materialized_streaming_executor.dart';
 import 'package:plug_agente/application/rpc/sql_rpc_stream_terminal_emitter.dart';
+import 'package:plug_agente/domain/entities/expected_source.dart';
 import 'package:plug_agente/domain/entities/query_request.dart';
 import 'package:plug_agente/domain/entities/query_response.dart';
 import 'package:plug_agente/domain/protocol/protocol.dart';
@@ -29,6 +30,40 @@ void main() {
       executor = const SqlRpcMaterializedStreamingExecutor(
         terminalEmitter: SqlRpcStreamTerminalEmitter(),
       );
+    });
+
+    test('verified materialized streaming preserves explicit completeness and upstream truncation', () async {
+      for (final truncated in [false, true]) {
+        final query = QueryRequest(
+          id: 'q',
+          agentId: 'agent',
+          query: 'SELECT id FROM fixture',
+          timestamp: DateTime.utc(2026),
+          expectedSource: ExpectedSource(dialect: 'mssql', identityHash: 'a' * 64),
+        );
+        final response = await executor.streamMaterializedResult(
+          request: const RpcRequest(jsonrpc: '2.0', method: 'sql.execute', id: 'req'),
+          queryRequest: query,
+          normalized: QueryResponse(
+            id: 'exec',
+            requestId: 'req',
+            agentId: 'agent',
+            data: const [
+              {'id': 1},
+            ],
+            timestamp: DateTime.utc(2026),
+            wasTruncated: truncated,
+          ),
+          limitedRows: const [
+            {'id': 1},
+          ],
+          effectiveMaxRows: 10,
+          wasTruncated: false,
+          limits: const TransportLimits(streamingChunkSize: 2),
+          streamEmitter: streamEmitter,
+        );
+        expect((response.result as Map<String, dynamic>)['truncated'], truncated);
+      }
     });
 
     test('should include column_metadata only on chunk 0', () async {

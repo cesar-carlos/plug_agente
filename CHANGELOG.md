@@ -5,6 +5,38 @@ and version bump instructions remain in `docs/install/release_guide.md`.
 
 ## Unreleased
 
+### Fixed — SQL Anywhere structural view inspection
+
+- Inspect ordinary BASE/VIEW resources by SYSTAB.table_type_str. The previous numeric discriminator mistook materialized views for ordinary views and omitted real views. Enforcement remains unknown; no capability or permission is inferred.
+- Extend the isolated MCP chain fixture to 16 paginated resources, explicit table/view policies, cross-page joins and fixed structural drift actions. Only the disposable operator companion performs DDL; production never accepts caller DDL. Release remains blocked.
+
+
+### Fixed — coordinated persona-v2 acceptance
+
+- Require shared-knowledge-and-compatibility in the installer/appcast guard and release manifest, aligned with all 14 MCP gates. No gates are accepted; production remains blocked.
+
+### Added — persistent MCP chain agent fixture
+
+- Use production Drift configuration/session/credential/token repositories and
+  FlutterSecure adapters with the native Windows DPAPI backend, isolated to the
+  temporary fixture support directory. No operational vault or plaintext fallback.
+- Restart without bootstrap preserves credentials, config/token identities and
+  all four journals; unknown operations stay non-executable after recovery.
+  Desktop bootstrap/installer and complete release acceptance remain pending.
+
+### Fixed — verified SQL in the MCP chain
+
+- Strict sql.execute ingress accepts expectedSource v1; malformed identities
+  remain invalid. Executing-connection checks and live policy still gate SQL.
+- Verified materialized queries, including chunked delivery, explicitly report
+  completeness without turning omitted legacy flags into proof. Preserve upstream
+  truncation. Incomplete/mistyped remote profiles return typed validation errors
+  instead of terminating a Socket.IO callback with unchecked casts.
+- Add the explicit four-engine MCP/hub/agent companion with private fixtures,
+  real ODBC/policy/journal, approval, revocation and post-commit confirmation loss.
+  This does not certify full desktop/Prisma bootstrap or release acceptance.
+
+
 ### Fixed — ODBC decoder, connection cleanup and streaming
 
 - Compressed columnar decoding in `dart_odbc_fast` releases native buffers

@@ -122,7 +122,9 @@ class AgentProfile {
         })
         .strict()
         .refine(
-          (value) => value['document_type'] == _resolveDocumentType(value['document'] as String),
+          (value) =>
+              value['document'] is String &&
+              value['document_type'] == _resolveDocumentType(value['document'] as String),
           message: m.documentTypeMismatch,
         );
   }
@@ -340,29 +342,38 @@ class AgentProfile {
       return payload;
     }
 
+    dynamic normalizeText(dynamic value, {bool digits = false, bool upper = false, bool lower = false}) {
+      if (value != null && value is! String) return value;
+      final text = (value as String? ?? '').trim();
+      if (digits) return _digitsOnly(text);
+      if (upper) return text.toUpperCase();
+      if (lower) return text.toLowerCase();
+      return text;
+    }
+
     final address = payload['address'];
     final normalizedAddress = address is Map<String, dynamic>
         ? <String, dynamic>{
-            'street': (address['street'] as String? ?? '').trim(),
-            'number': (address['number'] as String? ?? '').trim(),
-            'district': (address['district'] as String? ?? '').trim(),
-            'postal_code': _digitsOnly(address['postal_code'] as String? ?? ''),
-            'city': (address['city'] as String? ?? '').trim(),
-            'state': (address['state'] as String? ?? '').trim().toUpperCase(),
+            'street': normalizeText(address['street']),
+            'number': normalizeText(address['number']),
+            'district': normalizeText(address['district']),
+            'postal_code': normalizeText(address['postal_code'], digits: true),
+            'city': normalizeText(address['city']),
+            'state': normalizeText(address['state'], upper: true),
           }
         : address;
 
     return <String, dynamic>{
       ...payload,
-      'name': (payload['name'] as String? ?? '').trim(),
-      'trade_name': (payload['trade_name'] as String? ?? '').trim(),
-      'document': _digitsOnly(payload['document'] as String? ?? ''),
-      'document_type': (payload['document_type'] as String? ?? '').trim().toLowerCase(),
-      if (payload.containsKey('phone')) 'phone': _digitsOnly(payload['phone'] as String? ?? ''),
-      'mobile': _digitsOnly(payload['mobile'] as String? ?? ''),
-      'email': (payload['email'] as String? ?? '').trim().toLowerCase(),
+      'name': normalizeText(payload['name']),
+      'trade_name': normalizeText(payload['trade_name']),
+      'document': normalizeText(payload['document'], digits: true),
+      'document_type': normalizeText(payload['document_type'], lower: true),
+      if (payload.containsKey('phone')) 'phone': normalizeText(payload['phone'], digits: true),
+      'mobile': normalizeText(payload['mobile'], digits: true),
+      'email': normalizeText(payload['email'], lower: true),
       'address': normalizedAddress,
-      if (payload.containsKey('notes')) 'notes': (payload['notes'] as String? ?? '').trim(),
+      if (payload.containsKey('notes')) 'notes': normalizeText(payload['notes']),
     };
   }
 

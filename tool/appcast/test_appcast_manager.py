@@ -17,6 +17,19 @@ from tool.appcast import appcast_manager
 
 
 class AppcastManagerTests(unittest.TestCase):
+    def test_signature_diagnostics_distinguish_missing_and_invalid_signatures(self):
+        from tool.appcast.appcast_signing import generate_keypair
+        _, public = generate_keypair()
+        context = self.build_context()
+        tree = appcast_manager.et.ElementTree(appcast_manager._base_rss_root())
+        appcast_manager.update_appcast_tree(tree, context)
+        item = tree.getroot().find('channel/item')
+        with self.assertRaisesRegex(ValueError, 'missing plug:edSignature'):
+            appcast_manager.validate_signatures(item, context, public)
+        item.find('enclosure').set(appcast_manager._plug_attr('edSignature'), 'invalid')
+        with self.assertRaisesRegex(ValueError, 'signature is invalid'):
+            appcast_manager.validate_signatures(item, context, public)
+
     def update_rollout_with_cli(self, existing_rollout, requested_rollout, *, preserve, existing_channel="stable"):
         from tool.appcast.appcast_signing import generate_keypair
 

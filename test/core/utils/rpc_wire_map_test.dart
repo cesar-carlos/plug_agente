@@ -4,6 +4,13 @@ import 'package:plug_agente/domain/protocol/protocol.dart';
 
 void main() {
   group('RpcWireMap', () {
+    test('preserves required null journal counts through wire, batch and replay sanitation', () {
+      final result = <String, dynamic>{'operationId': 'operation', 'directlyAffectedRows': null};
+      final response = RpcResponse.success(id: 'request', result: result);
+      expect(RpcWireMap.sanitizeRpcResponse(response).result, result);
+      expect((RpcWireMap.sanitizeRpcResponseWirePayload(response.toJson()) as Map)['result'], result);
+      expect((RpcWireMap.sanitizeRpcResponseWirePayload([response.toJson()]) as List).single, response.toJson());
+    });
     test('putOptionalInt omits null values', () {
       final map = <String, dynamic>{'row_count': 0};
       RpcWireMap.putOptionalInt(map, 'affected_rows', null);

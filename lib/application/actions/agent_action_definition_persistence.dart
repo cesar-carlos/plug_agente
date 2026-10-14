@@ -461,6 +461,7 @@ final class AgentActionDefinitionPersistence {
 
     host.isSaving = true;
     host.lastOperationErrorMessage = null;
+    host.lastOperationFailure = null;
     host.notifyStateChanged();
 
     final trimmedId = actionId?.trim();
@@ -495,6 +496,7 @@ final class AgentActionDefinitionPersistence {
         shouldReload = true;
       },
       (failure) {
+        host.lastOperationFailure = failure;
         host.lastOperationErrorMessage = _messageFor(failure);
       },
     );

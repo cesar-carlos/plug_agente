@@ -102,6 +102,14 @@ class FakeAgentActionRepository implements IAgentActionRepository {
   }
 
   @override
+  Future<Result<bool>> updateTriggerRuntime(AgentActionTrigger expected, AgentActionTrigger updated) async {
+    final current = await getTrigger(expected.id);
+    if (current.isError() || !identical(current.getOrThrow(), expected)) return const Success(false);
+    final result = await saveTrigger(updated);
+    return result.fold((_) => const Success(true), Failure.new);
+  }
+
+  @override
   Future<Result<AgentActionTrigger>> saveTrigger(
     AgentActionTrigger trigger,
   ) async {

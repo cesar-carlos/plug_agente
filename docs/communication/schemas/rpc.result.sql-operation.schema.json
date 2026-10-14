@@ -1,0 +1,57 @@
+{
+  "additionalProperties": false,
+  "description": "Journal metadata; cancellation acceptance is not rollback. Unknown outcomes must never be retried automatically. Requires sqlOperations capability version 1 on the agent.",
+  "properties": {
+    "completedAt": {
+      "format": "date-time",
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "directlyAffectedRows": {
+      "minimum": 0,
+      "type": [
+        "integer",
+        "null"
+      ]
+    },
+    "executionId": {
+      "type": "string"
+    },
+    "fingerprint": {
+      "pattern": "^[a-f0-9]{64}$",
+      "type": "string"
+    },
+    "operationId": {
+      "format": "uuid",
+      "type": "string"
+    },
+    "state": {
+      "enum": [
+        "executando",
+        "cancelamento_solicitado",
+        "concluida",
+        "rollback_confirmado",
+        "resultado_desconhecido",
+        "cancelada"
+      ],
+      "type": "string"
+    },
+    "updatedAt": {
+      "format": "date-time",
+      "type": "string"
+    }
+  },
+  "required": [
+    "operationId",
+    "fingerprint",
+    "executionId",
+    "state",
+    "directlyAffectedRows",
+    "updatedAt"
+  ],
+  "type": "object",
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "rpc.result.sql-operation.schema.json"
+}

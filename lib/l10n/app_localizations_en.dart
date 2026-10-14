@@ -42,6 +42,13 @@ class AppLocalizationsEn extends AppLocalizations {
   String get agentActionsTestSelected => 'Test action';
 
   @override
+  String get agentActionsTestSelectedTooltip =>
+      'Checks the path and interpreter without running the task. Execution is available after activation.';
+
+  @override
+  String get agentActionsActivateSelected => 'Activate';
+
+  @override
   String get agentActionsCancelExecution => 'Cancel execution';
 
   @override
@@ -1096,6 +1103,12 @@ class AppLocalizationsEn extends AppLocalizations {
   String get agentActionsRiskNeedsValidation => 'Needs validation';
 
   @override
+  String get agentActionsRiskReadyForActivation => 'Ready to activate';
+
+  @override
+  String get agentActionsRiskOutsideFilter => 'Outside filter';
+
+  @override
   String get agentActionsRiskSecretPlaceholders => 'Uses secrets';
 
   @override
@@ -1290,6 +1303,11 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String agentActionsQueueActiveIndicator(int pending, int running) {
     return '$pending pending · $running running in queue';
+  }
+
+  @override
+  String agentActionsQueueActiveIndicatorWithNames(int pending, int running, String names) {
+    return '$pending pending · $running running: $names';
   }
 
   @override
@@ -1973,7 +1991,8 @@ class AppLocalizationsEn extends AppLocalizations {
   String get agentActionsTriggerValidationInvalidStartAt => 'Enter a valid start date and time.';
 
   @override
-  String get agentActionsTriggerValidationInvalidIntervalMinutes => 'Enter a positive whole number of minutes.';
+  String get agentActionsTriggerValidationInvalidIntervalMinutes =>
+      'Enter a positive interval in minutes; fractions are allowed.';
 
   @override
   String get agentActionsTriggerValidationInvalidTimeOfDay => 'Enter the time as HH:mm using a 24-hour clock.';
@@ -4819,6 +4838,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get formPasswordHide => 'Hide password';
 
   @override
+  String get buttonLoadingSemanticsSuffix => ', loading';
+
+  @override
   String formPasswordRequired(String fieldLabel) {
     return '$fieldLabel is required.';
   }
@@ -4977,6 +4999,24 @@ class AppLocalizationsEn extends AppLocalizations {
   String get agentActionsEditorAdvanced => 'Advanced settings';
 
   @override
+  String get agentActionsEditorIdentityTab => 'Identity';
+
+  @override
+  String get agentActionsEditorTargetTab => 'Run';
+
+  @override
+  String get agentActionsEditorScheduleTab => 'Schedule';
+
+  @override
+  String get agentActionsEditorLimitsTab => 'Limits';
+
+  @override
+  String get agentActionsEditorAdvancedTab => 'Advanced';
+
+  @override
+  String get agentActionsEditorNotificationsTab => 'Notifications';
+
+  @override
   String get agentActionsEditorAdvancedSummary => 'Context, environment, permissions, queue, output and remote access';
 
   @override
@@ -4984,6 +5024,17 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get agentActionsEditorOptionalHint => 'Optional';
+
+  @override
+  String get pagedViewPrevious => 'Previous';
+
+  @override
+  String get pagedViewNext => 'Next';
+
+  @override
+  String pagedViewPosition(int current, int total) {
+    return '$current of $total';
+  }
 
   @override
   String get agentActionsEditorNameHint => 'E.g. Update inventory';
@@ -5076,4 +5127,91 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get ctPolicyInvalidRecovery =>
       'Some tokens have an invalid saved policy and cannot authorize access. Revoke or delete the marked tokens, then create replacements with the required permissions.';
+
+  @override
+  String get triggerInvalidTimezone => 'Enter a valid IANA time zone.';
+
+  @override
+  String get triggerRearmRequired => 'Confirm rescheduling to run again.';
+
+  @override
+  String get triggerRearm => 'Reschedule the one-time run for the new date';
+
+  @override
+  String get triggerCategory => 'Trigger category';
+
+  @override
+  String get triggerDemand => 'On demand';
+
+  @override
+  String get triggerSchedule => 'Schedule';
+
+  @override
+  String get triggerApplication => 'Application';
+
+  @override
+  String get triggerResult => 'Another action’s result';
+
+  @override
+  String get triggerManualDescription => 'Runs when you start the action manually.';
+
+  @override
+  String get triggerRemoteDescription => 'Accepts remote requests, subject to action authorization.';
+
+  @override
+  String get triggerOnceDescription => 'Runs once at the specified date and time.';
+
+  @override
+  String get triggerIntervalDescription => 'Repeats in minutes. Fractions are accepted: 1.5 means 90 seconds.';
+
+  @override
+  String get triggerDailyDescription => 'Runs every day at the selected time.';
+
+  @override
+  String get triggerWeeklyDescription => 'Runs on the selected weekdays.';
+
+  @override
+  String get triggerMonthlyDescription => 'Runs on the chosen day; months without that day are skipped.';
+
+  @override
+  String get triggerStartDescription => 'Runs when the application starts.';
+
+  @override
+  String get triggerCloseDescription => 'Runs when the application closes, subject to shutdown limits.';
+
+  @override
+  String get triggerSuccessDescription => 'Runs after another action succeeds.';
+
+  @override
+  String get triggerFailureDescription => 'Runs after another action fails or times out.';
+
+  @override
+  String get triggerPickDateTime => 'Choose date and time';
+
+  @override
+  String get triggerPickTime => 'Choose time';
+
+  @override
+  String get triggerLocalDates => 'Start and end dates use the computer’s local time zone.';
+
+  @override
+  String get triggerLocalTime => 'Time in the computer’s local time zone';
+
+  @override
+  String get triggerNoFutureRun => 'This trigger has no future run. Review its dates or rescheduling.';
+
+  @override
+  String get triggerPreviewIncomplete => 'Enter a valid schedule to see the next run.';
+
+  @override
+  String get triggerPreviewDisabled => 'Disabled trigger: no run will be scheduled.';
+
+  @override
+  String get triggerPreviewLocal => 'Preview in the computer’s local time zone';
+
+  @override
+  String get triggerPreviewCatchUp => 'Missed run: it may start as soon as the trigger is saved.';
+
+  @override
+  String get triggerApply => 'Apply';
 }

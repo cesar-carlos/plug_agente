@@ -1,7 +1,8 @@
 import 'package:fluent_ui/fluent_ui.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:plug_agente/core/theme/theme.dart';
-
+import 'package:plug_agente/shared/widgets/common/actions/app_pressable.dart';
 import 'package:plug_agente/shared/widgets/common/layout/app_card.dart';
 
 void main() {
@@ -115,10 +116,7 @@ void main() {
       expect(card.margin, customMargin);
     });
 
-    testWidgets('should NOT wrap in GestureDetector when onTap is null', (
-      tester,
-    ) async {
-      // Act
+    testWidgets('should NOT wrap in AppPressable when onTap is null', (tester) async {
       await tester.pumpWidget(
         FluentApp(
           home: ScaffoldPage(
@@ -129,14 +127,10 @@ void main() {
         ),
       );
 
-      // Assert
-      expect(find.byType(GestureDetector), findsNothing);
+      expect(find.byType(AppPressable), findsNothing);
     });
 
-    testWidgets('should wrap in GestureDetector when onTap is provided', (
-      tester,
-    ) async {
-      // Act
+    testWidgets('should wrap in AppPressable when onTap is provided', (tester) async {
       await tester.pumpWidget(
         FluentApp(
           home: ScaffoldPage(
@@ -148,12 +142,10 @@ void main() {
         ),
       );
 
-      // Assert
-      expect(find.byType(GestureDetector), findsOneWidget);
+      expect(find.byType(AppPressable), findsOneWidget);
     });
 
     testWidgets('should call onTap when tapped', (tester) async {
-      // Arrange
       var tapped = false;
 
       await tester.pumpWidget(
@@ -167,12 +159,32 @@ void main() {
         ),
       );
 
-      // Act
-      await tester.tap(find.byType(GestureDetector));
-      await tester.pump();
+      await tester.tap(find.text('Tap me'));
+      await tester.pump(const Duration(milliseconds: 200));
 
-      // Assert
       expect(tapped, isTrue);
+    });
+
+    testWidgets('should call onTap from the keyboard', (tester) async {
+      var taps = 0;
+
+      await tester.pumpWidget(
+        FluentApp(
+          home: ScaffoldPage(
+            content: AppCard(
+              onTap: () => taps++,
+              child: const Text('Tap me'),
+            ),
+          ),
+        ),
+      );
+
+      await tester.sendKeyEvent(LogicalKeyboardKey.tab);
+      await tester.pump();
+      await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+      await tester.pump(const Duration(milliseconds: 200));
+
+      expect(taps, 1);
     });
   });
 }

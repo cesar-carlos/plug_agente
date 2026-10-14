@@ -1,5 +1,6 @@
 import 'package:fluent_ui/fluent_ui.dart';
 import 'package:plug_agente/core/theme/theme.dart';
+import 'package:plug_agente/l10n/app_localizations.dart';
 
 class AppButton extends StatelessWidget {
   const AppButton({
@@ -10,7 +11,7 @@ class AppButton extends StatelessWidget {
     this.isLoading = false,
     this.isPrimary = true,
     this.isDestructive = false,
-    this.isLoadingSemanticsLabelSuffix = ', loading',
+    this.isLoadingSemanticsLabelSuffix,
     this.focusNode,
     this.autofocus = false,
     this.tooltip,
@@ -29,8 +30,10 @@ class AppButton extends StatelessWidget {
   /// When [isPrimary] is true and [filledBackgroundColor] is null, uses [AppColors.error].
   final bool isDestructive;
 
-  /// Appended to [label] in semantics when [isLoading] is true (screen readers).
-  final String isLoadingSemanticsLabelSuffix;
+  /// Appended to [label] in semantics when [isLoading] is true.
+  ///
+  /// When null, the localized [AppLocalizations.buttonLoadingSemanticsSuffix] is used.
+  final String? isLoadingSemanticsLabelSuffix;
   final FocusNode? focusNode;
   final bool autofocus;
   final String? tooltip;
@@ -49,13 +52,7 @@ class AppButton extends StatelessWidget {
     final theme = FluentTheme.of(context);
     final baseTextStyle = labelStyle ?? context.bodyText.copyWith(fontWeight: FontWeight.w600);
 
-    final child = isLoading
-        ? const SizedBox(
-            width: 16,
-            height: 16,
-            child: ProgressRing(strokeWidth: 2),
-          )
-        : icon != null
+    final labelChild = icon != null
         ? Row(
             mainAxisSize: MainAxisSize.min,
             children: [
@@ -65,9 +62,29 @@ class AppButton extends StatelessWidget {
             ],
           )
         : Text(label, style: baseTextStyle);
+    final child = Stack(
+      alignment: Alignment.center,
+      children: [
+        Visibility(
+          visible: !isLoading,
+          maintainSize: true,
+          maintainState: true,
+          maintainAnimation: true,
+          child: labelChild,
+        ),
+        if (isLoading)
+          const SizedBox(
+            width: 16,
+            height: 16,
+            child: ProgressRing(strokeWidth: 2),
+          ),
+      ],
+    );
 
     final effectiveOnPressed = isLoading ? null : onPressed;
-    final effectiveSemanticsLabel = semanticsLabel ?? (isLoading ? '$label$isLoadingSemanticsLabelSuffix' : label);
+    final loadingSuffix =
+        isLoadingSemanticsLabelSuffix ?? AppLocalizations.of(context)?.buttonLoadingSemanticsSuffix ?? ', loading';
+    final effectiveSemanticsLabel = semanticsLabel ?? (isLoading ? '$label$loadingSuffix' : label);
 
     Widget button = isPrimary
         ? FilledButton(

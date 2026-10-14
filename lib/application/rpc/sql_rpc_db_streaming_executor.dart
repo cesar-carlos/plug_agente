@@ -119,6 +119,9 @@ class SqlRpcDbStreamingExecutor {
     String? database,
     PreparedSql? preparedSql,
   }) async {
+    if (queryRequest.expectedSource != null) {
+      return const SqlDbStreamingTryResult(skipReason: 'verified_source_dedicated_connection');
+    }
     final sqlForPolicy = preparedSql?.stripped ?? sql;
     final alreadyStripped = preparedSql != null;
     final normalizedSql = _autoPolicy.normalizeSqlForDbStreaming(

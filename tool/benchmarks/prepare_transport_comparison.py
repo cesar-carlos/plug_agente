@@ -15,19 +15,23 @@ from tool.odbc.prepare_package_native import prepare_native_library
 from tool.py.script_utils import resolve_command
 
 
-def main():
+def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--base-dir', type=Path, required=True)
     parser.add_argument('--output-dir', type=Path, required=True)
     parser.add_argument('--hosted-baseline-revision', help='Explicit Git source of the legacy hosted engine')
     parser.add_argument('--baseline-repository', type=Path, help='Reuse an existing native Git repository')
-    args = parser.parse_args()
+    args = parser.parse_args(argv)
     base = args.base_dir.resolve()
     subprocess.run(resolve_command(['flutter', 'pub', 'get']), cwd=base, check=True)
     lock = (base / 'pubspec.lock').read_text(encoding='utf-8')
     block = re.search(r'^  odbc_fast:\n(.*?)(?=^  \w|^sdks:)', lock, re.M | re.S)
     if block and 'source: git' in block[1]:
         baseline = build_pinned_native(base)
+    elif not args.hosted_baseline_revision:
+        if args.baseline_repository:
+            parser.error('--baseline-repository requires --hosted-baseline-revision')
+        baseline = prepare_native_library(base)
     else:
         revision = args.hosted_baseline_revision
         if not revision or not re.fullmatch('[0-9a-f]{40}', revision):
@@ -44,11 +48,13 @@ def main():
             raise ValueError('Hosted package version differs from the explicit Git baseline')
         baseline = build_source_native(base, checkout, revision)
     candidate = prepare_native_library(ROOT)
-    baseline_revision = json.loads((baseline.parent / 'manifest.json').read_text())['revision']
-    return subprocess.run([sys.executable, str(ROOT / 'tool/benchmarks/run_transport_comparison.py'),
+    baseline_revision = json.loads((baseline.parent / 'manifest.json').read_text()).get('revision')
+    command = [sys.executable, str(ROOT / 'tool/benchmarks/run_transport_comparison.py'),
         '--base-dir', str(base), '--output-dir', str(args.output_dir), '--allow-odbc-change',
-        '--base-native-library', str(baseline), '--candidate-native-library', str(candidate),
-        '--base-odbc-revision', baseline_revision], cwd=ROOT).returncode
+        '--base-native-library', str(baseline), '--candidate-native-library', str(candidate)]
+    if baseline_revision:
+        command.extend(['--base-odbc-revision', baseline_revision])
+    return subprocess.run(command, cwd=ROOT).returncode
 
 
 if __name__ == '__main__':

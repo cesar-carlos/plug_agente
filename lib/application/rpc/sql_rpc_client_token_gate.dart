@@ -41,8 +41,9 @@ class SqlRpcClientTokenGate {
     Iterable<PreparedSql?>? preparedStatements,
     bool deduplicateEquivalentSql = false,
     bool skipEmptyAfterTrim = false,
+    bool requireLiveSource = false,
   }) async {
-    if (!_featureFlags.enableClientTokenAuthorization) {
+    if (!requireLiveSource && !_featureFlags.enableClientTokenAuthorization) {
       return null;
     }
 
@@ -91,7 +92,7 @@ class SqlRpcClientTokenGate {
         sql: stmt,
         requestDatabase: requestDatabase,
         requestId: request.id?.toString(),
-        method: request.method,
+        method: requireLiveSource ? 'sql.execute.verified' : request.method,
         deadline: deadline,
         preparedSql: preparedSql,
       );
