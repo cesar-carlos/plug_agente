@@ -114,6 +114,7 @@ dependencies:
   timezone: ^0.11.1
 
 dev_dependencies:
+  flutter_secure_storage_windows: ^4.2.2
   flutter_test:
     sdk: flutter
 

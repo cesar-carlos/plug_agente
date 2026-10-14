@@ -288,7 +288,7 @@ automaticReplay:false on both peers. Every handler checks negotiated capability
 and the live opt-in before any journal/connection work; exceeding limits is refused,
 never clamped. Preserve directlyAffectedRows:null through wire and replay storage.
 Production installer/appcast gates remain blocked until full acceptance.
-
+Coordinated persona-v2 acceptance includes shared-knowledge-and-compatibility in addition to the other gates. Removing it from a manifest cannot authorize an installer or appcast release.
 
 ## Persona SQL homologation exception
 
@@ -299,7 +299,6 @@ overrides optional live-test skips only for that matrix. Database identity
 comes from a fixed complete metadata SELECT on the dedicated connection, not
 ODBC currentCatalog. Count identity proof and row-count queries in 32 commands.
 The matrix does not authorize enabling production operations or releasing builds.
-
 
 ## Persona-v2 source discovery
 
@@ -323,30 +322,32 @@ IDs never execute again. This does not replace live policy or published training
 Full live hub/agent acceptance, including DBA restore procedures, remains blocked.
 See docs/communication/source_discovery.md. Keep deployment blocked.
 
-
 The explicit MCP chain companion tool/homologation/persona_chain_agent_test.dart
-uses production Socket.IO/RPC/ODBC, policy metadata and durable journal with
-private fixture configuration/secrets only. Its case evaluator is limited to the
-fixed empty disposable table, not a generic four-engine publication runner.
-Never run it against configured sources or in parallel with another Flutter
-runner using the same native DLL. sql.execute schema ingress must strictly accept
-expectedSource v1; verified materialized responses (including chunked transport)
-carry explicit truncated:false only when no truncation occurred. Preserve true
-upstream truncation and legacy optional-flag semantics on unrelated paths.
-Malformed remote profiles return typed validation failure, never unchecked casts
-that terminate the Socket.IO callback. Chain commit-fault injection belongs only
-to the fixture, after the real native commit. Keep production opt-in blocked.
+uses production Socket.IO/RPC/ODBC, policy, Drift configuration/token metadata and
+durable journals. FlutterSecure adapters use the real Windows DPAPI backend in
+an exclusive temporary support directory; only directory lookup is redirected.
+Never mock encryption/storage or read/migrate the operational vault. Restart
+removes bootstrap secrets, recovers stable config/token identities and checks
+unknown journals through RPC; never recreate business fixtures or replay SQL.
+Missing/corrupt/incomplete vault refuses recovery without bootstrap fallback.
+Its case evaluator is limited to the fixed empty disposable table, not a generic
+four-engine publication runner. Never run against configured sources or in
+parallel with another Flutter runner using the same native DLL. sql.execute
+schema ingress must strictly accept expectedSource v1; verified materialized
+responses (including chunked transport) carry explicit truncated:false only when
+no truncation occurred. Preserve true upstream truncation and legacy optional
+semantics on unrelated paths. Malformed profiles return typed failures. Commit
+confirmation loss belongs only to the fixture, after real native commit. Desktop
+bootstrap, multi-process vault concurrency, TLS/Redis and real crashes during
+commit remain uncertified. Keep production opt-in blocked.
 
+## Inspeção estrutural em desenvolvimento
 
-The explicit MCP chain companion tool/homologation/persona_chain_agent_test.dart
-uses production Socket.IO/RPC/ODBC, policy metadata and durable journal with
-private fixture configuration/secrets only. Its case evaluator is limited to the
-fixed empty disposable table, not a generic four-engine publication runner.
-Never run it against configured sources or in parallel with another Flutter
-runner using the same native DLL. sql.execute schema ingress must strictly accept
-expectedSource v1; verified materialized responses (including chunked transport)
-carry explicit truncated:false only when no truncation occurred. Preserve true
-upstream truncation and legacy optional-flag semantics on unrelated paths.
-Malformed remote profiles return typed validation failure, never unchecked casts
-that terminate the Socket.IO callback. Chain commit-fault injection belongs only
-to the fixture, after the real native commit. Keep production opt-in blocked.
+O contrato `sourceSchema` v1 está em
+[Communication](../../docs/communication/README.md#inspeção-estrutural-sourceschema-v1).
+Manter consultas de metadados fixas por motor, recursos autorizados e prova na
+conexão executora; não usar helpers genéricos como prova física dos quatro motores.
+Nulos obrigatórios não podem ser removidos pelo saneamento do wire. Constraints
+desconhecidas não viram habilitadas; enforcement SQL Anywhere permanece desconhecido.
+Expectativas de constraints exigem sourceConstraints v1 e conferência na mesma
+conexão antes/depois do SELECT. A extensão não libera deploy.

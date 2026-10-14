@@ -168,6 +168,17 @@ void _registerRpc(
         inFlightAbortPort: getIt<ISqlInFlightExecutionAbortPort>(),
         operationsFactory: getIt<DefaultRpcMethodHandlerOperationsFactory>(),
         additionalHandlers: [
+          SourceSchemaRpcHandler(
+            getIt<ActiveConfigResolver>(),
+            getIt<ClientTokenValidationService>(),
+            OdbcSourceSchema(
+              OdbcSourceDiscovery(
+                getIt<odbc.OdbcService>(),
+                getIt<ConfigService>(),
+                getIt<DirectOdbcConnectionLimiter>(),
+              ),
+            ),
+          ),
           SourceDiscoveryRpcHandler(
             getIt<ActiveConfigResolver>(),
             getIt<ClientTokenValidationService>(),

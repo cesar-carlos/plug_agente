@@ -239,11 +239,7 @@
         "name": "result",
         "schema": {
           "type": "object",
-          "required": [
-            "openrpc",
-            "info",
-            "methods"
-          ],
+          "required": ["openrpc", "info", "methods"],
           "properties": {
             "openrpc": {
               "type": "string"
@@ -345,6 +341,26 @@
         "name": "result",
         "schema": {
           "$ref": "./schemas/rpc.result.source-discovery.schema.json"
+        }
+      }
+    },
+    {
+      "name": "sql.describeSchema",
+      "summary": "Bounded fixed dialect catalog inspection on the verified source connection; sourceSchema/sourceIdentity v1 and token policy required. Ordered PK/unique/FK metadata includes explicit enforcement state; SQL Anywhere remains unknown. SELECT constraint expectations additionally require sourceConstraints v1.",
+      "paramStructure": "by-name",
+      "params": [
+        {
+          "name": "params",
+          "required": true,
+          "schema": {
+            "$ref": "./schemas/rpc.params.source-schema.schema.json"
+          }
+        }
+      ],
+      "result": {
+        "name": "result",
+        "schema": {
+          "$ref": "./schemas/rpc.result.source-schema.schema.json"
         }
       }
     }

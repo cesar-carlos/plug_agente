@@ -3,12 +3,18 @@ import 'dart:async';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
 import 'package:odbc_fast/odbc_fast.dart' as odbc;
+import 'package:plug_agente/core/utils/rpc_wire_map.dart';
 import 'package:plug_agente/domain/entities/expected_source.dart';
+import 'package:plug_agente/domain/entities/expected_structure.dart';
 import 'package:plug_agente/domain/entities/query_request.dart';
+import 'package:plug_agente/domain/entities/source_schema.dart';
 import 'package:plug_agente/domain/errors/failures.dart' as domain;
 import 'package:plug_agente/infrastructure/external_services/odbc_source_discovery.dart';
 import 'package:plug_agente/infrastructure/external_services/odbc_verified_query.dart';
+import 'package:plug_agente/infrastructure/external_services/source_schema_sql.dart';
 import 'package:plug_agente/infrastructure/pool/direct_odbc_connection_limiter.dart';
+import 'package:plug_agente/infrastructure/validation/rpc_request_schema_sql_params_validator.dart';
+import 'package:plug_agente/infrastructure/validation/schema_loader.dart';
 import 'package:result_dart/result_dart.dart';
 
 import '../../application/services/sql_operation_executor_test.dart' show fixtureConfig;
@@ -72,6 +78,208 @@ void main() {
     sqlHandlingMode: SqlHandlingMode.preserve,
     expectedSource: identity,
   );
+  const structure = ExpectedStructure([
+    ExpectedResource(SchemaResource(schema: 'public', name: 'fixture', type: 'table'), [
+      {'name': 'id', 'nativeType': 'int4', 'nullable': false, 'size': 10, 'scale': 0},
+    ]),
+  ]);
+  const tables = odbc.QueryResult(
+    columns: ['TABLE_SCHEM', 'TABLE_NAME', 'TABLE_TYPE'],
+    rows: [
+      ['public', 'fixture', 'TABLE'],
+    ],
+    rowCount: 1,
+  );
+  const columns = odbc.QueryResult(
+    columns: ['TABLE_SCHEM', 'TABLE_NAME', 'COLUMN_NAME', 'TYPE_NAME', 'NULLABLE', 'COLUMN_SIZE', 'DECIMAL_DIGITS'],
+    rows: [
+      ['public', 'fixture', 'id', 'int4', 0, 10, 0],
+    ],
+    rowCount: 1,
+  );
+  void catalog() {
+    when(
+      () => native.executeQueryNamed('dedicated', SourceSchemaSql.query('postgres', 'tables'), any()),
+    ).thenAnswer((_) async => const Success(tables));
+    when(
+      () => native.executeQueryNamed('dedicated', SourceSchemaSql.query('postgres', 'columns'), any()),
+    ).thenAnswer((_) async => const Success(columns));
+  }
+
+  QueryRequest structural(ExpectedSource identity) => QueryRequest(
+    id: 'read',
+    agentId: 'agent',
+    query: 'SELECT id FROM fixture',
+    timestamp: DateTime.utc(2026),
+    sqlHandlingMode: SqlHandlingMode.preserve,
+    expectedSource: identity,
+    expectedStructure: structure,
+  );
+  test('structural proof before and after SELECT uses the same native connection', () async {
+    final identity = await expected();
+    catalog();
+    final result = await query.execute(structural(identity), fixtureConfig, 'test_db', const Duration(seconds: 3));
+    expect(result.isSuccess(), isTrue);
+    verify(() => native.executeQueryNamed('dedicated', SourceSchemaSql.query('postgres', 'columns'), any())).called(2);
+    verify(() => native.executeQueryNamed('dedicated', 'SELECT id FROM fixture', any())).called(1);
+    verify(() => native.connect(any(), options: any(named: 'options'))).called(1);
+  });
+  test('used-column drift before SELECT refuses dispatch without reconnect', () async {
+    final identity = await expected();
+    catalog();
+    when(
+      () => native.executeQueryNamed('dedicated', SourceSchemaSql.query('postgres', 'columns'), any()),
+    ).thenAnswer((_) async => const Success(odbc.QueryResult(columns: [], rows: [], rowCount: 0)));
+    final result = await query.execute(structural(identity), fixtureConfig, 'test_db', const Duration(seconds: 3));
+    expect((result.exceptionOrNull()! as domain.Failure).code, 'SOURCE_STRUCTURE_MISMATCH');
+    verifyNever(() => native.executeQueryNamed('dedicated', 'SELECT id FROM fixture', any()));
+    await Future<void>.delayed(Duration.zero);
+    verify(() => native.disconnect('dedicated')).called(1);
+  });
+  test('used-column drift after SELECT discards the materialized rows', () async {
+    final identity = await expected();
+    catalog();
+    var calls = 0;
+    when(() => native.executeQueryNamed('dedicated', SourceSchemaSql.query('postgres', 'columns'), any())).thenAnswer(
+      (_) async =>
+          ++calls == 1 ? const Success(columns) : const Success(odbc.QueryResult(columns: [], rows: [], rowCount: 0)),
+    );
+    final result = await query.execute(structural(identity), fixtureConfig, 'test_db', const Duration(seconds: 3));
+    expect((result.exceptionOrNull()! as domain.Failure).code, 'SOURCE_STRUCTURE_MISMATCH');
+    verify(() => native.executeQueryNamed('dedicated', 'SELECT id FROM fixture', any())).called(1);
+    verify(() => native.connect(any(), options: any(named: 'options'))).called(1);
+  });
+  test('procedural and bundled schema gates accept exactly the new structural contract', () async {
+    final params = <String, dynamic>{
+      'sql': 'SELECT id FROM public.fixture WHERE id=:id',
+      'params': {'id': 1},
+      'client_token': 'fixture-token',
+      'database': 'test_db',
+      'expectedSource': {'version': 1, 'dialect': 'postgres', 'identityHash': 'a' * 64},
+      'expectedStructure': {
+        'version': 1,
+        'resources': [
+          {
+            'resource': {'schema': 'public', 'name': 'fixture', 'type': 'table'},
+            'columns': [
+              {'name': 'id', 'nativeType': 'int4', 'nullable': false, 'size': 10, 'scale': 0},
+            ],
+          },
+        ],
+      },
+      'options': {'execution_mode': 'preserve', 'max_rows': 100, 'timeout_ms': 30000},
+    };
+    const gate = RpcRequestSchemaSqlParamsValidator();
+    expect(gate.validateSqlExecuteParams(params, 5000).isSuccess(), isTrue);
+    final loader = TransportSchemaLoader();
+    await loader.loadAll();
+    expect(loader.get(TransportSchemaIds.paramsSqlExecute)!.validate(params).isValid, isTrue);
+    expect(
+      gate.validateSqlExecuteParams({
+        ...params,
+        'expectedStructure': {'sql': 'SELECT secret'},
+      }, 5000).isError(),
+      isTrue,
+    );
+    final unbound = Map<String, dynamic>.from(params)..remove('expectedSource');
+    expect(gate.validateSqlExecuteParams(unbound, 5000).isError(), isTrue);
+  });
+  test('late structural metadata cannot launch the next command after the budget', () async {
+    final identity = await expected();
+    catalog();
+    final pending = Completer<Result<odbc.QueryResult>>();
+    when(
+      () => native.executeQueryNamed('dedicated', SourceSchemaSql.query('postgres', 'tables'), any()),
+    ).thenAnswer((_) => pending.future);
+    final result = await query.execute(
+      structural(identity),
+      fixtureConfig,
+      'test_db',
+      const Duration(milliseconds: 20),
+    );
+    expect(result.isError(), isTrue);
+    pending.complete(const Success(tables));
+    await Future<void>.delayed(const Duration(milliseconds: 20));
+    verifyNever(() => native.executeQueryNamed('dedicated', SourceSchemaSql.query('postgres', 'columns'), any()));
+    verifyNever(() => native.executeQueryNamed('dedicated', 'SELECT id FROM fixture', any()));
+  });
+  for (final afterRead in [false, true]) {
+    test('constraint drift ${afterRead ? 'after' : 'before'} SELECT refuses result without replay', () async {
+      final identity = await expected();
+      catalog();
+      final enforced = ExpectedStructure([
+        ExpectedResource(structure.resources.single.resource, structure.resources.single.columns, {
+          'primaryKeys': [
+            {
+              'name': 'pk_fixture',
+              'columns': ['id'],
+              'status': 'enabled',
+            },
+          ],
+          'uniqueKeys': <Object?>[],
+          'foreignKeys': <Object?>[],
+        }),
+      ]);
+      var checks = 0;
+      when(() => native.executeQueryNamed('dedicated', SourceSchemaSql.query('postgres', 'primary'), any())).thenAnswer(
+        (_) async => Success(
+          odbc.QueryResult(
+            columns: ['PK_NAME', 'COLUMN_NAME', 'KEY_SEQ', 'CONSTRAINT_STATUS'],
+            rows: [
+              ['pk_fixture', 'id', 1, if (afterRead && ++checks == 1) 'enabled' else 'disabled'],
+            ],
+            rowCount: 1,
+          ),
+        ),
+      );
+      final result = await query.execute(
+        QueryRequest(
+          id: 'constraint',
+          agentId: 'agent',
+          query: 'SELECT id FROM fixture',
+          timestamp: DateTime.utc(2026),
+          sqlHandlingMode: SqlHandlingMode.preserve,
+          expectedSource: identity,
+          expectedStructure: enforced,
+        ),
+        fixtureConfig,
+        'test_db',
+        const Duration(seconds: 2),
+      );
+      expect(result.isError(), isTrue);
+      expect((result.exceptionOrNull()! as domain.Failure).code, 'SOURCE_STRUCTURE_MISMATCH');
+      if (afterRead) {
+        verify(() => native.executeQueryNamed('dedicated', 'SELECT id FROM fixture', any())).called(1);
+      } else {
+        verifyNever(() => native.executeQueryNamed('dedicated', 'SELECT id FROM fixture', any()));
+      }
+    });
+  }
+  test('metadata nullable fields survive wire sanitization', () {
+    final response =
+        RpcWireMap.sanitizeRpcResponseWirePayload({
+              'jsonrpc': '2.0',
+              'id': 'schema',
+              'result': {
+                'contractVersion': 1,
+                'identity': <String, Object?>{},
+                'resources': [
+                  {
+                    'resource': {'schema': null},
+                    'columns': [
+                      {'nullable': null, 'size': null, 'scale': null},
+                    ],
+                  },
+                ],
+                'metadataPage': {'nextOffset': null},
+              },
+            })
+            as Map<String, dynamic>;
+    final result = response['result'] as Map<String, dynamic>;
+    expect((result['metadataPage'] as Map<String, dynamic>).containsKey('nextOffset'), isTrue);
+    final first = (result['resources'] as List<dynamic>).first as Map<String, dynamic>;
+    expect((first['resource'] as Map<String, dynamic>).containsKey('schema'), isTrue);
+  });
   test('both native checks and read use the same connection without reconnect', () async {
     final identity = await expected();
     final result = (await query.execute(

@@ -50,6 +50,8 @@ import 'package:plug_agente/application/rpc/factories/default_rpc_method_handler
 import 'package:plug_agente/application/rpc/factories/sql_rpc_method_handler_operations_factory.dart';
 import 'package:plug_agente/application/rpc/rpc_method_dispatcher.dart';
 import 'package:plug_agente/application/rpc/source_discovery_rpc_handler.dart';
+import 'package:plug_agente/application/rpc/source_schema_rpc_handler.dart';
+import 'package:plug_agente/infrastructure/external_services/odbc_source_schema.dart';
 import 'package:plug_agente/application/rpc/sql_execute_materialized_result_policy.dart';
 import 'package:plug_agente/application/rpc/sql_operation_rpc_handler.dart';
 import 'package:plug_agente/application/rpc/sql_streaming_connection_string_cache.dart';

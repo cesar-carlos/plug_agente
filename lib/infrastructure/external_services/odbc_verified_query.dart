@@ -9,6 +9,7 @@ import 'package:plug_agente/infrastructure/errors/odbc_failure_mapper.dart';
 import 'package:plug_agente/infrastructure/external_services/odbc_gateway_query_preparation.dart';
 import 'package:plug_agente/infrastructure/external_services/odbc_query_response_factory.dart';
 import 'package:plug_agente/infrastructure/external_services/odbc_source_discovery.dart';
+import 'package:plug_agente/infrastructure/external_services/odbc_source_schema.dart';
 import 'package:result_dart/result_dart.dart';
 
 /// Read-only, bounded materialization. No pool, cached rows, DB stream or retry.
@@ -27,6 +28,10 @@ class OdbcVerifiedQuery {
         final started = DateTime.now();
         final proof = await OdbcSourceDiscovery.inspectConnection(sessions.service, id, config, database);
         expected.verify(proof);
+        if (request.expectedStructure case final structure?) {
+          await OdbcSourceSchema(sessions).verifyColumns(id, structure, proof.dialect, remaining);
+          remaining();
+        }
         // Firebird pagination is compiled by MCP; never route it through T-SQL.
         if (proof.dialect == 'firebird' && request.pagination != null) {
           throw ValidationFailure('Firebird verified queries require explicit trained pagination SQL.');
@@ -59,6 +64,10 @@ class OdbcVerifiedQuery {
         remaining();
         expected.verify(await OdbcSourceDiscovery.inspectConnection(sessions.service, id, config, database));
         remaining();
+        if (request.expectedStructure case final structure?) {
+          await OdbcSourceSchema(sessions).verifyColumns(id, structure, proof.dialect, remaining);
+          remaining();
+        }
         return OdbcQueryResponseFactory.fromSingleResult(request, result, startedAt: started);
       },
       timeout: timeout,

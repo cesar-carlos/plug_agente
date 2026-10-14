@@ -198,12 +198,22 @@ schema ingress accepts strict expectedSource v1. Verified complete results carry
 truncated:false (including materialized chunking); upstream truncation remains true.
 Legacy unrelated requests retain their optional flag contract.
 
-Only private named fixtures are accepted. Configuration/secret boundaries are
-in-memory fixtures; hub repositories are in-memory. The fixed-table operation
+Only private named fixtures are accepted. The default hub uses PostgreSQL/Prisma
+and real ClientAgentAccess request/owner approval. The agent uses production
+AgentConfigRepository, HubSessionStore, OdbcCredentialStore and token repository
+on Drift, with FlutterSecure adapters and real Windows DPAPI. Only support-directory
+lookup points at the private fixture vault; storage/encryption are not mocked and
+legacy/operational vault migration is disabled. SQLite contains metadata, not raw
+passwords/JWTs/tokens. Missing/corrupt secrets fail closed without bootstrap fallback.
+MCP, hub and agent processes restart; ODBC/JWT bootstrap is removed before agent
+recovery. Config/token IDs, publications and grants survive. A second agent
+restart reads all four unknown journals through hub RPC; duplicate fixture plans
+return the same executionId and unknown count without running business SQL again.
+The fixed-table operation
 case evaluator is not the general four-engine product runner. A fixture-only
 factory loses confirmation after actual native commit to test unknown outcome
 and absence of another MCP dispatch; it does not simulate a real process crash.
-Default desktop/vault bootstrap, full process recovery, permissions-minimum DBA
+Default desktop bootstrap/installer, concurrent vault writers, real crashes, permissions-minimum DBA
 procedures, full type/trigger parity and remaining release gates still require
 acceptance. See plug_mcp/docs/persona-v2/homologation-chain.md for reproducible
 provisioning, teardown and scope. Do not start the operational desktop app.

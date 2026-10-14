@@ -23,6 +23,8 @@ class TransportSchemaIds {
   static const String agentCapabilities = 'agent.capabilities.schema.json';
   static const String agentReady = 'agent.ready.schema.json';
   static const String agentProfile = 'agent.profile.schema.json';
+  static const String paramsSourceSchema = 'rpc.params.source-schema.schema.json';
+  static const String resultSourceSchema = 'rpc.result.source-schema.schema.json';
   static const String paramsSourceDiscovery = 'rpc.params.source-discovery.schema.json';
   static const String resultSourceDiscovery = 'rpc.result.source-discovery.schema.json';
   static const String paramsSqlOperationExecute = 'rpc.params.sql-operation-execute.schema.json';
@@ -64,6 +66,8 @@ class TransportSchemaIds {
     agentCapabilities,
     agentReady,
     agentProfile,
+    paramsSourceSchema,
+    resultSourceSchema,
     paramsSourceDiscovery,
     resultSourceDiscovery,
     paramsSqlOperationExecute,

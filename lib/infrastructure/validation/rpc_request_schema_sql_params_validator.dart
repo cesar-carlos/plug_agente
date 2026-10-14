@@ -1,4 +1,5 @@
 import 'package:plug_agente/domain/entities/expected_source.dart';
+import 'package:plug_agente/domain/entities/expected_structure.dart';
 import 'package:plug_agente/infrastructure/validation/rpc_request_schema_validation_support.dart';
 import 'package:result_dart/result_dart.dart';
 
@@ -29,6 +30,7 @@ final class RpcRequestSchemaSqlParamsValidator {
       'options',
       'database',
       'expectedSource',
+      'expectedStructure',
     };
     final extraKeys = params.keys.where((key) => !allowedKeys.contains(key));
     if (extraKeys.isNotEmpty) {
@@ -43,6 +45,17 @@ final class RpcRequestSchemaSqlParamsValidator {
         ExpectedSource.fromJson(params['expectedSource']);
       } on Object {
         return RpcRequestSchemaValidationSupport.invalidParams('Invalid expected source identity.');
+      }
+    }
+
+    if (params.containsKey('expectedStructure')) {
+      try {
+        ExpectedStructure.fromJson(params['expectedStructure']);
+        if (!params.containsKey('expectedSource')) {
+          return RpcRequestSchemaValidationSupport.invalidParams('Expected structure requires expectedSource.');
+        }
+      } on Object {
+        return RpcRequestSchemaValidationSupport.invalidParams('Invalid expected structure.');
       }
     }
 

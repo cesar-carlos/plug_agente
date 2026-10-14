@@ -66,11 +66,21 @@ abstract final class RpcWireMap {
   }
 
   /// Preserve required nullable journal fields; null means indeterminate, never zero.
-  static Map<String, dynamic> _sanitizeResult(Map<String, dynamic> result) => {
-    ...omitNullEntriesDeep(result),
-    if (result.containsKey('directlyAffectedRows') && result['directlyAffectedRows'] == null)
-      'directlyAffectedRows': null,
-  };
+  static Map<String, dynamic> _sanitizeResult(Map<String, dynamic> result) {
+    // sourceSchema v1 has required nullable fields: schema, native metadata and nextOffset.
+    // Their absence must not be confused with an observation of null/unknown.
+    if (result['contractVersion'] == 1 &&
+        result['identity'] is Map &&
+        result['resources'] is List &&
+        result['metadataPage'] is Map) {
+      return Map<String, dynamic>.from(result);
+    }
+    return {
+      ...omitNullEntriesDeep(result),
+      if (result.containsKey('directlyAffectedRows') && result['directlyAffectedRows'] == null)
+        'directlyAffectedRows': null,
+    };
+  }
 
   /// Strips `null` values from a prepared `rpc:response` wire object (single or batch).
   static dynamic sanitizeRpcResponseWirePayload(dynamic payload) {

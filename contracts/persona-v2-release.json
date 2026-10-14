@@ -2,6 +2,7 @@
   "generation": "persona-v2",
   "ready": false,
   "requiredGates": [
+    "shared-knowledge-and-compatibility",
     "identity-and-authorization",
     "training-and-local-query",
     "federation",

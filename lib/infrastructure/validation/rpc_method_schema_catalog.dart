@@ -7,6 +7,7 @@ class RpcMethodSchemaCatalog {
   const RpcMethodSchemaCatalog();
 
   static const Map<String, String> _paramsSchemaByMethod = <String, String>{
+    'sql.describeSchema': TransportSchemaIds.paramsSourceSchema,
     'sql.describeSource': TransportSchemaIds.paramsSourceDiscovery,
     'sql.operation.execute': TransportSchemaIds.paramsSqlOperationExecute,
     'sql.operation.get': TransportSchemaIds.paramsSqlOperationReference,
@@ -25,6 +26,7 @@ class RpcMethodSchemaCatalog {
   };
 
   static const Map<String, String> _resultSchemaByMethod = <String, String>{
+    'sql.describeSchema': TransportSchemaIds.resultSourceSchema,
     'sql.describeSource': TransportSchemaIds.resultSourceDiscovery,
     'sql.operation.execute': TransportSchemaIds.resultSqlOperation,
     'sql.operation.get': TransportSchemaIds.resultSqlOperation,

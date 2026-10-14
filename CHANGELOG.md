@@ -5,6 +5,19 @@ and version bump instructions remain in `docs/install/release_guide.md`.
 
 ## Unreleased
 
+### Fixed — coordinated persona-v2 acceptance
+
+- Require shared-knowledge-and-compatibility in the installer/appcast guard and release manifest, aligned with all 14 MCP gates. No gates are accepted; production remains blocked.
+
+### Added — persistent MCP chain agent fixture
+
+- Use production Drift configuration/session/credential/token repositories and
+  FlutterSecure adapters with the native Windows DPAPI backend, isolated to the
+  temporary fixture support directory. No operational vault or plaintext fallback.
+- Restart without bootstrap preserves credentials, config/token identities and
+  all four journals; unknown operations stay non-executable after recovery.
+  Desktop bootstrap/installer and complete release acceptance remain pending.
+
 ### Fixed — verified SQL in the MCP chain
 
 - Strict sql.execute ingress accepts expectedSource v1; malformed identities

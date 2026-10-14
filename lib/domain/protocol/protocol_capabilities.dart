@@ -50,6 +50,8 @@ class ProtocolCapabilities {
     final extensions = <String, dynamic>{
       'sourceDiscovery': 1,
       'sourceIdentity': 1,
+      'sourceSchema': 1,
+      'sourceConstraints': 1,
       'batchSupport': true,
       'bulkInsert': true,
       'binaryPayload': binaryPayload,

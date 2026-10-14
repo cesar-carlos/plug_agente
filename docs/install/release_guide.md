@@ -23,6 +23,10 @@ Plug Agente.
 - O CI falha se `pubspec.yaml`, `installer/setup.iss` e
   `lib/core/constants/app_version.g.dart` estiverem fora de sincronia.
 
+## Bloqueio coordenado persona-v2
+
+`python tool/release/check_persona_release.py` exige os 14 gates coordenados, incluindo `shared-knowledge-and-compatibility`. Manifesto permanece `ready: false`, sem gates concluídos, até evidências aceitas. Homologação parcial não libera instalador, appcast ou publicação.
+
 ## Pre-validacao local (antes do CI)
 
 Rode o gate local com paridade ao publish workflow **antes** de disparar o CI:

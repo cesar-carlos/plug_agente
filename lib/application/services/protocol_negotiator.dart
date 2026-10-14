@@ -259,7 +259,7 @@ class ProtocolNegotiator implements IProtocolNegotiator {
       negotiated[TransportExtensionNegotiation.healthPiggyback] = healthPiggyback;
     }
 
-    for (final extension in ['sourceDiscovery', 'sourceIdentity']) {
+    for (final extension in ['sourceDiscovery', 'sourceIdentity', 'sourceSchema', 'sourceConstraints']) {
       if (agentExtensions[extension] == 1 && serverExtensions[extension] == 1) {
         negotiated[extension] = 1;
       }
