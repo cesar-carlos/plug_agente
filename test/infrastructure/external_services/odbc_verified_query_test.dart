@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:fake_async/fake_async.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
 import 'package:odbc_fast/odbc_fast.dart' as odbc;
@@ -187,21 +188,31 @@ void main() {
   test('late structural metadata cannot launch the next command after the budget', () async {
     final identity = await expected();
     catalog();
-    final pending = Completer<Result<odbc.QueryResult>>();
-    when(
-      () => native.executeQueryNamed('dedicated', SourceSchemaSql.query('postgres', 'tables'), any()),
-    ).thenAnswer((_) => pending.future);
-    final result = await query.execute(
-      structural(identity),
-      fixtureConfig,
-      'test_db',
-      const Duration(milliseconds: 20),
-    );
-    expect(result.isError(), isTrue);
-    pending.complete(const Success(tables));
-    await Future<void>.delayed(const Duration(milliseconds: 20));
-    verifyNever(() => native.executeQueryNamed('dedicated', SourceSchemaSql.query('postgres', 'columns'), any()));
-    verifyNever(() => native.executeQueryNamed('dedicated', 'SELECT id FROM fixture', any()));
+    fakeAsync((async) {
+      final pending = Completer<Result<odbc.QueryResult>>();
+      when(
+        () => native.executeQueryNamed('dedicated', SourceSchemaSql.query('postgres', 'tables'), any()),
+      ).thenAnswer((_) => pending.future);
+      domain.Failure? failure;
+      query.execute(structural(identity), fixtureConfig, 'test_db', const Duration(seconds: 30)).then((result) {
+        expect(result.isError(), isTrue);
+        failure = result.exceptionOrNull()! as domain.Failure;
+      });
+      async.flushMicrotasks();
+      verify(() => native.executeQueryNamed('dedicated', SourceSchemaSql.query('postgres', 'tables'), any())).called(1);
+      // Advance timers without advancing the real stopwatch, reproducing an early timeout.
+      async.elapse(const Duration(seconds: 30));
+      expect(failure, isA<domain.DatabaseFailure>());
+      expect(failure!.cause, isA<TimeoutException>());
+      expect(limiter.activeCount, 1);
+      verifyNever(() => native.disconnect('dedicated'));
+      pending.complete(const Success(tables));
+      async.flushMicrotasks();
+      verifyNever(() => native.executeQueryNamed('dedicated', SourceSchemaSql.query('postgres', 'columns'), any()));
+      verifyNever(() => native.executeQueryNamed('dedicated', 'SELECT id FROM fixture', any()));
+      verify(() => native.disconnect('dedicated')).called(1);
+      expect(limiter.activeCount, 0);
+    });
   });
   for (final afterRead in [false, true]) {
     test('constraint drift ${afterRead ? 'after' : 'before'} SELECT refuses result without replay', () async {
