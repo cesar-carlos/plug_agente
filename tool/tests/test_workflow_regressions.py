@@ -13,8 +13,20 @@ def workflow(name):
 
 
 class WorkflowRegressionTests(unittest.TestCase):
+    def test_expensive_benchmark_runs_only_in_a_separate_manual_workflow(self):
+        ci = workflow('flutter_ci.yml')
+        benchmark = workflow('transport-benchmark.yml')
+        # PyYAML's YAML 1.1 loader reads the unquoted GitHub key `on` as True.
+        self.assertEqual(set(benchmark[True]), {'workflow_dispatch'})
+        self.assertNotIn('transport-benchmark', ci['jobs'])
+        self.assertNotEqual(benchmark['concurrency']['group'], ci['concurrency']['group'])
+        commands = [step.get('run', '') for job in ci['jobs'].values()
+                    for step in job.get('steps', [])]
+        self.assertFalse(any('prepare_transport_comparison.py' in command or
+                             'run_benchmark_suite.py' in command for command in commands))
+
     def test_transport_benchmark_uses_locked_baseline_and_requires_comparison_success(self):
-        steps = workflow('flutter_ci.yml')['jobs']['transport-benchmark']['steps']
+        steps = workflow('transport-benchmark.yml')['jobs']['transport-benchmark']['steps']
         comparison = next(step for step in steps if step.get('id') == 'transport-comparison')
         self.assertNotIn('--hosted-baseline-revision', comparison['run'])
         suite = next(step for step in steps if step['name'] == 'Run transport benchmark suite')
