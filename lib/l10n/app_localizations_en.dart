@@ -4837,6 +4837,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get formPasswordHide => 'Hide password';
 
   @override
+  String get buttonLoadingSemanticsSuffix => ', loading';
+
+  @override
   String formPasswordRequired(String fieldLabel) {
     return '$fieldLabel is required.';
   }
@@ -4995,6 +4998,24 @@ class AppLocalizationsEn extends AppLocalizations {
   String get agentActionsEditorAdvanced => 'Advanced settings';
 
   @override
+  String get agentActionsEditorIdentityTab => 'Identity';
+
+  @override
+  String get agentActionsEditorTargetTab => 'Run';
+
+  @override
+  String get agentActionsEditorScheduleTab => 'Schedule';
+
+  @override
+  String get agentActionsEditorLimitsTab => 'Limits';
+
+  @override
+  String get agentActionsEditorAdvancedTab => 'Advanced';
+
+  @override
+  String get agentActionsEditorNotificationsTab => 'Notifications';
+
+  @override
   String get agentActionsEditorAdvancedSummary => 'Context, environment, permissions, queue, output and remote access';
 
   @override
@@ -5002,6 +5023,17 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get agentActionsEditorOptionalHint => 'Optional';
+
+  @override
+  String get pagedViewPrevious => 'Previous';
+
+  @override
+  String get pagedViewNext => 'Next';
+
+  @override
+  String pagedViewPosition(int current, int total) {
+    return '$current of $total';
+  }
 
   @override
   String get agentActionsEditorNameHint => 'E.g. Update inventory';

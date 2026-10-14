@@ -289,7 +289,6 @@ class _RuntimeLimitFields extends StatelessWidget {
     required this.callbacks,
   });
 
-  static const double _rowBreakpoint = 720;
   static const int _labelLines = 2;
 
   final AppLocalizations l10n;
@@ -305,8 +304,7 @@ class _RuntimeLimitFields extends StatelessWidget {
   Widget build(BuildContext context) {
     return LayoutBuilder(
       builder: (context, constraints) {
-        final scale = MediaQuery.textScalerOf(context).scale(1);
-        final sideBySide = constraints.maxWidth >= _rowBreakpoint * scale;
+        final sideBySide = !AppLayout.formFieldsStack(context, constraints.maxWidth);
         final attempts = _attemptsField(reserveLabelLines: sideBySide);
         final runtime = _runtimeField(reserveLabelLines: sideBySide);
         final unit = _unitField(reserveLabelLines: sideBySide);

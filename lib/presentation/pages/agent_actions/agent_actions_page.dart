@@ -341,6 +341,7 @@ class _AgentActionsPageState extends State<AgentActionsPage> {
     AgentActionDefinition? definition,
   }) async {
     final dirtyNotifier = ValueNotifier<bool>(false);
+    final titleNotifier = ValueNotifier<String>('');
     try {
       // Fluent's showDialog already defaults to barrierDismissible: false,
       // so accidental clicks outside the editor do not drop the draft.
@@ -351,11 +352,13 @@ class _AgentActionsPageState extends State<AgentActionsPage> {
           return _AgentActionEditorDialogShell(
             l10n: l10n,
             dirtyNotifier: dirtyNotifier,
+            titleNotifier: titleNotifier,
             child: DeferredAgentActionEditor(
               provider: provider,
               definition: definition,
               l10n: l10n,
               dirtyNotifier: dirtyNotifier,
+              titleNotifier: titleNotifier,
               onSaved: () {
                 Navigator.pop(dialogContext);
               },
@@ -365,6 +368,7 @@ class _AgentActionsPageState extends State<AgentActionsPage> {
       );
     } finally {
       dirtyNotifier.dispose();
+      titleNotifier.dispose();
     }
   }
 
@@ -493,6 +497,7 @@ class _AgentActionEditorDialogShell extends StatelessWidget {
   const _AgentActionEditorDialogShell({
     required this.l10n,
     required this.dirtyNotifier,
+    required this.titleNotifier,
     required this.child,
   });
 
@@ -506,6 +511,7 @@ class _AgentActionEditorDialogShell extends StatelessWidget {
 
   final AppLocalizations l10n;
   final ValueNotifier<bool> dirtyNotifier;
+  final ValueNotifier<String> titleNotifier;
   final Widget child;
 
   Size _editorDialogContentSize(BuildContext context) {
@@ -572,7 +578,15 @@ class _AgentActionEditorDialogShell extends StatelessWidget {
                 contentWidth: contentSize.width,
                 contentHeight: contentSize.height,
                 closeTooltip: l10n.btnClose,
-                title: const SizedBox.shrink(),
+                title: ValueListenableBuilder<String>(
+                  valueListenable: titleNotifier,
+                  builder: (_, title, _) {
+                    if (title.isEmpty) {
+                      return const SizedBox.shrink();
+                    }
+                    return Text(title, maxLines: 1, overflow: TextOverflow.ellipsis);
+                  },
+                ),
                 onClose: () => unawaited(_tryClose(dialogContext)),
                 content: child,
               );

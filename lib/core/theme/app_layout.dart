@@ -14,6 +14,19 @@ class AppLayout {
   static const double maxDataWidth = 1440;
   static const double maxFormWidth = 640;
   static const double maxWideFormWidth = 1120;
+
+  /// Width where paired form fields stack. Scales with the text scaler so
+  /// enlarged fonts wrap before the labels collide.
+  static const double formFieldRowBreakpoint = 720;
+
+  static bool formFieldsStack(
+    BuildContext context,
+    double maxWidth, {
+    double breakpoint = formFieldRowBreakpoint,
+  }) {
+    return maxWidth < breakpoint * MediaQuery.textScalerOf(context).scale(1);
+  }
+
   static const double scrollbarPadding = 16;
 
   static EdgeInsets pagePadding(BuildContext context) {

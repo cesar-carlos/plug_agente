@@ -9026,6 +9026,12 @@ abstract class AppLocalizations {
   /// **'Hide password'**
   String get formPasswordHide;
 
+  /// Screen reader suffix appended to a button label while its action is in progress.
+  ///
+  /// In en, this message translates to:
+  /// **', loading'**
+  String get buttonLoadingSemanticsSuffix;
+
   /// No description provided for @formPasswordRequired.
   ///
   /// In en, this message translates to:
@@ -9308,6 +9314,42 @@ abstract class AppLocalizations {
   /// **'Advanced settings'**
   String get agentActionsEditorAdvanced;
 
+  /// No description provided for @agentActionsEditorIdentityTab.
+  ///
+  /// In en, this message translates to:
+  /// **'Identity'**
+  String get agentActionsEditorIdentityTab;
+
+  /// No description provided for @agentActionsEditorTargetTab.
+  ///
+  /// In en, this message translates to:
+  /// **'Run'**
+  String get agentActionsEditorTargetTab;
+
+  /// No description provided for @agentActionsEditorScheduleTab.
+  ///
+  /// In en, this message translates to:
+  /// **'Schedule'**
+  String get agentActionsEditorScheduleTab;
+
+  /// No description provided for @agentActionsEditorLimitsTab.
+  ///
+  /// In en, this message translates to:
+  /// **'Limits'**
+  String get agentActionsEditorLimitsTab;
+
+  /// No description provided for @agentActionsEditorAdvancedTab.
+  ///
+  /// In en, this message translates to:
+  /// **'Advanced'**
+  String get agentActionsEditorAdvancedTab;
+
+  /// No description provided for @agentActionsEditorNotificationsTab.
+  ///
+  /// In en, this message translates to:
+  /// **'Notifications'**
+  String get agentActionsEditorNotificationsTab;
+
   /// No description provided for @agentActionsEditorAdvancedSummary.
   ///
   /// In en, this message translates to:
@@ -9325,6 +9367,24 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Optional'**
   String get agentActionsEditorOptionalHint;
+
+  /// No description provided for @pagedViewPrevious.
+  ///
+  /// In en, this message translates to:
+  /// **'Previous'**
+  String get pagedViewPrevious;
+
+  /// No description provided for @pagedViewNext.
+  ///
+  /// In en, this message translates to:
+  /// **'Next'**
+  String get pagedViewNext;
+
+  /// Position of the current page in a paged surface.
+  ///
+  /// In en, this message translates to:
+  /// **'{current} of {total}'**
+  String pagedViewPosition(int current, int total);
 
   /// No description provided for @agentActionsEditorNameHint.
   ///

@@ -1,5 +1,6 @@
 import 'package:fluent_ui/fluent_ui.dart';
 import 'package:plug_agente/core/theme/theme.dart';
+import 'package:plug_agente/shared/widgets/common/actions/app_pressable.dart';
 
 class AppCard extends StatelessWidget {
   const AppCard({
@@ -23,8 +24,9 @@ class AppCard extends StatelessWidget {
       child: child,
     );
 
+    final onTap = this.onTap;
     if (onTap != null) {
-      return GestureDetector(onTap: onTap, child: card);
+      return AppPressable(onPressed: onTap, child: card);
     }
 
     return card;

@@ -2036,6 +2036,10 @@
   "formPasswordDefaultHint": "Digite a senha",
   "formPasswordShow": "Mostrar senha",
   "formPasswordHide": "Ocultar senha",
+  "buttonLoadingSemanticsSuffix": ", carregando",
+  "@buttonLoadingSemanticsSuffix": {
+    "description": "Sufixo de leitor de tela acrescentado ao rótulo de um botão enquanto a ação está em andamento."
+  },
   "formPasswordRequired": "{fieldLabel} é obrigatória.",
   "@formPasswordRequired": {
     "placeholders": {
@@ -2104,9 +2108,25 @@
   "agentActionsEditorSchedule": "Quando executar",
   "agentActionsEditorLimits": "Limites e encerramento",
   "agentActionsEditorAdvanced": "Configurações avançadas",
+  "agentActionsEditorIdentityTab": "Identificação",
+  "agentActionsEditorTargetTab": "Execução",
+  "agentActionsEditorScheduleTab": "Agenda",
+  "agentActionsEditorLimitsTab": "Limites",
+  "agentActionsEditorAdvancedTab": "Avançado",
+  "agentActionsEditorNotificationsTab": "Notificações",
   "agentActionsEditorAdvancedSummary": "Contexto, ambiente, permissões, filas, saída e acesso remoto",
   "agentActionsEditorRequiredHint": "Obrigatório",
   "agentActionsEditorOptionalHint": "Opcional",
+  "pagedViewPrevious": "Anterior",
+  "pagedViewNext": "Próxima",
+  "pagedViewPosition": "{current} de {total}",
+  "@pagedViewPosition": {
+    "description": "Posição da página atual em uma superfície paginada.",
+    "placeholders": {
+      "current": {"type": "int"},
+      "total": {"type": "int"}
+    }
+  },
   "agentActionsEditorNameHint": "Ex.: Atualizar estoque",
   "agentActionsEditorDescriptionHint": "Descreva a finalidade da ação e quando utilizá-la.",
   "agentActionsEditorActivationSteps": "Salve a ação, use Testar ação para validar e depois altere o estado para Ativa. A validação verifica a configuração sem executar a tarefa.",

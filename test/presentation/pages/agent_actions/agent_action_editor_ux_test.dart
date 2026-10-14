@@ -2,7 +2,7 @@ import 'package:fluent_ui/fluent_ui.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:plug_agente/domain/actions/actions.dart';
 import 'package:plug_agente/l10n/app_localizations.dart';
-import 'package:plug_agente/presentation/pages/agent_actions/widgets/editor/agent_action_editor_section.dart';
+import 'package:plug_agente/shared/widgets/common/navigation/app_paged_view.dart';
 
 import 'agent_actions_page_test_harness.dart';
 
@@ -16,46 +16,19 @@ void main() {
     await harness.pumpPage(tester);
   }
 
-  Future<void> toggle(WidgetTester tester, String section) async {
-    final header = find
-        .descendant(of: find.byKey(ValueKey('agent_action_section_$section')), matching: find.byType(Button))
-        .first;
-    FocusManager.instance.primaryFocus?.unfocus();
-    await tester.pumpAndSettle();
-    await tester.ensureVisible(header);
-    await tester.pumpAndSettle();
-    await tester.tap(header);
-    await tester.pumpAndSettle();
-  }
-
-  testWidgets('editor starts with essential sections open and advanced settings collapsed', (tester) async {
+  testWidgets('editor opens on the identification page', (tester) async {
     final harness = AgentActionsPageHarness();
     await tester.binding.setSurfaceSize(const Size(1200, 900));
     await pumpHarness(tester, harness);
     await openCreateActionDialog(tester, l10n, expandPolicies: false);
-    expect(
-      tester.widget<AgentActionEditorSection>(find.byKey(const ValueKey('agent_action_section_identity'))).expanded,
-      isTrue,
-    );
-    expect(
-      tester.widget<AgentActionEditorSection>(find.byKey(const ValueKey('agent_action_section_target'))).expanded,
-      isTrue,
-    );
-    expect(
-      tester.widget<AgentActionEditorSection>(find.byKey(const ValueKey('agent_action_section_limits'))).expanded,
-      isTrue,
-    );
-    expect(
-      tester.widget<AgentActionEditorSection>(find.byKey(const ValueKey('agent_action_section_advanced'))).expanded,
-      isFalse,
-    );
-    expect(
-      tester
-          .widget<AgentActionEditorSection>(find.byKey(const ValueKey('agent_action_section_notifications')))
-          .expanded,
-      isFalse,
-    );
+    expect(isAppPageSelected(tester, 'identity'), isTrue);
+    expect(isAppPageSelected(tester, 'advanced'), isFalse);
     expect(find.text(l10n.agentActionsEditorActivationSteps), findsOneWidget);
+    expect(find.byType(AppPagedView), findsOneWidget);
+    expect(find.text(l10n.agentActionsEditorNotificationsTab), findsOneWidget);
+    expect(find.text(l10n.pagedViewPrevious), findsOneWidget);
+    expect(find.text(l10n.pagedViewPosition(1, 6)), findsNothing);
+    expect(filledButtonWithText(l10n.agentActionsFormSave), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 
@@ -80,19 +53,17 @@ void main() {
     await pumpHarness(tester, harness);
     await openCreateActionDialog(tester, l10n, expandPolicies: false);
     await tester.enterText(agentActionFormTextBox(l10n.agentActionsFormName), 'Atualizar estoque');
+    await showActionEditorPage(tester, 'target');
     await tester.enterText(agentActionFormTextBox(l10n.agentActionsFormCommand), 'echo ok');
-    await toggle(tester, 'advanced');
+    await showActionEditorPage(tester, 'advanced');
     final queue = agentActionFormTextBox(l10n.agentActionsFormMaxConcurrent);
     await tester.ensureVisible(queue);
     await tester.pumpAndSettle();
     await tester.enterText(queue, '0');
-    await toggle(tester, 'advanced');
+    await showActionEditorPage(tester, 'identity');
     await tester.tap(filledButtonWithText(l10n.agentActionsFormSave));
     await tester.pumpAndSettle();
-    expect(
-      tester.widget<AgentActionEditorSection>(find.byKey(const ValueKey('agent_action_section_advanced'))).expanded,
-      isTrue,
-    );
+    expect(isAppPageSelected(tester, 'advanced'), isTrue);
     expect(tester.widget<TextBox>(queue).focusNode!.hasFocus, isTrue);
     expect(find.byType(ContentDialog), findsOneWidget);
     expect(harness.repository.definitions, isEmpty);
@@ -108,7 +79,7 @@ void main() {
     );
     await pumpHarness(tester, harness);
     await openSelectedActionDialog(tester, expandPolicies: false);
-    await toggle(tester, 'notifications');
+    await showActionEditorPage(tester, 'notifications');
     final notification = find.text(l10n.agentActionsFormNotifyOnSuccess);
     await tester.ensureVisible(notification);
     await tester.pumpAndSettle();
@@ -128,11 +99,11 @@ void main() {
     final harness = AgentActionsPageHarness();
     await pumpHarness(tester, harness);
     await openCreateActionDialog(tester, l10n, expandPolicies: false);
-    await toggle(tester, 'schedule');
+    await showActionEditorPage(tester, 'schedule');
     expect(find.text(l10n.agentActionsEditorScheduleLocalOnly), findsOneWidget);
-    await tester.ensureVisible(agentActionFormComboBox(l10n.agentActionsFormType));
-    await tester.pumpAndSettle();
+    await showActionEditorPage(tester, 'identity');
     await selectActionFormType(tester, l10n, l10n.agentActionsTypeExecutable);
+    await showActionEditorPage(tester, 'schedule');
     expect(find.text(l10n.agentActionsEditorScheduleSaveFirst), findsOneWidget);
     expect(find.byKey(const ValueKey('agent_action_editor_add_trigger')), findsNothing);
     expect(tester.takeException(), isNull);
@@ -170,8 +141,8 @@ void main() {
     await harness.pumpPage(tester);
     await openCreateActionDialog(tester, l10n, expandPolicies: false);
     await selectActionFormType(tester, l10n, l10n.agentActionsTypeExecutable);
-    await toggle(tester, 'advanced');
-    await toggle(tester, 'notifications');
+    await showActionEditorPage(tester, 'advanced');
+    await showActionEditorPage(tester, 'notifications');
     expect(filledButtonWithText(l10n.agentActionsFormSave), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
@@ -192,7 +163,7 @@ void main() {
     );
     await pumpHarness(tester, harness);
     await openSelectedActionDialog(tester, expandPolicies: false);
-    await toggle(tester, 'schedule');
+    await showActionEditorPage(tester, 'schedule');
     expect(find.textContaining('Próximo disparo:'), findsOneWidget);
     final add = find.byKey(const ValueKey('agent_action_editor_add_trigger'));
     await tester.ensureVisible(add);

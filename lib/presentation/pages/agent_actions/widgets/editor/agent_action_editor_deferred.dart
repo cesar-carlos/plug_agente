@@ -12,6 +12,7 @@ class DeferredAgentActionEditor extends StatefulWidget {
     required this.onSaved,
     this.definition,
     this.dirtyNotifier,
+    this.titleNotifier,
     super.key,
   });
 
@@ -20,6 +21,7 @@ class DeferredAgentActionEditor extends StatefulWidget {
   final AppLocalizations l10n;
   final VoidCallback onSaved;
   final ValueNotifier<bool>? dirtyNotifier;
+  final ValueNotifier<String>? titleNotifier;
 
   @override
   State<DeferredAgentActionEditor> createState() => _DeferredAgentActionEditorState();
@@ -54,6 +56,7 @@ class _DeferredAgentActionEditorState extends State<DeferredAgentActionEditor> {
       showChrome: false,
       onSaved: widget.onSaved,
       dirtyNotifier: widget.dirtyNotifier,
+      titleNotifier: widget.titleNotifier,
     );
   }
 }

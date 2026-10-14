@@ -354,20 +354,17 @@ void main() {
       of: dialog,
       matching: find.byType(Scrollbar),
     );
-    final listViewFinder = find.descendant(
-      of: dialog,
-      matching: find.byType(ListView),
-    );
 
     expect(scrollbarFinder, findsOneWidget);
-    expect(listViewFinder, findsOneWidget);
 
     final scrollbar = tester.widget<Scrollbar>(scrollbarFinder);
-    final listView = tester.widget<ListView>(listViewFinder);
+    final scrollView = tester.widget<SingleChildScrollView>(
+      find.descendant(of: scrollbarFinder, matching: find.byType(SingleChildScrollView)),
+    );
 
     expect(scrollbar.controller, isNotNull);
-    expect(listView.controller, same(scrollbar.controller));
-    expect(listView.primary, isFalse);
+    expect(scrollView.controller, same(scrollbar.controller));
+    expect(scrollView.primary, isFalse);
     expect(tester.takeException(), isNull);
   });
 
@@ -991,6 +988,7 @@ void main() {
     await tester.binding.setSurfaceSize(const Size(1600, 2000));
     await harness.pumpPage(tester);
     await openSelectedActionDialog(tester);
+    await showActionEditorPage(tester, 'target');
 
     final configPathField = agentActionFormTextBox(ptL10n.agentActionsFormData7ConfigPath);
     final shortcutButton = find.ancestor(
@@ -1194,6 +1192,7 @@ void main() {
     await tester.binding.setSurfaceSize(const Size(1400, 900));
     await harness.pumpPage(tester);
     await openSelectedActionDialog(tester);
+    await showActionEditorPage(tester, 'target');
 
     await tester.enterText(
       agentActionFormTextBox(ptL10n.agentActionsFormConnectionSearch),
@@ -1600,6 +1599,7 @@ void main() {
     await harness.pumpPage(tester);
     await openCreateActionDialog(tester, ptL10n);
     await selectActionFormType(tester, ptL10n, ptL10n.agentActionsTypePowerShell);
+    await showActionEditorPage(tester, 'target');
 
     expect(find.text(ptL10n.agentActionsFormPowerShellModeScript), findsOneWidget);
     await tester.ensureVisible(agentActionFormComboBox(ptL10n.agentActionsFormPowerShellMode));
@@ -1626,6 +1626,7 @@ void main() {
     await harness.pumpPage(tester);
     await openCreateActionDialog(tester, ptL10n);
     await selectActionFormType(tester, ptL10n, ptL10n.agentActionsTypePowerShell);
+    await showActionEditorPage(tester, 'target');
 
     expect(find.text(ptL10n.agentActionsFormPowerShellModeCommand), findsOneWidget);
     await tester.ensureVisible(agentActionFormComboBox(ptL10n.agentActionsFormPowerShellMode));

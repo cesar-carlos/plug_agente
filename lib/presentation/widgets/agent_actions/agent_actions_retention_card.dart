@@ -137,7 +137,7 @@ class _AgentActionsRetentionCardState extends State<AgentActionsRetentionCard> {
           const SizedBox(height: AppSpacing.sm),
           LayoutBuilder(
             builder: (context, constraints) {
-              final stackFields = constraints.maxWidth < 720;
+              final stackFields = AppLayout.formFieldsStack(context, constraints.maxWidth);
               final executionField = AppTextField(
                 label: l10n.agentActionsRetentionExecutionHistory,
                 controller: _executionDaysController,

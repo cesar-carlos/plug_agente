@@ -1,8 +1,6 @@
 import 'package:fluent_ui/fluent_ui.dart';
 import 'package:plug_agente/core/theme/theme.dart';
 
-const double _compactBreakpoint = 640;
-
 /// Lays out [children] in a [Row] with optional flex weights on wide widths
 /// and stacks them vertically when the available width is too narrow for
 /// side-by-side fields.
@@ -20,7 +18,7 @@ class ResponsiveFieldRow extends StatelessWidget {
   Widget build(BuildContext context) {
     return LayoutBuilder(
       builder: (context, constraints) {
-        if (constraints.maxWidth < _compactBreakpoint) {
+        if (AppLayout.formFieldsStack(context, constraints.maxWidth)) {
           return Column(
             children: [
               for (var index = 0; index < children.length; index++) ...[
@@ -64,7 +62,7 @@ class ResponsiveFieldActionRow extends StatelessWidget {
   Widget build(BuildContext context) {
     return LayoutBuilder(
       builder: (context, constraints) {
-        if (constraints.maxWidth < _compactBreakpoint) {
+        if (AppLayout.formFieldsStack(context, constraints.maxWidth)) {
           return Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [

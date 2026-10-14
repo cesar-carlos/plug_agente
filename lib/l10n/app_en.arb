@@ -2036,6 +2036,10 @@
   "formPasswordDefaultHint": "Enter password",
   "formPasswordShow": "Show password",
   "formPasswordHide": "Hide password",
+  "buttonLoadingSemanticsSuffix": ", loading",
+  "@buttonLoadingSemanticsSuffix": {
+    "description": "Screen reader suffix appended to a button label while its action is in progress."
+  },
   "formPasswordRequired": "{fieldLabel} is required.",
   "@formPasswordRequired": {
     "placeholders": {
@@ -2104,9 +2108,25 @@
   "agentActionsEditorSchedule": "When to run",
   "agentActionsEditorLimits": "Limits and shutdown",
   "agentActionsEditorAdvanced": "Advanced settings",
+  "agentActionsEditorIdentityTab": "Identity",
+  "agentActionsEditorTargetTab": "Run",
+  "agentActionsEditorScheduleTab": "Schedule",
+  "agentActionsEditorLimitsTab": "Limits",
+  "agentActionsEditorAdvancedTab": "Advanced",
+  "agentActionsEditorNotificationsTab": "Notifications",
   "agentActionsEditorAdvancedSummary": "Context, environment, permissions, queue, output and remote access",
   "agentActionsEditorRequiredHint": "Required",
   "agentActionsEditorOptionalHint": "Optional",
+  "pagedViewPrevious": "Previous",
+  "pagedViewNext": "Next",
+  "pagedViewPosition": "{current} of {total}",
+  "@pagedViewPosition": {
+    "description": "Position of the current page in a paged surface.",
+    "placeholders": {
+      "current": {"type": "int"},
+      "total": {"type": "int"}
+    }
+  },
   "agentActionsEditorNameHint": "E.g. Update inventory",
   "agentActionsEditorDescriptionHint": "Describe the purpose of this action and when to use it.",
   "agentActionsEditorActivationSteps": "Save the action, use Test action to validate it, then change its state to Active. Validation checks the configuration without running the task.",

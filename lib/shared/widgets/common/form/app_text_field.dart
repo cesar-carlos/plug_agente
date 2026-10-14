@@ -141,19 +141,25 @@ class _AppTextFieldState extends State<AppTextField> {
   }
 
   void _onControllerChanged() {
-    if (_touched && mounted) {
-      setState(() {});
-    }
+    if (!mounted || !_touched) return;
+    _publishEdited(widget.controller?.text ?? '');
   }
 
   void _handleChanged(String value) {
+    widget.onChanged?.call(value);
+    final controller = widget.controller;
+    if (controller != null) {
+      AppFormFeedbackScope.maybeOf(context)?.onChanged(controller);
+    }
+    _publishEdited(value);
+  }
+
+  void _publishEdited(String value) {
+    if (_touched && value == _lastChangedValue) return;
     setState(() {
       _touched = true;
       _lastChangedValue = value;
     });
-    widget.onChanged?.call(value);
-    final controller = widget.controller;
-    if (controller != null) AppFormFeedbackScope.maybeOf(context)?.onChanged(controller);
   }
 
   Widget? _buildPrefixIcon() {

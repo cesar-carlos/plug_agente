@@ -68,7 +68,7 @@ class AgentActionIdentitySection extends StatelessWidget {
   Widget build(BuildContext context) {
     return LayoutBuilder(
       builder: (context, constraints) {
-        final stackFields = constraints.maxWidth < 720 * MediaQuery.textScalerOf(context).scale(1);
+        final stackFields = AppLayout.formFieldsStack(context, constraints.maxWidth);
         final nameField = AppTextField(
           label: l10n.agentActionsFormName,
           controller: nameController,
