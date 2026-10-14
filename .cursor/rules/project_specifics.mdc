@@ -350,4 +350,7 @@ conexão executora; não usar helpers genéricos como prova física dos quatro m
 Nulos obrigatórios não podem ser removidos pelo saneamento do wire. Constraints
 desconhecidas não viram habilitadas; enforcement SQL Anywhere permanece desconhecido.
 Expectativas de constraints exigem sourceConstraints v1 e conferência na mesma
-conexão antes/depois do SELECT. A extensão não libera deploy.
+conexão antes/depois do SELECT. A extensão não libera deploy. SQL Anywhere identifica recursos BASE/VIEW regulares
+por SYSTAB.table_type_str, sem classificar materialized views implicitamente. A
+fixture ampla compõe 16 recursos, usa policy explícita e altera apenas wide_07
+por ações fixas do companion; nenhum DDL do consumidor é aceito.

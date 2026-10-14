@@ -5,6 +5,12 @@ and version bump instructions remain in `docs/install/release_guide.md`.
 
 ## Unreleased
 
+### Fixed — SQL Anywhere structural view inspection
+
+- Inspect ordinary BASE/VIEW resources by SYSTAB.table_type_str. The previous numeric discriminator mistook materialized views for ordinary views and omitted real views. Enforcement remains unknown; no capability or permission is inferred.
+- Extend the isolated MCP chain fixture to 16 paginated resources, explicit table/view policies, cross-page joins and fixed structural drift actions. Only the disposable operator companion performs DDL; production never accepts caller DDL. Release remains blocked.
+
+
 ### Fixed — coordinated persona-v2 acceptance
 
 - Require shared-knowledge-and-compatibility in the installer/appcast guard and release manifest, aligned with all 14 MCP gates. No gates are accepted; production remains blocked.

@@ -83,7 +83,9 @@ não prova inexistência. Estados são enabled/disabled/unvalidated/unknown por 
 PostgreSQL verifica índices/validação e triggers de FK; SQL Server índices e confiança
 das FKs; Firebird índices associados. Índices parciais ou por expressão não provam
 unicidade global. SQL Anywhere mantém enforcement desconhecido: o indicador interno
-not_enforced não habilita dependências. `metadataPage` é separado da paginação SQL;
+not_enforced não habilita dependências. SQL Anywhere distingue tabelas BASE de views
+regulares VIEW por SYSTAB.table_type_str; materialized views não entram como views
+regulares nem como tabelas implicitamente. `metadataPage` é separado da paginação SQL;
 nulos obrigatórios são preservados, inclusive schema Firebird.
 
 `sql.execute.expectedStructure` exige as mesmas capabilities e `expectedSource`.
