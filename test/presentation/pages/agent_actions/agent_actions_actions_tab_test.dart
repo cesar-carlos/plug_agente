@@ -568,7 +568,13 @@ void main() {
       type: AgentActionTriggerType.weekly,
       fill: (tester) async {
         await tester.enterText(agentActionFormTextBox(ptL10n.agentActionsTriggerFieldTimeOfDay), '08:30');
-        await tester.tap(find.widgetWithText(Checkbox, ptL10n.agentActionsTriggerWeekdayMon));
+        final monday = find.widgetWithText(Checkbox, ptL10n.agentActionsTriggerWeekdayMon);
+        await tester.ensureVisible(monday);
+        await tester.pumpAndSettle();
+        expect(monday.hitTestable(), findsOneWidget);
+        await tester.tap(monday.hitTestable());
+        await tester.pump();
+        expect(tester.widget<Checkbox>(monday).checked, isTrue);
       },
     ),
     (
@@ -603,6 +609,11 @@ void main() {
 
       expect(harness.repository.triggers, hasLength(1));
       expect(harness.repository.triggers.values.single.type, scenario.type);
+      if (scenario.type == AgentActionTriggerType.weekly) {
+        final schedule = harness.repository.triggers.values.single.schedule;
+        expect(schedule.weekdays, {DateTime.monday});
+        expect(schedule.timeOfDayMinutes, 8 * Duration.minutesPerHour + 30);
+      }
       expect(find.text(ptL10n.agentActionsTriggerEditorTitleNew), findsNothing);
     });
   }
