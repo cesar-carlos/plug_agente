@@ -38,9 +38,10 @@ class OdbcSourceDiscovery implements ISourceDiscoveryProbe {
     String? id;
     Future<Object?>? pending;
     var lateConnect = false;
+    var budgetExpired = false;
     Duration remaining() {
       final value = timeout - watch.elapsed;
-      if (value <= Duration.zero) throw TimeoutException('Discovery budget exhausted');
+      if (budgetExpired || value <= Duration.zero) throw TimeoutException('Discovery budget exhausted');
       return value;
     }
 
@@ -58,6 +59,10 @@ class OdbcSourceDiscovery implements ISourceDiscoveryProbe {
       );
       try {
         return await action.timeout(remaining());
+      } on TimeoutException {
+        // Timer completion is authoritative even if the stopwatch is short of the deadline.
+        budgetExpired = true;
+        rethrow;
       } finally {
         if (settled) pending = null;
       }
