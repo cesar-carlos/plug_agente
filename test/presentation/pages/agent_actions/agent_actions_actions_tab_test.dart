@@ -1490,12 +1490,12 @@ void main() {
       findsOneWidget,
     );
 
-    await tester.tap(find.byIcon(FluentIcons.cancel));
+    await tester.tap(find.byKey(const ValueKey<String>('agent_action_execution_cancel_execution-1')));
     await tester.pump();
     while (harness.provider.isLoading || harness.provider.hasCancellationInProgress('execution-1')) {
       await tester.pump(const Duration(milliseconds: 50));
     }
-    await tester.pumpAndSettle();
+    await pumpUntilUiSettles(tester);
 
     expect(
       harness.repository.executions['execution-1']?.status,

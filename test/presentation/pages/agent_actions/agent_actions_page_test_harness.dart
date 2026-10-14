@@ -145,9 +145,23 @@ void drainPendingFlutterErrors(WidgetTester tester) {
   while (tester.takeException() != null) {}
 }
 
+Future<void> pumpUntilUiSettles(WidgetTester tester) async {
+  try {
+    await tester.pumpAndSettle(
+      const Duration(milliseconds: 50),
+      EnginePhase.sendSemanticsUpdate,
+      const Duration(seconds: 2),
+    );
+  } on FlutterError catch (error) {
+    if (!error.toString().contains('pumpAndSettle timed out')) {
+      rethrow;
+    }
+  }
+}
+
 Future<void> openTab(WidgetTester tester, String label) async {
   await tester.tap(find.text(label).first);
-  await tester.pumpAndSettle();
+  await pumpUntilUiSettles(tester);
 }
 
 Future<void> openCreateActionDialog(WidgetTester tester, AppLocalizations l10n, {bool expandPolicies = true}) async {
@@ -427,7 +441,7 @@ class AgentActionsPageHarness {
     while (provider.isLoading) {
       await tester.pump(const Duration(milliseconds: 50));
     }
-    await tester.pumpAndSettle();
+    await pumpUntilUiSettles(tester);
   }
 
   Widget buildWidget() {

@@ -118,6 +118,7 @@ class AgentActionExecutionRow extends StatelessWidget {
                     button: true,
                     label: l10n.agentActionsCancelExecution,
                     child: IconButton(
+                      key: ValueKey<String>('agent_action_execution_cancel_${execution.id}'),
                       icon: provider.hasCancellationInProgress(execution.id)
                           ? const SizedBox.square(
                               dimension: 14,
