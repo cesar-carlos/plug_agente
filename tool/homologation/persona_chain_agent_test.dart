@@ -43,6 +43,7 @@ import 'persona_chain_cases.dart';
 import 'persona_chain_faults.dart';
 import 'persona_chain_observer.dart';
 import 'persona_chain_storage.dart';
+import 'persona_chain_structure_fixture.dart';
 
 // Explicit isolated fixture only; production config and native vault adapters.
 void main() {
@@ -133,6 +134,7 @@ void main() {
             ]) {
               (await service.executeQuery(sql, connectionId: setupId)).getOrThrow();
             }
+            await provisionWideStructureFixture(service, setupId);
           } finally {
             (await service.disconnect(setupId)).getOrThrow();
           }
@@ -215,6 +217,15 @@ void main() {
           if (job['kind'] == 'revoke-technical-token') {
             (await tokens.revokeToken(storage.tokenId)).getOrThrow();
             return true;
+          }
+          if (job['kind'] == 'wide-add-unrelated-column' || job['kind'] == 'wide-change-trained-column') {
+            return changeWideStructureFixture(
+              service,
+              connectionString: strings.resolveConnectionString(config),
+              database: database,
+              engine: engine,
+              kind: job['kind'] as String,
+            );
           }
           return evaluateChainCase(job, caseFactory, caseAuthorizer, storage.tokenValue, config.agentId);
         };

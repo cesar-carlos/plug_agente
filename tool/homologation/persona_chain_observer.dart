@@ -27,10 +27,14 @@ class ChainFixtureObserver implements IRpcRequestDispatcher {
       negotiatedExtensions: negotiatedExtensions,
     );
     final data = response.error?.data;
+    final Object? params = request.params;
+    final Object? structure = params is Map ? params['expectedStructure'] : null;
+    final Object? resources = structure is Map ? structure['resources'] : null;
     await metadata.writeAsString(
       '${jsonEncode({
         'method': request.method,
         'code': response.error?.code,
+        if (resources is List) 'structureResourceCount': resources.length,
         if (data is Map) ...{
           for (final key in ['failure_code', 'stage', 'retryable', 'outcome_unknown', 'reason'])
             if (data.containsKey(key)) key: data[key],

@@ -9,8 +9,10 @@ import 'package:flutter_secure_storage_windows/flutter_secure_storage_windows.da
 import 'package:flutter_test/flutter_test.dart';
 import 'package:plug_agente/core/utils/odbc_connection_string_secrets.dart';
 import 'package:plug_agente/domain/entities/client_token_create_request.dart';
+import 'package:plug_agente/domain/entities/client_token_rule.dart';
 import 'package:plug_agente/domain/entities/config.dart';
 import 'package:plug_agente/domain/value_objects/client_permission_set.dart';
+import 'package:plug_agente/domain/value_objects/database_resource.dart';
 import 'package:plug_agente/infrastructure/datasources/client_token_local_data_source.dart';
 import 'package:plug_agente/infrastructure/repositories/agent_config_drift_database.dart';
 import 'package:plug_agente/infrastructure/repositories/agent_config_repository.dart';
@@ -94,10 +96,48 @@ class ChainAgentStorage {
           clientId: clientId,
           agentId: initial.agentId,
           name: 'Isolated chain fixture',
-          allTables: true,
+          allTables: false,
           allViews: false,
           globalPermissions: const ClientPermissionSet(canRead: true, canUpdate: true, canDelete: true),
-          rules: const [],
+          rules: [
+            for (final table in [
+              'operation_fixture',
+              'schema_parent',
+              'schema_child',
+              for (var index = 0; index < 15; index++) 'wide_${index.toString().padLeft(2, '0')}',
+            ])
+              for (final name in {
+                table,
+                switch (engine) {
+                  'postgres' => 'public.$table',
+                  'mssql' => 'dbo.$table',
+                  'sybase' => 'dba.$table',
+                  _ => table,
+                },
+              })
+                ClientTokenRule(
+                  resource: DatabaseResource(resourceType: DatabaseResourceType.table, name: name),
+                  permissions: ClientPermissionSet(
+                    canRead: true,
+                    canUpdate: table == 'operation_fixture',
+                    canDelete: table == 'operation_fixture',
+                  ),
+                  effect: ClientTokenRuleEffect.allow,
+                ),
+            ClientTokenRule(
+              resource: DatabaseResource(
+                resourceType: DatabaseResourceType.view,
+                name: switch (engine) {
+                  'postgres' => 'public.wide_15',
+                  'mssql' => 'dbo.wide_15',
+                  'sybase' => 'dba.wide_15',
+                  _ => 'wide_15',
+                },
+              ),
+              permissions: const ClientPermissionSet(canRead: true, canUpdate: false, canDelete: false),
+              effect: ClientTokenRuleEffect.allow,
+            ),
+          ],
           payload: {'database': initial.databaseName},
         ),
       )).getOrThrow();
