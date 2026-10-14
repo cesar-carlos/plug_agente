@@ -77,6 +77,7 @@ class AgentActionTriggerScheduler {
   bool _bootstrapDisabled = false;
   String? _lastStartIssueReason;
   int _scheduleGeneration = 0;
+  final Map<String, int> _triggerRevisions = {};
   bool _appStartDispatchedThisProcess = false;
   bool _appCloseDispatchedThisProcess = false;
   Future<Result<int>>? _appStartDispatchInFlight;
@@ -255,6 +256,7 @@ class AgentActionTriggerScheduler {
   }
 
   void unscheduleTrigger(String triggerId) {
+    _triggerRevisions[triggerId] = (_triggerRevisions[triggerId] ?? 0) + 1;
     _unscheduleTrigger(triggerId);
   }
 
@@ -298,14 +300,14 @@ class AgentActionTriggerScheduler {
         continue;
       }
       count++;
-      final saved = await _repository.saveTrigger(trigger.copyWith(lastRunAt: _now()));
+      final saved = await _repository.updateTriggerRuntime(trigger, trigger.copyWith(lastRunAt: _now()));
       if (saved.isError()) _logSchedulerIssue('Failed to update event trigger ${trigger.id}', saved.exceptionOrNull());
     }
     return Success(count);
   }
 
   Future<Result<bool>> syncTrigger(AgentActionTrigger trigger) async {
-    _unscheduleTrigger(trigger.id);
+    unscheduleTrigger(trigger.id);
 
     if (!_started || !trigger.isEnabled || !trigger.isTemporalTrigger) {
       return const Success(false);
@@ -511,12 +513,15 @@ class AgentActionTriggerScheduler {
   }
 
   Future<Result<bool>> _scheduleTemporalTrigger(
-    AgentActionTrigger trigger,
-  ) async {
+    AgentActionTrigger trigger, {
+    AgentActionTrigger? expected,
+  }) async {
     if (!_started) {
       return const Success(false);
     }
 
+    final generation = _scheduleGeneration;
+    final revision = _triggerRevisions[trigger.id] ?? 0;
     final effectiveTrigger = trigger.type == AgentActionTriggerType.interval && trigger.schedule.startAt == null
         ? trigger.copyWith(
             schedule: trigger.schedule.copyWith(
@@ -534,23 +539,25 @@ class AgentActionTriggerScheduler {
 
     final nextRunAt = decisionResult.getOrThrow().nextRunAt;
     if (nextRunAt == null) {
-      await _repository.saveTrigger(
+      final cleared = await _repository.updateTriggerRuntime(
+        expected ?? trigger,
         effectiveTrigger.copyWith(clearNextRunAt: true),
       );
+      if (cleared.isError()) return Failure(cleared.exceptionOrNull()!);
       return const Success(false);
     }
 
     final updatedTrigger = effectiveTrigger.copyWith(nextRunAt: nextRunAt);
-    final saveResult = await _repository.saveTrigger(updatedTrigger);
+    final saveResult = await _repository.updateTriggerRuntime(expected ?? trigger, updatedTrigger);
     if (saveResult.isError()) {
       return Failure(saveResult.exceptionOrNull()!);
     }
 
+    if (!saveResult.getOrThrow() || !_isTriggerLive(trigger.id, generation, revision)) return const Success(false);
     _timersByTriggerId[trigger.id]?.cancel();
-    final generation = _scheduleGeneration;
     _timersByTriggerId[trigger.id] = _timerFactory(
       _delayUntil(nextRunAt),
-      () => unawaited(_dispatchAndReschedule(trigger.id, nextRunAt, generation)),
+      () => unawaited(_dispatchAndReschedule(trigger.id, nextRunAt, generation, revision)),
     );
     return const Success(true);
   }
@@ -559,11 +566,10 @@ class AgentActionTriggerScheduler {
     String triggerId,
     DateTime scheduledAt,
     int generation,
+    int revision,
   ) async {
+    if (!_isTriggerLive(triggerId, generation, revision)) return;
     _unscheduleTrigger(triggerId);
-    if (!_isSchedulingLive(generation)) {
-      return;
-    }
 
     final featureGateResult = _ensureSchedulerFeatureGateAllows();
     if (featureGateResult.isError()) {
@@ -580,7 +586,7 @@ class AgentActionTriggerScheduler {
       triggerId: triggerId,
       scheduledAt: scheduledAt,
     );
-    if (!_isSchedulingLive(generation)) {
+    if (!_isTriggerLive(triggerId, generation, revision)) {
       return;
     }
 
@@ -596,7 +602,7 @@ class AgentActionTriggerScheduler {
     }
 
     final freshTriggerResult = await _repository.getTrigger(triggerId);
-    if (!_isSchedulingLive(generation)) {
+    if (!_isTriggerLive(triggerId, generation, revision)) {
       return;
     }
     if (freshTriggerResult.isError()) {
@@ -620,7 +626,7 @@ class AgentActionTriggerScheduler {
       updatedTrigger = updatedTrigger.copyWith(lastRunAt: _now());
     }
 
-    final rescheduleResult = await _scheduleTemporalTrigger(updatedTrigger);
+    final rescheduleResult = await _scheduleTemporalTrigger(updatedTrigger, expected: freshTrigger);
     if (rescheduleResult.isError()) {
       _logSchedulerIssue(
         'Failed to reschedule agent action trigger $triggerId',
@@ -679,9 +685,10 @@ class AgentActionTriggerScheduler {
             );
       if (dispatchResult.isSuccess()) {
         dispatchedCount += 1;
-        await _repository.saveTrigger(
-          trigger.copyWith(lastRunAt: _now()),
-        );
+        final saved = await _repository.updateTriggerRuntime(trigger, trigger.copyWith(lastRunAt: _now()));
+        if (saved.isError()) {
+          _logSchedulerIssue('Failed to update lifecycle trigger ${trigger.id}', saved.exceptionOrNull());
+        }
       } else {
         _logSchedulerIssue(
           'Failed to dispatch lifecycle trigger ${trigger.id}',
@@ -754,6 +761,9 @@ class AgentActionTriggerScheduler {
 
     return delay;
   }
+
+  bool _isTriggerLive(String id, int generation, int revision) =>
+      _isSchedulingLive(generation) && (_triggerRevisions[id] ?? 0) == revision;
 
   void _unscheduleTrigger(String triggerId) {
     _timersByTriggerId.remove(triggerId)?.cancel();

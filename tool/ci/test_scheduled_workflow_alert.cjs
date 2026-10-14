@@ -148,3 +148,21 @@ test('issue pagination errors fail visibly', async () => {
   const current = run(12, 'success');
   await assert.rejects(execute(current, [current], [], false, true), /Issues API unavailable/);
 });
+
+test('an ongoing failure refreshes the log link and preserves investigation notes', async () => {
+  const current = run(12, 'failure');
+  const result = await execute(current, [current, run(11, 'failure')], [{
+    title, number: 42, body: 'Latest failed run: https://old.example/10\n\nInvestigation notes',
+  }]);
+  assert.equal(result.updates.length, 1);
+  assert.equal(result.updates[0].body, `Latest failed run: ${current.html_url}\n\nInvestigation notes`);
+  assert.equal(result.updates[0].state, undefined);
+});
+
+test('duplicate failure notification does not rewrite an up-to-date alert', async () => {
+  const current = run(12, 'failure');
+  const result = await execute(current, [current, run(11, 'failure')], [{
+    title, number: 42, body: `Latest failed run: ${current.html_url}`,
+  }]);
+  assert.equal(result.updates.length, 0);
+});

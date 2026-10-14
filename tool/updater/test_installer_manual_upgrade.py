@@ -27,15 +27,17 @@ class ManualUpgradeTests(unittest.TestCase):
         functions = []
         for name in ("UpdaterExists", "WantsAutomaticUpdates", "ShouldInstallUpdaterHost",
                      "ShouldInstallUpdaterClient", "ShouldInstallUpdaterWorker",
-                     "ConfigureUpdaterAuthorization", "PrepareToInstall"):
+                     "ConfigureUpdaterAuthorization", "PrepareUpdaterHostUpgrade", "PrepareToInstall"):
             match = re.search(rf"^(?:function|procedure) {name}\b.*?(?=^(?:function|procedure) |\Z)",
                               setup, re.M | re.S)
             if match is None:
                 raise AssertionError(f"Missing production function: {name}")
             functions.append(match.group())
         source = "\n".join(functions)
+        source = source.replace("'{app}'", "'{tmp}\\fixture-app'")
         for name in ("IsAdminInstallMode", "WizardSilent", "WizardIsTaskSelected",
-                     "RegQueryDWordValue", "FileExists", "ExtractTemporaryFile"):
+                     "RegQueryDWordValue", "FileExists", "ExtractTemporaryFile",
+                     "TaskDialogMsgBox", "WizardSelectTasks"):
             source = re.sub(rf"\b{name}\b", f"Fixture{name}", source)
         source = source.replace("function PrepareToInstall(", "function RunPreparation(")
         production = cls.root / "production.iss"
@@ -51,7 +53,9 @@ class ManualUpgradeTests(unittest.TestCase):
 
     def test_manual_upgrade_from_enabled_legacy_updater(self):
         for case in ("manual", "missing_client", "retry_after_contract_error",
-                     "upgrade_flag_unchecked", "active_operation", "revocation_failure"):
+                     "upgrade_flag_unchecked", "active_operation", "revocation_failure",
+                     "dialog_manual", "dialog_upgrade", "dialog_cancel", "dialog_stop_failure",
+                     "silent_legacy", "other_contract_failure", "dialog_active_operation"):
             with self.subTest(case=case):
                 result = self.root / f"{case}.result"
                 log = self.root / f"{case}.log"

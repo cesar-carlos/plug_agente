@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:plug_agente/core/timezone/iana_timezone_data.dart';
 import 'package:plug_agente/domain/actions/actions.dart';
 import 'package:plug_agente/l10n/app_localizations.dart';
+import 'package:timezone/timezone.dart' as tz;
 import 'package:uuid/uuid.dart';
 
 final class AgentActionTriggerBuildResult {
@@ -15,7 +17,9 @@ final class AgentActionTriggerBuildResult {
 
 class AgentActionTriggerSaveFormState {
   AgentActionTriggerSaveFormState({AgentActionTrigger? existing})
-    : nameController = TextEditingController(text: existing?.name ?? ''),
+    : _existing = existing,
+      _id = existing?.id ?? const Uuid().v4(),
+      nameController = TextEditingController(text: existing?.name ?? ''),
       sourceActionIdController = TextEditingController(text: existing?.schedule.sourceActionId ?? ''),
       _type = existing?.type ?? AgentActionTriggerType.manual,
       _isEnabled = existing?.isEnabled ?? true,
@@ -24,15 +28,43 @@ class AgentActionTriggerSaveFormState {
       timezoneController = TextEditingController(
         text: _initialTimezone(existing),
       ),
-      startAtController = TextEditingController(text: _formatDateTimeForField(existing?.schedule.startAt)),
-      endAtController = TextEditingController(text: _formatDateTimeForField(existing?.schedule.endAt)),
+      startAtController = TextEditingController(text: formatDateTimeForField(existing?.schedule.startAt)),
+      endAtController = TextEditingController(text: formatDateTimeForField(existing?.schedule.endAt)),
       intervalMinutesController = TextEditingController(
-        text: existing?.schedule.interval == null ? '' : '${existing!.schedule.interval!.inMinutes}',
+        text: existing?.schedule.interval == null ? '' : formatInterval(existing!.schedule.interval!),
       ),
       timeOfDayController = TextEditingController(text: _formatTimeOfDay(existing?.schedule.timeOfDayMinutes)),
       dayOfMonthController = TextEditingController(
         text: existing?.schedule.dayOfMonth == null ? '' : '${existing!.schedule.dayOfMonth}',
       );
+
+  static const int _maxIntervalMicroseconds = 0x7fffffffffffffff;
+
+  final AgentActionTrigger? _existing;
+  final String _id;
+  bool rearmOnce = false;
+  final Map<TextEditingController, String> fieldErrors = {};
+  String? selectionError;
+  String? selectionErrorKey;
+  List<TextEditingController> get controllers => [
+    nameController,
+    sourceActionIdController,
+    timezoneController,
+    startAtController,
+    endAtController,
+    intervalMinutesController,
+    timeOfDayController,
+    dayOfMonthController,
+  ];
+  bool get needsRearm {
+    if (_type != AgentActionTriggerType.once || _existing?.lastScheduledAt == null) return false;
+    final start = parseLocalDateTime(startAtController.text);
+    final previous = _existing?.schedule.startAt;
+    return _existing?.type != _type || start == null || previous == null || !start.isAtSameMomentAs(previous);
+  }
+
+  static String formatInterval(Duration value) =>
+      (value.inMicroseconds / Duration.microsecondsPerMinute).toString().replaceFirst(RegExp(r'\.0$'), '');
 
   final TextEditingController nameController;
   final TextEditingController sourceActionIdController;
@@ -128,15 +160,19 @@ class AgentActionTriggerSaveFormState {
     AgentActionTrigger? existing,
   }) {
     parseError = null;
+    fieldErrors.clear();
+    selectionError = null;
+    selectionErrorKey = null;
 
-    final id = existing?.id ?? const Uuid().v4();
+    final id = existing?.id ?? _id;
     final nameRaw = nameController.text.trim();
     final name = nameRaw.isEmpty ? null : nameRaw;
 
     if (supportsMissedRunPolicy) {
       for (final field in [startAtController, endAtController]) {
-        if (field.text.trim().isNotEmpty && _tryParseLocalDateTime(field.text) == null) {
-          parseError = l10n.agentActionsTriggerValidationInvalidDateRange;
+        if (field.text.trim().isNotEmpty && parseLocalDateTime(field.text) == null) {
+          fieldErrors[field] = l10n.agentActionsTriggerValidationInvalidDateRange;
+          parseError = fieldErrors[field];
           return AgentActionTriggerBuildResult(parseError: parseError);
         }
       }
@@ -153,33 +189,44 @@ class AgentActionTriggerSaveFormState {
         final source = sourceActionIdController.text.trim();
         if (source.isEmpty || source == actionId) {
           parseError = l10n.agentActionsTriggerValidationSourceAction;
+          fieldErrors[sourceActionIdController] = parseError!;
           return AgentActionTriggerBuildResult(parseError: parseError);
         }
         schedule = AgentActionTriggerSchedule(sourceActionId: source);
       case AgentActionTriggerType.once:
-        final startAt = _tryParseLocalDateTime(startAtController.text);
+        final startAt = parseLocalDateTime(startAtController.text);
         if (startAt == null) {
           parseError = l10n.agentActionsTriggerValidationInvalidStartAt;
+          fieldErrors[startAtController] = parseError!;
           return AgentActionTriggerBuildResult(parseError: parseError);
         }
 
-        final endAtOnce = _tryParseLocalDateTime(endAtController.text);
+        final endAtOnce = parseLocalDateTime(endAtController.text);
         schedule = AgentActionTriggerSchedule(
           startAt: startAt,
           endAt: endAtOnce,
           ignoreMissedRuns: _ignoreMissedRuns,
         );
       case AgentActionTriggerType.interval:
-        final minutes = int.tryParse(intervalMinutesController.text.trim());
-        if (minutes == null || minutes <= 0) {
+        final minutes = double.tryParse(intervalMinutesController.text.trim().replaceAll(',', '.'));
+        if (minutes == null ||
+            !minutes.isFinite ||
+            minutes <= 0 ||
+            minutes * Duration.microsecondsPerMinute >= _maxIntervalMicroseconds ||
+            (minutes * Duration.microsecondsPerMinute).round() == 0) {
           parseError = l10n.agentActionsTriggerValidationInvalidIntervalMinutes;
+          fieldErrors[intervalMinutesController] = parseError!;
           return AgentActionTriggerBuildResult(parseError: parseError);
         }
 
-        final startAtInterval = _tryParseLocalDateTime(startAtController.text);
-        final endAtInterval = _tryParseLocalDateTime(endAtController.text);
+        final startAtInterval = parseLocalDateTime(startAtController.text);
+        final endAtInterval = parseLocalDateTime(endAtController.text);
         schedule = AgentActionTriggerSchedule(
-          interval: Duration(minutes: minutes),
+          interval:
+              _existing?.schedule.interval != null &&
+                  intervalMinutesController.text == formatInterval(_existing!.schedule.interval!)
+              ? _existing.schedule.interval
+              : Duration(microseconds: (minutes * Duration.microsecondsPerMinute).round()),
           startAt: startAtInterval,
           endAt: endAtInterval,
           ignoreMissedRuns: _ignoreMissedRuns,
@@ -188,11 +235,12 @@ class AgentActionTriggerSaveFormState {
         final timeMinutes = _tryParseTimeOfDayMinutes(timeOfDayController.text);
         if (timeMinutes == null) {
           parseError = l10n.agentActionsTriggerValidationInvalidTimeOfDay;
+          fieldErrors[timeOfDayController] = parseError!;
           return AgentActionTriggerBuildResult(parseError: parseError);
         }
 
-        final startDaily = _tryParseLocalDateTime(startAtController.text);
-        final endDaily = _tryParseLocalDateTime(endAtController.text);
+        final startDaily = parseLocalDateTime(startAtController.text);
+        final endDaily = parseLocalDateTime(endAtController.text);
         schedule = AgentActionTriggerSchedule(
           timeOfDayMinutes: timeMinutes,
           startAt: startDaily,
@@ -204,16 +252,19 @@ class AgentActionTriggerSaveFormState {
         final timeWeekly = _tryParseTimeOfDayMinutes(timeOfDayController.text);
         if (timeWeekly == null) {
           parseError = l10n.agentActionsTriggerValidationInvalidTimeOfDay;
+          fieldErrors[timeOfDayController] = parseError!;
           return AgentActionTriggerBuildResult(parseError: parseError);
         }
 
         if (_weekdays.isEmpty || _weekdays.any((day) => day < 1 || day > 7)) {
           parseError = l10n.agentActionsTriggerValidationWeekdaysRequired;
+          selectionError = parseError;
+          selectionErrorKey = 'weekdays';
           return AgentActionTriggerBuildResult(parseError: parseError);
         }
 
-        final startWeekly = _tryParseLocalDateTime(startAtController.text);
-        final endWeekly = _tryParseLocalDateTime(endAtController.text);
+        final startWeekly = parseLocalDateTime(startAtController.text);
+        final endWeekly = parseLocalDateTime(endAtController.text);
         schedule = AgentActionTriggerSchedule(
           timeOfDayMinutes: timeWeekly,
           weekdays: _weekdays,
@@ -226,17 +277,19 @@ class AgentActionTriggerSaveFormState {
         final timeMonthly = _tryParseTimeOfDayMinutes(timeOfDayController.text);
         if (timeMonthly == null) {
           parseError = l10n.agentActionsTriggerValidationInvalidTimeOfDay;
+          fieldErrors[timeOfDayController] = parseError!;
           return AgentActionTriggerBuildResult(parseError: parseError);
         }
 
         final day = int.tryParse(dayOfMonthController.text.trim());
         if (day == null || day < 1 || day > 31) {
           parseError = l10n.agentActionsTriggerValidationInvalidDayOfMonth;
+          fieldErrors[dayOfMonthController] = parseError!;
           return AgentActionTriggerBuildResult(parseError: parseError);
         }
 
-        final startMonthly = _tryParseLocalDateTime(startAtController.text);
-        final endMonthly = _tryParseLocalDateTime(endAtController.text);
+        final startMonthly = parseLocalDateTime(startAtController.text);
+        final endMonthly = parseLocalDateTime(endAtController.text);
         schedule = AgentActionTriggerSchedule(
           timeOfDayMinutes: timeMonthly,
           dayOfMonth: day,
@@ -247,6 +300,27 @@ class AgentActionTriggerSaveFormState {
         );
     }
 
+    if (schedule.startAt != null && schedule.endAt != null && !schedule.endAt!.isAfter(schedule.startAt!)) {
+      parseError = l10n.agentActionsTriggerValidationInvalidDateRange;
+      fieldErrors[endAtController] = parseError!;
+      return AgentActionTriggerBuildResult(parseError: parseError);
+    }
+    if (schedule.timezoneId != null) {
+      ensureIanaTimeZoneDataLoaded();
+      try {
+        tz.getLocation(schedule.timezoneId!);
+      } on tz.LocationNotFoundException {
+        parseError = l10n.triggerInvalidTimezone;
+        fieldErrors[timezoneController] = parseError!;
+        return AgentActionTriggerBuildResult(parseError: parseError);
+      }
+    }
+    if (needsRearm && !rearmOnce) {
+      parseError = l10n.triggerRearmRequired;
+      selectionError = parseError;
+      selectionErrorKey = 'rearm';
+      return AgentActionTriggerBuildResult(parseError: parseError);
+    }
     return AgentActionTriggerBuildResult(
       trigger: AgentActionTrigger(
         id: id,
@@ -255,7 +329,7 @@ class AgentActionTriggerSaveFormState {
         name: name,
         isEnabled: _isEnabled,
         schedule: schedule,
-        lastScheduledAt: existing?.lastScheduledAt,
+        lastScheduledAt: needsRearm && rearmOnce ? null : existing?.lastScheduledAt,
         lastRunAt: existing?.lastRunAt,
         nextRunAt: existing?.nextRunAt,
         createdAt: existing?.createdAt,
@@ -263,14 +337,15 @@ class AgentActionTriggerSaveFormState {
     );
   }
 
-  static String _formatDateTimeForField(DateTime? value) {
+  static String formatDateTimeForField(DateTime? value) {
     if (value == null) {
       return '';
     }
 
     final local = value.toLocal();
     String two(int n) => n.toString().padLeft(2, '0');
-    return '${local.year}-${two(local.month)}-${two(local.day)} ${two(local.hour)}:${two(local.minute)}';
+    return '${local.year}-${two(local.month)}-${two(local.day)} ${two(local.hour)}:${two(local.minute)}'
+        '${local.second != 0 || local.millisecond != 0 || local.microsecond != 0 ? ':${two(local.second)}.${(local.millisecond * 1000 + local.microsecond).toString().padLeft(6, '0')}' : ''}';
   }
 
   static String _formatTimeOfDay(int? minutes) {
@@ -283,14 +358,29 @@ class AgentActionTriggerSaveFormState {
     return '${h.toString().padLeft(2, '0')}:${m.toString().padLeft(2, '0')}';
   }
 
-  static DateTime? _tryParseLocalDateTime(String raw) {
+  static DateTime? parseLocalDateTime(String raw) {
     final trimmed = raw.trim();
     if (trimmed.isEmpty) {
       return null;
     }
 
+    final match = RegExp(
+      r'^(\d{4})-(\d{2})-(\d{2})[ T](\d{2}):(\d{2})(?::(\d{2})(?:\.(\d{1,6}))?)?$',
+    ).firstMatch(trimmed);
+    if (match == null) return null;
+    final parts = [for (var i = 1; i <= 6; i++) int.parse(match.group(i) ?? '0')];
     final normalized = trimmed.contains('T') ? trimmed : trimmed.replaceFirst(RegExp(r'\s+'), 'T');
-    return DateTime.tryParse(normalized);
+    final parsed = DateTime.tryParse(normalized);
+    if (parsed == null ||
+        parsed.year != parts[0] ||
+        parsed.month != parts[1] ||
+        parsed.day != parts[2] ||
+        parsed.hour != parts[3] ||
+        parsed.minute != parts[4] ||
+        parsed.second != parts[5]) {
+      return null;
+    }
+    return parsed;
   }
 
   static int? _tryParseTimeOfDayMinutes(String raw) {

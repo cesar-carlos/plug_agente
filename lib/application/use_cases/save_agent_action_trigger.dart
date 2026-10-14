@@ -1,5 +1,3 @@
-import 'dart:developer' as developer;
-
 import 'package:plug_agente/application/actions/agent_action_trigger_definition_validator.dart';
 import 'package:plug_agente/application/actions/agent_action_trigger_scheduler.dart';
 import 'package:plug_agente/application/use_cases/validate_agent_action_trigger.dart';
@@ -100,24 +98,22 @@ class SaveAgentActionTrigger {
     }
 
     final savedTrigger = saveResult.getOrThrow();
-    await _syncSavedTrigger(savedTrigger);
-    return Success(savedTrigger);
-  }
-
-  Future<void> _syncSavedTrigger(AgentActionTrigger trigger) async {
-    final scheduler = _scheduler;
-    if (scheduler == null) {
-      return;
-    }
-
-    final syncResult = await scheduler.syncTrigger(trigger);
-    if (syncResult.isError()) {
-      developer.log(
-        'Failed to sync saved agent action trigger ${trigger.id} with scheduler',
-        name: 'save_agent_action_trigger',
-        level: 900,
-        error: syncResult.exceptionOrNull(),
+    final syncResult = await _scheduler?.syncTrigger(savedTrigger);
+    if (syncResult != null && syncResult.isError()) {
+      return Failure(
+        ActionFailure.withContext(
+          message: 'Trigger was saved but could not be scheduled.',
+          cause: syncResult.exceptionOrNull(),
+          context: {
+            'reason': 'trigger_saved_not_scheduled',
+            'trigger_id': savedTrigger.id,
+            'persisted': true,
+            'user_message':
+                'O gatilho foi salvo, mas nao foi possivel agendar sua execucao. Clique em Salvar gatilho para tentar novamente.',
+          },
+        ),
       );
     }
+    return Success(savedTrigger);
   }
 }

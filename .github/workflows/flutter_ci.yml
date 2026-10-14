@@ -282,6 +282,7 @@ jobs:
             tool.tests.test_streaming_tuning \
             tool.tests.test_build_pinned_native \
             tool.tests.test_prepare_package_native \
+            tool.tests.test_prepare_transport_comparison \
             tool.tests.test_odbc_benchmark_runner \
             tool.tests.test_odbc_benchmark_gate \
             tool.tests.test_compare_benchmark_summary \
@@ -452,18 +453,18 @@ jobs:
           python tool/odbc/prepare_package_native.py --github-env "${{ github.env }}"
 
       - name: Qualify transport with identical-code control and both revision orders
+        id: transport-comparison
         shell: bash
         run: |
           set -euo pipefail
           mkdir -p artifacts/benchmark
           python tool/benchmarks/prepare_transport_comparison.py \
             --base-dir transport-base \
-            --hosted-baseline-revision f15b33653593a6eed367fdc8ba98e80540dfe771 \
             --output-dir artifacts/benchmark/transport \
             2>&1 | tee artifacts/benchmark/transport-comparison.log
 
       - name: Run transport benchmark suite
-        if: ${{ !cancelled() }}
+        if: ${{ !cancelled() && steps.transport-comparison.outcome == 'success' }}
         shell: bash
         run: |
           set -o pipefail

@@ -1986,7 +1986,8 @@ class AppLocalizationsPt extends AppLocalizations {
   String get agentActionsTriggerValidationInvalidStartAt => 'Informe uma data e hora de início válidas.';
 
   @override
-  String get agentActionsTriggerValidationInvalidIntervalMinutes => 'Informe um número inteiro positivo de minutos.';
+  String get agentActionsTriggerValidationInvalidIntervalMinutes =>
+      'Informe um intervalo positivo em minutos; frações são permitidas.';
 
   @override
   String get agentActionsTriggerValidationInvalidTimeOfDay => 'Informe o horário como HH:mm em relogio de 24 horas.';
@@ -5139,4 +5140,91 @@ class AppLocalizationsPt extends AppLocalizations {
   @override
   String get ctPolicyInvalidRecovery =>
       'Alguns tokens têm a política salva inválida e não podem autorizar acesso. Revogue ou exclua os tokens identificados e crie outros com as permissões necessárias.';
+
+  @override
+  String get triggerInvalidTimezone => 'Informe um fuso IANA válido.';
+
+  @override
+  String get triggerRearmRequired => 'Confirme o reagendamento para executar novamente.';
+
+  @override
+  String get triggerRearm => 'Reagendar a execução única para a nova data';
+
+  @override
+  String get triggerCategory => 'Categoria do gatilho';
+
+  @override
+  String get triggerDemand => 'Sob demanda';
+
+  @override
+  String get triggerSchedule => 'Agendamento';
+
+  @override
+  String get triggerApplication => 'Aplicativo';
+
+  @override
+  String get triggerResult => 'Resultado de outra ação';
+
+  @override
+  String get triggerManualDescription => 'Executa quando você inicia a ação manualmente.';
+
+  @override
+  String get triggerRemoteDescription => 'Permite solicitações remotas, sujeitas à autorização da ação.';
+
+  @override
+  String get triggerOnceDescription => 'Executa uma única vez na data e hora informadas.';
+
+  @override
+  String get triggerIntervalDescription => 'Repete em minutos. Aceita frações: 1,5 equivale a 90 segundos.';
+
+  @override
+  String get triggerDailyDescription => 'Executa todos os dias no horário escolhido.';
+
+  @override
+  String get triggerWeeklyDescription => 'Executa nos dias da semana selecionados.';
+
+  @override
+  String get triggerMonthlyDescription => 'Executa no dia escolhido; meses sem esse dia são ignorados.';
+
+  @override
+  String get triggerStartDescription => 'Executa ao iniciar o aplicativo.';
+
+  @override
+  String get triggerCloseDescription => 'Executa ao encerrar o aplicativo, respeitando os limites de fechamento.';
+
+  @override
+  String get triggerSuccessDescription => 'Executa após outra ação terminar com sucesso.';
+
+  @override
+  String get triggerFailureDescription => 'Executa após outra ação falhar ou exceder o tempo limite.';
+
+  @override
+  String get triggerPickDateTime => 'Escolher data e hora';
+
+  @override
+  String get triggerPickTime => 'Escolher horário';
+
+  @override
+  String get triggerLocalDates => 'Datas de início e fim usam o fuso local do computador.';
+
+  @override
+  String get triggerLocalTime => 'Horário no fuso local do computador';
+
+  @override
+  String get triggerNoFutureRun => 'Este gatilho não possui execução futura. Revise as datas ou o reagendamento.';
+
+  @override
+  String get triggerPreviewIncomplete => 'Preencha um agendamento válido para ver a próxima execução.';
+
+  @override
+  String get triggerPreviewDisabled => 'Gatilho desativado: nenhuma execução será agendada.';
+
+  @override
+  String get triggerPreviewLocal => 'Prévia no fuso local do computador';
+
+  @override
+  String get triggerPreviewCatchUp => 'Execução pendente: pode iniciar assim que o gatilho for salvo.';
+
+  @override
+  String get triggerApply => 'Aplicar';
 }

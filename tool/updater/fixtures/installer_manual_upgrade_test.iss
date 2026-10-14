@@ -25,6 +25,8 @@ var
   Selected, ClientMissing, ActiveOperation, RejectRevocation, PolicyEnabled: Boolean;
   Authorized: Cardinal;
   ContractChecks, Revocations, OperationChecks: Integer;
+  DialogCalls, HostUpgrades, Enrollments, DialogChoice: Integer;
+  SilentMode, StopFailure, OtherContractFailure: Boolean;
 
 #include ProductionInstallerDir + "\installation_reporting.iss"
 #include ProductionInstallerDir + "\installation_repair.iss"
@@ -41,7 +43,25 @@ end;
 
 function FixtureWizardSilent(): Boolean;
 begin
-  Result := False;
+  Result := SilentMode;
+end;
+
+procedure FixtureWizardSelectTasks(const Tasks: String);
+begin
+  AssertTrue(Tasks = '!autoupdate', 'Only automatic updates may be deselected');
+  Selected := False;
+end;
+
+function FixtureTaskDialogMsgBox(const Instruction, Text: String; const Typ: TMsgBoxType;
+  const Buttons: Cardinal; const Labels: TArrayOfString; const ShieldButton: Integer): Integer;
+begin
+  DialogCalls := DialogCalls + 1;
+  AssertTrue(not SilentMode, 'Silent installs must never display a dialog');
+  AssertTrue(Buttons = (MB_YESNOCANCEL or MB_DEFBUTTON1), 'First option must be the default, with cancellation available');
+  AssertTrue((GetArrayLength(Labels) = 2) and (Labels[0] = CustomMessage('UpdaterHostContinueManual')) and
+    (Labels[1] = CustomMessage('UpdaterHostContinueUpgrade')), 'Manual continuation must be the first choice');
+  AssertTrue(ShieldButton = IDNO, 'Only upgrading the service has the administrative shield');
+  Result := DialogChoice;
 end;
 
 function FixtureWizardIsTaskSelected(const Task: String): Boolean;
@@ -78,7 +98,13 @@ end;
 
 function RunDependencyCommand(const Filename, Parameters: String; var Details: String): Boolean;
 begin
-  AssertTrue(Filename = ExpandConstant('{tmp}\plug_update_client.exe'), 'Must use embedded client, not legacy installed client');
+  if Pos('--enroll ', Parameters) = 1 then
+  begin
+    AssertTrue(HostUpgrades = 1, 'Only the replaced host may be enrolled');
+    AssertTrue(Filename = ExpandConstant('{commonpf}\PlugAgenteUpdater\plug_update_client.exe'), 'Enroll with the newly installed client');
+  end
+  else
+    AssertTrue(Filename = ExpandConstant('{tmp}\plug_update_client.exe'), 'Must use embedded client, not legacy installed client');
   Details := '';
   Result := True;
   if Parameters = '--check-install 0' then
@@ -91,6 +117,7 @@ begin
   begin
     ContractChecks := ContractChecks + 1;
     Details := '{"code":"host_upgrade_required","ok":false}';
+    if OtherContractFailure then Details := '{"code":"binary_hash_mismatch","ok":false}';
     Result := False;
   end
   else if Parameters = '--revoke' then
@@ -98,6 +125,20 @@ begin
     Revocations := Revocations + 1;
     Result := not RejectRevocation;
     if Result then PolicyEnabled := False else Details := 'service_manager_denied';
+  end
+  else if Parameters = '--prepare-host-upgrade' then
+  begin
+    HostUpgrades := HostUpgrades + 1;
+    PolicyEnabled := False;
+    Result := not StopFailure;
+    if StopFailure then Details := 'host_stop_unconfirmed';
+  end
+  else if Pos('--prepare-control ', Parameters) = 1 then
+    AssertTrue(HostUpgrades = 1, 'Control preparation must follow explicit host upgrade')
+  else if Pos('--enroll ', Parameters) = 1 then
+  begin
+    Enrollments := Enrollments + 1;
+    PolicyEnabled := True;
   end
   else RaiseException('Unexpected updater command: ' + Parameters);
 end;
@@ -116,6 +157,7 @@ begin
   UpdaterWasPresent := True;
   PolicyEnabled := True;
   Authorized := 1;
+  DialogChoice := IDCANCEL;
   ClientMissing := TestCase = 'missing_client';
   ActiveOperation := TestCase = 'active_operation';
   RejectRevocation := TestCase = 'revocation_failure';
@@ -125,15 +167,44 @@ begin
     ErrorText := RunPreparation(NeedsRestart);
     AssertTrue(ErrorText <> '', 'Legacy contract must reproduce the initial error');
     AssertTrue(ContractChecks = 1, 'Legacy contract must actually be checked');
-    AssertTrue(CriticalInstallationError, 'Initial error must be recorded');
+    AssertTrue(DialogCalls = 1, 'Legacy contract must offer interactive choices');
   end;
   Selected := False;
+  DialogCalls := 0;
+  if Pos('dialog_', TestCase) = 1 then Selected := True;
+  if TestCase = 'dialog_manual' then DialogChoice := IDYES;
+  if (TestCase = 'dialog_upgrade') or (TestCase = 'dialog_stop_failure') then DialogChoice := IDNO;
+  StopFailure := TestCase = 'dialog_stop_failure';
+  SilentMode := TestCase = 'silent_legacy';
+  OtherContractFailure := TestCase = 'other_contract_failure';
+  if OtherContractFailure then Selected := True;
+  if TestCase = 'dialog_active_operation' then ActiveOperation := True;
   ContractChecks := 0;
   ErrorText := RunPreparation(NeedsRestart);
   AssertTrue(OperationChecks > 0, 'Manual install must still check active operations');
-  AssertTrue(ContractChecks = 0, 'Unchecked automatic updates must bypass legacy contract checks');
-  if ActiveOperation then
-    AssertTrue(ErrorText <> '', 'Active update must still prevent file replacement')
+  if (Pos('dialog_', TestCase) <> 1) and not SilentMode and not OtherContractFailure then
+    AssertTrue(ContractChecks = 0, 'Unchecked automatic updates must bypass legacy contract checks');
+  if TestCase = 'dialog_upgrade' then
+  begin
+    AssertTrue((ErrorText = '') and (DialogCalls = 1) and (HostUpgrades = 1), 'Explicit service upgrade must continue in the same installation');
+    AssertTrue(ShouldInstallUpdaterHost() and ShouldInstallUpdaterClient() and ShouldInstallUpdaterWorker(), 'Upgrade must replace all updater components');
+    AssertTrue(not PolicyEnabled and (Authorized = 0), 'Old authorization must be disabled before replacement');
+    ConfigureUpdaterAuthorization;
+    AssertTrue((Enrollments = 1) and PolicyEnabled and (Authorized = 1), 'New host must be enrolled and authorized');
+  end
+  else if (TestCase = 'dialog_cancel') or StopFailure or SilentMode or OtherContractFailure then
+  begin
+    AssertTrue(ErrorText <> '', 'Unresolved or cancelled preparation must prevent installation');
+    AssertTrue(not ShouldInstallUpdaterHost() and (Enrollments = 0), 'Failure must never install or enroll a new host');
+    if SilentMode or OtherContractFailure then AssertTrue(DialogCalls = 0, 'Only interactive legacy-contract failures offer migration');
+    if StopFailure then AssertTrue(not PolicyEnabled and (Authorized = 0), 'Failed stop must keep authorization disabled');
+    if TestCase = 'dialog_cancel' then AssertTrue(PolicyEnabled and (Authorized = 1) and (HostUpgrades = 0), 'Cancel must not authorize or mutate the service');
+  end
+  else if ActiveOperation then
+  begin
+    AssertTrue(ErrorText <> '', 'Active update must still prevent file replacement');
+    AssertTrue(DialogCalls = 0, 'Active operation must block before offering choices');
+  end
   else
   begin
     AssertTrue(ErrorText = '', 'Manual installation must pass preparation: ' + ErrorText);
@@ -155,6 +226,7 @@ begin
       AssertTrue(not Failed and not CriticalInstallationError, 'Manual configuration must complete');
       AssertTrue(not PolicyEnabled and (Authorized = 0), 'Policy and Windows authorization must both be disabled');
       AssertTrue(not HasInstallationWarnings(), 'Legacy contract alone must not produce warnings');
+      if TestCase = 'dialog_manual' then AssertTrue((DialogCalls = 1) and not Selected and (HostUpgrades = 0), 'Manual choice must deselect automatic updates without replacing the host');
     end;
   end;
   AssertTrue(SaveStringToFile(ExpandConstant('{param:RESULT}'), 'passed', False), 'Cannot save assertions');

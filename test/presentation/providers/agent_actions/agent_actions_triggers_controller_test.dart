@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
 import 'package:plug_agente/application/use_cases/delete_agent_action_trigger.dart';
@@ -130,6 +131,32 @@ void main() {
       expect(controller.triggers, isEmpty);
       expect(controller.isLoadingTriggers, isTrue);
     });
+  });
+
+  test('keeps the newest selection when requests complete out of order', () async {
+    final first = Completer<Result<List<AgentActionTrigger>>>();
+    final second = Completer<Result<List<AgentActionTrigger>>>();
+    when(() => listTriggers(actionId: 'a')).thenAnswer((_) => first.future);
+    when(() => listTriggers(actionId: 'b')).thenAnswer((_) => second.future);
+    final loadA = controller.syncForSelection(actionId: 'a', selectedActionId: 'a');
+    final loadB = controller.syncForSelection(actionId: 'b', selectedActionId: 'b');
+    second.complete(const Success([AgentActionTrigger(id: 'tb', actionId: 'b', type: AgentActionTriggerType.manual)]));
+    await loadB;
+    first.complete(const Success([AgentActionTrigger(id: 'ta', actionId: 'a', type: AgentActionTriggerType.manual)]));
+    await loadA;
+    expect(controller.triggers.single.actionId, 'b');
+    expect(controller.isLoadingTriggers, isFalse);
+  });
+
+  test('clearing selection invalidates an in-flight request', () async {
+    final pending = Completer<Result<List<AgentActionTrigger>>>();
+    when(() => listTriggers(actionId: 'a')).thenAnswer((_) => pending.future);
+    final load = controller.syncForSelection(actionId: 'a', selectedActionId: 'a');
+    await controller.syncForSelection(actionId: null, selectedActionId: null);
+    pending.complete(const Success([AgentActionTrigger(id: 'ta', actionId: 'a', type: AgentActionTriggerType.manual)]));
+    await load;
+    expect(controller.triggers, isEmpty);
+    expect(controller.isLoadingTriggers, isFalse);
   });
 
   group('AgentActionsTriggersController mutations', () {

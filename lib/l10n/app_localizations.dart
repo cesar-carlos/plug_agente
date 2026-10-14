@@ -3647,7 +3647,7 @@ abstract class AppLocalizations {
   /// No description provided for @agentActionsTriggerValidationInvalidIntervalMinutes.
   ///
   /// In en, this message translates to:
-  /// **'Enter a positive whole number of minutes.'**
+  /// **'Enter a positive interval in minutes; fractions are allowed.'**
   String get agentActionsTriggerValidationInvalidIntervalMinutes;
 
   /// No description provided for @agentActionsTriggerValidationInvalidTimeOfDay.
@@ -9541,6 +9541,180 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Some tokens have an invalid saved policy and cannot authorize access. Revoke or delete the marked tokens, then create replacements with the required permissions.'**
   String get ctPolicyInvalidRecovery;
+
+  /// No description provided for @triggerInvalidTimezone.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter a valid IANA time zone.'**
+  String get triggerInvalidTimezone;
+
+  /// No description provided for @triggerRearmRequired.
+  ///
+  /// In en, this message translates to:
+  /// **'Confirm rescheduling to run again.'**
+  String get triggerRearmRequired;
+
+  /// No description provided for @triggerRearm.
+  ///
+  /// In en, this message translates to:
+  /// **'Reschedule the one-time run for the new date'**
+  String get triggerRearm;
+
+  /// No description provided for @triggerCategory.
+  ///
+  /// In en, this message translates to:
+  /// **'Trigger category'**
+  String get triggerCategory;
+
+  /// No description provided for @triggerDemand.
+  ///
+  /// In en, this message translates to:
+  /// **'On demand'**
+  String get triggerDemand;
+
+  /// No description provided for @triggerSchedule.
+  ///
+  /// In en, this message translates to:
+  /// **'Schedule'**
+  String get triggerSchedule;
+
+  /// No description provided for @triggerApplication.
+  ///
+  /// In en, this message translates to:
+  /// **'Application'**
+  String get triggerApplication;
+
+  /// No description provided for @triggerResult.
+  ///
+  /// In en, this message translates to:
+  /// **'Another action’s result'**
+  String get triggerResult;
+
+  /// No description provided for @triggerManualDescription.
+  ///
+  /// In en, this message translates to:
+  /// **'Runs when you start the action manually.'**
+  String get triggerManualDescription;
+
+  /// No description provided for @triggerRemoteDescription.
+  ///
+  /// In en, this message translates to:
+  /// **'Accepts remote requests, subject to action authorization.'**
+  String get triggerRemoteDescription;
+
+  /// No description provided for @triggerOnceDescription.
+  ///
+  /// In en, this message translates to:
+  /// **'Runs once at the specified date and time.'**
+  String get triggerOnceDescription;
+
+  /// No description provided for @triggerIntervalDescription.
+  ///
+  /// In en, this message translates to:
+  /// **'Repeats in minutes. Fractions are accepted: 1.5 means 90 seconds.'**
+  String get triggerIntervalDescription;
+
+  /// No description provided for @triggerDailyDescription.
+  ///
+  /// In en, this message translates to:
+  /// **'Runs every day at the selected time.'**
+  String get triggerDailyDescription;
+
+  /// No description provided for @triggerWeeklyDescription.
+  ///
+  /// In en, this message translates to:
+  /// **'Runs on the selected weekdays.'**
+  String get triggerWeeklyDescription;
+
+  /// No description provided for @triggerMonthlyDescription.
+  ///
+  /// In en, this message translates to:
+  /// **'Runs on the chosen day; months without that day are skipped.'**
+  String get triggerMonthlyDescription;
+
+  /// No description provided for @triggerStartDescription.
+  ///
+  /// In en, this message translates to:
+  /// **'Runs when the application starts.'**
+  String get triggerStartDescription;
+
+  /// No description provided for @triggerCloseDescription.
+  ///
+  /// In en, this message translates to:
+  /// **'Runs when the application closes, subject to shutdown limits.'**
+  String get triggerCloseDescription;
+
+  /// No description provided for @triggerSuccessDescription.
+  ///
+  /// In en, this message translates to:
+  /// **'Runs after another action succeeds.'**
+  String get triggerSuccessDescription;
+
+  /// No description provided for @triggerFailureDescription.
+  ///
+  /// In en, this message translates to:
+  /// **'Runs after another action fails or times out.'**
+  String get triggerFailureDescription;
+
+  /// No description provided for @triggerPickDateTime.
+  ///
+  /// In en, this message translates to:
+  /// **'Choose date and time'**
+  String get triggerPickDateTime;
+
+  /// No description provided for @triggerPickTime.
+  ///
+  /// In en, this message translates to:
+  /// **'Choose time'**
+  String get triggerPickTime;
+
+  /// No description provided for @triggerLocalDates.
+  ///
+  /// In en, this message translates to:
+  /// **'Start and end dates use the computer’s local time zone.'**
+  String get triggerLocalDates;
+
+  /// No description provided for @triggerLocalTime.
+  ///
+  /// In en, this message translates to:
+  /// **'Time in the computer’s local time zone'**
+  String get triggerLocalTime;
+
+  /// No description provided for @triggerNoFutureRun.
+  ///
+  /// In en, this message translates to:
+  /// **'This trigger has no future run. Review its dates or rescheduling.'**
+  String get triggerNoFutureRun;
+
+  /// No description provided for @triggerPreviewIncomplete.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter a valid schedule to see the next run.'**
+  String get triggerPreviewIncomplete;
+
+  /// No description provided for @triggerPreviewDisabled.
+  ///
+  /// In en, this message translates to:
+  /// **'Disabled trigger: no run will be scheduled.'**
+  String get triggerPreviewDisabled;
+
+  /// No description provided for @triggerPreviewLocal.
+  ///
+  /// In en, this message translates to:
+  /// **'Preview in the computer’s local time zone'**
+  String get triggerPreviewLocal;
+
+  /// No description provided for @triggerPreviewCatchUp.
+  ///
+  /// In en, this message translates to:
+  /// **'Missed run: it may start as soon as the trigger is saved.'**
+  String get triggerPreviewCatchUp;
+
+  /// No description provided for @triggerApply.
+  ///
+  /// In en, this message translates to:
+  /// **'Apply'**
+  String get triggerApply;
 }
 
 class _AppLocalizationsDelegate extends LocalizationsDelegate<AppLocalizations> {

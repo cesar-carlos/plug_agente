@@ -170,8 +170,7 @@ Future<void> openCreateActionDialog(WidgetTester tester, AppLocalizations l10n, 
 }
 
 bool isAppPageSelected(WidgetTester tester, String section) {
-  return tester.getSemantics(find.byKey(ValueKey('app_page_$section'))).flagsCollection.isSelected ==
-      Tristate.isTrue;
+  return tester.getSemantics(find.byKey(ValueKey('app_page_$section'))).flagsCollection.isSelected == Tristate.isTrue;
 }
 
 Future<void> showActionEditorPage(WidgetTester tester, String section) async {
@@ -258,6 +257,17 @@ Future<void> openCreateTriggerDialog(WidgetTester tester, AppLocalizations l10n)
 }
 
 Future<void> selectTriggerType(WidgetTester tester, AppLocalizations l10n, String typeLabel) async {
+  final category = [l10n.agentActionsTriggerTypeManual, l10n.agentActionsTriggerTypeRemote].contains(typeLabel)
+      ? l10n.triggerDemand
+      : [l10n.agentActionsTriggerTypeAppStart, l10n.agentActionsTriggerTypeAppClose].contains(typeLabel)
+      ? l10n.triggerApplication
+      : [l10n.agentActionsTriggerTypeActionSucceeded, l10n.agentActionsTriggerTypeActionFailed].contains(typeLabel)
+      ? l10n.triggerResult
+      : l10n.triggerSchedule;
+  await tester.tap(formComboBox(l10n.triggerCategory));
+  await tester.pumpAndSettle();
+  await tester.tap(find.text(category).last);
+  await tester.pumpAndSettle();
   await tester.tap(formComboBox(l10n.agentActionsTriggerFieldType));
   await tester.pumpAndSettle();
   await tester.tap(find.text(typeLabel).last);
@@ -894,6 +904,14 @@ class FakeAgentActionRepository implements IAgentActionRepository {
     definitions.remove(id);
     triggers.removeWhere((_, trigger) => trigger.actionId == id);
     return const Success(unit);
+  }
+
+  @override
+  Future<Result<bool>> updateTriggerRuntime(AgentActionTrigger expected, AgentActionTrigger updated) async {
+    final current = await getTrigger(expected.id);
+    if (current.isError() || !identical(current.getOrThrow(), expected)) return const Success(false);
+    final result = await saveTrigger(updated);
+    return result.fold((_) => const Success(true), Failure.new);
   }
 
   @override

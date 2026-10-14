@@ -18,6 +18,13 @@ abstract class IAgentActionRepository {
 
   Future<Result<AgentActionTrigger>> getTrigger(String id);
 
+  /// Updates runtime state only if the stored snapshot still matches [expected].
+  /// Never inserts a missing trigger or overwrites a concurrent edit.
+  Future<Result<bool>> updateTriggerRuntime(
+    AgentActionTrigger expected,
+    AgentActionTrigger updated,
+  );
+
   Future<Result<List<AgentActionTrigger>>> listTriggers({
     String? actionId,
     bool? isEnabled,

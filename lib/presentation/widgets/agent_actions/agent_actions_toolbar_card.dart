@@ -72,7 +72,6 @@ class AgentActionsToolbarCard extends StatelessWidget {
                 icon: FluentIcons.play,
                 label: l10n.agentActionsRunSelected,
                 onPressed: provider.canRunSelected ? (onRunSelected ?? provider.runSelectedAction) : null,
-                isBusy: provider.isSelectedDefinitionRunning,
                 tooltip: '${l10n.agentActionsRunSelected} (Ctrl+R)',
                 disabledReason: _commandDisabledReason(
                   l10n: l10n,

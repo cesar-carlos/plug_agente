@@ -52,6 +52,19 @@ module.exports = async function scheduledWorkflowAlert({ github, context, core }
   }
 
   if (existingIssue) {
+    const previousBody = existingIssue.body || '';
+    const latestRunLine = `Latest failed run: ${latest.html_url}`;
+    const body = /^Latest failed run:.*$/m.test(previousBody)
+      ? previousBody.replace(/^Latest failed run:.*$/m, latestRunLine)
+      : `${previousBody}\n\n${latestRunLine}`.trim();
+    if (body !== previousBody) {
+      await github.rest.issues.update({
+        owner: context.repo.owner,
+        repo: context.repo.repo,
+        issue_number: existingIssue.number,
+        body,
+      });
+    }
     core.warning(`An alert is already open: #${existingIssue.number}`);
     return;
   }

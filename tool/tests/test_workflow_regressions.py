@@ -13,6 +13,15 @@ def workflow(name):
 
 
 class WorkflowRegressionTests(unittest.TestCase):
+    def test_transport_benchmark_uses_locked_baseline_and_requires_comparison_success(self):
+        steps = workflow('flutter_ci.yml')['jobs']['transport-benchmark']['steps']
+        comparison = next(step for step in steps if step.get('id') == 'transport-comparison')
+        self.assertNotIn('--hosted-baseline-revision', comparison['run'])
+        suite = next(step for step in steps if step['name'] == 'Run transport benchmark suite')
+        self.assertIn("steps.transport-comparison.outcome == 'success'", suite['if'])
+        artifacts = next(step for step in steps if step['name'] == 'Upload benchmark artifacts')
+        self.assertEqual(artifacts['if'], 'always()')
+
     def test_feed_publication_does_not_install_unused_flutter_dependencies(self):
         steps = workflow("update-appcast.yml")["jobs"]["update-appcast"]["steps"]
         self.assertFalse(any("flutter-action" in step.get("uses", "") or
