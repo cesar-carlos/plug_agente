@@ -51,7 +51,6 @@ import 'package:plug_agente/application/rpc/factories/sql_rpc_method_handler_ope
 import 'package:plug_agente/application/rpc/rpc_method_dispatcher.dart';
 import 'package:plug_agente/application/rpc/source_discovery_rpc_handler.dart';
 import 'package:plug_agente/application/rpc/source_schema_rpc_handler.dart';
-import 'package:plug_agente/infrastructure/external_services/odbc_source_schema.dart';
 import 'package:plug_agente/application/rpc/sql_execute_materialized_result_policy.dart';
 import 'package:plug_agente/application/rpc/sql_operation_rpc_handler.dart';
 import 'package:plug_agente/application/rpc/sql_streaming_connection_string_cache.dart';
@@ -286,6 +285,7 @@ import 'package:plug_agente/infrastructure/external_services/odbc_driver_checker
 import 'package:plug_agente/infrastructure/external_services/odbc_in_flight_execution_registry.dart';
 import 'package:plug_agente/infrastructure/external_services/odbc_runtime_lifecycle.dart';
 import 'package:plug_agente/infrastructure/external_services/odbc_source_discovery.dart';
+import 'package:plug_agente/infrastructure/external_services/odbc_source_schema.dart';
 import 'package:plug_agente/infrastructure/external_services/odbc_sql_operation_transaction.dart';
 import 'package:plug_agente/infrastructure/external_services/odbc_streaming_gateway.dart';
 import 'package:plug_agente/infrastructure/external_services/odbc_streaming_named_parameter_preparer.dart';

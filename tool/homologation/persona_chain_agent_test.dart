@@ -6,7 +6,6 @@ import 'package:plug_agente/application/rpc/client_token_get_policy_rate_limiter
 import 'package:plug_agente/application/rpc/rpc_method_dispatcher.dart';
 import 'package:plug_agente/application/rpc/source_discovery_rpc_handler.dart';
 import 'package:plug_agente/application/rpc/source_schema_rpc_handler.dart';
-import 'package:plug_agente/infrastructure/external_services/odbc_source_schema.dart';
 import 'package:plug_agente/application/rpc/sql_operation_rpc_handler.dart';
 import 'package:plug_agente/application/services/active_config_resolver.dart';
 import 'package:plug_agente/application/services/client_token_validation_service.dart';
@@ -29,6 +28,7 @@ import 'package:plug_agente/infrastructure/codecs/transport_work_pool.dart';
 import 'package:plug_agente/infrastructure/datasources/socket_data_source.dart';
 import 'package:plug_agente/infrastructure/external_services/odbc_database_gateway.dart';
 import 'package:plug_agente/infrastructure/external_services/odbc_source_discovery.dart';
+import 'package:plug_agente/infrastructure/external_services/odbc_source_schema.dart';
 import 'package:plug_agente/infrastructure/external_services/odbc_sql_operation_transaction.dart';
 import 'package:plug_agente/infrastructure/external_services/socket_io_transport_client_v2.dart';
 import 'package:plug_agente/infrastructure/metrics/metrics_collector.dart';
