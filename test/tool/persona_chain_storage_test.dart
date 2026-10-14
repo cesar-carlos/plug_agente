@@ -10,6 +10,7 @@ import '../../tool/homologation/persona_chain_storage.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
+  final windowsDpapiRequired = !Platform.isWindows ? 'Windows DPAPI fixture is required.' : false;
   late Directory session;
   late ChainAgentStorage storage;
   final initial = Config(
@@ -29,11 +30,17 @@ void main() {
     updatedAt: DateTime.utc(2026),
   );
   setUp(() {
+    if (windowsDpapiRequired != false) {
+      return;
+    }
     session = Directory.systemTemp.createTempSync('se7e-chain-vault-test-');
     registerChainVault(session);
     storage = ChainAgentStorage(session.path, 'postgres');
   });
   tearDown(() async {
+    if (windowsDpapiRequired != false) {
+      return;
+    }
     await storage.database.close();
     debugDefaultTargetPlatformOverride = null;
     session.deleteSync(recursive: true);
@@ -59,7 +66,7 @@ void main() {
     expect(recovered.id, saved.id);
     expect(recovered.password == saved.password, isTrue);
     expect(recovered.authToken == saved.authToken, isTrue);
-  });
+  }, skip: windowsDpapiRequired);
   test('missing vault refuses recovery without replacing the existing token or configuration', () async {
     await storage.open(initial, 'fixture-client');
     final boot = File('${session.path}/postgres-boot.json').readAsStringSync();
@@ -69,7 +76,7 @@ void main() {
     await expectLater(storage.open(initial, 'fixture-client'), throwsStateError);
     expect(File('${session.path}/postgres-boot.json').readAsStringSync(), boot);
     expect(await storage.database.select(storage.database.clientTokenCacheTable).get(), hasLength(1));
-  });
+  }, skip: windowsDpapiRequired);
   test('corrupt native vault refuses recovery without plaintext fallback', () async {
     await storage.open(initial, 'fixture-client');
     await storage.database.close();
@@ -77,7 +84,7 @@ void main() {
     storage = ChainAgentStorage(session.path, 'postgres');
     await expectLater(storage.open(initial, 'fixture-client'), throwsA(isA<Exception>()));
     expect(await storage.database.select(storage.database.configTable).get(), hasLength(1));
-  });
+  }, skip: windowsDpapiRequired);
   test('missing ODBC secret refuses recovery even when bootstrap still contains the password', () async {
     await storage.open(initial, 'fixture-client');
     await storage.database.close();
@@ -85,5 +92,5 @@ void main() {
     await vault.delete(key: 'postgres_odbc_isolated-config_password');
     storage = ChainAgentStorage(session.path, 'postgres');
     await expectLater(storage.open(initial, 'fixture-client'), throwsStateError);
-  });
+  }, skip: windowsDpapiRequired);
 }
