@@ -69,6 +69,7 @@ class AgentActionsDefinitionsController implements AgentActionsDefinitionsSaveHo
   bool usedDefaultDeveloperData7ConfigPath = false;
   @override
   String? lastOperationErrorMessage;
+  @override
   Exception? lastOperationFailure;
 
   UnmodifiableListView<AgentActionDefinition>? definitionsViewCache;

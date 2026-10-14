@@ -116,7 +116,6 @@ void main() {
       final definition = AgentActionDefinition(
         id: 'script-1',
         name: 'Link de Cobranca',
-        state: AgentActionState.needsValidation,
         config: ScriptActionConfig(
           scriptPath: AgentActionPathReference(
             originalPath: r'C:\Data7\LinkCobranca\LinkCobrancaExecutor.bat',
@@ -173,7 +172,6 @@ void main() {
       const definition = AgentActionDefinition(
         id: 'action-record',
         name: 'Run command',
-        state: AgentActionState.needsValidation,
         config: CommandLineActionConfig(command: 'dir'),
         policies: AgentActionDefinitionPolicies(
           remote: AgentActionRemotePolicy(isEnabled: true, allowAdHoc: true),
@@ -256,7 +254,6 @@ void main() {
       const definition = AgentActionDefinition(
         id: 'action-legacy',
         name: 'Run command',
-        state: AgentActionState.needsValidation,
         config: CommandLineActionConfig(command: 'dir'),
       );
       final testedAt = DateTime.utc(2026, 10, 14, 12, 40);

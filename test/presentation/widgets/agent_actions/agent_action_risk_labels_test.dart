@@ -34,7 +34,6 @@ void main() {
     const definition = AgentActionDefinition(
       id: 'action-1',
       name: 'Run',
-      state: AgentActionState.needsValidation,
       config: CommandLineActionConfig(command: 'dir'),
     );
 

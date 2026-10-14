@@ -74,7 +74,6 @@ void main() {
       const before = AgentActionDefinition(
         id: 'script-1',
         name: 'Link de Cobranca',
-        state: AgentActionState.needsValidation,
         config: ScriptActionConfig(
           scriptPath: AgentActionPathReference(
             originalPath: r'C:\Data7\LinkCobranca\LinkCobrancaExecutor.bat',
@@ -105,7 +104,6 @@ void main() {
       final before = AgentActionDefinition(
         id: 'script-1',
         name: 'Link de Cobranca',
-        state: AgentActionState.needsValidation,
         config: ScriptActionConfig(
           scriptPath: AgentActionPathReference(
             originalPath: r'C:\Data7\LinkCobranca\LinkCobrancaExecutor.bat',
@@ -133,7 +131,6 @@ void main() {
       const before = AgentActionDefinition(
         id: 'script-1',
         name: 'Link de Cobranca',
-        state: AgentActionState.needsValidation,
         config: ScriptActionConfig(
           scriptPath: AgentActionPathReference(
             originalPath: r'C:\Data7\LinkCobranca\LinkCobrancaExecutor.bat',
