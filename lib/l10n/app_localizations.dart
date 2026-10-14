@@ -158,6 +158,18 @@ abstract class AppLocalizations {
   /// **'Test action'**
   String get agentActionsTestSelected;
 
+  /// No description provided for @agentActionsTestSelectedTooltip.
+  ///
+  /// In en, this message translates to:
+  /// **'Checks the path and interpreter without running the task. Execution is available after activation.'**
+  String get agentActionsTestSelectedTooltip;
+
+  /// No description provided for @agentActionsActivateSelected.
+  ///
+  /// In en, this message translates to:
+  /// **'Activate'**
+  String get agentActionsActivateSelected;
+
   /// No description provided for @agentActionsCancelExecution.
   ///
   /// In en, this message translates to:
@@ -2060,6 +2072,18 @@ abstract class AppLocalizations {
   /// **'Needs validation'**
   String get agentActionsRiskNeedsValidation;
 
+  /// No description provided for @agentActionsRiskReadyForActivation.
+  ///
+  /// In en, this message translates to:
+  /// **'Ready to activate'**
+  String get agentActionsRiskReadyForActivation;
+
+  /// No description provided for @agentActionsRiskOutsideFilter.
+  ///
+  /// In en, this message translates to:
+  /// **'Outside filter'**
+  String get agentActionsRiskOutsideFilter;
+
   /// No description provided for @agentActionsRiskSecretPlaceholders.
   ///
   /// In en, this message translates to:
@@ -2401,6 +2425,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'{pending} pending · {running} running in queue'**
   String agentActionsQueueActiveIndicator(int pending, int running);
+
+  /// No description provided for @agentActionsQueueActiveIndicatorWithNames.
+  ///
+  /// In en, this message translates to:
+  /// **'{pending} pending · {running} running: {names}'**
+  String agentActionsQueueActiveIndicatorWithNames(int pending, int running, String names);
 
   /// No description provided for @agentActionsConfirmRemoteTitle.
   ///

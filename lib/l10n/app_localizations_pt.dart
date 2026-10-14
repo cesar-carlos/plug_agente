@@ -42,6 +42,13 @@ class AppLocalizationsPt extends AppLocalizations {
   String get agentActionsTestSelected => 'Testar ação';
 
   @override
+  String get agentActionsTestSelectedTooltip =>
+      'Confere caminho e interpretador, sem executar a tarefa. A execução fica disponível depois de ativar.';
+
+  @override
+  String get agentActionsActivateSelected => 'Ativar';
+
+  @override
   String get agentActionsCancelExecution => 'Cancelar execução';
 
   @override
@@ -1092,6 +1099,12 @@ class AppLocalizationsPt extends AppLocalizations {
   String get agentActionsRiskNeedsValidation => 'Precisa validar';
 
   @override
+  String get agentActionsRiskReadyForActivation => 'Pronta para ativar';
+
+  @override
+  String get agentActionsRiskOutsideFilter => 'Fora do filtro';
+
+  @override
   String get agentActionsRiskSecretPlaceholders => 'Usa segredos';
 
   @override
@@ -1286,6 +1299,11 @@ class AppLocalizationsPt extends AppLocalizations {
   @override
   String agentActionsQueueActiveIndicator(int pending, int running) {
     return '$pending na fila · $running em execução na fila';
+  }
+
+  @override
+  String agentActionsQueueActiveIndicatorWithNames(int pending, int running, String names) {
+    return '$pending na fila · $running em execução: $names';
   }
 
   @override

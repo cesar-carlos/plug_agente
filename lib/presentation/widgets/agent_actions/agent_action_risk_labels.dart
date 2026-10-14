@@ -38,6 +38,8 @@ List<AgentActionRiskDescriptor> collectAgentActionRiskDescriptors({
   bool runnerUnavailable = false,
   bool editorUnsupported = false,
   bool needsValidation = false,
+  bool preflightReady = false,
+  bool outsideListFilter = false,
   Set<String> secretPlaceholderNames = const <String>{},
 }) {
   final descriptors = <AgentActionRiskDescriptor>[];
@@ -51,11 +53,18 @@ List<AgentActionRiskDescriptor> collectAgentActionRiskDescriptors({
       ),
     );
   }
+  if (outsideListFilter) {
+    descriptors.add(
+      AgentActionRiskDescriptor(
+        label: l10n.agentActionsRiskOutsideFilter,
+      ),
+    );
+  }
   if (needsValidation) {
     descriptors.add(
       AgentActionRiskDescriptor(
-        label: l10n.agentActionsRiskNeedsValidation,
-        isWarning: true,
+        label: preflightReady ? l10n.agentActionsRiskReadyForActivation : l10n.agentActionsRiskNeedsValidation,
+        isWarning: !preflightReady,
       ),
     );
   }

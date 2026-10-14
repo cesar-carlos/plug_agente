@@ -35,6 +35,7 @@ class ActionExecutionQueue {
   final ActionExecutionQueueMetricsCollector? _metrics;
 
   final Map<String, int> _runningByActionId = <String, int>{};
+  final Map<String, Set<String>> _runningExecutionIdsByActionId = <String, Set<String>>{};
   final Map<String, Queue<_PendingActionTask<Object>>> _pendingByActionId =
       <String, Queue<_PendingActionTask<Object>>>{};
   final Map<String, Future<Result<Object>>> _idempotentResults = <String, Future<Result<Object>>>{};
@@ -57,6 +58,14 @@ class ActionExecutionQueue {
   Completer<void>? _drainedCompleter;
 
   int get runningCount => _runningByActionId.values.fold(0, (total, count) => total + count);
+
+  bool isActionRunning(String actionId) => (_runningByActionId[actionId] ?? 0) > 0;
+
+  Iterable<String> get runningActionIds => _runningByActionId.keys;
+
+  Set<String> runningExecutionIdsFor(String actionId) {
+    return Set<String>.unmodifiable(_runningExecutionIdsByActionId[actionId] ?? const <String>{});
+  }
 
   int get queuedCount => _pendingByActionId.values.fold(0, (total, queue) => total + queue.length);
 
@@ -327,18 +336,13 @@ class ActionExecutionQueue {
     }
 
     _metrics?.recordRunStarted();
-    _runningByActionId[request.actionId] = (_runningByActionId[request.actionId] ?? 0) + 1;
+    _beginRunning(request.actionId, request.executionId);
     try {
       return await request.task();
     } on Object catch (error) {
       return Failure(_unexpectedTaskFailure(request, error));
     } finally {
-      final current = (_runningByActionId[request.actionId] ?? 1) - 1;
-      if (current <= 0) {
-        _runningByActionId.remove(request.actionId);
-      } else {
-        _runningByActionId[request.actionId] = current;
-      }
+      _endRunning(request.actionId, request.executionId);
       _completeIdleWaitersIfNeeded();
       _completeDrainedIfIdle();
       if (!_disposed) {
@@ -367,18 +371,13 @@ class ActionExecutionQueue {
       // reality for subsequent loop iterations. Without this, multiple slots can
       // be granted incorrectly when maxConcurrent > 1, because _PendingActionTask
       // does not update _runningByActionId on its own.
-      _runningByActionId[actionId] = (_runningByActionId[actionId] ?? 0) + 1;
+      _beginRunning(actionId, pending.request.executionId);
 
       // Decrement and drain again when the dequeued task finishes (success,
       // failure, timeout, or cancellation all resolve pending.future).
       unawaited(
         pending.future.whenComplete(() {
-          final current = (_runningByActionId[actionId] ?? 1) - 1;
-          if (current <= 0) {
-            _runningByActionId.remove(actionId);
-          } else {
-            _runningByActionId[actionId] = current;
-          }
+          _endRunning(actionId, pending.request.executionId);
           _completeIdleWaitersIfNeeded();
           _completeDrainedIfIdle();
           if (!_disposed) {
@@ -392,6 +391,26 @@ class ActionExecutionQueue {
 
     if (queue.isEmpty) {
       _pendingByActionId.remove(actionId);
+    }
+  }
+
+  void _beginRunning(String actionId, String executionId) {
+    _runningByActionId[actionId] = (_runningByActionId[actionId] ?? 0) + 1;
+    (_runningExecutionIdsByActionId[actionId] ??= <String>{}).add(executionId);
+  }
+
+  void _endRunning(String actionId, String executionId) {
+    final executionIds = _runningExecutionIdsByActionId[actionId];
+    executionIds?.remove(executionId);
+    if (executionIds != null && executionIds.isEmpty) {
+      _runningExecutionIdsByActionId.remove(actionId);
+    }
+
+    final current = (_runningByActionId[actionId] ?? 1) - 1;
+    if (current <= 0) {
+      _runningByActionId.remove(actionId);
+    } else {
+      _runningByActionId[actionId] = current;
     }
   }
 

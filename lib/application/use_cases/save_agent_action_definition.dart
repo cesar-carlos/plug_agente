@@ -37,8 +37,9 @@ class SaveAgentActionDefinition {
   );
 
   Future<Result<AgentActionDefinition>> call(
-    AgentActionDefinition definition,
-  ) async {
+    AgentActionDefinition definition, {
+    bool recordPreflight = false,
+  }) async {
     final normalizationResult = await _validateDefinition.normalizeForSave(
       definition,
     );
@@ -52,29 +53,32 @@ class SaveAgentActionDefinition {
       name: normalizedDefinition.name.trim(),
     );
 
-    final existingRemote = (await _repository.getDefinition(persistedDefinition.id)).getOrNull()?.policies.remote;
+    var policyAdjusted = persistedDefinition;
+    if (policyAdjusted.policies.remote.allowAdHoc && !_featureFlags.enableRemoteAdHocAgentActions) {
+      policyAdjusted = policyAdjusted.copyWith(
+        policies: policyAdjusted.policies.copyWith(
+          remote: policyAdjusted.policies.remote.copyWith(allowAdHoc: false),
+        ),
+      );
+    }
+    if (policyAdjusted.policies.elevated.runElevated && !_featureFlags.enableElevatedAgentActions) {
+      policyAdjusted = policyAdjusted.copyWith(
+        policies: policyAdjusted.policies.copyWith(
+          elevated: policyAdjusted.policies.elevated.copyWith(runElevated: false),
+        ),
+      );
+    }
+
+    final existingDefinition = (await _repository.getDefinition(policyAdjusted.id)).getOrNull();
+    final existingRemote = existingDefinition?.policies.remote;
     final reconciledRemote = await _remoteApprovalReconciler.reconcileAsync(
-      incoming: persistedDefinition.policies.remote,
+      incoming: policyAdjusted.policies.remote,
       previous: existingRemote,
-      definition: persistedDefinition,
+      definition: policyAdjusted,
     );
-    var definitionWithRemote = persistedDefinition.copyWith(
-      policies: persistedDefinition.policies.copyWith(remote: reconciledRemote),
+    final definitionWithRemote = policyAdjusted.copyWith(
+      policies: policyAdjusted.policies.copyWith(remote: reconciledRemote),
     );
-    if (definitionWithRemote.policies.remote.allowAdHoc && !_featureFlags.enableRemoteAdHocAgentActions) {
-      definitionWithRemote = definitionWithRemote.copyWith(
-        policies: definitionWithRemote.policies.copyWith(
-          remote: definitionWithRemote.policies.remote.copyWith(allowAdHoc: false),
-        ),
-      );
-    }
-    if (definitionWithRemote.policies.elevated.runElevated && !_featureFlags.enableElevatedAgentActions) {
-      definitionWithRemote = definitionWithRemote.copyWith(
-        policies: definitionWithRemote.policies.copyWith(
-          elevated: definitionWithRemote.policies.elevated.copyWith(runElevated: false),
-        ),
-      );
-    }
 
     if (definitionWithRemote.policies.remote.canRunSavedAction) {
       final triggersResult = await _repository.listTriggers(
@@ -109,13 +113,38 @@ class SaveAgentActionDefinition {
       if (compatibility.isError()) return Failure(compatibility.exceptionOrNull()!);
     }
 
-    final pendingSnapshotHash = _snapshotter.snapshotHash(definitionWithRemote);
-    if (definitionWithRemote.state == AgentActionState.active) {
-      final preflightSnapshotHash = _preflightContentSnapshotHash(persistedDefinition);
-      final recordedPreflightHash =
-          definition.lastPreflightSnapshotHash ?? definitionWithRemote.lastPreflightSnapshotHash;
-      final recordedPreflightValidatedAt =
-          definition.lastPreflightValidatedAt ?? definitionWithRemote.lastPreflightValidatedAt;
+    final preflightSnapshotHash = _preflightContentSnapshotHash(definitionWithRemote);
+    final existingContentHash = existingDefinition == null ? null : _preflightContentSnapshotHash(existingDefinition);
+    final storedPreflightAt = existingDefinition?.lastPreflightValidatedAt ?? definition.lastPreflightValidatedAt;
+    final canRefreshStoredPreflight =
+        !recordPreflight &&
+        existingContentHash != null &&
+        existingContentHash == preflightSnapshotHash &&
+        AgentActionPreflightValidity.isTimestampValid(
+          storedPreflightAt,
+          now: _now(),
+          settings: _preflightSettings,
+        );
+    final definitionReadyForPreflight = recordPreflight
+        ? definitionWithRemote.copyWith(
+            lastPreflightSnapshotHash: preflightSnapshotHash,
+            lastPreflightValidatedAt: _now().toUtc(),
+          )
+        : canRefreshStoredPreflight
+        ? definitionWithRemote.copyWith(
+            lastPreflightSnapshotHash: preflightSnapshotHash,
+            lastPreflightValidatedAt: storedPreflightAt,
+          )
+        : definitionWithRemote;
+    final pendingSnapshotHash = _snapshotter.snapshotHash(definitionReadyForPreflight);
+    if (definitionReadyForPreflight.state == AgentActionState.active) {
+      final usesRefreshedPreflight = recordPreflight || canRefreshStoredPreflight;
+      final recordedPreflightHash = usesRefreshedPreflight
+          ? definitionReadyForPreflight.lastPreflightSnapshotHash
+          : definition.lastPreflightSnapshotHash ?? definitionReadyForPreflight.lastPreflightSnapshotHash;
+      final recordedPreflightValidatedAt = usesRefreshedPreflight
+          ? definitionReadyForPreflight.lastPreflightValidatedAt
+          : definition.lastPreflightValidatedAt ?? definitionReadyForPreflight.lastPreflightValidatedAt;
       if (!AgentActionPreflightValidity.isValid(
         recordedHash: recordedPreflightHash,
         expectedHash: preflightSnapshotHash,
@@ -159,11 +188,10 @@ class SaveAgentActionDefinition {
       }
     }
 
-    var definitionWithSnapshot = definitionWithRemote.copyWith(
+    var definitionWithSnapshot = definitionReadyForPreflight.copyWith(
       definitionSnapshotHash: pendingSnapshotHash,
     );
-    if (definitionWithRemote.state != AgentActionState.active) {
-      final preflightSnapshotHash = _preflightContentSnapshotHash(persistedDefinition);
+    if (!recordPreflight && definitionReadyForPreflight.state != AgentActionState.active) {
       if (definitionWithSnapshot.lastPreflightSnapshotHash != null &&
           definitionWithSnapshot.lastPreflightSnapshotHash != preflightSnapshotHash) {
         definitionWithSnapshot = definitionWithSnapshot.copyWith(
@@ -176,8 +204,6 @@ class SaveAgentActionDefinition {
   }
 
   String _preflightContentSnapshotHash(AgentActionDefinition definition) {
-    return _snapshotter.snapshotHash(
-      definition.copyWith(state: AgentActionState.needsValidation),
-    );
+    return _snapshotter.executionContentHash(definition);
   }
 }

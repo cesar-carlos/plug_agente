@@ -24,6 +24,7 @@ final class AgentActionsSelectionCoordinator {
     required bool Function() canDeleteSelected,
     required bool Function() canRunSelected,
     required bool Function() canTestSelected,
+    required bool Function(AgentActionDefinition definition) canActivateDefinition,
     required bool Function(AgentActionExecution execution) canCancelExecution,
     required bool Function() canTransferBundle,
   }) : _definitionsController = definitionsController,
@@ -39,6 +40,7 @@ final class AgentActionsSelectionCoordinator {
        _canDeleteSelected = canDeleteSelected,
        _canRunSelected = canRunSelected,
        _canTestSelected = canTestSelected,
+       _canActivateDefinition = canActivateDefinition,
        _canCancelExecution = canCancelExecution,
        _canTransferBundle = canTransferBundle;
 
@@ -55,6 +57,7 @@ final class AgentActionsSelectionCoordinator {
   final bool Function() _canDeleteSelected;
   final bool Function() _canRunSelected;
   final bool Function() _canTestSelected;
+  final bool Function(AgentActionDefinition definition) _canActivateDefinition;
   final bool Function(AgentActionExecution execution) _canCancelExecution;
   final bool Function() _canTransferBundle;
 
@@ -160,6 +163,22 @@ final class AgentActionsSelectionCoordinator {
       definition: definition,
       dangerousCommandConfirmed: dangerousCommandConfirmed,
     );
+    if (errorMessage != null) {
+      _setErrorMessage(errorMessage);
+      _notifyStateChanged();
+      return;
+    }
+
+    await _reload();
+  }
+
+  Future<void> activateDefinition(AgentActionDefinition definition) async {
+    if (!_canActivateDefinition(definition)) {
+      return;
+    }
+
+    _setErrorMessage(null);
+    final errorMessage = await _definitionsController.activateDefinition(definition);
     if (errorMessage != null) {
       _setErrorMessage(errorMessage);
       _notifyStateChanged();

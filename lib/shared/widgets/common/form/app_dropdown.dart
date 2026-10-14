@@ -16,6 +16,7 @@ class AppDropdown<T> extends StatefulWidget {
     this.helpTooltip,
     this.helpButtonKey,
     this.reserveHelpAffordance = false,
+    this.labelMinLines = 1,
   });
 
   final String label;
@@ -29,6 +30,7 @@ class AppDropdown<T> extends StatefulWidget {
   final String? helpTooltip;
   final Key? helpButtonKey;
   final bool reserveHelpAffordance;
+  final int labelMinLines;
 
   @override
   State<AppDropdown<T>> createState() => _AppDropdownState<T>();
@@ -73,6 +75,7 @@ class _AppDropdownState<T> extends State<AppDropdown<T>> {
       helpTooltip: widget.helpTooltip,
       helpButtonKey: widget.helpButtonKey,
       reserveHelpAffordance: widget.reserveHelpAffordance,
+      labelMinLines: widget.labelMinLines,
       child: dropdown,
     );
   }

@@ -70,6 +70,87 @@ void main() {
       );
     });
 
+    test('execution content hash ignores policy changes and follows the launched config', () {
+      const before = AgentActionDefinition(
+        id: 'script-1',
+        name: 'Link de Cobranca',
+        state: AgentActionState.needsValidation,
+        config: ScriptActionConfig(
+          scriptPath: AgentActionPathReference(
+            originalPath: r'C:\Data7\LinkCobranca\LinkCobrancaExecutor.bat',
+          ),
+        ),
+      );
+      final renamed = before.copyWith(
+        name: 'Outro nome',
+        policies: const AgentActionDefinitionPolicies(
+          retry: AgentActionRetryPolicy(maxAttempts: 3),
+        ),
+      );
+      final moved = before.copyWith(
+        config: const ScriptActionConfig(
+          scriptPath: AgentActionPathReference(
+            originalPath: r'C:\Data7\LinkCobranca\Other.bat',
+          ),
+        ),
+      );
+
+      expect(snapshotter.executionContentHash(before), snapshotter.executionContentHash(renamed));
+      expect(snapshotter.executionContentHash(before), isNot(snapshotter.executionContentHash(moved)));
+    });
+
+    test('should keep snapshot hash when only the path validation timestamp changes', () {
+      final checkedAt = DateTime.utc(2026, 10, 14, 12, 8);
+      final recheckedAt = DateTime.utc(2026, 10, 14, 12, 30);
+      final before = AgentActionDefinition(
+        id: 'script-1',
+        name: 'Link de Cobranca',
+        state: AgentActionState.needsValidation,
+        config: ScriptActionConfig(
+          scriptPath: AgentActionPathReference(
+            originalPath: r'C:\Data7\LinkCobranca\LinkCobrancaExecutor.bat',
+            canonicalPath: r'C:\Data7\LinkCobranca\LinkCobrancaExecutor.bat',
+            existsAtValidation: true,
+            validatedAt: checkedAt,
+          ),
+        ),
+      );
+      final after = before.copyWith(
+        config: ScriptActionConfig(
+          scriptPath: AgentActionPathReference(
+            originalPath: r'C:\Data7\LinkCobranca\LinkCobrancaExecutor.bat',
+            canonicalPath: r'C:\Data7\LinkCobranca\LinkCobrancaExecutor.bat',
+            existsAtValidation: true,
+            validatedAt: recheckedAt,
+          ),
+        ),
+      );
+
+      expect(snapshotter.snapshotHash(before), snapshotter.snapshotHash(after));
+    });
+
+    test('should change snapshot hash when the script path changes', () {
+      const before = AgentActionDefinition(
+        id: 'script-1',
+        name: 'Link de Cobranca',
+        state: AgentActionState.needsValidation,
+        config: ScriptActionConfig(
+          scriptPath: AgentActionPathReference(
+            originalPath: r'C:\Data7\LinkCobranca\LinkCobrancaExecutor.bat',
+          ),
+        ),
+      );
+      final after = before.copyWith(
+        config: const ScriptActionConfig(
+          scriptPath: AgentActionPathReference(
+            originalPath: r'C:\Data7\LinkCobranca\Other.bat',
+          ),
+        ),
+      );
+
+      expect(snapshotter.snapshotHash(before), isNot(snapshotter.snapshotHash(after)));
+    });
+
     test('should change fingerprint when remote ad-hoc policy changes', () {
       const base = AgentActionDefinition(
         id: 'a1',

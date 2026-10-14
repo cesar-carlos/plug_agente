@@ -42,6 +42,13 @@ class AppLocalizationsEn extends AppLocalizations {
   String get agentActionsTestSelected => 'Test action';
 
   @override
+  String get agentActionsTestSelectedTooltip =>
+      'Checks the path and interpreter without running the task. Execution is available after activation.';
+
+  @override
+  String get agentActionsActivateSelected => 'Activate';
+
+  @override
   String get agentActionsCancelExecution => 'Cancel execution';
 
   @override
@@ -1096,6 +1103,12 @@ class AppLocalizationsEn extends AppLocalizations {
   String get agentActionsRiskNeedsValidation => 'Needs validation';
 
   @override
+  String get agentActionsRiskReadyForActivation => 'Ready to activate';
+
+  @override
+  String get agentActionsRiskOutsideFilter => 'Outside filter';
+
+  @override
   String get agentActionsRiskSecretPlaceholders => 'Uses secrets';
 
   @override
@@ -1290,6 +1303,11 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String agentActionsQueueActiveIndicator(int pending, int running) {
     return '$pending pending · $running running in queue';
+  }
+
+  @override
+  String agentActionsQueueActiveIndicatorWithNames(int pending, int running, String names) {
+    return '$pending pending · $running running: $names';
   }
 
   @override

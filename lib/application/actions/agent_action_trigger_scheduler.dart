@@ -585,10 +585,14 @@ class AgentActionTriggerScheduler {
     }
 
     if (dispatchResult.isError()) {
-      _logSchedulerIssue(
-        'Failed to dispatch scheduled agent action trigger $triggerId',
-        dispatchResult.exceptionOrNull(),
-      );
+      final failure = dispatchResult.exceptionOrNull();
+      final reason = failure is ActionFailure ? failure.context['reason'] : null;
+      if (reason != AgentActionGateConstants.actionNotActiveReason) {
+        _logSchedulerIssue(
+          'Failed to dispatch scheduled agent action trigger $triggerId',
+          failure,
+        );
+      }
     }
 
     final freshTriggerResult = await _repository.getTrigger(triggerId);

@@ -2,20 +2,28 @@ part of '../agent_actions_provider.dart';
 
 extension AgentActionsProviderCapabilities on AgentActionsProvider {
   bool canRunDefinition(AgentActionDefinition definition) {
-    if (hasBlockingLocalOperation) {
+    if (isTesting || isTransferringBundle) {
       return false;
     }
 
     return _localOperationPolicy.canRunDefinition(
       definition: definition,
       isFeatureEnabled: isFeatureEnabled,
-      isRunning: isRunning,
+      isRunning: isDefinitionRunning(definition.id),
       allowsLocalManualOperation: _runtimeController.allowsLocalManualOperation(definition.type),
     );
   }
 
+  bool canActivateDefinition(AgentActionDefinition definition) {
+    if (isTesting || isTransferringBundle || definition.state == AgentActionState.active) {
+      return false;
+    }
+
+    return isFeatureEnabled && isPreflightValidForDefinition(definition);
+  }
+
   bool canTestDefinition(AgentActionDefinition definition) {
-    if (hasBlockingLocalOperation) {
+    if (isTesting || isTransferringBundle) {
       return false;
     }
 

@@ -94,7 +94,7 @@ class AgentActionDefinitionRowActions extends StatelessWidget {
         Tooltip(
           message: l10n.agentActionsRunSelected,
           child: IconButton(
-            icon: provider.isRunning && provider.selectedActionId == definition.id
+            icon: provider.isDefinitionRunning(definition.id)
                 ? const SizedBox.square(
                     dimension: 16,
                     child: ProgressRing(strokeWidth: 2),
@@ -115,8 +115,36 @@ class AgentActionDefinitionRowActions extends StatelessWidget {
                 : null,
           ),
         ),
+        if (provider.isDefinitionRunning(definition.id) && definition.type.supportsProcessTermination)
+          Tooltip(
+            message: l10n.agentActionsCancelExecution,
+            child: IconButton(
+              key: ValueKey<String>('agent_action_definition_stop_${definition.id}'),
+              icon: const Icon(FluentIcons.cancel, size: 16),
+              onPressed: () {
+                unawaited(provider.stopRunningDefinition(definition));
+              },
+            ),
+          ),
+        if (provider.canActivateDefinition(definition))
+          Tooltip(
+            message: l10n.agentActionsActivateSelected,
+            child: IconButton(
+              key: ValueKey<String>('agent_action_definition_activate_${definition.id}'),
+              icon: provider.isSaving && provider.selectedActionId == definition.id
+                  ? const SizedBox.square(
+                      dimension: 16,
+                      child: ProgressRing(strokeWidth: 2),
+                    )
+                  : const Icon(FluentIcons.accept, size: 16),
+              onPressed: () {
+                provider.selectAction(definition.id);
+                unawaited(provider.activateDefinition(definition));
+              },
+            ),
+          ),
         Tooltip(
-          message: l10n.agentActionsTestSelected,
+          message: l10n.agentActionsTestSelectedTooltip,
           child: IconButton(
             icon: provider.isTesting && provider.selectedActionId == definition.id
                 ? const SizedBox.square(

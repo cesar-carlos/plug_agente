@@ -32,7 +32,7 @@ class AgentActionsToolbarCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final blockingLabel = provider.isRunning ? l10n.agentActionsStatusRunning : null;
+    final blockingLabel = provider.isTesting ? l10n.agentActionsStatusRunning : null;
 
     return AppCard(
       padding: const EdgeInsets.symmetric(
@@ -72,7 +72,7 @@ class AgentActionsToolbarCard extends StatelessWidget {
                 icon: FluentIcons.play,
                 label: l10n.agentActionsRunSelected,
                 onPressed: provider.canRunSelected ? (onRunSelected ?? provider.runSelectedAction) : null,
-                isBusy: provider.isRunning,
+                isBusy: provider.isSelectedDefinitionRunning,
                 tooltip: '${l10n.agentActionsRunSelected} (Ctrl+R)',
                 disabledReason: _commandDisabledReason(
                   l10n: l10n,
@@ -85,7 +85,7 @@ class AgentActionsToolbarCard extends StatelessWidget {
                 label: l10n.agentActionsTestSelected,
                 onPressed: provider.canTestSelected ? provider.testSelectedAction : null,
                 isBusy: provider.isTesting,
-                tooltip: '${l10n.agentActionsTestSelected} (Ctrl+T)',
+                tooltip: '${l10n.agentActionsTestSelectedTooltip} (Ctrl+T)',
                 disabledReason: _commandDisabledReason(
                   l10n: l10n,
                   canPerform: provider.canTestSelected,
@@ -110,10 +110,16 @@ class AgentActionsToolbarCard extends StatelessWidget {
                 Icon(FluentIcons.processing, size: 16, color: FluentTheme.of(context).accentColor),
                 const SizedBox(width: AppSpacing.xs),
                 Text(
-                  l10n.agentActionsQueueActiveIndicator(
-                    provider.liveQueuePendingCount,
-                    provider.liveQueueRunningCount,
-                  ),
+                  provider.runningActionNames.isEmpty
+                      ? l10n.agentActionsQueueActiveIndicator(
+                          provider.liveQueuePendingCount,
+                          provider.liveQueueRunningCount,
+                        )
+                      : l10n.agentActionsQueueActiveIndicatorWithNames(
+                          provider.liveQueuePendingCount,
+                          provider.liveQueueRunningCount,
+                          provider.runningActionNames,
+                        ),
                   style: context.captionText,
                 ),
               ],

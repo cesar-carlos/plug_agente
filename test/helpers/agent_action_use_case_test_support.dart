@@ -94,9 +94,7 @@ Future<Result<AgentActionDefinition>> saveDefinitionForTest(
 
   final saved = staged.getOrThrow();
   const snapshotter = AgentActionDefinitionSnapshotter();
-  final preflightHash = snapshotter.snapshotHash(
-    saved.copyWith(state: AgentActionState.needsValidation),
-  );
+  final preflightHash = snapshotter.executionContentHash(saved);
   return useCase(
     saved.copyWith(
       state: AgentActionState.active,

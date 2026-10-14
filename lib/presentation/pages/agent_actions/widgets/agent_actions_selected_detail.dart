@@ -120,6 +120,9 @@ class AgentActionSelectedDetailContent extends StatelessWidget {
             runnerUnavailable: provider.isActionTypeUnavailable(definition.type),
             editorUnsupported: !isAgentActionTypeEditableInUi(definition.type),
             needsValidation: definition.state == AgentActionState.needsValidation,
+            preflightReady:
+                definition.state == AgentActionState.needsValidation &&
+                provider.isPreflightValidForDefinition(definition),
             secretPlaceholderNames: provider.selectedSecretPlaceholderNames,
             triggers: provider.triggers,
           ),

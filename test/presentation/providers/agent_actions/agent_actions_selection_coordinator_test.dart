@@ -80,6 +80,7 @@ AgentActionsSelectionCoordinator _coordinator({
     canDeleteSelected: canDeleteSelected ?? () => false,
     canRunSelected: canRunSelected ?? () => false,
     canTestSelected: canTestSelected ?? () => false,
+    canActivateDefinition: (_) => false,
     canCancelExecution: canCancelExecution ?? (_) => false,
     canTransferBundle: canTransferBundle ?? () => false,
   );

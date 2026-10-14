@@ -30,6 +30,32 @@ void main() {
     );
   });
 
+  test('should mark a validated action as ready to activate instead of needing validation', () {
+    const definition = AgentActionDefinition(
+      id: 'action-1',
+      name: 'Run',
+      state: AgentActionState.needsValidation,
+      config: CommandLineActionConfig(command: 'dir'),
+    );
+
+    final waiting = collectAgentActionRiskDescriptors(
+      definition: definition,
+      l10n: l10n,
+      needsValidation: true,
+    );
+    final ready = collectAgentActionRiskDescriptors(
+      definition: definition,
+      l10n: l10n,
+      needsValidation: true,
+      preflightReady: true,
+    );
+
+    expect(waiting.single.label, l10n.agentActionsRiskNeedsValidation);
+    expect(waiting.single.isWarning, isTrue);
+    expect(ready.single.label, l10n.agentActionsRiskReadyForActivation);
+    expect(ready.single.isWarning, isFalse);
+  });
+
   test('should include elevated descriptor when policy requests elevated run', () {
     const definition = AgentActionDefinition(
       id: 'action-elevated',

@@ -11,6 +11,8 @@
   "agentActionsRunSelected": "Run selected",
   "agentActionsMoreActions": "More actions",
   "agentActionsTestSelected": "Test action",
+  "agentActionsTestSelectedTooltip": "Checks the path and interpreter without running the task. Execution is available after activation.",
+  "agentActionsActivateSelected": "Activate",
   "agentActionsCancelExecution": "Cancel execution",
   "agentActionsDeleteSelected": "Delete action",
   "agentActionsDeleteConfirmTitle": "Delete action",
@@ -372,6 +374,8 @@
   "agentActionsRiskLeaveProcessRunning": "Leaves process running",
   "agentActionsRiskUnsupportedType": "Unsupported editor",
   "agentActionsRiskNeedsValidation": "Needs validation",
+  "agentActionsRiskReadyForActivation": "Ready to activate",
+  "agentActionsRiskOutsideFilter": "Outside filter",
   "agentActionsRiskSecretPlaceholders": "Uses secrets",
   "agentActionsNeedsValidationTitle": "Validation required",
   "agentActionsNeedsValidationMessage": "Test this action locally before running or enabling remote execution.",
@@ -471,6 +475,7 @@
     }
   },
   "agentActionsQueueActiveIndicator": "{pending} pending · {running} running in queue",
+  "agentActionsQueueActiveIndicatorWithNames": "{pending} pending · {running} running: {names}",
   "@agentActionsQueueActiveIndicator": {
     "placeholders": {
       "pending": {
@@ -478,6 +483,19 @@
       },
       "running": {
         "type": "int"
+      }
+    }
+  },
+  "@agentActionsQueueActiveIndicatorWithNames": {
+    "placeholders": {
+      "pending": {
+        "type": "int"
+      },
+      "running": {
+        "type": "int"
+      },
+      "names": {
+        "type": "String"
       }
     }
   },

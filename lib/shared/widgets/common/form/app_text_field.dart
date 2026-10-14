@@ -32,6 +32,7 @@ class AppTextField extends StatefulWidget {
     this.helpButtonKey,
     this.reserveHelpAffordance = false,
     this.helperText,
+    this.labelMinLines = 1,
   });
 
   final String label;
@@ -58,6 +59,7 @@ class AppTextField extends StatefulWidget {
   final Key? helpButtonKey;
   final bool reserveHelpAffordance;
   final String? helperText;
+  final int labelMinLines;
 
   @override
   State<AppTextField> createState() => _AppTextFieldState();
@@ -211,6 +213,7 @@ class _AppTextFieldState extends State<AppTextField> {
       helpTooltip: widget.helpTooltip,
       helpButtonKey: widget.helpButtonKey,
       reserveHelpAffordance: widget.reserveHelpAffordance,
+      labelMinLines: widget.labelMinLines,
       child: textBox,
     );
   }

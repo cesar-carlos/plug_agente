@@ -32,7 +32,28 @@ extension AgentActionsProviderReadModel on AgentActionsProvider {
   bool get isElevatedRunnerDegraded => _runtimeController.isElevatedRunnerDegraded;
   bool get isPreparingElevatedRunner => _runtimeController.isPreparingElevatedRunner;
   bool get canManageTriggers => isFeatureEnabled && !isMaintenanceMode;
-  bool get hasBlockingLocalOperation => isRunning || isTesting || isTransferringBundle;
+  bool get hasBlockingLocalOperation => isTesting || isTransferringBundle;
+
+  bool get isSelectedDefinitionRunning {
+    final selected = selectedDefinition;
+    return selected != null && isDefinitionRunning(selected.id);
+  }
+
+  String get runningActionNames {
+    final actionIds = <String>{
+      if (_executionsController.runningManualActionId case final String actionId) actionId,
+      ...?_executionQueue?.runningActionIds,
+      ..._executionsController.executions
+          .where((execution) => !execution.isTerminal)
+          .map((execution) => execution.actionId),
+    };
+    final names = definitions
+        .where((definition) => actionIds.contains(definition.id))
+        .map((definition) => definition.name)
+        .toList(growable: false);
+    return names.join(', ');
+  }
+
   bool get canTransferBundle =>
       canManageTriggers && !isLoading && !isSaving && !isDeleting && !hasBlockingLocalOperation;
   AgentActionRuntimeStateSnapshot get runtimeSubsystemSnapshot => _runtimeController.runtimeSubsystemSnapshot;
@@ -120,6 +141,38 @@ extension AgentActionsProviderReadModel on AgentActionsProvider {
   int get runningCount => _executionsController.runningCount;
   int get liveQueuePendingCount => _executionQueue?.queuedCount ?? 0;
   int get liveQueueRunningCount => _executionQueue?.runningCount ?? 0;
+
+  bool isDefinitionRunning(String actionId) {
+    if (_executionsController.runningManualActionId == actionId) {
+      return true;
+    }
+    if (_executionQueue?.isActionRunning(actionId) ?? false) {
+      return true;
+    }
+    return _executionsController.hasActiveExecutionForDefinition(actionId);
+  }
+
+  Set<String> runningExecutionIdsFor(String actionId) {
+    return <String>{
+      ...?_executionQueue?.runningExecutionIdsFor(actionId),
+      ..._executionsController.executions
+          .where((execution) => execution.actionId == actionId && !execution.isTerminal)
+          .map((execution) => execution.id),
+    };
+  }
+
+  String get runningActionSignature {
+    final actionIds = <String>{
+      if (_executionsController.runningManualActionId case final String actionId) actionId,
+      ...?_executionQueue?.runningActionIds,
+      ..._executionsController.executions
+          .where((execution) => !execution.isTerminal)
+          .map((execution) => execution.actionId),
+    };
+    final sorted = actionIds.toList()..sort();
+    return sorted.join(',');
+  }
+
   bool get hasLiveQueueActivity => liveQueuePendingCount > 0 || liveQueueRunningCount > 0;
   int get summaryQueuedCount => _executionQueue != null ? liveQueuePendingCount : queuedCount;
   int get summaryRunningCount => _executionQueue != null ? liveQueueRunningCount : runningCount;

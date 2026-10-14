@@ -11,6 +11,20 @@ class AgentActionDefinitionSnapshotter {
     return 'sha256:${sha256.convert(utf8.encode(canonicalJson))}';
   }
 
+  /// Hash of the configuration that execution actually launches.
+  ///
+  /// Name, state and policies stay out so an editor round-trip of those
+  /// fields does not discard a successful preflight.
+  String executionContentHash(AgentActionDefinition definition) {
+    final canonicalJson = jsonEncode(
+      _canonicalize(<String, Object?>{
+        'type': definition.type.name,
+        'config': _configToSnapshot(definition.config),
+      }),
+    );
+    return 'sha256:${sha256.convert(utf8.encode(canonicalJson))}';
+  }
+
   /// Redacted hash of fields that require local re-approval when changed after remote enablement.
   ///
   /// When [secretReferenceFingerprints] is provided, `${secret:name}` content hashes
@@ -230,11 +244,12 @@ class AgentActionDefinitionSnapshotter {
     if (path == null) {
       return null;
     }
+    // validatedAt is rewritten on every path check. It is not configuration
+    // content, so including it would discard a successful preflight on save.
     return <String, Object?>{
       'originalPath': path.originalPath,
       'canonicalPath': path.canonicalPath,
       'existsAtValidation': path.existsAtValidation,
-      'validatedAt': path.validatedAt?.toUtc().toIso8601String(),
       'validationHash': path.validationHash,
     };
   }

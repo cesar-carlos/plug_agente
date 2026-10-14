@@ -107,9 +107,7 @@ void main() {
     harness.provider.selectAction('action-1');
     final live = harness.provider.selectedDefinition!;
     const snapshotter = AgentActionDefinitionSnapshotter();
-    final preflightHash = snapshotter.snapshotHash(
-      live.copyWith(state: AgentActionState.needsValidation),
-    );
+    final preflightHash = snapshotter.executionContentHash(live);
     harness.repository.definitions['action-1'] = live.copyWith(
       state: AgentActionState.needsValidation,
       lastPreflightSnapshotHash: preflightHash,

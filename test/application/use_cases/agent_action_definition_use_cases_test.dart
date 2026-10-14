@@ -81,6 +81,134 @@ void main() {
       expect(result.getOrThrow().lastPreflightSnapshotHash, isNotNull);
     });
 
+    test('should keep preflight when normalization only refreshes the path timestamp', () async {
+      final refreshedAt = DateTime.utc(2026, 10, 14, 12, 30);
+      final scriptValidation = ValidateAgentActionDefinition(
+        AgentActionAdapterRegistry([
+          FakeCommandLineActionAdapter(
+            actionType: AgentActionType.script,
+            normalizedDefinitionFactory: (definition) {
+              final config = definition.config as ScriptActionConfig;
+              return definition.copyWith(
+                config: ScriptActionConfig(
+                  scriptPath: AgentActionPathReference(
+                    originalPath: config.scriptPath.originalPath,
+                    canonicalPath: config.scriptPath.canonicalPath ?? config.scriptPath.originalPath,
+                    existsAtValidation: true,
+                    validatedAt: refreshedAt,
+                    validationHash: config.scriptPath.validationHash,
+                    pathChangePolicy: config.scriptPath.pathChangePolicy,
+                  ),
+                  arguments: config.arguments,
+                ),
+              );
+            },
+          ),
+        ]),
+      );
+      final useCase = SaveAgentActionDefinition(
+        repository,
+        scriptValidation,
+        const AgentActionDefinitionSnapshotter(),
+        featureFlags,
+        now: () => DateTime.utc(2026, 10, 14, 12, 31),
+      );
+      final definition = AgentActionDefinition(
+        id: 'script-1',
+        name: 'Link de Cobranca',
+        state: AgentActionState.needsValidation,
+        config: ScriptActionConfig(
+          scriptPath: AgentActionPathReference(
+            originalPath: r'C:\Data7\LinkCobranca\LinkCobrancaExecutor.bat',
+            canonicalPath: r'C:\Data7\LinkCobranca\LinkCobrancaExecutor.bat',
+            existsAtValidation: true,
+            validatedAt: DateTime.utc(2026, 10, 14, 12, 8),
+          ),
+        ),
+      );
+      const snapshotter = AgentActionDefinitionSnapshotter();
+      final preflightHash = snapshotter.executionContentHash(definition);
+
+      final tested = await useCase(
+        definition.copyWith(
+          lastPreflightSnapshotHash: preflightHash,
+          lastPreflightValidatedAt: DateTime.utc(2026, 10, 14, 12, 31),
+        ),
+      );
+
+      expect(tested.isSuccess(), isTrue);
+      expect(tested.getOrThrow().lastPreflightSnapshotHash, preflightHash);
+      expect(tested.getOrThrow().state, AgentActionState.needsValidation);
+
+      final activated = await useCase(
+        tested.getOrThrow().copyWith(state: AgentActionState.active),
+      );
+
+      expect(activated.isSuccess(), isTrue);
+      expect(activated.getOrThrow().state, AgentActionState.active);
+      expect(activated.getOrThrow().lastPreflightSnapshotHash, preflightHash);
+    });
+
+    test('should record the preflight hash of the saved definition and then allow activation', () async {
+      final useCase = SaveAgentActionDefinition(
+        repository,
+        ValidateAgentActionDefinition(
+          AgentActionAdapterRegistry([
+            FakeCommandLineActionAdapter(
+              normalizedDefinitionFactory: (definition) {
+                final config = definition.config as CommandLineActionConfig;
+                const suffix = ' /normalized';
+                final command = config.command.endsWith(suffix) ? config.command : '${config.command}$suffix';
+                return definition.copyWith(
+                  config: CommandLineActionConfig(command: command),
+                );
+              },
+            ),
+          ]),
+        ),
+        const AgentActionDefinitionSnapshotter(),
+        featureFlags,
+        now: () => DateTime.utc(2026, 10, 14, 12, 40),
+      );
+      const definition = AgentActionDefinition(
+        id: 'action-record',
+        name: 'Run command',
+        state: AgentActionState.needsValidation,
+        config: CommandLineActionConfig(command: 'dir'),
+        policies: AgentActionDefinitionPolicies(
+          remote: AgentActionRemotePolicy(isEnabled: true, allowAdHoc: true),
+        ),
+      );
+
+      final recorded = await useCase(definition, recordPreflight: true);
+
+      expect(recorded.isSuccess(), isTrue);
+      final saved = recorded.getOrThrow();
+      expect(saved.policies.remote.allowAdHoc, isFalse);
+      expect((saved.config as CommandLineActionConfig).command, 'dir /normalized');
+      const snapshotter = AgentActionDefinitionSnapshotter();
+      expect(
+        saved.lastPreflightSnapshotHash,
+        snapshotter.executionContentHash(saved),
+      );
+
+      final activated = await useCase(saved.copyWith(state: AgentActionState.active));
+
+      expect(activated.isSuccess(), isTrue);
+      expect(activated.getOrThrow().state, AgentActionState.active);
+
+      final edited = await useCase(
+        activated.getOrThrow().copyWith(
+          state: AgentActionState.needsValidation,
+          config: const CommandLineActionConfig(command: 'dir /b'),
+        ),
+      );
+
+      expect(edited.isSuccess(), isTrue);
+      expect(edited.getOrThrow().lastPreflightSnapshotHash, isNull);
+      expect(edited.getOrThrow().lastPreflightValidatedAt, isNull);
+    });
+
     test('should reject saving active definition when preflight validation expired', () async {
       final useCase = SaveAgentActionDefinition(
         repository,
@@ -100,9 +228,7 @@ void main() {
       expect(staged.isSuccess(), isTrue);
 
       const snapshotter = AgentActionDefinitionSnapshotter();
-      final preflightHash = snapshotter.snapshotHash(
-        definition.copyWith(state: AgentActionState.needsValidation),
-      );
+      final preflightHash = snapshotter.executionContentHash(definition);
       repository.definitions['action-1'] = staged.getOrThrow().copyWith(
         lastPreflightSnapshotHash: preflightHash,
         lastPreflightValidatedAt: DateTime.utc(2026, 4),
@@ -117,6 +243,41 @@ void main() {
         (result.exceptionOrNull()! as ActionValidationFailure).code,
         AgentActionFailureCode.preflightExpiredForActive,
       );
+    });
+
+    test('should activate unchanged content when the stored preflight hash is stale', () async {
+      final useCase = SaveAgentActionDefinition(
+        repository,
+        validateDefinition,
+        const AgentActionDefinitionSnapshotter(),
+        featureFlags,
+        now: () => DateTime.utc(2026, 10, 14, 13),
+      );
+      const definition = AgentActionDefinition(
+        id: 'action-legacy',
+        name: 'Run command',
+        state: AgentActionState.needsValidation,
+        config: CommandLineActionConfig(command: 'dir'),
+      );
+      final testedAt = DateTime.utc(2026, 10, 14, 12, 40);
+      repository.definitions['action-legacy'] = definition.copyWith(
+        lastPreflightSnapshotHash: 'sha256:legacy',
+        lastPreflightValidatedAt: testedAt,
+      );
+
+      final result = await useCase(
+        repository.definitions['action-legacy']!.copyWith(
+          state: AgentActionState.active,
+          lastPreflightSnapshotHash: 'sha256:legacy',
+          lastPreflightValidatedAt: testedAt,
+        ),
+      );
+
+      expect(result.isSuccess(), isTrue);
+      final saved = result.getOrThrow();
+      expect(saved.state, AgentActionState.active);
+      expect(saved.lastPreflightSnapshotHash, isNot('sha256:legacy'));
+      expect(saved.lastPreflightValidatedAt, testedAt);
     });
 
     test('should invalidate preflight hash when definition content changes on save', () async {
@@ -190,9 +351,7 @@ void main() {
       );
       final approvedAt = DateTime.utc(2026, 5, 20, 9);
       final initialFingerprints = await fingerprinter.fingerprintsFor(base);
-      final preflightHash = snapshotter.snapshotHash(
-        base.copyWith(state: AgentActionState.needsValidation),
-      );
+      final preflightHash = snapshotter.executionContentHash(base);
       repository.definitions['action-secret'] = base.copyWith(
         policies: AgentActionDefinitionPolicies(
           remote: AgentActionRemotePolicy(
@@ -416,9 +575,7 @@ void main() {
 
       final staged = await useCase(changed);
       expect(staged.isSuccess(), isTrue);
-      final preflightHash = snapshotter.snapshotHash(
-        staged.getOrThrow().copyWith(state: AgentActionState.needsValidation),
-      );
+      final preflightHash = snapshotter.executionContentHash(staged.getOrThrow());
       final second = await useCase(
         staged.getOrThrow().copyWith(
           state: AgentActionState.active,

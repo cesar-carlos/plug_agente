@@ -302,6 +302,10 @@ class _AgentActionsDefinitionGridState extends State<_AgentActionsDefinitionGrid
             runnerUnavailable: provider.isActionTypeUnavailable(definition.type),
             editorUnsupported: !isAgentActionTypeEditableInUi(definition.type),
             needsValidation: definition.state == AgentActionState.needsValidation,
+            preflightReady:
+                definition.state == AgentActionState.needsValidation &&
+                provider.isPreflightValidForDefinition(definition),
+            outsideListFilter: !provider.definitionMatchesListFilter(definition),
             secretPlaceholderNames: provider.secretPlaceholderNamesFor(definition),
             triggers: definition.id == provider.selectedActionId ? provider.triggers : const <AgentActionTrigger>[],
           );
