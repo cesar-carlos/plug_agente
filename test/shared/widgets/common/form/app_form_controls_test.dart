@@ -252,7 +252,7 @@ class _FeedbackHost extends StatefulWidget {
 }
 
 class _FeedbackHostState extends State<_FeedbackHost> {
-  var builds = 0;
+  int builds = 0;
   final TextEditingController controller = TextEditingController();
   String? error;
 
@@ -269,7 +269,7 @@ class _FeedbackHostState extends State<_FeedbackHost> {
   @override
   Widget build(BuildContext context) {
     return AppFormFeedbackScope(
-      errors: {if (error != null) controller: error!},
+      errors: {controller: ?error},
       requiredControllers: {controller},
       requiredHint: 'Obrigatório',
       optionalHint: 'Opcional',

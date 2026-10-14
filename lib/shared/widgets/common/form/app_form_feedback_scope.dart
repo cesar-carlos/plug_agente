@@ -13,11 +13,11 @@ class AppFormFeedbackScope extends InheritedWidget {
     required this.focusController,
     required this.focusRequest,
     required this.onChanged,
+    required super.child,
     this.keyedErrors = const {},
     this.requiredKeys = const {},
     this.focusKey,
     this.onKeyedChanged,
-    required super.child,
     super.key,
   });
 

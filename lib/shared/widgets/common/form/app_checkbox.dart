@@ -30,7 +30,7 @@ class AppCheckbox extends StatelessWidget {
     return LayoutBuilder(
       builder: (context, constraints) {
         final maxWidth = constraints.maxWidth;
-        final labelMaxWidth = maxWidth.isFinite ? math.max(0.0, maxWidth - reserved) : null;
+        final labelMaxWidth = maxWidth.isFinite ? math.max(0, maxWidth - reserved).toDouble() : null;
         return Checkbox(
           checked: checked,
           onChanged: onChanged,
