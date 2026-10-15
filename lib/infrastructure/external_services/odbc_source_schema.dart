@@ -94,24 +94,24 @@ class OdbcSourceSchema implements ISourceSchemaProbe {
         );
       }
       final columns = await rows(catalog(id, item.resource, dialect, 'columns', remaining: remaining));
+      final columnsByName = <String, Map<String, Object?>?>{};
+      for (final column in columns) {
+        if (!matches(column, item.resource, dialect)) continue;
+        final name = text(column['COLUMN_NAME']);
+        final canonicalName = dialect == 'firebird' ? name.toUpperCase() : name;
+        // A duplicate remains ambiguous even when both definitions are equal.
+        columnsByName.update(canonicalName, (_) => null, ifAbsent: () => column);
+      }
       for (final expectedColumn in item.columns) {
-        final found = columns
-            .where(
-              (c) =>
-                  matches(c, item.resource, dialect) &&
-                  (dialect == 'firebird'
-                      ? text(c['COLUMN_NAME']).toUpperCase() == (expectedColumn['name']! as String).toUpperCase()
-                      : text(c['COLUMN_NAME']) == expectedColumn['name']),
-            )
-            .toList();
-        if (found.length != 1) {
+        final name = expectedColumn['name']! as String;
+        final column = columnsByName[dialect == 'firebird' ? name.toUpperCase() : name];
+        if (column == null) {
           throw domain.DatabaseFailure.withContext(
             code: 'SOURCE_STRUCTURE_MISMATCH',
             message: 'Used source structure differs from the published expectation.',
             context: const {'retryable': false},
           );
         }
-        final column = found.single;
         final nullable = integer(column['NULLABLE']);
         if (text(column['TYPE_NAME']).toLowerCase() != (expectedColumn['nativeType']! as String).toLowerCase() ||
             nullable == null ||
@@ -330,8 +330,8 @@ class OdbcSourceSchema implements ISourceSchemaProbe {
   static bool sameKey(Map<String, Object?> a, Map<Object?, Object?> b, String dialect) =>
       a['name'] == b['name'] &&
       a['status'] == b['status'] &&
-      jsonEncode(a['columns']) == jsonEncode(b['columns']) &&
-      jsonEncode(a['targetColumns']) == jsonEncode(b['targetColumns']) &&
+      _sameColumnNames(a['columns'], b['columns']) &&
+      _sameColumnNames(a['targetColumns'], b['targetColumns']) &&
       (a['target'] == null && b['target'] == null ||
           a['target'] is Map &&
               b['target'] is Map &&
@@ -345,6 +345,23 @@ class OdbcSourceSchema implements ISourceSchemaProbe {
                           text((b['target']! as Map<Object?, Object?>)[k]).toUpperCase()
                     : (a['target']! as Map<Object?, Object?>)[k] == (b['target']! as Map<Object?, Object?>)[k]),
               ));
+
+  static bool _sameColumnNames(Object? a, Object? b) {
+    if (a == null && b == null) return true;
+    if (a is List && b is List) {
+      if (a.length != b.length) return false;
+      for (var i = 0; i < a.length; i++) {
+        final left = a[i];
+        final right = b[i];
+        if (left is! String || right is! String) {
+          return jsonEncode(a) == jsonEncode(b);
+        }
+        if (left != right) return false;
+      }
+      return true;
+    }
+    return jsonEncode(a) == jsonEncode(b);
+  }
 
   static List<Map<String, Object?>> foreignConstraints(List<Map<String, Object?>> raw) {
     final grouped = <String, List<Map<String, Object?>>>{};

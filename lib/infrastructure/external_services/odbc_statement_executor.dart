@@ -49,6 +49,12 @@ final class OdbcStatementExecutor {
   static const int _asyncRequestErrorStatus = -1;
   static const int _asyncRequestCancelledStatus = -2;
   static const Duration _asyncRequestPollInterval = Duration(milliseconds: 20);
+  // Two early probes, then return to the existing 20 ms cadence.
+  static const _initialAsyncPollOffsets = [
+    Duration(milliseconds: 2),
+    Duration(milliseconds: 6),
+    Duration(milliseconds: 20),
+  ];
 
   /// Returns a prepared statement id for [statementKey], reusing a cached entry
   /// when present (LRU touch) or preparing a new one. Evicts the oldest entry
@@ -302,6 +308,8 @@ final class OdbcStatementExecutor {
       );
     }
     var completionUnconfirmed = true;
+    var initialPollIndex = 0;
+    final pollingWatch = Stopwatch()..start();
 
     try {
       while (true) {
@@ -341,7 +349,11 @@ final class OdbcStatementExecutor {
                 ),
               );
             }
-            final delay = remaining < _asyncRequestPollInterval ? remaining : _asyncRequestPollInterval;
+            final scheduled = initialPollIndex < _initialAsyncPollOffsets.length
+                ? _initialAsyncPollOffsets[initialPollIndex++] - pollingWatch.elapsed
+                : _asyncRequestPollInterval;
+            final interval = scheduled > Duration.zero ? scheduled : Duration.zero;
+            final delay = remaining < interval ? remaining : interval;
             await Future<void>.delayed(delay);
             continue;
           case _asyncRequestErrorStatus:
