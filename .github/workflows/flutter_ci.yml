@@ -150,7 +150,7 @@ jobs:
           python tool/odbc/prepare_package_native.py --github-env "${{ github.env }}"
           flutter test test/docs/openrpc_contract_test.dart test/docs/communication test/infrastructure/external_services/transport/hub_inbound_catalog_codec_test.dart
       - name: Set up Node
-        uses: actions/setup-node@v6
+        uses: actions/setup-node@v7
         with:
           node-version-file: plug_server/.nvmrc
       - name: Hub contract fixtures
@@ -264,7 +264,7 @@ jobs:
         run: python3 -m unittest tool.tests.test_workflow_regressions tool.release.test_publish_release -v
 
       - name: Set up Node for alert tests
-        uses: actions/setup-node@v6
+        uses: actions/setup-node@v7
         with:
           node-version: '24'
 
