@@ -24,6 +24,36 @@ void main() {
     expect(reader.plan(raw).contentHash, isNot(first.contentHash));
     expect(reader.reference(raw, execution: true).expectedSource!.identityHash, 'b' * 64);
   });
+  Map<String, dynamic> guarded() => envelope()
+    ..['expectedSource'] = {'version': 1, 'dialect': 'postgres', 'identityHash': 'a' * 64}
+    ..['expectedStructure'] = {
+      'version': 1,
+      'resources': [
+        {
+          'resource': {'schema': 'public', 'name': 'parent', 'type': 'table'},
+          'columns': [
+            {'name': 'id', 'nativeType': 'int4', 'nullable': false, 'size': 32, 'scale': 0},
+          ],
+        },
+      ],
+    };
+  test('structural expectation is hashed, requires identity and is execution-only', () {
+    final raw = guarded();
+    final first = reader.plan(raw);
+    expect(first.expectedStructure!.resources.single.resource.name, 'parent');
+    final resources = (raw['expectedStructure'] as Map)['resources'] as List;
+    final columns = (resources.single as Map)['columns'] as List;
+    (columns.single as Map)['nullable'] = true;
+    expect(reader.plan(raw).contentHash, isNot(first.contentHash));
+    expect(() => reader.reference(raw), throwsA(isA<SqlOperationFailure>()));
+    raw.remove('expectedSource');
+    expect(() => reader.plan(raw), throwsA(isA<SqlOperationFailure>()));
+  });
+  test('structural and second identity queries consume the operation statement budget', () {
+    final plan = reader.plan(guarded());
+    expect(plan.nativeStatementCount('postgres'), 6);
+    expect(plan.nativeStatementCount('mssql'), 8);
+  });
   final invalid = <String, void Function(Map<String, dynamic>)>{
     'unknown field': (p) => p['approved'] = true,
     'untrusted digest': (p) => p['contentHash'] = 'd' * 64,
@@ -96,6 +126,10 @@ void main() {
   }
   for (final sql in [
     'INSERT INTO parent(name) VALUES (:name) RETURNING id',
+    'INSERT INTO "public"."parent" (name) VALUES (:name) RETURNING id',
+    'INSERT INTO [dbo].[parent] (name) VALUES (:name)',
+    'UPDATE [dbo].[parent] SET name=:name WHERE id=:id',
+    'DELETE FROM "public"."parent" WHERE id=:id',
     'UPDATE parent SET name = :name WHERE id = :id',
     'DELETE FROM parent WHERE id = :id',
   ]) {

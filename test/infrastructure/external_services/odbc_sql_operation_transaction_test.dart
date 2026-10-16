@@ -1,5 +1,7 @@
 import 'dart:async';
+import 'dart:convert';
 
+import 'package:crypto/crypto.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
 import 'package:odbc_fast/odbc_fast.dart' as odbc;
@@ -10,6 +12,7 @@ import 'package:plug_agente/domain/errors/sql_operation_failure.dart';
 import 'package:plug_agente/domain/repositories/i_config_connection_string_source.dart';
 import 'package:plug_agente/domain/repositories/i_sql_operation_transaction.dart';
 import 'package:plug_agente/infrastructure/external_services/odbc_sql_operation_transaction.dart';
+import 'package:plug_agente/infrastructure/external_services/source_schema_sql.dart';
 import 'package:plug_agente/infrastructure/pool/direct_odbc_connection_limiter.dart';
 import 'package:result_dart/result_dart.dart';
 
@@ -132,7 +135,7 @@ void main() {
     verify(() => native.beginTransaction('dedicated', accessMode: odbc.TransactionAccessMode.readWrite)).called(1);
     verify(() => native.commitTransaction('dedicated', 7)).called(1);
   });
-  for (final engine in ['postgres', 'firebird']) {
+  for (final engine in ['postgres']) {
     test('$engine refuses missing RETURNING before DML and proves count only from complete returned rows', () async {
       when(() => native.getConnectionDbmsInfo('dedicated')).thenAnswer((_) async => Success(info(engine)));
       final session = await open();
@@ -216,7 +219,7 @@ void main() {
     expect((await factory.open(target, const Duration(seconds: 1))).isError(), isTrue);
     verifyNever(() => native.beginTransaction(any(), accessMode: any(named: 'accessMode')));
   });
-  for (final engine in ['postgres', 'sqlserver', 'sybase_asa', 'firebird']) {
+  for (final engine in ['postgres', 'sqlserver', 'sybase_asa']) {
     test('$engine proves exact database independently of broken catalog hint', () async {
       when(
         () => native.getConnectionDbmsInfo('dedicated'),
@@ -291,6 +294,119 @@ void main() {
     final failure = rejected.exceptionOrNull()! as SqlOperationFailure;
     expect(failure.code, 'SOURCE_IDENTITY_MISMATCH');
     expect(failure.context['outcome_unknown'], isFalse);
+    verifyNever(() => native.beginTransaction(any(), accessMode: any(named: 'accessMode')));
+  });
+  Future<Result<ISqlOperationTransaction>> guarded({bool drift = false, bool overflow = false}) async {
+    final identity = sha256
+        .convert(
+          utf8.encode(
+            jsonEncode([
+              'source-discovery-v1',
+              'postgres',
+              fixtureConfig.host.toLowerCase(),
+              fixtureConfig.port,
+              'test_db',
+              'cluster',
+              '17',
+            ]),
+          ),
+        )
+        .toString();
+    when(() => native.executeQueryNamed('dedicated', any(), const {})).thenAnswer(
+      (_) async => const Success(
+        odbc.QueryResult(
+          columns: ['db', 'cluster_id', 'db_id'],
+          rows: [
+            ['test_db', 'cluster', '17'],
+          ],
+          rowCount: 1,
+        ),
+      ),
+    );
+    when(() => native.executeQueryNamed('dedicated', SourceSchemaSql.query('postgres', 'tables'), any())).thenAnswer(
+      (_) async => const Success(
+        odbc.QueryResult(
+          columns: ['table_schem', 'table_name', 'table_type'],
+          rows: [
+            ['public', 'parent', 'table'],
+          ],
+          rowCount: 1,
+        ),
+      ),
+    );
+    when(() => native.executeQueryNamed('dedicated', SourceSchemaSql.query('postgres', 'columns'), any())).thenAnswer(
+      (_) async => Success(
+        odbc.QueryResult(
+          columns: [
+            'table_schem',
+            'table_name',
+            'column_name',
+            'type_name',
+            'nullable',
+            'column_size',
+            'decimal_digits',
+          ],
+          rows: [
+            if (drift) ['public', 'parent', 'id', 'int8', 0, 32, 0] else ['public', 'parent', 'id', 'int4', 0, 32, 0],
+          ],
+          rowCount: 1,
+        ),
+      ),
+    );
+    final raw = envelope()
+      ..['expectedSource'] = {'version': 1, 'dialect': 'postgres', 'identityHash': identity}
+      ..['expectedStructure'] = {
+        'version': 1,
+        'resources': [
+          {
+            'resource': {'schema': 'public', 'name': 'parent', 'type': 'table'},
+            'columns': [
+              {'name': 'id', 'nativeType': 'int4', 'nullable': false, 'size': 32, 'scale': 0},
+            ],
+          },
+        ],
+      };
+    if (overflow) {
+      raw['steps'] = [
+        for (var i = 0; i < 30; i++) {...(envelope()['steps'] as List).first as Map, 'id': 'step$i'},
+      ];
+    }
+    final plan = const SqlOperationParamsReader().plan(raw);
+    return factory.open(
+      SqlOperationTarget(
+        config: target.config,
+        database: target.database,
+        scopeHash: target.scopeHash,
+        authorizationHash: target.authorizationHash,
+        expectedSource: plan.expectedSource,
+      ),
+      const Duration(seconds: 1),
+      plan: plan,
+    );
+  }
+
+  test('identity and structural proof use the dedicated connection before transaction begin', () async {
+    final session = (await guarded()).getOrThrow();
+    verifyInOrder([
+      () => native.executeQueryNamed('dedicated', any(that: contains('pg_control_system')), const {}),
+      () => native.executeQueryNamed('dedicated', SourceSchemaSql.query('postgres', 'tables'), any()),
+      () => native.executeQueryNamed('dedicated', SourceSchemaSql.query('postgres', 'columns'), any()),
+      () => native.executeQueryNamed('dedicated', any(that: contains('pg_control_system')), const {}),
+      () => native.beginTransaction('dedicated', accessMode: odbc.TransactionAccessMode.readWrite),
+    ]);
+    await session.rollback(const Duration(seconds: 1));
+    await session.close();
+  });
+  test('structural drift refuses before begin or business SQL and preserves typed reason', () async {
+    final result = await guarded(drift: true);
+    expect((result.exceptionOrNull()! as SqlOperationFailure).code, 'SOURCE_STRUCTURE_MISMATCH');
+    verifyNever(() => native.beginTransaction(any(), accessMode: any(named: 'accessMode')));
+    verifyNever(() => native.executeQueryNamed(any(), any(that: startsWith('INSERT')), any()));
+  });
+  test('structural verification exceeding 32 statements refuses before identity SQL or begin', () async {
+    final result = await guarded(overflow: true);
+    expect((result.exceptionOrNull()! as SqlOperationFailure).code, 'SQL_OPERATION_STEP_LIMIT');
+    verifyNever(() => native.executeQueryNamed(any(), any(), any()));
     verifyNever(() => native.beginTransaction(any(), accessMode: any(named: 'accessMode')));
   });
   test('native count queries consume the 32-statement budget before executing SQL', () async {

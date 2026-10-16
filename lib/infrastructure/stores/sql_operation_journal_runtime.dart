@@ -14,8 +14,23 @@ class SqlOperationJournalRuntime {
   SqlOperationJournalDatabase? _database;
   ISqlOperationJournal? _journal;
   Future<Result<void>>? _initializing;
+  Future<void>? _closing;
+  bool _closed = false;
   ISqlOperationJournal get journal => _journal ?? (throw StateError('SQL operation journal not initialized.'));
-  Future<Result<void>> initialize() => _initializing ??= _open();
+  Future<Result<void>> initialize() {
+    if (_closed) {
+      return Future.value(
+        Failure(
+          SqlOperationFailure(
+            code: 'SQL_OPERATION_JOURNAL_UNAVAILABLE',
+            message: 'Journal runtime is closed; create a new runtime before initialization.',
+          ),
+        ),
+      );
+    }
+    return _initializing ??= _open();
+  }
+
   Future<Result<void>> _open() async {
     try {
       _ownerLock = await File('$path.owner.lock').open(mode: FileMode.append);
@@ -24,18 +39,20 @@ class SqlOperationJournalRuntime {
       _database = database;
       final journal = DriftSqlOperationJournal(database);
       (await journal.recoverInterrupted()).getOrThrow();
+      if (_closed) throw StateError('Journal runtime closed during initialization.');
       _journal = journal;
       return const Success(unit);
-    } on Object catch (_) {
+    } on Object catch (error) {
       var cleanupFailed = false;
       try {
-        await close();
+        await _dispose();
       } on Object {
         cleanupFailed = true;
       }
       return Failure(
         SqlOperationFailure(
           code: 'SQL_OPERATION_JOURNAL_UNAVAILABLE',
+          cause: error,
           context: {if (cleanupFailed) 'cleanup_failed': true},
           message: 'Durable journal storage is unavailable or owned by another process.',
         ),
@@ -43,7 +60,16 @@ class SqlOperationJournalRuntime {
     }
   }
 
-  Future<void> close() async {
+  Future<void> close() => _closing ??= _close();
+
+  Future<void> _close() async {
+    _closed = true;
+    _journal = null;
+    await _initializing;
+    await _dispose();
+  }
+
+  Future<void> _dispose() async {
     final database = _database;
     final owner = _ownerLock;
     _database = null;

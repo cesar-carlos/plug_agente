@@ -5,11 +5,24 @@ and version bump instructions remain in `docs/install/release_guide.md`.
 
 ## Unreleased
 
+### Fixed — exact transactional resource authorization
+
+- sql.operation.execute no longer authorizes homonymous resources by basename or reuses/overwrites legacy authorization decisions. Preserve other methods and global-scope semantics. Qualified DML, outputs and refusal paths are tested in dedicated fixtures; no existing grants/snapshots are enlarged. Production remains blocked.
+
+### Added — durable SQL operation failure categories
+
+- Add nullable failure_code in journal schema 3, preserving upgrades from schemas 1/2 and old terminal records without inferred causes. Enumerated metadata survives restart/get/duplicates; generic failures never expose native diagnostics.
+- Carry optional failureCode through RPC/OpenRPC; it does not establish commit/rollback, permit replay or release deployment. Hub 1.15.0 and MCP retain the same safe code.
+
+### Added — structural SQL operation foundation
+
+- Decode and hash optional expectedStructure, requiring explicit structureGuard v1 and source identity/schema/constraints negotiation. Check metadata read permission and verify on the dedicated ODBC connection before beginning the write transaction; count all fixed verification queries within 32 commands.
+- Refuse drift and preserve terminal journal deduplication without business effects. Native fixture covers the four engines; shared DML publication in MCP remains pending; transport and durable refusal categories are implemented in development. Production remains blocked.
+
 ### Fixed — SQL Anywhere structural view inspection
 
 - Inspect ordinary BASE/VIEW resources by SYSTAB.table_type_str. The previous numeric discriminator mistook materialized views for ordinary views and omitted real views. Enforcement remains unknown; no capability or permission is inferred.
 - Extend the isolated MCP chain fixture to 16 paginated resources, explicit table/view policies, cross-page joins and fixed structural drift actions. Only the disposable operator companion performs DDL; production never accepts caller DDL. Release remains blocked.
-
 
 ### Fixed — coordinated persona-v2 acceptance
 
@@ -35,7 +48,6 @@ and version bump instructions remain in `docs/install/release_guide.md`.
 - Add the explicit four-engine MCP/hub/agent companion with private fixtures,
   real ODBC/policy/journal, approval, revocation and post-commit confirmation loss.
   This does not certify full desktop/Prisma bootstrap or release acceptance.
-
 
 ### Fixed — ODBC decoder, connection cleanup and streaming
 
@@ -408,7 +420,7 @@ and version bump instructions remain in `docs/install/release_guide.md`.
 - `RpcResponsePreparer.prepareForSend` now preserves a propagated
   `meta.request_id` set by `attachRequestTrace` instead of overwriting it
   with `response.id`. Today's behavior is unchanged (`response.id ==
-  meta.requestId == hub_uuid`); the change is preventive for the future
+meta.requestId == hub_uuid`); the change is preventive for the future
   `clientRequestIdEcho` extension where `response.id` carries the consumer
   id and `meta.request_id` must remain the wire correlator. See
   `plug_server/docs/plug_agente/03_performance_roadmap.md` item 8.

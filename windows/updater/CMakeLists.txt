@@ -47,6 +47,10 @@ add_executable(plug_updater_finalization_test finalization_test.cpp)
 target_link_libraries(plug_updater_finalization_test PRIVATE plug_updater_security)
 add_test(NAME plug_updater_finalization COMMAND plug_updater_finalization_test)
 
+add_executable(plug_updater_pipe_test pipe_test.cpp)
+target_link_libraries(plug_updater_pipe_test PRIVATE plug_updater_security)
+add_test(NAME plug_updater_pipe COMMAND plug_updater_pipe_test)
+
 add_executable(plug_update_service service_main.cpp)
 add_executable(plug_update_client client_main.cpp)
 add_executable(plug_update_worker worker_main.cpp)

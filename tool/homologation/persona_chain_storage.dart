@@ -73,7 +73,7 @@ class ChainAgentStorage {
   late String tokenValue;
   bool get resumed => _boot.existsSync();
 
-  Future<Config> open(Config initial, String clientId) async {
+  Future<Config> open(Config initial, String clientId, {List<String> publicationTables = const []}) async {
     final resume = resumed;
     if (resume) {
       final boot = jsonDecode(await _boot.readAsString()) as Map<String, dynamic>;
@@ -102,8 +102,12 @@ class ChainAgentStorage {
           rules: [
             for (final table in [
               'operation_fixture',
+              ...publicationTables,
               'schema_parent',
               'schema_child',
+              'rel_left',
+              'rel_link',
+              'rel_right',
               for (var index = 0; index < 15; index++) 'wide_${index.toString().padLeft(2, '0')}',
             ])
               for (final name in {
@@ -119,8 +123,8 @@ class ChainAgentStorage {
                   resource: DatabaseResource(resourceType: DatabaseResourceType.table, name: name),
                   permissions: ClientPermissionSet(
                     canRead: true,
-                    canUpdate: table == 'operation_fixture',
-                    canDelete: table == 'operation_fixture',
+                    canUpdate: table == 'operation_fixture' || publicationTables.contains(table),
+                    canDelete: table == 'operation_fixture' || publicationTables.contains(table),
                   ),
                   effect: ClientTokenRuleEffect.allow,
                 ),

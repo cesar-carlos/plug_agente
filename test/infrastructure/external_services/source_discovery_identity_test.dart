@@ -5,12 +5,23 @@ import 'package:plug_agente/application/services/sql_operation_statement_guard.d
 import 'package:plug_agente/domain/entities/expected_source.dart';
 import 'package:plug_agente/domain/entities/source_discovery.dart';
 import 'package:plug_agente/domain/entities/sql_operation_plan.dart';
+import 'package:plug_agente/domain/errors/failures.dart';
 import 'package:plug_agente/infrastructure/external_services/odbc_source_discovery.dart';
 import 'package:result_dart/result_dart.dart';
 import '../../application/services/sql_operation_executor_test.dart' show fixtureConfig;
 import 'odbc_sql_operation_transaction_test.dart' show Native, info;
 
 void main() {
+  test('Firebird is unsupported before any identity query or business SQL', () {
+    expect(
+      () => OdbcSourceDiscovery.dialectFor(info('firebird')),
+      throwsA(isA<DatabaseFailure>().having((f) => f.code, 'code', 'SOURCE_DIALECT_UNSUPPORTED')),
+    );
+    expect(
+      () => ExpectedSource.fromJson({'version': 1, 'dialect': 'firebird', 'identityHash': 'a' * 64}),
+      throwsA(isA<ValidationFailure>()),
+    );
+  });
   const uuid = '11111111-1111-4111-8111-111111111111';
   late Native native;
   final sql = OdbcSourceDiscovery.metadataSql('sybase');
@@ -69,7 +80,7 @@ void main() {
     }
   });
   test('provisioned identity is only valid for SQL Anywhere; locator never matches', () {
-    for (final dialect in ['postgres', 'mssql', 'sybase', 'firebird']) {
+    for (final dialect in ['postgres', 'mssql', 'sybase']) {
       final expected = ExpectedSource(dialect: dialect, identityHash: 'a' * 64);
       for (final kind in ['native', 'provisioned', 'locator']) {
         final proof = SourceDiscovery(

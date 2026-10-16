@@ -261,7 +261,7 @@
     {
       "name": "sql.operation.execute",
       "summary": "Execute a durably journaled single-source transaction.",
-      "description": "Contract v1. Requires live Client token policy bound to agent and database. Requires negotiated sqlOperations v1 and explicit agent homologation opt-in (default off). Production release remains blocked pending full acceptance. Never retry unknown outcomes.",
+      "description": "Contract v1. Requires live Client token policy bound to agent and database. Requires negotiated sqlOperations v1 and explicit agent homologation opt-in (default off). Production release remains blocked pending full acceptance. Never retry unknown outcomes. Optional expectedStructure requires negotiated sqlOperations.structureGuard:1, sourceSchema/sourceIdentity v1 and sourceConstraints v1 when keys are used. Fixed metadata checks run on the executing connection before transaction begin and consume the 32-statement budget. Optional failureCode is durable safe journal metadata, never native text or outcome proof; old terminal records omit it.",
       "paramStructure": "by-name",
       "params": [
         {
@@ -283,7 +283,7 @@
     {
       "name": "sql.operation.get",
       "summary": "Read durable operation state.",
-      "description": "Contract v1. Requires live Client token policy bound to agent and database. Requires negotiated sqlOperations v1 and explicit agent homologation opt-in (default off). Production release remains blocked pending full acceptance. Never retry unknown outcomes.",
+      "description": "Contract v1. Requires live Client token policy bound to agent and database. Requires negotiated sqlOperations v1 and explicit agent homologation opt-in (default off). Production release remains blocked pending full acceptance. Never retry unknown outcomes. Optional failureCode is durable safe journal metadata, never native text or outcome proof; old terminal records omit it.",
       "paramStructure": "by-name",
       "params": [
         {
@@ -305,7 +305,7 @@
     {
       "name": "sql.operation.cancel",
       "summary": "Request cancellation; acceptance does not prove rollback.",
-      "description": "Contract v1. Requires live Client token policy bound to agent and database. Requires negotiated sqlOperations v1 and explicit agent homologation opt-in (default off). Production release remains blocked pending full acceptance. Never retry unknown outcomes.",
+      "description": "Contract v1. Requires live Client token policy bound to agent and database. Requires negotiated sqlOperations v1 and explicit agent homologation opt-in (default off). Production release remains blocked pending full acceptance. Never retry unknown outcomes. Optional failureCode is durable safe journal metadata, never native text or outcome proof; old terminal records omit it.",
       "paramStructure": "by-name",
       "params": [
         {

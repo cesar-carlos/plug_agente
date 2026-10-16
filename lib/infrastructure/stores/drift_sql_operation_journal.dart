@@ -16,6 +16,7 @@ class DriftSqlOperationJournal implements ISqlOperationJournal {
       if (intent.contentHash == null ||
           !RegExp(r'^[a-f0-9]{64}$').hasMatch(intent.contentHash!) ||
           intent.state != SqlOperationJournalState.executing ||
+          intent.failureCode != null ||
           !RegExp(r'^[a-f0-9]{64}$').hasMatch(intent.scopeHash) ||
           !RegExp(r'^[a-f0-9]{64}$').hasMatch(intent.fingerprint) ||
           intent.operationId.isEmpty ||
@@ -57,6 +58,7 @@ class DriftSqlOperationJournal implements ISqlOperationJournal {
     String fingerprint,
     SqlOperationJournalState state, {
     int? directlyAffectedRows,
+    SqlOperationFailureCode? failureCode,
   }) => _guard(
     () => _db.transaction(() async {
       final current = await _entry(operationId, scopeHash, fingerprint);
@@ -71,13 +73,15 @@ class DriftSqlOperationJournal implements ISqlOperationJournal {
             SqlOperationJournalState.cancelled,
           ].contains(state) ||
           (state == SqlOperationJournalState.completed && (directlyAffectedRows == null || directlyAffectedRows < 0)) ||
-          (state != SqlOperationJournalState.completed && directlyAffectedRows != null)) {
+          (state != SqlOperationJournalState.completed && directlyAffectedRows != null) ||
+          (state == SqlOperationJournalState.completed && failureCode != null)) {
         throw SqlOperationFailure(code: 'SQL_OPERATION_CONFLICT', message: 'Invalid operation transition.');
       }
       await (_db.update(_db.sqlOperationJournalRecords)..where((r) => r.operationId.equals(operationId))).write(
         SqlOperationJournalRecordsCompanion(
           state: Value(state.name),
           directlyAffectedRows: Value(directlyAffectedRows),
+          failureCode: Value(failureCode?.code),
           updatedAt: Value(_now()),
         ),
       );
@@ -117,6 +121,7 @@ class DriftSqlOperationJournal implements ISqlOperationJournal {
             .write(
               SqlOperationJournalRecordsCompanion(
                 state: Value(SqlOperationJournalState.outcomeUnknown.name),
+                failureCode: Value(SqlOperationFailureCode.interrupted.code),
                 updatedAt: Value(_now()),
               ),
             ),
@@ -132,7 +137,15 @@ class DriftSqlOperationJournal implements ISqlOperationJournal {
         message: 'Operation identity unavailable or content mismatch.',
       );
     }
+    final failureCode = row.failureCode == null ? null : SqlOperationFailureCode.tryParse(row.failureCode!);
+    if (row.failureCode != null && failureCode == null) {
+      throw SqlOperationFailure(
+        code: 'SQL_OPERATION_JOURNAL_UNAVAILABLE',
+        message: 'Invalid journal failure metadata.',
+      );
+    }
     return SqlOperationJournalEntry(
+      failureCode: failureCode,
       operationId: row.operationId,
       scopeHash: row.scopeHash,
       fingerprint: row.fingerprint,

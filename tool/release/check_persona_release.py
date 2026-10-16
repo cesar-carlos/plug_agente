@@ -2,7 +2,7 @@
 import json
 from pathlib import Path
 
-REQUIRED = ["shared-knowledge-and-compatibility","identity-and-authorization","training-and-local-query","federation","agent-operation-journal","hub-operation-contract","operation-approval-and-reconciliation","external-rest-and-mcp","oauth-and-console","postgres-real","mssql-real","sybase-real","firebird-real","coordinated-cutover"]
+REQUIRED = ["shared-knowledge-and-compatibility","identity-and-authorization","training-and-local-query","federation","agent-operation-journal","hub-operation-contract","operation-approval-and-reconciliation","external-rest-and-mcp","oauth-and-console","postgres-real","mssql-real","sybase-real","coordinated-cutover"]
 
 def ready(manifest):
     return (

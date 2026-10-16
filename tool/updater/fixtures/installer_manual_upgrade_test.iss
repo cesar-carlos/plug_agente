@@ -87,7 +87,7 @@ end;
 
 procedure VerifyInstalledCore;
 begin
-  RaiseException('Manual full installation must not enter optional repair');
+  AssertTrue(IsOptionalRepair(), 'Manual full installation must not enter optional repair');
 end;
 
 function StoreUpdaterAuthorization(const Value: Cardinal): Boolean;
@@ -157,6 +157,31 @@ begin
   UpdaterWasPresent := True;
   PolicyEnabled := True;
   Authorized := 1;
+  if Pos('silent_repair_', TestCase) = 1 then
+  begin
+    SilentMode := True;
+    AssertTrue(IsOptionalRepair(), 'Repair regression requires the real repair flag');
+    AssertTrue(ForceDirectories(ExpandConstant('{tmp}\fixture-app')), 'Cannot create private repair metadata');
+    AssertTrue(SaveStringToFile(ExpandConstant('{tmp}\fixture-app\install-mode.ini'),
+      '[installation]' + #13#10 + 'workerVersion=test+1' + #13#10 + 'mode=global' + #13#10 + 'channel=stable', False),
+      'Cannot save private repair metadata');
+    if TestCase = 'silent_repair_enabled' then
+      AssertTrue(WantsAutomaticUpdates(), 'Explicit optional updater repair must remain available')
+    else
+    begin
+      ErrorText := RunPreparation(NeedsRestart);
+      AssertTrue(ErrorText = '', 'Optional repair without auto-update must bypass the legacy contract');
+      AssertTrue((OperationChecks = 1) and (ContractChecks = 0), 'Repair keeps the safety check only');
+      AssertTrue(not ShouldInstallUpdaterHost() and not ShouldInstallUpdaterClient() and
+        not ShouldInstallUpdaterWorker(), 'Optional repair must not copy updater binaries');
+      AssertTrue(not ShouldCopyApplicationFiles(), 'Optional repair must not replace the core');
+      ConfigureUpdaterAuthorization;
+      AssertTrue((Enrollments = 0) and (Revocations = 0) and PolicyEnabled and (Authorized = 1),
+        'Unrequested updater repair must preserve existing authorization without enrollment or revocation');
+    end;
+    AssertTrue(SaveStringToFile(ExpandConstant('{param:RESULT}'), 'passed', False), 'Cannot save assertions');
+    Exit;
+  end;
   DialogChoice := IDCANCEL;
   ClientMissing := TestCase = 'missing_client';
   ActiveOperation := TestCase = 'active_operation';

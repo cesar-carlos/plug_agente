@@ -127,13 +127,21 @@ class Transactions implements ISqlOperationTransactionFactory, ISqlOperationTran
   ];
   Future<void> Function()? afterStep;
   Future<void> Function()? onCommit;
+  SqlOperationPlan? openedPlan;
   bool loseCommit = false;
   bool failRollback = false;
   Exception? executeFailure;
+  Exception? openFailure;
   Result<void>? planValidation;
   @override
-  Future<Result<ISqlOperationTransaction>> open(SqlOperationTarget target, Duration timeout) async {
+  Future<Result<ISqlOperationTransaction>> open(
+    SqlOperationTarget target,
+    Duration timeout, {
+    SqlOperationPlan? plan,
+  }) async {
     opened++;
+    openedPlan = plan;
+    if (openFailure != null) return Failure(openFailure!);
     return Success(this);
   }
 
@@ -213,6 +221,46 @@ void main() {
     expect(authorizer.calls, 4);
     expect((await run()).executionId, result.executionId);
     expect(transactions.executed.length, 2);
+  });
+  for (final code in [
+    SqlOperationFailureCode.sourceIdentityMismatch,
+    SqlOperationFailureCode.sourceStructureMismatch,
+  ]) {
+    test('durable open refusal preserves ${code.code} for get and duplicate without replay', () async {
+      transactions.openFailure = SqlOperationFailure(code: code.code, message: 'PRIVATE_NATIVE_DIAGNOSTIC');
+      final first = await run();
+      expect(first.state, SqlOperationJournalState.cancelled);
+      expect(first.failureCode, code);
+      expect((await executor.get(plan, 'token', 'agent')).getOrThrow().failureCode, code);
+      expect((await run()).failureCode, code);
+      expect(transactions.opened, 1);
+      expect(transactions.executed, isEmpty);
+      expect(transactions.commits, 0);
+    });
+  }
+  test('RPC exposes only the safe code, never diagnostic text', () async {
+    transactions.openFailure = SqlOperationFailure(
+      code: 'SOURCE_STRUCTURE_MISMATCH',
+      message: 'PRIVATE_NATIVE_DIAGNOSTIC',
+    );
+    final handler = SqlOperationRpcHandler('sql.operation.execute', executor, enabled: () => true);
+    final response = await handler.handle(
+      RpcRequest(jsonrpc: '2.0', id: 'safe-reason', method: handler.method, params: envelope()),
+      const RpcDispatchContext(
+        agentId: 'agent',
+        clientToken: 'token',
+        streamEmitter: null,
+        limits: TransportLimits(),
+        negotiatedExtensions: {SqlOperationCapability.key: SqlOperationCapability.advertisement},
+      ),
+    );
+    expect(response.error, isNull);
+    expect((response.result as Map)['failureCode'], 'SOURCE_STRUCTURE_MISMATCH');
+    expect(response.result.toString(), isNot(contains('PRIVATE_NATIVE_DIAGNOSTIC')));
+  });
+  test('unrecognized native code is reduced to a safe failure category', () async {
+    transactions.openFailure = SqlOperationFailure(code: 'PRIVATE_DRIVER_SQL', message: 'PRIVATE_NATIVE_DIAGNOSTIC');
+    expect((await run()).failureCode, SqlOperationFailureCode.failed);
   });
   test('concurrent duplicate calls dispatch once', () async {
     final completed = await Future.wait([run(), run()]);
@@ -301,7 +349,9 @@ void main() {
   });
   test('native timeout never overlaps a rollback and cannot be reexecuted', () async {
     transactions.executeFailure = TimeoutException('native call in progress');
-    expect((await run()).state, SqlOperationJournalState.outcomeUnknown);
+    final receipt = await run();
+    expect(receipt.state, SqlOperationJournalState.outcomeUnknown);
+    expect(receipt.failureCode, SqlOperationFailureCode.timeout);
     await run();
     expect(transactions.executed.length, 1);
     expect(transactions.rollbacks, 0);
@@ -395,6 +445,52 @@ void main() {
     expect((await request(capability)).error, isNull);
     enabled = false;
     expect(code(await request(capability)), 'CAPABILITY_UNAVAILABLE');
+    expect(transactions.opened, 1);
+  });
+  test('structural RPC guard requires every exact capability before durable claim or open', () async {
+    final raw = envelope()
+      ..['expectedSource'] = {'version': 1, 'dialect': 'postgres', 'identityHash': 'a' * 64}
+      ..['expectedStructure'] = {
+        'version': 1,
+        'resources': [
+          {
+            'resource': {'schema': 'public', 'name': 'parent', 'type': 'table'},
+            'columns': [
+              {'name': 'id', 'nativeType': 'int4', 'nullable': false, 'size': 32, 'scale': 0},
+            ],
+            'constraints': {'primaryKeys': <Object?>[], 'uniqueKeys': <Object?>[], 'foreignKeys': <Object?>[]},
+          },
+        ],
+      };
+    final extensions = <String, dynamic>{
+      SqlOperationCapability.key: SqlOperationCapability.advertisement,
+      'sourceIdentity': 1,
+      'sourceSchema': 1,
+      'sourceConstraints': 1,
+    };
+    final handler = SqlOperationRpcHandler('sql.operation.execute', executor, enabled: () => true);
+    Future<RpcResponse> send(Map<String, dynamic> negotiated) => handler.handle(
+      RpcRequest(jsonrpc: '2.0', id: 'structure', method: handler.method, params: raw),
+      RpcDispatchContext(
+        agentId: 'agent',
+        clientToken: 'token',
+        streamEmitter: null,
+        limits: const TransportLimits(),
+        negotiatedExtensions: negotiated,
+      ),
+    );
+    for (final key in ['sourceIdentity', 'sourceSchema', 'sourceConstraints']) {
+      final missing = {...extensions}..remove(key);
+      final response = await send(missing);
+      expect((response.error!.data as Map)['failure_code'], 'CAPABILITY_UNAVAILABLE');
+    }
+    final old = {...SqlOperationCapability.advertisement}..remove('structureGuard');
+    expect((await send({...extensions, SqlOperationCapability.key: old})).error, isNotNull);
+    expect(transactions.opened, 0);
+    expect((await send(extensions)).error, isNull);
+    expect(transactions.openedPlan!.expectedStructure!.resources.single.resource.name, 'parent');
+    raw['expectedStructure'] = {'version': 1, 'resources': <Object?>[]};
+    expect((await send(extensions)).error!.code, RpcErrorCode.invalidParams);
     expect(transactions.opened, 1);
   });
   test('maintenance drains admitted operations and refuses new claims until recovery', () async {

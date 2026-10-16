@@ -8,7 +8,7 @@ class ExpectedSource {
     if (raw is! Map<String, dynamic> ||
         raw.length != 3 ||
         raw['version'] != 1 ||
-        !['postgres', 'mssql', 'sybase', 'firebird'].contains(raw['dialect']) ||
+        !['postgres', 'mssql', 'sybase'].contains(raw['dialect']) ||
         raw['identityHash'] is! String ||
         !RegExp(r'^[a-f0-9]{64}$').hasMatch(raw['identityHash'] as String)) {
       throw ValidationFailure('Invalid expected durable source identity.');

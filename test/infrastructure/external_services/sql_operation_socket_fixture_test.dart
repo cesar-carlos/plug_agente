@@ -16,10 +16,12 @@ import 'package:plug_agente/infrastructure/external_services/socket_io_transport
 import 'package:plug_agente/infrastructure/stores/sql_operation_journal_runtime.dart';
 import 'package:result_dart/result_dart.dart';
 import '../../application/services/sql_operation_executor_test.dart' show Authorizer, Transactions;
+import 'sql_operation_native_recovery_fixture.dart';
 
 class _Dispatcher implements IRpcRequestDispatcher {
-  _Dispatcher(this.executor);
+  _Dispatcher(this.executor, {this.expectedCalls = 8});
   final SqlOperationExecutor executor;
+  final int expectedCalls;
   final finished = Completer<void>();
   int calls = 0;
   @override
@@ -41,7 +43,7 @@ class _Dispatcher implements IRpcRequestDispatcher {
         negotiatedExtensions: negotiatedExtensions,
       ),
     );
-    if (++calls == 8) finished.complete();
+    if (++calls == expectedCalls) finished.complete();
     return response;
   }
 
@@ -54,19 +56,52 @@ class _Dispatcher implements IRpcRequestDispatcher {
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
   final url = Platform.environment['PLUG_SQL_OPERATION_E2E_URL'];
+  final recoveryRoot = Platform.environment['PLUG_SQL_OPERATION_RECOVERY_ROOT'];
+  final phase = Platform.environment['PLUG_SQL_OPERATION_RECOVERY_PHASE'];
   test(
     'production socket negotiation reaches durable journal without replaying uncertain commit',
     () async {
-      final directory = await Directory.systemTemp.createTemp('sql-operation-socket-');
+      if (phase != null && recoveryRoot == null) {
+        throw StateError('Recovery phase requires a private recovery directory.');
+      }
+      final directory = recoveryRoot == null
+          ? await Directory.systemTemp.createTemp('sql-operation-socket-')
+          : Directory(recoveryRoot);
+      if (recoveryRoot != null) {
+        final resolved = Directory(await directory.resolveSymbolicLinks());
+        if (resolved.parent.path != await Directory.systemTemp.resolveSymbolicLinks() ||
+            !resolved.path.split(Platform.pathSeparator).last.startsWith('sql-operation-recovery-') ||
+            !['crash', 'recover'].contains(phase) ||
+            Uri.parse(url!).host != '127.0.0.1') {
+          throw StateError('Recovery requires an explicit private loopback fixture.');
+        }
+      }
       final runtime = SqlOperationJournalRuntime('${directory.path}/journal.db');
-      final transactions = Transactions()..loseCommit = true;
+      final transactions = Transactions()..loseCommit = recoveryRoot == null;
+      final nativeManifest = Platform.environment['PLUG_SQL_OPERATION_NATIVE_MANIFEST'];
+      NativeRecoveryFixture? native;
+      if (nativeManifest != null) {
+        if (recoveryRoot == null || phase == null) throw StateError('Native recovery requires isolated recovery mode.');
+        native = NativeRecoveryFixture(directory, phase, Platform.environment['PLUG_SQL_OPERATION_NATIVE_STAGE']!);
+        await native.initialize(nativeManifest, Platform.environment['PLUG_SQL_OPERATION_NATIVE_ENGINE']!);
+      }
+      if (phase == 'crash' && native == null) {
+        transactions.afterStep = () async {
+          await File(
+            '${directory.path}/interrupted-after-step',
+          ).writeAsString('durable-claim-before-commit', flush: true);
+          // Abrupt VM exit deliberately bypasses rollback, journal finish and finally.
+          exit(73);
+        };
+      }
       (await runtime.initialize()).getOrThrow();
       final dispatcher = _Dispatcher(
         SqlOperationExecutor(
           journal: runtime.journal,
-          authorizer: Authorizer(),
-          transactions: transactions,
+          authorizer: native ?? Authorizer(),
+          transactions: native ?? transactions,
         ),
+        expectedCalls: phase == 'recover' ? 3 : 8,
       );
       final flags = FeatureFlags(
         InMemoryAppSettingsStore({
@@ -86,15 +121,24 @@ void main() {
         expect(connected.isSuccess(), isTrue);
         await dispatcher.finished.future.timeout(const Duration(seconds: 25));
         await Future<void>.delayed(const Duration(milliseconds: 750));
-        expect(transactions.opened, 1);
-        expect(transactions.commits, 1);
-        expect(transactions.executed.length, 2);
-        expect(transactions.bindings[1]['parent_id']?.value, '42');
+        if (phase == 'recover') {
+          await native?.verifyRecovery();
+          expect(transactions.opened, 0);
+          expect(transactions.commits, 0);
+          expect(transactions.executed, isEmpty);
+          await File('${directory.path}/recovered-without-replay').writeAsString('verified', flush: true);
+        } else {
+          expect(transactions.opened, 1);
+          expect(transactions.commits, 1);
+          expect(transactions.executed.length, 2);
+          expect(transactions.bindings[1]['parent_id']?.value, '42');
+        }
       } finally {
         await transport.disconnect();
         await TransportWorkPool.shared.dispose();
         await runtime.close();
-        await directory.delete(recursive: true);
+        await native?.close();
+        if (recoveryRoot == null) await directory.delete(recursive: true);
       }
     },
     skip: url == null ? 'Run through the isolated Node socket harness.' : false,

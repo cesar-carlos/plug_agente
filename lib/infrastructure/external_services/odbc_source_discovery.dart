@@ -142,7 +142,6 @@ class OdbcSourceDiscovery implements ISourceDiscoveryProbe {
     'postgres' => 'postgres',
     'sqlserver' => 'mssql',
     'sybase_asa' => 'sybase',
-    _ when info.dbmsName.toLowerCase().contains('firebird') => 'firebird',
     _ => throw domain.DatabaseFailure.withContext(
       code: 'SOURCE_DIALECT_UNSUPPORTED',
       message: 'Database engine is unsupported.',

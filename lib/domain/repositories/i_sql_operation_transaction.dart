@@ -11,7 +11,7 @@ abstract interface class ISqlOperationAuthorizer {
 }
 
 abstract interface class ISqlOperationTransactionFactory {
-  Future<Result<ISqlOperationTransaction>> open(SqlOperationTarget target, Duration timeout);
+  Future<Result<ISqlOperationTransaction>> open(SqlOperationTarget target, Duration timeout, {SqlOperationPlan? plan});
 }
 
 abstract interface class ISqlOperationTransaction {

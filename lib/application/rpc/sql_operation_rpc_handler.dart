@@ -27,6 +27,19 @@ class SqlOperationRpcHandler implements RpcMethodHandler {
       if (!_enabled() || !SqlOperationCapability.supported(capability)) {
         return _error(request, 'CAPABILITY_UNAVAILABLE');
       }
+      final raw = request.params;
+      if (raw is Map && raw.containsKey('expectedStructure')) {
+        final structure = raw['expectedStructure'];
+        final resources = structure is Map ? structure['resources'] : null;
+        final needsConstraints = resources is List && resources.any((r) => r is Map && r['constraints'] != null);
+        if (method != 'sql.operation.execute' ||
+            !SqlOperationCapability.supportsStructure(capability) ||
+            context.negotiatedExtensions['sourceSchema'] != 1 ||
+            context.negotiatedExtensions['sourceIdentity'] != 1 ||
+            (needsConstraints && context.negotiatedExtensions['sourceConstraints'] != 1)) {
+          return _error(request, 'CAPABILITY_UNAVAILABLE');
+        }
+      }
       final token = context.clientToken;
       if (token == null || token.trim().isEmpty) return _error(request, 'SQL_OPERATION_AUTHORIZATION_DENIED');
       const reader = SqlOperationParamsReader();
@@ -68,6 +81,7 @@ class SqlOperationRpcHandler implements RpcMethodHandler {
               SqlOperationJournalState.cancelled => 'cancelada',
             },
             'directlyAffectedRows': entry.directlyAffectedRows,
+            if (entry.failureCode != null) 'failureCode': entry.failureCode!.code,
             'updatedAt': entry.updatedAt.toUtc().toIso8601String(),
             if (![
               SqlOperationJournalState.executing,
@@ -82,7 +96,9 @@ class SqlOperationRpcHandler implements RpcMethodHandler {
       return _error(
         request,
         error is domain.Failure ? error.code : 'SQL_OPERATION_FAILED',
-        error is SqlOperationFailure ? RpcErrorCode.invalidParams : RpcErrorCode.internalError,
+        error is SqlOperationFailure || error is domain.ValidationFailure
+            ? RpcErrorCode.invalidParams
+            : RpcErrorCode.internalError,
       );
     }
   }

@@ -1,3 +1,5 @@
+> Escopo vigente: PostgreSQL, SQL Server e SQL Anywhere. Firebird removido do suporte por decisão do produto. Evidências históricas não homologam o novo candidato; produção permanece bloqueada.
+
 # Identidade física e dialeto por hub/agente
 
 Toda comunicação com bases de negócio segue **MCP → plug_server → plug_agente →
@@ -149,3 +151,7 @@ Perfil remoto incompleto falha com ValidationFailure, sem interromper callbacks.
 Isso complementa os testes nativos; não elimina as pendências de instalação
 completa e cenários em trânsito descritas acima. Procedimento e limites:
 plug_mcp/docs/persona-v2/homologation-chain.md.
+
+O transporte v1 preserva seu enum histórico por compatibilidade; isso não
+concede suporte ao motor. O runtime recusa Firebird antes de metadados ou SQL
+de negócio. A matriz atual exige PostgreSQL, SQL Server e SQL Anywhere.

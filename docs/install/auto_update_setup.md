@@ -12,6 +12,20 @@
 Configuracao, publicacao e diagnostico do update automatico do Plug Agente no
 Windows.
 
+## Local supervisor compatibility — 2026-10-15
+
+Recovery contract 2 fixes incomplete IPC replies and bounded partial reads.
+Existing contract-1 supervisors require an explicit administrative host transition;
+the installer still defaults to continuing manually when offering that choice.
+Dart refuses the old contract before maintenance. App version stays 1.8.7; IPC
+framing stays v1. The production automatic-apply gates remain disabled.
+
+The qualified Windows 11 lifecycle, standard-user service tests, twenty signed
+prepare/cancel cycles and temporary notification integration passed. Scope,
+evidence and remaining release blockers belong to the
+[current plan](../implemente/plano_auto_update_evolution.md#qualified-windows-lifecycle-and-ipc-delivery-2026-10-15).
+This does not authorize production distribution or claim automatic rollback.
+
 ## Transição para serviço Windows — 2026-10-04
 
 A implementação do serviço está em andamento. O instalador oferece **Atualizar

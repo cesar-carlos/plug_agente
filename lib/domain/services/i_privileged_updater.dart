@@ -72,13 +72,15 @@ class UpdaterCapabilities {
     this.recoveryContract = 0,
   });
 
+  static const requiredRecoveryContract = 2;
+
   final bool authorized;
   final bool applicationReady;
   final String channel;
   final List<String> approved;
   final int recoveryContract;
 
-  bool get canApplyAutomatically => authorized && applicationReady && recoveryContract == 1;
+  bool get canApplyAutomatically => authorized && applicationReady && recoveryContract == requiredRecoveryContract;
 }
 
 /// Dispatch is acknowledged separately from installation and health success.

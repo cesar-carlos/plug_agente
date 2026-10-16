@@ -1,5 +1,6 @@
 import 'package:plug_agente/domain/entities/config.dart';
 import 'package:plug_agente/domain/entities/expected_source.dart';
+import 'package:plug_agente/domain/entities/expected_structure.dart';
 
 enum SqlOperationEffect { select, insert, update, delete }
 
@@ -77,8 +78,18 @@ class SqlOperationPlan extends SqlOperationReference {
     required this.maxAffectedRows,
     required this.timeout,
     required this.contentHash,
+    this.expectedStructure,
     super.expectedSource,
   });
+  final ExpectedStructure? expectedStructure;
+  int nativeStatementCount(String dialect) =>
+      1 +
+      steps.fold<int>(
+        0,
+        (count, step) =>
+            count + (step.effect != SqlOperationEffect.select && {'mssql', 'sybase'}.contains(dialect) ? 2 : 1),
+      ) +
+      (expectedStructure == null ? 0 : expectedStructure!.verificationStatementCount + 1);
   final List<SqlOperationStep> steps;
   final int maxAffectedRows;
   final Duration timeout;

@@ -63,7 +63,8 @@ class AuthorizeSqlOperation {
             )
             .toList(growable: false);
 
-        final cache = method == 'sql.execute.verified' ? null : _decisionCache;
+        final exactResource = method == 'sql.operation.execute';
+        final cache = method == 'sql.execute.verified' || exactResource ? null : _decisionCache;
         final cacheRevision = cache?.revision;
         final missIndices = <int>[];
         final deniedAccesses = <ClassifiedSqlResource>{};
@@ -186,6 +187,7 @@ class AuthorizeSqlOperation {
               final allowed = policy.isAllowed(
                 operation: access.operation,
                 resource: access.resource,
+                exactResource: exactResource,
               );
               if (allowed) {
                 _cacheDecision(
@@ -442,7 +444,7 @@ class AuthorizeSqlOperation {
     DateTime? credentialExpiresAt,
   }) {
     final cache = _decisionCache;
-    if (cache == null) {
+    if (cache == null || method == 'sql.operation.execute') {
       return;
     }
     final now = _now();

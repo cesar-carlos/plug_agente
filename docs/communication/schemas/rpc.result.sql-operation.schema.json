@@ -4,17 +4,11 @@
   "properties": {
     "completedAt": {
       "format": "date-time",
-      "type": [
-        "string",
-        "null"
-      ]
+      "type": ["string", "null"]
     },
     "directlyAffectedRows": {
       "minimum": 0,
-      "type": [
-        "integer",
-        "null"
-      ]
+      "type": ["integer", "null"]
     },
     "executionId": {
       "type": "string"
@@ -41,6 +35,25 @@
     "updatedAt": {
       "format": "date-time",
       "type": "string"
+    },
+    "failureCode": {
+      "type": "string",
+      "enum": [
+        "SOURCE_IDENTITY_MISMATCH",
+        "SOURCE_STRUCTURE_MISMATCH",
+        "SQL_OPERATION_CONDITION_FAILED",
+        "SQL_OPERATION_ROW_LIMIT",
+        "SQL_OPERATION_ROW_COUNT_UNKNOWN",
+        "SQL_OPERATION_OUTPUT_INVALID",
+        "SQL_OPERATION_AUTHORIZATION_CHANGED",
+        "SQL_OPERATION_AUTHORIZATION_DENIED",
+        "SQL_OPERATION_CANCELLED",
+        "SQL_OPERATION_NATIVE_FAILED",
+        "SQL_OPERATION_TIMEOUT",
+        "SQL_OPERATION_INTERRUPTED",
+        "SQL_OPERATION_FAILED"
+      ],
+      "description": "Durable safe failure category, not a commit or rollback proof. Absent on older terminal records."
     }
   },
   "required": [
@@ -53,5 +66,23 @@
   ],
   "type": "object",
   "$schema": "http://json-schema.org/draft-07/schema#",
-  "$id": "rpc.result.sql-operation.schema.json"
+  "$id": "rpc.result.sql-operation.schema.json",
+  "allOf": [
+    {
+      "if": {
+        "required": ["failureCode"]
+      },
+      "then": {
+        "properties": {
+          "state": {
+            "enum": [
+              "cancelada",
+              "rollback_confirmado",
+              "resultado_desconhecido"
+            ]
+          }
+        }
+      }
+    }
+  ]
 }

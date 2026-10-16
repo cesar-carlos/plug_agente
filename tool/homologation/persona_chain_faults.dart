@@ -10,8 +10,12 @@ class ChainCommitFaultFactory implements ISqlOperationTransactionFactory {
   final ISqlOperationTransactionFactory delegate;
   bool loseNextConfirmation = false;
   @override
-  Future<Result<ISqlOperationTransaction>> open(SqlOperationTarget target, Duration timeout) async {
-    final opened = await delegate.open(target, timeout);
+  Future<Result<ISqlOperationTransaction>> open(
+    SqlOperationTarget target,
+    Duration timeout, {
+    SqlOperationPlan? plan,
+  }) async {
+    final opened = await delegate.open(target, timeout, plan: plan);
     if (opened.isError() || !loseNextConfirmation) return opened;
     loseNextConfirmation = false;
     return Success(_LostCommitConfirmation(opened.getOrThrow()));

@@ -14,7 +14,8 @@ constexpr int kProtocolVersion = 1;
 // Fail closed until launcher, probation bootstrap and data recovery are wired
 // and validated. Editing a policy cannot activate an unfinished implementation.
 constexpr bool kApplicationContractImplemented = false;
-constexpr int kRecoveryContractVersion = 1;
+// Version 2 requires complete, bounded IPC delivery before disconnecting.
+constexpr int kRecoveryContractVersion = 2;
 constexpr size_t kMaxMessageBytes = 1024 * 1024;
 constexpr size_t kMaxManifestBytes = 65536;
 constexpr unsigned long kInstallTimeoutMs = 30 * 60 * 1000;

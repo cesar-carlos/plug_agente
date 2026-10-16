@@ -59,6 +59,16 @@ class SqlOperationAuthorizer implements ISqlOperationAuthorizer {
           method: 'sql.operation.execute',
         )).getOrThrow();
       }
+      if (ref is SqlOperationPlan && ref.expectedStructure != null) {
+        for (final sql in ref.expectedStructure!.authorizationSql()) {
+          (await _authorize(
+            token: token,
+            sql: sql,
+            requestDatabase: ref.database,
+            method: 'sql.operation.execute',
+          )).getOrThrow();
+        }
+      }
       final scope = buildIdempotencyFingerprintForEnvelope({
         'hubOrigin': origin,
         'agentId': agentId,

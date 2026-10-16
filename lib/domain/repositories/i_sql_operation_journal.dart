@@ -11,6 +11,7 @@ abstract class ISqlOperationJournal {
     String fingerprint,
     SqlOperationJournalState state, {
     int? directlyAffectedRows,
+    SqlOperationFailureCode? failureCode,
   });
   Future<Result<SqlOperationJournalEntry>> requestCancellation(
     String operationId,

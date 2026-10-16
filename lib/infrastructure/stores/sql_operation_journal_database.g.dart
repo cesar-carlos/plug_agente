@@ -74,6 +74,17 @@ class $SqlOperationJournalRecordsTable extends SqlOperationJournalRecords
     type: DriftSqlType.string,
     requiredDuringInsert: true,
   );
+  static const VerificationMeta _failureCodeMeta = const VerificationMeta(
+    'failureCode',
+  );
+  @override
+  late final GeneratedColumn<String> failureCode = GeneratedColumn<String>(
+    'failure_code',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
   static const VerificationMeta _directlyAffectedRowsMeta =
       const VerificationMeta('directlyAffectedRows');
   @override
@@ -103,6 +114,7 @@ class $SqlOperationJournalRecordsTable extends SqlOperationJournalRecords
     contentHash,
     executionId,
     state,
+    failureCode,
     directlyAffectedRows,
     updatedAt,
   ];
@@ -176,6 +188,15 @@ class $SqlOperationJournalRecordsTable extends SqlOperationJournalRecords
     } else if (isInserting) {
       context.missing(_stateMeta);
     }
+    if (data.containsKey('failure_code')) {
+      context.handle(
+        _failureCodeMeta,
+        failureCode.isAcceptableOrUnknown(
+          data['failure_code']!,
+          _failureCodeMeta,
+        ),
+      );
+    }
     if (data.containsKey('directly_affected_rows')) {
       context.handle(
         _directlyAffectedRowsMeta,
@@ -229,6 +250,10 @@ class $SqlOperationJournalRecordsTable extends SqlOperationJournalRecords
         DriftSqlType.string,
         data['${effectivePrefix}state'],
       )!,
+      failureCode: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}failure_code'],
+      ),
       directlyAffectedRows: attachedDatabase.typeMapping.read(
         DriftSqlType.int,
         data['${effectivePrefix}directly_affected_rows'],
@@ -254,6 +279,7 @@ class SqlOperationJournalRecord extends DataClass
   final String? contentHash;
   final String executionId;
   final String state;
+  final String? failureCode;
   final int? directlyAffectedRows;
   final DateTime updatedAt;
   const SqlOperationJournalRecord({
@@ -263,6 +289,7 @@ class SqlOperationJournalRecord extends DataClass
     this.contentHash,
     required this.executionId,
     required this.state,
+    this.failureCode,
     this.directlyAffectedRows,
     required this.updatedAt,
   });
@@ -277,6 +304,9 @@ class SqlOperationJournalRecord extends DataClass
     }
     map['execution_id'] = Variable<String>(executionId);
     map['state'] = Variable<String>(state);
+    if (!nullToAbsent || failureCode != null) {
+      map['failure_code'] = Variable<String>(failureCode);
+    }
     if (!nullToAbsent || directlyAffectedRows != null) {
       map['directly_affected_rows'] = Variable<int>(directlyAffectedRows);
     }
@@ -294,6 +324,9 @@ class SqlOperationJournalRecord extends DataClass
           : Value(contentHash),
       executionId: Value(executionId),
       state: Value(state),
+      failureCode: failureCode == null && nullToAbsent
+          ? const Value.absent()
+          : Value(failureCode),
       directlyAffectedRows: directlyAffectedRows == null && nullToAbsent
           ? const Value.absent()
           : Value(directlyAffectedRows),
@@ -313,6 +346,7 @@ class SqlOperationJournalRecord extends DataClass
       contentHash: serializer.fromJson<String?>(json['contentHash']),
       executionId: serializer.fromJson<String>(json['executionId']),
       state: serializer.fromJson<String>(json['state']),
+      failureCode: serializer.fromJson<String?>(json['failureCode']),
       directlyAffectedRows: serializer.fromJson<int?>(
         json['directlyAffectedRows'],
       ),
@@ -329,6 +363,7 @@ class SqlOperationJournalRecord extends DataClass
       'contentHash': serializer.toJson<String?>(contentHash),
       'executionId': serializer.toJson<String>(executionId),
       'state': serializer.toJson<String>(state),
+      'failureCode': serializer.toJson<String?>(failureCode),
       'directlyAffectedRows': serializer.toJson<int?>(directlyAffectedRows),
       'updatedAt': serializer.toJson<DateTime>(updatedAt),
     };
@@ -341,6 +376,7 @@ class SqlOperationJournalRecord extends DataClass
     Value<String?> contentHash = const Value.absent(),
     String? executionId,
     String? state,
+    Value<String?> failureCode = const Value.absent(),
     Value<int?> directlyAffectedRows = const Value.absent(),
     DateTime? updatedAt,
   }) => SqlOperationJournalRecord(
@@ -350,6 +386,7 @@ class SqlOperationJournalRecord extends DataClass
     contentHash: contentHash.present ? contentHash.value : this.contentHash,
     executionId: executionId ?? this.executionId,
     state: state ?? this.state,
+    failureCode: failureCode.present ? failureCode.value : this.failureCode,
     directlyAffectedRows: directlyAffectedRows.present
         ? directlyAffectedRows.value
         : this.directlyAffectedRows,
@@ -373,6 +410,9 @@ class SqlOperationJournalRecord extends DataClass
           ? data.executionId.value
           : this.executionId,
       state: data.state.present ? data.state.value : this.state,
+      failureCode: data.failureCode.present
+          ? data.failureCode.value
+          : this.failureCode,
       directlyAffectedRows: data.directlyAffectedRows.present
           ? data.directlyAffectedRows.value
           : this.directlyAffectedRows,
@@ -389,6 +429,7 @@ class SqlOperationJournalRecord extends DataClass
           ..write('contentHash: $contentHash, ')
           ..write('executionId: $executionId, ')
           ..write('state: $state, ')
+          ..write('failureCode: $failureCode, ')
           ..write('directlyAffectedRows: $directlyAffectedRows, ')
           ..write('updatedAt: $updatedAt')
           ..write(')'))
@@ -403,6 +444,7 @@ class SqlOperationJournalRecord extends DataClass
     contentHash,
     executionId,
     state,
+    failureCode,
     directlyAffectedRows,
     updatedAt,
   );
@@ -416,6 +458,7 @@ class SqlOperationJournalRecord extends DataClass
           other.contentHash == this.contentHash &&
           other.executionId == this.executionId &&
           other.state == this.state &&
+          other.failureCode == this.failureCode &&
           other.directlyAffectedRows == this.directlyAffectedRows &&
           other.updatedAt == this.updatedAt);
 }
@@ -428,6 +471,7 @@ class SqlOperationJournalRecordsCompanion
   final Value<String?> contentHash;
   final Value<String> executionId;
   final Value<String> state;
+  final Value<String?> failureCode;
   final Value<int?> directlyAffectedRows;
   final Value<DateTime> updatedAt;
   final Value<int> rowid;
@@ -438,6 +482,7 @@ class SqlOperationJournalRecordsCompanion
     this.contentHash = const Value.absent(),
     this.executionId = const Value.absent(),
     this.state = const Value.absent(),
+    this.failureCode = const Value.absent(),
     this.directlyAffectedRows = const Value.absent(),
     this.updatedAt = const Value.absent(),
     this.rowid = const Value.absent(),
@@ -449,6 +494,7 @@ class SqlOperationJournalRecordsCompanion
     this.contentHash = const Value.absent(),
     required String executionId,
     required String state,
+    this.failureCode = const Value.absent(),
     this.directlyAffectedRows = const Value.absent(),
     required DateTime updatedAt,
     this.rowid = const Value.absent(),
@@ -465,6 +511,7 @@ class SqlOperationJournalRecordsCompanion
     Expression<String>? contentHash,
     Expression<String>? executionId,
     Expression<String>? state,
+    Expression<String>? failureCode,
     Expression<int>? directlyAffectedRows,
     Expression<DateTime>? updatedAt,
     Expression<int>? rowid,
@@ -476,6 +523,7 @@ class SqlOperationJournalRecordsCompanion
       if (contentHash != null) 'content_hash': contentHash,
       if (executionId != null) 'execution_id': executionId,
       if (state != null) 'state': state,
+      if (failureCode != null) 'failure_code': failureCode,
       if (directlyAffectedRows != null)
         'directly_affected_rows': directlyAffectedRows,
       if (updatedAt != null) 'updated_at': updatedAt,
@@ -490,6 +538,7 @@ class SqlOperationJournalRecordsCompanion
     Value<String?>? contentHash,
     Value<String>? executionId,
     Value<String>? state,
+    Value<String?>? failureCode,
     Value<int?>? directlyAffectedRows,
     Value<DateTime>? updatedAt,
     Value<int>? rowid,
@@ -501,6 +550,7 @@ class SqlOperationJournalRecordsCompanion
       contentHash: contentHash ?? this.contentHash,
       executionId: executionId ?? this.executionId,
       state: state ?? this.state,
+      failureCode: failureCode ?? this.failureCode,
       directlyAffectedRows: directlyAffectedRows ?? this.directlyAffectedRows,
       updatedAt: updatedAt ?? this.updatedAt,
       rowid: rowid ?? this.rowid,
@@ -528,6 +578,9 @@ class SqlOperationJournalRecordsCompanion
     if (state.present) {
       map['state'] = Variable<String>(state.value);
     }
+    if (failureCode.present) {
+      map['failure_code'] = Variable<String>(failureCode.value);
+    }
     if (directlyAffectedRows.present) {
       map['directly_affected_rows'] = Variable<int>(directlyAffectedRows.value);
     }
@@ -549,6 +602,7 @@ class SqlOperationJournalRecordsCompanion
           ..write('contentHash: $contentHash, ')
           ..write('executionId: $executionId, ')
           ..write('state: $state, ')
+          ..write('failureCode: $failureCode, ')
           ..write('directlyAffectedRows: $directlyAffectedRows, ')
           ..write('updatedAt: $updatedAt, ')
           ..write('rowid: $rowid')
@@ -580,6 +634,7 @@ typedef $$SqlOperationJournalRecordsTableCreateCompanionBuilder =
       Value<String?> contentHash,
       required String executionId,
       required String state,
+      Value<String?> failureCode,
       Value<int?> directlyAffectedRows,
       required DateTime updatedAt,
       Value<int> rowid,
@@ -592,6 +647,7 @@ typedef $$SqlOperationJournalRecordsTableUpdateCompanionBuilder =
       Value<String?> contentHash,
       Value<String> executionId,
       Value<String> state,
+      Value<String?> failureCode,
       Value<int?> directlyAffectedRows,
       Value<DateTime> updatedAt,
       Value<int> rowid,
@@ -637,6 +693,11 @@ class $$SqlOperationJournalRecordsTableFilterComposer
 
   ColumnFilters<String> get state => $composableBuilder(
     column: $table.state,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get failureCode => $composableBuilder(
+    column: $table.failureCode,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -694,6 +755,11 @@ class $$SqlOperationJournalRecordsTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<String> get failureCode => $composableBuilder(
+    column: $table.failureCode,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<int> get directlyAffectedRows => $composableBuilder(
     column: $table.directlyAffectedRows,
     builder: (column) => ColumnOrderings(column),
@@ -743,6 +809,11 @@ class $$SqlOperationJournalRecordsTableAnnotationComposer
 
   GeneratedColumn<String> get state =>
       $composableBuilder(column: $table.state, builder: (column) => column);
+
+  GeneratedColumn<String> get failureCode => $composableBuilder(
+    column: $table.failureCode,
+    builder: (column) => column,
+  );
 
   GeneratedColumn<int> get directlyAffectedRows => $composableBuilder(
     column: $table.directlyAffectedRows,
@@ -805,6 +876,7 @@ class $$SqlOperationJournalRecordsTableTableManager
                 Value<String?> contentHash = const Value.absent(),
                 Value<String> executionId = const Value.absent(),
                 Value<String> state = const Value.absent(),
+                Value<String?> failureCode = const Value.absent(),
                 Value<int?> directlyAffectedRows = const Value.absent(),
                 Value<DateTime> updatedAt = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
@@ -815,6 +887,7 @@ class $$SqlOperationJournalRecordsTableTableManager
                 contentHash: contentHash,
                 executionId: executionId,
                 state: state,
+                failureCode: failureCode,
                 directlyAffectedRows: directlyAffectedRows,
                 updatedAt: updatedAt,
                 rowid: rowid,
@@ -827,6 +900,7 @@ class $$SqlOperationJournalRecordsTableTableManager
                 Value<String?> contentHash = const Value.absent(),
                 required String executionId,
                 required String state,
+                Value<String?> failureCode = const Value.absent(),
                 Value<int?> directlyAffectedRows = const Value.absent(),
                 required DateTime updatedAt,
                 Value<int> rowid = const Value.absent(),
@@ -837,6 +911,7 @@ class $$SqlOperationJournalRecordsTableTableManager
                 contentHash: contentHash,
                 executionId: executionId,
                 state: state,
+                failureCode: failureCode,
                 directlyAffectedRows: directlyAffectedRows,
                 updatedAt: updatedAt,
                 rowid: rowid,

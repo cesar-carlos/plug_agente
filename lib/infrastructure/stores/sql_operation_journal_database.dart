@@ -9,6 +9,7 @@ class SqlOperationJournalRecords extends Table {
   TextColumn get contentHash => text().nullable()();
   TextColumn get executionId => text()();
   TextColumn get state => text()();
+  TextColumn get failureCode => text().nullable()();
   IntColumn get directlyAffectedRows => integer().nullable()();
   DateTimeColumn get updatedAt => dateTime()();
   @override
@@ -20,11 +21,12 @@ class SqlOperationJournalRecords extends Table {
 class SqlOperationJournalDatabase extends _$SqlOperationJournalDatabase {
   SqlOperationJournalDatabase(super.e);
   @override
-  int get schemaVersion => 2;
+  int get schemaVersion => 3;
   @override
   MigrationStrategy get migration => MigrationStrategy(
     onUpgrade: (m, from, to) async {
       if (from < 2) await m.addColumn(sqlOperationJournalRecords, sqlOperationJournalRecords.contentHash);
+      if (from < 3) await m.addColumn(sqlOperationJournalRecords, sqlOperationJournalRecords.failureCode);
     },
     beforeOpen: (_) async {
       await customStatement('PRAGMA journal_mode = WAL');

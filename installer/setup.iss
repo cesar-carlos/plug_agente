@@ -300,9 +300,11 @@ begin
   end;
   if WizardSilent() then
   begin
-    if IsOptionalRepair() and (ExpandConstant('{param:AUTOUPDATE|0}') = '1') then
+    if IsOptionalRepair() then
     begin
-      Result := True;
+      // Repair only the explicitly requested features; do not inherit the
+      // service authorization from an earlier installation.
+      Result := ExpandConstant('{param:AUTOUPDATE|0}') = '1';
       Exit;
     end;
     // A normal preference is never administrative authorization. Only this

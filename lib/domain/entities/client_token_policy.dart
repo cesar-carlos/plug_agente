@@ -80,6 +80,7 @@ class ClientTokenPolicy {
   bool isAllowed({
     required SqlOperation operation,
     required DatabaseResource resource,
+    bool exactResource = false,
   }) {
     if (isRevoked) {
       return false;
@@ -87,6 +88,7 @@ class ClientTokenPolicy {
 
     var hasExplicitAllow = false;
     for (final rule in effectiveRules) {
+      if (exactResource && rule.resource.normalizedName != resource.normalizedName) continue;
       if (!rule.appliesTo(resource)) {
         continue;
       }

@@ -189,6 +189,7 @@ Future<GlobalStorageContext> _resolveGlobalStorageContextOrThrow() async {
 Future<void> setupDependencies({
   required RuntimeCapabilities capabilities,
   RuntimeDetectionDiagnostics? runtimeDetectionDiagnostics,
+  GlobalStorageContext? storageContext,
 }) async {
   developer.log(
     'Setting up dependencies with runtime mode: ${capabilities.mode.displayName}',
@@ -212,7 +213,7 @@ Future<void> setupDependencies({
     );
   }
 
-  final globalStorageContext = await _resolveGlobalStorageContextOrThrow();
+  final globalStorageContext = storageContext ?? await _resolveGlobalStorageContextOrThrow();
   getIt.registerSingleton<GlobalStorageContext>(globalStorageContext);
   await ErrorLoggingBootstrap.upgradeToAppStorage(globalStorageContext);
   await ErrorLoggingBootstrap.registerErrorTracker(

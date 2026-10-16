@@ -14,7 +14,6 @@
     "postgres-real",
     "mssql-real",
     "sybase-real",
-    "firebird-real",
     "coordinated-cutover"
   ],
   "completedGates": []

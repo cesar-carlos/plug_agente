@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'package:plug_agente/application/rpc/idempotency_fingerprint.dart';
 import 'package:plug_agente/domain/entities/expected_source.dart';
+import 'package:plug_agente/domain/entities/expected_structure.dart';
 import 'package:plug_agente/domain/entities/sql_operation_plan.dart';
 import 'package:plug_agente/domain/errors/sql_operation_failure.dart';
 import 'package:uuid/uuid.dart';
@@ -20,7 +21,7 @@ class SqlOperationParamsReader {
       'client_token',
       'clientToken',
       'auth',
-      if (execution) ...{'steps', 'maxAffectedRows', 'timeoutMs'},
+      if (execution) ...{'steps', 'maxAffectedRows', 'timeoutMs', 'expectedStructure'},
     });
     if (p['contractVersion'] != 1 || !Uuid.isValidUUID(fromString: _string(p['operationId']))) _invalid();
     final aliases = [p['client_token'], p['clientToken'], p['auth']].where((v) => v != null).toList();
@@ -42,6 +43,7 @@ class SqlOperationParamsReader {
   SqlOperationPlan plan(Object? raw) {
     final ref = reference(raw, execution: true);
     final p = _object(raw);
+    if (p.containsKey('expectedStructure') && ref.expectedSource == null) _invalid();
     if (utf8.encode(jsonEncode(p)).length > 2 * 1024 * 1024) _invalid();
     final max = _integer(p['maxAffectedRows'], 1, 100000);
     final timeout = _integer(p['timeoutMs'], 1, 300000);
@@ -111,6 +113,7 @@ class SqlOperationParamsReader {
       sourcePhysicalId: ref.sourcePhysicalId,
       database: ref.database,
       expectedSource: ref.expectedSource,
+      expectedStructure: p.containsKey('expectedStructure') ? ExpectedStructure.fromJson(p['expectedStructure']) : null,
       steps: List.unmodifiable(steps),
       maxAffectedRows: max,
       timeout: Duration(milliseconds: timeout),

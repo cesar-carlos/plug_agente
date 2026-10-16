@@ -213,9 +213,13 @@ class SqlValidator {
       );
     }
 
-    final orderTerms = _splitTopLevelCommaSeparated(
-      orderByClause,
-    ).map(_parseOrderTerm).toList();
+    final orderTerms =
+        _splitTopLevelCommaSeparated(
+          orderByClause,
+        ).map((raw) {
+          final term = _parseOrderTerm(raw);
+          return term == null ? null : _paginationOutputTerm(normalizedQuery, term);
+        }).toList();
     if (orderTerms.any((term) => term == null)) {
       return Failure(
         _sqlValidationFailure(
@@ -437,6 +441,46 @@ class SqlValidator {
     }
 
     return false;
+  }
+
+  /// The pagination wrapper can reference output names, never inner table aliases.
+  /// Qualified terms require an exact simple projection; unsupported shapes fail closed.
+  static QueryPaginationOrderTerm? _paginationOutputTerm(
+    String query,
+    QueryPaginationOrderTerm term,
+  ) {
+    if (!term.expression.contains('.')) return term;
+    final projection = RegExp(
+      r'^\s*select\s+(.+?)\s+from\s',
+      caseSensitive: false,
+      dotAll: true,
+    ).firstMatch(query)?.group(1);
+    if (projection == null) return null;
+    const segment = r'(?:\[[^\]]+\]|"[^"]+"|[A-Za-z_][A-Za-z0-9_$]*)';
+    final simpleColumn = RegExp(
+      '^($segment(?:\\.$segment)*)(?:\\s+(?:as\\s+)?($segment))?\$',
+      caseSensitive: false,
+    );
+    final projections = <({String expression, String output})>[];
+    for (final item in _splitTopLevelCommaSeparated(projection)) {
+      final match = simpleColumn.firstMatch(item.trim());
+      if (match == null) return null;
+      final expression = match.group(1)!;
+      final output = match.group(2) ?? expression.split('.').last;
+      projections.add((expression: expression, output: output));
+    }
+    final outputNames = projections.map((p) => _stripIdentifierQuoting(p.output).toLowerCase()).toList();
+    if (outputNames.toSet().length != outputNames.length) return null;
+    if (projections.any((p) => p.output == term.expression)) return term;
+    final matches = projections.where((p) => p.expression == term.expression).toList();
+    if (matches.length != 1) return null;
+    final output = matches.single.output;
+    if (!_orderTermPattern.hasMatch(output)) return null;
+    return QueryPaginationOrderTerm(
+      expression: output,
+      lookupKey: _stripIdentifierQuoting(output),
+      descending: term.descending,
+    );
   }
 
   static List<String> _splitTopLevelCommaSeparated(String sql) {

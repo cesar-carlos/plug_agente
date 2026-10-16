@@ -13,6 +13,20 @@ Future<void> provisionWideStructureFixture(odbc.OdbcService service, String conn
       (await service.executeQuery(sql, connectionId: connectionId)).getOrThrow();
     }
   }
+  for (final sql in [
+    'CREATE TABLE rel_left (tenant_id INTEGER NOT NULL, left_id INTEGER NOT NULL, PRIMARY KEY(tenant_id,left_id))',
+    'CREATE TABLE rel_right (tenant_id INTEGER NOT NULL, right_id INTEGER NOT NULL, PRIMARY KEY(tenant_id,right_id))',
+    'CREATE TABLE rel_link (tenant_id INTEGER NOT NULL, left_id INTEGER NOT NULL, right_id INTEGER NOT NULL, PRIMARY KEY(tenant_id,left_id,right_id), CONSTRAINT fk_rel_left FOREIGN KEY(tenant_id,left_id) REFERENCES rel_left(tenant_id,left_id), CONSTRAINT fk_rel_right FOREIGN KEY(tenant_id,right_id) REFERENCES rel_right(tenant_id,right_id))',
+    'INSERT INTO rel_left VALUES(1,10)',
+    'INSERT INTO rel_left VALUES(1,20)',
+    'INSERT INTO rel_right VALUES(1,100)',
+    'INSERT INTO rel_right VALUES(1,200)',
+    'INSERT INTO rel_link VALUES(1,10,100)',
+    'INSERT INTO rel_link VALUES(1,10,200)',
+    'INSERT INTO rel_link VALUES(1,20,100)',
+  ]) {
+    (await service.executeQuery(sql, connectionId: connectionId)).getOrThrow();
+  }
   for (final name in ['wide_15', 'wide_hidden']) {
     (await service.executeQuery(
       'CREATE VIEW $name AS SELECT tenant_id,item_id,marker FROM wide_14',
@@ -21,7 +35,7 @@ Future<void> provisionWideStructureFixture(odbc.OdbcService service, String conn
   }
 }
 
-/// No caller SQL, identifiers or values. Both changes are restricted to wide_07.
+/// No caller SQL, identifiers or values. Wide changes target only wide_07; FK removal targets only rel_link.
 Future<bool> changeWideStructureFixture(
   odbc.OdbcService service, {
   required String connectionString,
@@ -36,6 +50,7 @@ Future<bool> changeWideStructureFixture(
     _ => throw StateError('Unsupported fixture engine.'),
   };
   final sql = switch (kind) {
+    'relationship-drop-right-fk' => 'ALTER TABLE rel_link DROP CONSTRAINT fk_rel_right',
     'wide-add-unrelated-column' => 'ALTER TABLE wide_07 ADD extra_note INTEGER',
     'wide-change-trained-column' => switch (engine) {
       'postgres' => 'ALTER TABLE wide_07 ALTER COLUMN marker TYPE BIGINT',

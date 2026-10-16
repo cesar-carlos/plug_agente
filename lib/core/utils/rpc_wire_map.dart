@@ -77,6 +77,14 @@ abstract final class RpcWireMap {
     }
     return {
       ...omitNullEntriesDeep(result),
+      // SQL null is a cell value. Removing it loses a column or shifts array cells.
+      if (result['rows'] is List && (result['row_count'] is int || result['columns'] is List)) 'rows': result['rows'],
+      if (result['multi_result'] == true)
+        for (final key in ['result_sets', 'items'])
+          if (result[key] is List)
+            key: (result[key] as List<dynamic>)
+                .map((dynamic item) => item is Map<String, dynamic> ? _sanitizeResult(item) : item)
+                .toList(growable: false),
       if (result.containsKey('directlyAffectedRows') && result['directlyAffectedRows'] == null)
         'directlyAffectedRows': null,
     };

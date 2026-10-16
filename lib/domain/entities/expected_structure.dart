@@ -108,6 +108,19 @@ class ExpectedStructure {
     return ExpectedStructure(resources);
   }
   final List<ExpectedResource> resources;
+
+  /// Fixed metadata statements needed on an existing executing connection.
+  int get verificationStatementCount => resources.fold(
+    0,
+    (total, resource) =>
+        total +
+        2 +
+        [
+          'primaryKeys',
+          'uniqueKeys',
+          'foreignKeys',
+        ].where((kind) => ((resource.constraints?[kind] as List?) ?? const []).isNotEmpty).length,
+  );
   List<String> authorizationSql() => resources
       .map((r) => 'SELECT ${r.columns.map((c) => c['name']).join(',')} FROM ${r.resource.qualified} WHERE 1=0')
       .toList();

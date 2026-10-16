@@ -17,9 +17,7 @@
       "type": "string"
     },
     "contractVersion": {
-      "enum": [
-        1
-      ],
+      "enum": [1],
       "type": "number"
     },
     "database": {
@@ -63,19 +61,11 @@
                 "type": "integer"
               }
             },
-            "required": [
-              "min",
-              "max"
-            ],
+            "required": ["min", "max"],
             "type": "object"
           },
           "effect": {
-            "enum": [
-              "select",
-              "insert",
-              "update",
-              "delete"
-            ],
+            "enum": ["select", "insert", "update", "delete"],
             "type": "string"
           },
           "expectedRows": {
@@ -92,10 +82,7 @@
                 "type": "integer"
               }
             },
-            "required": [
-              "min",
-              "max"
-            ],
+            "required": ["min", "max"],
             "type": "object"
           },
           "id": {
@@ -125,9 +112,7 @@
                   "additionalProperties": false,
                   "properties": {
                     "kind": {
-                      "enum": [
-                        "value"
-                      ],
+                      "enum": ["value"],
                       "type": "string"
                     },
                     "scalar": {
@@ -136,9 +121,7 @@
                           "additionalProperties": false,
                           "properties": {
                             "type": {
-                              "enum": [
-                                "string"
-                              ],
+                              "enum": ["string"],
                               "type": "string"
                             },
                             "value": {
@@ -146,19 +129,14 @@
                               "type": "string"
                             }
                           },
-                          "required": [
-                            "type",
-                            "value"
-                          ],
+                          "required": ["type", "value"],
                           "type": "object"
                         },
                         {
                           "additionalProperties": false,
                           "properties": {
                             "type": {
-                              "enum": [
-                                "decimal"
-                              ],
+                              "enum": ["decimal"],
                               "type": "string"
                             },
                             "value": {
@@ -167,19 +145,14 @@
                               "type": "string"
                             }
                           },
-                          "required": [
-                            "type",
-                            "value"
-                          ],
+                          "required": ["type", "value"],
                           "type": "object"
                         },
                         {
                           "additionalProperties": false,
                           "properties": {
                             "type": {
-                              "enum": [
-                                "integer"
-                              ],
+                              "enum": ["integer"],
                               "type": "string"
                             },
                             "value": {
@@ -188,19 +161,14 @@
                               "type": "string"
                             }
                           },
-                          "required": [
-                            "type",
-                            "value"
-                          ],
+                          "required": ["type", "value"],
                           "type": "object"
                         },
                         {
                           "additionalProperties": false,
                           "properties": {
                             "type": {
-                              "enum": [
-                                "date"
-                              ],
+                              "enum": ["date"],
                               "type": "string"
                             },
                             "value": {
@@ -218,19 +186,14 @@
                               ]
                             }
                           },
-                          "required": [
-                            "type",
-                            "value"
-                          ],
+                          "required": ["type", "value"],
                           "type": "object"
                         },
                         {
                           "additionalProperties": false,
                           "properties": {
                             "type": {
-                              "enum": [
-                                "uuid"
-                              ],
+                              "enum": ["uuid"],
                               "type": "string"
                             },
                             "value": {
@@ -239,69 +202,49 @@
                               "type": "string"
                             }
                           },
-                          "required": [
-                            "type",
-                            "value"
-                          ],
+                          "required": ["type", "value"],
                           "type": "object"
                         },
                         {
                           "additionalProperties": false,
                           "properties": {
                             "type": {
-                              "enum": [
-                                "boolean"
-                              ],
+                              "enum": ["boolean"],
                               "type": "string"
                             },
                             "value": {
                               "type": "boolean"
                             }
                           },
-                          "required": [
-                            "type",
-                            "value"
-                          ],
+                          "required": ["type", "value"],
                           "type": "object"
                         },
                         {
                           "additionalProperties": false,
                           "properties": {
                             "type": {
-                              "enum": [
-                                "null"
-                              ],
+                              "enum": ["null"],
                               "type": "string"
                             },
                             "value": {
-                              "enum": [
-                                null
-                              ],
+                              "enum": [null],
                               "type": "null"
                             }
                           },
-                          "required": [
-                            "type",
-                            "value"
-                          ],
+                          "required": ["type", "value"],
                           "type": "object"
                         }
                       ]
                     }
                   },
-                  "required": [
-                    "kind",
-                    "scalar"
-                  ],
+                  "required": ["kind", "scalar"],
                   "type": "object"
                 },
                 {
                   "additionalProperties": false,
                   "properties": {
                     "kind": {
-                      "enum": [
-                        "step_output"
-                      ],
+                      "enum": ["step_output"],
                       "type": "string"
                     },
                     "output": {
@@ -315,11 +258,7 @@
                       "type": "string"
                     }
                   },
-                  "required": [
-                    "kind",
-                    "stepId",
-                    "output"
-                  ],
+                  "required": ["kind", "stepId", "output"],
                   "type": "object"
                 }
               ]
@@ -332,13 +271,7 @@
             "type": "string"
           }
         },
-        "required": [
-          "id",
-          "effect",
-          "sql",
-          "params",
-          "outputs"
-        ],
+        "required": ["id", "effect", "sql", "params", "outputs"],
         "type": "object"
       },
       "maxItems": 32,
@@ -353,11 +286,7 @@
     "expectedSource": {
       "type": "object",
       "additionalProperties": false,
-      "required": [
-        "version",
-        "dialect",
-        "identityHash"
-      ],
+      "required": ["version", "dialect", "identityHash"],
       "properties": {
         "version": {
           "type": "integer",
@@ -365,18 +294,258 @@
         },
         "dialect": {
           "type": "string",
-          "enum": [
-            "postgres",
-            "mssql",
-            "sybase",
-            "firebird"
-          ]
+          "enum": ["postgres", "mssql", "sybase", "firebird"]
         },
         "identityHash": {
           "type": "string",
           "pattern": "^[a-f0-9]{64}$"
         }
       }
+    },
+    "expectedStructure": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "type": "object",
+      "properties": {
+        "version": {
+          "type": "number",
+          "const": 1
+        },
+        "resources": {
+          "minItems": 1,
+          "maxItems": 16,
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "resource": {
+                "type": "object",
+                "properties": {
+                  "schema": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "maxLength": 128,
+                        "pattern": "^[A-Za-z_][A-Za-z0-9_$]*$"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "name": {
+                    "type": "string",
+                    "maxLength": 128,
+                    "pattern": "^[A-Za-z_][A-Za-z0-9_$]*$"
+                  },
+                  "type": {
+                    "type": "string",
+                    "enum": ["table", "view"]
+                  }
+                },
+                "required": ["schema", "name", "type"],
+                "additionalProperties": false
+              },
+              "columns": {
+                "minItems": 1,
+                "maxItems": 1024,
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "name": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 128
+                    },
+                    "nativeType": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 128
+                    },
+                    "nullable": {
+                      "type": ["boolean", "null"]
+                    },
+                    "size": {
+                      "anyOf": [
+                        {
+                          "type": "integer",
+                          "minimum": 0,
+                          "maximum": 9007199254740991
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "scale": {
+                      "anyOf": [
+                        {
+                          "type": "integer",
+                          "minimum": 0,
+                          "maximum": 9007199254740991
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    }
+                  },
+                  "required": [
+                    "name",
+                    "nativeType",
+                    "nullable",
+                    "size",
+                    "scale"
+                  ],
+                  "additionalProperties": false
+                }
+              },
+              "constraints": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["primaryKeys", "uniqueKeys", "foreignKeys"],
+                "properties": {
+                  "primaryKeys": {
+                    "type": "array",
+                    "maxItems": 64,
+                    "items": {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "required": ["name", "columns", "status"],
+                      "properties": {
+                        "name": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 128
+                        },
+                        "columns": {
+                          "type": "array",
+                          "minItems": 1,
+                          "maxItems": 32,
+                          "items": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 128
+                          }
+                        },
+                        "status": {
+                          "const": "enabled"
+                        }
+                      }
+                    }
+                  },
+                  "uniqueKeys": {
+                    "type": "array",
+                    "maxItems": 64,
+                    "items": {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "required": ["name", "columns", "status"],
+                      "properties": {
+                        "name": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 128
+                        },
+                        "columns": {
+                          "type": "array",
+                          "minItems": 1,
+                          "maxItems": 32,
+                          "items": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 128
+                          }
+                        },
+                        "status": {
+                          "const": "enabled"
+                        }
+                      }
+                    }
+                  },
+                  "foreignKeys": {
+                    "type": "array",
+                    "maxItems": 128,
+                    "items": {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "required": [
+                        "name",
+                        "columns",
+                        "status",
+                        "target",
+                        "targetColumns"
+                      ],
+                      "properties": {
+                        "name": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 128
+                        },
+                        "columns": {
+                          "type": "array",
+                          "minItems": 1,
+                          "maxItems": 32,
+                          "items": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 128
+                          }
+                        },
+                        "status": {
+                          "const": "enabled"
+                        },
+                        "target": {
+                          "type": "object",
+                          "properties": {
+                            "schema": {
+                              "anyOf": [
+                                {
+                                  "type": "string",
+                                  "maxLength": 128,
+                                  "pattern": "^[A-Za-z_][A-Za-z0-9_$]*$"
+                                },
+                                {
+                                  "type": "null"
+                                }
+                              ]
+                            },
+                            "name": {
+                              "type": "string",
+                              "maxLength": 128,
+                              "pattern": "^[A-Za-z_][A-Za-z0-9_$]*$"
+                            },
+                            "type": {
+                              "type": "string",
+                              "enum": ["table", "view"]
+                            }
+                          },
+                          "required": ["schema", "name", "type"],
+                          "additionalProperties": false
+                        },
+                        "targetColumns": {
+                          "type": "array",
+                          "minItems": 1,
+                          "maxItems": 32,
+                          "items": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 128
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            },
+            "required": ["resource", "columns"],
+            "additionalProperties": false
+          }
+        }
+      },
+      "required": ["version", "resources"],
+      "additionalProperties": false
     }
   },
   "required": [
@@ -391,5 +560,15 @@
   ],
   "type": "object",
   "$schema": "http://json-schema.org/draft-07/schema#",
-  "$id": "rpc.params.sql-operation-execute.schema.json"
+  "$id": "rpc.params.sql-operation-execute.schema.json",
+  "allOf": [
+    {
+      "if": {
+        "required": ["expectedStructure"]
+      },
+      "then": {
+        "required": ["expectedSource"]
+      }
+    }
+  ]
 }

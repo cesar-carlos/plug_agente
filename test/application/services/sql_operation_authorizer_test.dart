@@ -56,6 +56,31 @@ void main() {
     );
     expect((await authorizer.authorize(plan, 'token', 'agent', plan.steps)).isError(), isTrue);
   });
+  test('structural dependencies require read permission in addition to write permission', () async {
+    final identity = 'a' * 64;
+    final raw = envelope()
+      ..['sourcePhysicalId'] = sha256.convert(utf8.encode(jsonEncode(['https://api.example.com', identity]))).toString()
+      ..['expectedSource'] = {'version': 1, 'dialect': 'postgres', 'identityHash': identity}
+      ..['expectedStructure'] = {
+        'version': 1,
+        'resources': [
+          {
+            'resource': {'schema': 'public', 'name': 'parent', 'type': 'table'},
+            'columns': [
+              {'name': 'id', 'nativeType': 'int4', 'nullable': false, 'size': 32, 'scale': 0},
+            ],
+          },
+        ],
+      };
+    final guarded = const SqlOperationParamsReader().plan(raw);
+    when(() => policies.resolvePolicy(any())).thenAnswer(
+      (_) async =>
+          Success(policy(permissions: const ClientPermissionSet(canRead: false, canUpdate: true, canDelete: true))),
+    );
+    expect((await authorizer.authorize(guarded, 'token', 'agent', guarded.steps)).isError(), isTrue);
+    when(() => policies.resolvePolicy(any())).thenAnswer((_) async => Success(policy()));
+    expect((await authorizer.authorize(guarded, 'token', 'agent', guarded.steps)).isSuccess(), isTrue);
+  });
   test('database binding is mandatory even for status and full access tokens', () async {
     when(() => policies.resolvePolicy(any())).thenAnswer((_) async => Success(policy(database: null)));
     expect((await authorizer.authorize(plan, 'token', 'agent', const [])).isError(), isTrue);

@@ -324,17 +324,40 @@ std::vector<uint8_t> user_dpapi(const std::vector<uint8_t>& bytes, bool encrypti
   SecureZeroMemory(output.pbData, output.cbData); LocalFree(output.pbData); return result;
 }
 bool pipe_transfer(HANDLE pipe, void* buffer, DWORD size, bool writing, DWORD timeout_ms) {
-  OVERLAPPED operation{}; Handle event(CreateEventW(nullptr, TRUE, FALSE, nullptr)); operation.hEvent = event.get();
-  DWORD transferred = 0;
-  const BOOL started = writing ? WriteFile(pipe, buffer, size, &transferred, &operation) : ReadFile(pipe, buffer, size, &transferred, &operation);
-  if (!started) {
-    if (GetLastError() != ERROR_IO_PENDING) return false;
-    if (WaitForSingleObject(event.get(), timeout_ms) != WAIT_OBJECT_0) {
-      CancelIoEx(pipe, &operation); GetOverlappedResult(pipe, &operation, &transferred, TRUE); return false;
+  const auto deadline = GetTickCount64() + timeout_ms;
+  DWORD offset = 0;
+  while (offset < size) {
+    const auto now = GetTickCount64();
+    if (now >= deadline) return false;
+    OVERLAPPED operation{}; Handle event(CreateEventW(nullptr, TRUE, FALSE, nullptr)); operation.hEvent = event.get();
+    if (!event.valid()) return false;
+    DWORD transferred = 0;
+    auto* cursor = static_cast<uint8_t*>(buffer) + offset;
+    const BOOL started = writing ? WriteFile(pipe, cursor, size - offset, &transferred, &operation)
+                                 : ReadFile(pipe, cursor, size - offset, &transferred, &operation);
+    if (!started) {
+      if (GetLastError() != ERROR_IO_PENDING) return false;
+      if (WaitForSingleObject(event.get(), static_cast<DWORD>(deadline - now)) != WAIT_OBJECT_0) {
+        CancelIoEx(pipe, &operation); GetOverlappedResult(pipe, &operation, &transferred, TRUE); return false;
+      }
+      if (!GetOverlappedResult(pipe, &operation, &transferred, FALSE)) return false;
     }
-    if (!GetOverlappedResult(pipe, &operation, &transferred, FALSE)) return false;
+    if (!transferred) return false;
+    offset += transferred;
   }
-  return transferred == size;
+  return true;
+}
+bool pipe_reply(HANDLE pipe, const std::string& bytes, DWORD timeout_ms) {
+  if (bytes.empty() || bytes.size() > kMaxMessageBytes) return false;
+  DWORD length = static_cast<DWORD>(bytes.size());
+  if (!pipe_transfer(pipe, &length, sizeof(length), true, timeout_ms) ||
+      !pipe_transfer(pipe, const_cast<char*>(bytes.data()), length, true, timeout_ms)) return false;
+  // DisconnectNamedPipe discards unread buffered replies. Wait for consumption
+  // without FlushFileBuffers, which can block the service indefinitely. Legacy
+  // clients signal completion by closing; new clients send a receipt byte.
+  uint8_t receipt = 0;
+  pipe_transfer(pipe, &receipt, sizeof(receipt), false, timeout_ms);
+  return true;
 }
 Json pipe_call(const Json& request) {
   if (!WaitNamedPipeW(L"\\\\.\\pipe\\PlugAgenteUpdater.v1", 5000)) throw std::runtime_error("updater_unavailable");
@@ -370,6 +393,12 @@ Json pipe_call(const Json& request) {
     throw std::runtime_error("updater_ipc_failed");
   bytes.resize(length);
   if (!pipe_transfer(pipe.get(), bytes.data(), length, false, 10000)) throw std::runtime_error("updater_ipc_failed");
-  return parse_json(bytes);
+  const auto response = parse_json(bytes);
+  uint8_t receipt = 1;
+  // Advisory delivery receipt only: old supervisors may have closed the pipe
+  // after a complete response. Its failure must never turn a confirmed result
+  // into an unknown operation or encourage redispatch.
+  pipe_transfer(pipe.get(), &receipt, sizeof(receipt), true, 1000);
+  return response;
 }
 }  // namespace plug::updater

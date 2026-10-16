@@ -44,6 +44,7 @@ import 'persona_chain_faults.dart';
 import 'persona_chain_observer.dart';
 import 'persona_chain_storage.dart';
 import 'persona_chain_structure_fixture.dart';
+import 'persona_publication_fixture.dart';
 
 // Explicit isolated fixture only; production config and native vault adapters.
 void main() {
@@ -73,7 +74,7 @@ void main() {
     final ready = <String, Object>{};
     final evaluators = <String, Future<bool> Function(Map<String, dynamic>)>{};
     try {
-      for (final engine in ['postgres', 'mssql', 'sybase', 'firebird']) {
+      for (final engine in ['postgres', 'mssql', 'sybase']) {
         final fixture = (manifest['engines'] as Map<String, dynamic>)[engine] as Map<String, dynamic>;
         final database = fixture['database'] as String;
         if (engine == 'firebird'
@@ -85,6 +86,7 @@ void main() {
         cleanup.add(storage.database.close);
         final resumed = storage.resumed;
         final connection = resumed ? '' : fixture['connectionString'] as String;
+        final publicationTables = (fixture['publicationTables'] as List<dynamic>?) ?? [];
         if (!resumed) {
           final setupId = (await service.connect(connection)).getOrThrow().id;
           try {
@@ -129,7 +131,7 @@ void main() {
             )).getOrThrow();
             for (final sql in [
               'CREATE TABLE schema_parent (tenant_id INTEGER NOT NULL, item_id INTEGER NOT NULL, PRIMARY KEY(tenant_id,item_id))',
-              'CREATE UNIQUE INDEX ux_schema_parent ON schema_parent(item_id,tenant_id)',
+              'ALTER TABLE schema_parent ADD CONSTRAINT ux_schema_parent UNIQUE(item_id,tenant_id)',
               'CREATE TABLE schema_child (tenant_id INTEGER NOT NULL, item_id INTEGER NOT NULL, PRIMARY KEY(tenant_id,item_id), CONSTRAINT fk_schema_parent FOREIGN KEY(tenant_id,item_id) REFERENCES schema_parent(tenant_id,item_id))',
             ]) {
               (await service.executeQuery(sql, connectionId: setupId)).getOrThrow();
@@ -168,6 +170,7 @@ void main() {
             updatedAt: DateTime.utc(2026),
           ),
           manifest['clientId'] as String,
+          publicationTables: publicationTables.map((t) => (t as Map<String, dynamic>)['table'] as String).toList(),
         );
         final settings = InMemoryAppSettingsStore({
           'feature_enable_sql_operations': true,
@@ -177,6 +180,14 @@ void main() {
         });
         final flags = FeatureFlags(settings);
         final strings = ConfigService(ConfigValidator());
+        final publicationFixture = PublicationFixture(
+          service,
+          strings.resolveConnectionString(config),
+          database,
+          engine,
+          publicationTables,
+        );
+        if (!resumed && publicationTables.isNotEmpty) await publicationFixture.initialize();
         final configs = storage.configs;
         final source = ActiveConfigResolver(configs, settings);
         final tokens = storage.tokens;
@@ -210,6 +221,16 @@ void main() {
         final caseAuthorizer = SqlOperationAuthorizer(source, validation);
         final caseFactory = OdbcSqlOperationTransactionFactory(service, strings, limiter);
         evaluators[engine] = (job) async {
+          if (job['kind'] == 'publication-prepare') {
+            if (resumed) throw StateError('Publication cases require a fresh agent session.');
+            await publicationFixture.prepare(job['seeds'] as List<dynamic>);
+            return true;
+          }
+          if (job['kind'] == 'publication-clear') {
+            if (resumed) throw StateError('Publication cases require a fresh agent session.');
+            await publicationFixture.clear();
+            return true;
+          }
           if (job['kind'] == 'lose-commit-confirmation') {
             faultFactory.loseNextConfirmation = true;
             return true;
@@ -218,7 +239,9 @@ void main() {
             (await tokens.revokeToken(storage.tokenId)).getOrThrow();
             return true;
           }
-          if (job['kind'] == 'wide-add-unrelated-column' || job['kind'] == 'wide-change-trained-column') {
+          if (job['kind'] == 'wide-add-unrelated-column' ||
+              job['kind'] == 'wide-change-trained-column' ||
+              job['kind'] == 'relationship-drop-right-fk') {
             return changeWideStructureFixture(
               service,
               connectionString: strings.resolveConnectionString(config),
@@ -269,7 +292,7 @@ void main() {
         };
       }
       await File('$sessionRoot/agents-ready.json').writeAsString(jsonEncode(ready), flush: true);
-      final deadline = DateTime.now().add(const Duration(minutes: 8));
+      final deadline = DateTime.now().add(const Duration(minutes: 12));
       while (!File('$sessionRoot/agents-stop').existsSync()) {
         for (final item in Directory(
           sessionRoot,
@@ -283,9 +306,10 @@ void main() {
             code = error is SqlOperationFailure ? error.code : error.runtimeType.toString();
             passed = false;
           }
-          await File(
-            '${item.path}.result',
-          ).writeAsString(jsonEncode({'passed': passed, 'code': ?code}), flush: true);
+          // Publish only the complete result. Readers must never observe a partial JSON file.
+          final result = File('${item.path}.result.tmp');
+          await result.writeAsString(jsonEncode({'passed': passed, 'code': ?code}), flush: true);
+          await result.rename('${item.path}.result');
           await item.rename('${item.path}.processed');
         }
         if (DateTime.now().isAfter(deadline)) throw StateError('Fixture controller did not finish.');
@@ -298,5 +322,5 @@ void main() {
       await TransportWorkPool.shared.dispose();
       locator.shutdown();
     }
-  }, timeout: const Timeout(Duration(minutes: 10)));
+  }, timeout: const Timeout(Duration(minutes: 14)));
 }

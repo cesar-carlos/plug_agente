@@ -318,8 +318,7 @@ class OdbcSourceSchema implements ISourceSchemaProbe {
             'foreignKeys',
           ].every(
             (kind) => (result[kind]! as List).every((k) => (k as Map<Object?, Object?>)['status'] != 'unknown'),
-          ) &&
-          request.expected.dialect != 'sybase';
+          );
       if (coverage['constraintStatus']!) result['limitations'] = ['scoped_relationships'];
       return result;
     } on Object {

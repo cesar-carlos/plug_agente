@@ -1,6 +1,6 @@
 # Plano de Evolucao do Auto-Update
 
-## Estado atual — 2026-10-07
+## Estado atual — 2026-10-15
 
 A implementação das cinco etapas de correção está integrada. A homologação do
 fluxo privilegiado continua pendente. Esta seção substitui as pendências de
@@ -40,6 +40,63 @@ manual e contratos RPC do hub permanecem compatíveis.
 Os testes de aplicação usam transportes controlados para IPC; os testes nativos
 locais não executam enrollment nem instalação como serviço SYSTEM. O build de
 validação usa a chave pública da fixture e não é um artefato de distribuição.
+
+## Qualified Windows lifecycle and IPC delivery (2026-10-15)
+
+Windows 11 build 26300 passed a namespaced, real-machine lifecycle derived from
+production installer and C++ sources. Product identity, AppId, SCM service/pipe,
+registry and folders were rewritten into one exclusive fixture; activation gates,
+ACLs, hashes, Ed25519 and PID/SID/SCM checks were preserved. The existing Release
+payload remains 1.8.7+1. These packages are private acceptance artifacts, never
+production installers or evidence of an upgrade to a newer app build.
+
+The run exposed a real IPC defect: DisconnectNamedPipe discarded buffered replies
+before the client consumed them; byte-pipe reads also incorrectly required a full
+buffer in one read. Transfers now collect partial bytes under one deadline. Replies
+wait for a bounded delivery receipt or legacy-client close before disconnecting,
+avoiding unbounded FlushFileBuffers. Receipts do not authorize an operation, prove
+installation success or permit redispatch. Five native pipe cases cover delayed
+readers, legacy close, fragmented input, stalled readers and total timeout.
+
+Native recovery contract 2 requires this delivery behavior. The installer rejects
+contract-1 hosts and offers its existing manual/default or explicit host-upgrade
+path; Dart refuses old hosts before maintenance. Protocol/framing remains IPC v1;
+app version remains 1.8.7. kApplicationContractImplemented and
+applicationContractValidated remain false. No automatic apply gate was enabled.
+
+The final fixture passed clean install/enrollment, non-elevated IPC, optional repair
+without updater mutations, missing-client repair, actual historical supervisor
+replacement (source fdb44d86b2a36df85c0133cf72167217fc1bd16e, contract 1), explicit
+migration to contract 2, same-version manual reinstall, uninstall, reinstall with
+residual policy and final uninstall. SQLite retention data and encrypted fixture
+vault persisted while download cache, protocol, Run and service were removed.
+A separate non-elevated phase proved DPAPI, protected policy/control ACLs, registered
+client binding, refusal of administrative commands, replay/channel/capability/bad
+signature refusal, idempotent signed staging and cancellation. Twenty prepare/cancel
+cycles passed; these are not twenty install/apply/rollback cycles.
+
+Native desktop cold/restart also passed real NotificationService registration,
+show/cancel APIs and temporary AppUserModelId/activator binding, alongside the hub
+RPC harness. An optional WindowsInitializationSettings injection isolates identity;
+production defaults are unchanged. This does not certify notification clicks,
+visual banner delivery, logon or ShellExecute activation. Temporary notification
+keys and application profiles were removed. Fixture machine directories were
+removed only after completed uninstall; private evidence remains under build/.
+
+Validation: 59 Python tests, four CTest targets, 76 Dart lifecycle/shell regressions,
+36 final updater regressions including the contract-1 guard, native notification
+cold/restart, full Flutter analysis plus final changed-file analysis, hub lint and
+test type checking passed. The operational profile/vault, app EXEs, updater
+binaries/policy and captured startup/protocol/authorization values were identical
+before/after the lifecycle and cleanup. The original updater remains registered;
+no operational installation was uninstalled or migrated in this fixture run.
+
+Still pending: real service apply/probation/rollback with original-user data/schema
+and crash recovery, twenty complete apply cycles/handle and snapshot retention,
+distinct Windows user/admin, actual logon/protocol/notification activation, supported
+Windows 10/Server targets, newer-build upgrades and distribution gates. The original
+clean-VM validator remains unchanged. This partial evidence does not promote any
+production installer/appcast or coordinated persona gate.
 
 ## Histórico — revisão de 2026-10-06: serviço sem certificado comercial
 

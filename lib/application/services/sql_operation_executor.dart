@@ -68,7 +68,7 @@ class SqlOperationExecutor {
       claimed = true;
       // Intent is durable before open/begin and before any business statement.
       // The factory owns timeout/late-connect cleanup; never abandon its future here.
-      transaction = (await _transactions.open(target, budget())).getOrThrow();
+      transaction = (await _transactions.open(target, budget(), plan: plan)).getOrThrow();
       transaction.validatePlan(plan).getOrThrow();
       final values = <String, Map<String, SqlScalar>>{};
       for (final step in plan.steps) {
@@ -137,7 +137,18 @@ class SqlOperationExecutor {
           }
         }
       }
-      return await _journal.finish(plan.operationId, target.scopeHash, plan.fingerprint, state);
+      final failureCode = error is TimeoutException
+          ? SqlOperationFailureCode.timeout
+          : error is domain.Failure
+          ? SqlOperationFailureCode.tryParse(error.code) ?? SqlOperationFailureCode.failed
+          : SqlOperationFailureCode.failed;
+      return await _journal.finish(
+        plan.operationId,
+        target.scopeHash,
+        plan.fingerprint,
+        state,
+        failureCode: failureCode,
+      );
     } finally {
       watch.stop();
       if (transaction != null) {

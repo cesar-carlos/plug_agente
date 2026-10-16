@@ -36,6 +36,19 @@ void main() {
         isTrue,
       );
     }
+    final status = loader.get(TransportSchemaIds.resultSqlOperation)!;
+    final receipt = {
+      'operationId': envelope()['operationId'],
+      'fingerprint': 'b' * 64,
+      'executionId': 'execution',
+      'state': 'cancelada',
+      'directlyAffectedRows': null,
+      'updatedAt': '2026-10-10T00:00:00Z',
+      'failureCode': 'SOURCE_STRUCTURE_MISMATCH',
+    };
+    expect(status.validate(receipt).isValid, isTrue);
+    expect(status.validate({...receipt, 'failureCode': 'PRIVATE_NATIVE_MESSAGE'}).isValid, isFalse);
+    expect(status.validate({...receipt, 'state': 'concluida'}).isValid, isFalse);
     final nullScalar = envelope();
     (nullScalar['steps'] as List<Map<String, dynamic>>).first['params'] = {
       'name': {

@@ -102,3 +102,12 @@ Referências técnicas dos catálogos: [PostgreSQL pg_constraint](https://www.po
 e [Firebird RDB$RELATION_FIELDS](https://firebirdsql.org/file/documentation/chunk/en/refdocs/fblangref25/fblangref-appx04-relfields.html).
 SQL e schemas efetivos estão no runtime e nos JSON/OpenRPC empacotados; referências
 não substituem execução dos testes reais de cada versão/driver.
+
+A fixture da cadeia persistente acrescenta rel_left/rel_link/rel_right, com FKs
+compostas e policy somente leitura. O MCP fixa a FK na filha na navegação 1:N e
+preserva intermediárias/elos N:N; a relação conceitual não autoriza JOIN direto.
+A ação fixa relationship-drop-right-fk do companion confere a base descartável
+antes de remover fk_rel_right, sem receber SQL ou identificadores do consumidor.
+PostgreSQL, SQL Server e Firebird recusam a consulta após a remoção; SQL Anywhere
+continua recusando adoção dependente de enforcement desconhecido. Esse alcance
+não conclui a matriz integral nem libera instalador/appcast/deploy.

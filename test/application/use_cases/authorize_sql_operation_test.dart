@@ -34,6 +34,56 @@ void main() {
       );
     });
 
+    test('transactional operations require exact resources without changing legacy fallback', () async {
+      const policy = ClientTokenPolicy(
+        clientId: 'client',
+        allTables: false,
+        allViews: false,
+        payload: {'database': 'fixture'},
+        rules: [
+          ClientTokenRule(
+            resource: DatabaseResource(resourceType: DatabaseResourceType.table, name: 'trusted.orders'),
+            permissions: ClientPermissionSet(canRead: true, canUpdate: true, canDelete: true),
+            effect: ClientTokenRuleEffect.allow,
+          ),
+        ],
+      );
+      when(() => resolver.resolvePolicy(any())).thenAnswer((_) async => const Success(policy));
+      const wrong = 'UPDATE other.orders SET amount=:amount WHERE id=:id';
+      expect((await useCase.call(token: 'token', sql: wrong, requestDatabase: 'fixture')).isSuccess(), isTrue);
+      clearInteractions(resolver);
+      expect(
+        (await useCase.call(
+          token: 'token',
+          sql: wrong,
+          requestDatabase: 'fixture',
+          method: 'sql.operation.execute',
+        )).isError(),
+        isTrue,
+      );
+      verify(() => resolver.resolvePolicy('token')).called(1);
+      clearInteractions(resolver);
+      expect((await useCase.call(token: 'token', sql: wrong, requestDatabase: 'fixture')).isSuccess(), isTrue);
+      verifyNever(() => resolver.resolvePolicy(any()));
+      expect(
+        (await useCase.call(
+          token: 'token',
+          sql: 'UPDATE orders SET amount=:amount WHERE id=:id',
+          requestDatabase: 'fixture',
+          method: 'sql.operation.execute',
+        )).isError(),
+        isTrue,
+      );
+      expect(
+        (await useCase.call(
+          token: 'token',
+          sql: 'UPDATE "trusted"."orders" SET amount=:amount WHERE id=:id',
+          requestDatabase: 'fixture',
+          method: 'sql.operation.execute',
+        )).isSuccess(),
+        isTrue,
+      );
+    });
     test('verified queries never reuse legacy allow decisions or a policy without mandatory database', () async {
       when(() => resolver.resolvePolicy(any())).thenAnswer((_) async => Success(_buildFullAccessPolicy()));
       expect(

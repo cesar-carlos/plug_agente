@@ -82,6 +82,60 @@ void main() {
       isTrue,
     );
   });
+  test('terminal safe reason survives reopening, duplicate and cancellation', () async {
+    final directory = await Directory.systemTemp.createTemp('sql_operation_reason_test_');
+    addTearDown(() => directory.delete(recursive: true));
+    final file = File('${directory.path}/journal.sqlite');
+    var db = SqlOperationJournalDatabase(NativeDatabase(file));
+    var journal = DriftSqlOperationJournal(db);
+    await journal.claim(intent());
+    await journal.finish(
+      'operation',
+      scope,
+      fingerprint,
+      SqlOperationJournalState.cancelled,
+      failureCode: SqlOperationFailureCode.sourceStructureMismatch,
+    );
+    await db.close();
+    db = SqlOperationJournalDatabase(NativeDatabase(file));
+    addTearDown(db.close);
+    journal = DriftSqlOperationJournal(db);
+    expect((await journal.recoverInterrupted()).getOrThrow(), 0);
+    final duplicate = (await journal.claim(intent())).getOrThrow();
+    expect(duplicate.claimed, isFalse);
+    expect(duplicate.entry.failureCode, SqlOperationFailureCode.sourceStructureMismatch);
+    expect(
+      (await journal.requestCancellation('operation', scope, fingerprint)).getOrThrow().failureCode,
+      SqlOperationFailureCode.sourceStructureMismatch,
+    );
+    expect(
+      (await journal.finish(
+        'operation',
+        scope,
+        fingerprint,
+        SqlOperationJournalState.outcomeUnknown,
+        failureCode: SqlOperationFailureCode.failed,
+      )).isError(),
+      isTrue,
+    );
+  });
+  test('success cannot carry a failure category', () async {
+    final db = SqlOperationJournalDatabase(NativeDatabase.memory());
+    addTearDown(db.close);
+    final journal = DriftSqlOperationJournal(db);
+    await journal.claim(intent());
+    expect(
+      (await journal.finish(
+        'operation',
+        scope,
+        fingerprint,
+        SqlOperationJournalState.completed,
+        directlyAffectedRows: 1,
+        failureCode: SqlOperationFailureCode.failed,
+      )).isError(),
+      isTrue,
+    );
+  });
   test('restart persists intent, records uncertainty, and preserves completed operations', () async {
     final directory = await Directory.systemTemp.createTemp('sql_operation_journal_test_');
     addTearDown(() => directory.delete(recursive: true));

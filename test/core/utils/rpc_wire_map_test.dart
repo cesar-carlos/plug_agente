@@ -4,6 +4,54 @@ import 'package:plug_agente/domain/protocol/protocol.dart';
 
 void main() {
   group('RpcWireMap', () {
+    test('native SQL envelopes preserve null cells in every result set', () {
+      final rows = [
+        <String, dynamic>{'id': 1, 'marker': null},
+      ];
+      final set = <String, dynamic>{'row_count': 1, 'rows': rows, 'affected_rows': null};
+      final response = RpcResponse.success(
+        id: 'multi',
+        result: <String, dynamic>{
+          ...set,
+          'multi_result': true,
+          'result_sets': [set],
+          'items': [set],
+        },
+      );
+      final result = RpcWireMap.sanitizeRpcResponse(response).result as Map;
+      expect(result['rows'], rows);
+      for (final key in ['result_sets', 'items']) {
+        final item = (result[key] as List).single as Map;
+        expect(item['rows'], rows);
+        expect(item.containsKey('affected_rows'), isFalse);
+      }
+    });
+    test('SQL cells retain null and column positions through wire, batch and replay', () {
+      for (final rows in <List<dynamic>>[
+        [
+          <String, dynamic>{'id': 1, 'marker': null},
+        ],
+        [
+          <dynamic>[1, null],
+        ],
+      ]) {
+        final response = RpcResponse.success(
+          id: 'sql',
+          result: <String, dynamic>{
+            'columns': ['id', 'marker'],
+            'rows': rows,
+            'affected_rows': null,
+          },
+        );
+        final replay = RpcWireMap.sanitizeRpcResponse(response).result as Map;
+        final wire = (RpcWireMap.sanitizeRpcResponseWirePayload(response.toJson()) as Map)['result'] as Map;
+        final batch = (RpcWireMap.sanitizeRpcResponseWirePayload([response.toJson()]) as List).single as Map;
+        for (final result in [replay, wire, batch['result'] as Map]) {
+          expect(result['rows'], rows);
+          expect(result.containsKey('affected_rows'), isFalse);
+        }
+      }
+    });
     test('preserves required null journal counts through wire, batch and replay sanitation', () {
       final result = <String, dynamic>{'operationId': 'operation', 'directlyAffectedRows': null};
       final response = RpcResponse.success(id: 'request', result: result);

@@ -24,5 +24,5 @@ See docs/communication/sql_operations.md. Journal, bootstrap/DI/shutdown, RPC an
 ODBC executor are integrated. Versioned SQL-operation negotiation and transport are
 implemented; explicit homologation opt-in is disabled by default. See the owning
 project_specifics rule and docs for limits and remaining acceptance. Never retry
-unknown operations. Production installer/appcast remain blocked; four-engine
+unknown operations. Production installer/appcast remain blocked; three-engine
 homologation and MCP publication/standard composition are still pending.

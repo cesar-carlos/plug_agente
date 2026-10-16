@@ -273,6 +273,7 @@ esta em "Desktop e Runtime".
 
 ## Persona-v2 SQL operations
 
+Journal schema 3 stores optional enumerated failure_code only, never native text. Preserve terminal codes through get/duplicates/restart; old terminal rows have no inferred cause. Startup interruption remains unknown, never replayable.
 Journal metadata lives in a separate additive Drift database with WAL and FULL
 synchronous durability. No SQL or credentials. Bootstrap/RPC/executor wiring and remaining work in
 `docs/communication/sql_operations.md`. Unknown operations never reexecute.
@@ -292,8 +293,8 @@ Coordinated persona-v2 acceptance includes shared-knowledge-and-compatibility in
 
 ## Persona SQL homologation exception
 
-The explicitly invoked four-engine matrix under tool/homologation requires
-all four private fixtures and fails on missing environment; it must never skip
+The explicitly invoked three-engine matrix under tool/homologation requires
+all three private fixtures and fails on missing environment; it must never skip
 or fall back to .env, configured sources or existing DSNs. This requirement
 overrides optional live-test skips only for that matrix. Database identity
 comes from a fixed complete metadata SELECT on the dedicated connection, not
@@ -330,8 +331,12 @@ Never mock encryption/storage or read/migrate the operational vault. Restart
 removes bootstrap secrets, recovers stable config/token identities and checks
 unknown journals through RPC; never recreate business fixtures or replay SQL.
 Missing/corrupt/incomplete vault refuses recovery without bootstrap fallback.
-Its case evaluator is limited to the fixed empty disposable table, not a generic
-four-engine publication runner. Never run against configured sources or in
+The legacy case evaluator retains its fixed empty table. The operator-only
+publication companion accepts bounded typed declarations for private publication_*
+tables from the session manifest, never consumer SQL. Only a fresh session may
+prepare/clear them; uncertain execution requires discarding the entire fixture.
+Generic cases use production hub/RPC gateways and compare complete typed results.
+Never run against configured sources or in
 parallel with another Flutter runner using the same native DLL. sql.execute
 schema ingress must strictly accept expectedSource v1; verified materialized
 responses (including chunked transport) carry explicit truncated:false only when
@@ -346,11 +351,31 @@ commit remain uncertified. Keep production opt-in blocked.
 O contrato `sourceSchema` v1 está em
 [Communication](../../docs/communication/README.md#inspeção-estrutural-sourceschema-v1).
 Manter consultas de metadados fixas por motor, recursos autorizados e prova na
-conexão executora; não usar helpers genéricos como prova física dos quatro motores.
+conexão executora; não usar helpers genéricos como prova física dos três motores.
 Nulos obrigatórios não podem ser removidos pelo saneamento do wire. Constraints
-desconhecidas não viram habilitadas; enforcement SQL Anywhere permanece desconhecido.
+desconhecidas não viram habilitadas. SQL Anywhere 16 comprova constraints locais
+por views públicas e índices físicos; FK exige configuração vigente verificável.
+Escopo e limites em docs/communication/sql_operations.md.
 Expectativas de constraints exigem sourceConstraints v1 e conferência na mesma
 conexão antes/depois do SELECT. A extensão não libera deploy. SQL Anywhere identifica recursos BASE/VIEW regulares
 por SYSTAB.table_type_str, sem classificar materialized views implicitamente. A
-fixture ampla compõe 16 recursos, usa policy explícita e altera apenas wide_07
-por ações fixas do companion; nenhum DDL do consumidor é aceito.
+fixture ampla compõe 16 recursos, usa policy explícita e altera wide_07
+por ações fixas do companion. A fixture rel_left/rel_link/rel_right prova FK
+reversa e ponte composta N:N; outra ação fixa remove somente fk_rel_right da
+base privada previamente conferida, incluindo SQL Anywhere 16 com prova vigente.
+Nenhum DDL ou identificador do consumidor é aceito; a policy não libera escrita
+nessas tabelas e enforcement desconhecido não habilita adoção física.
+
+Structural SQL operations: expectedStructure requires expectedSource plus exact
+sqlOperations.structureGuard:1/sourceSchema/sourceIdentity negotiation and
+sourceConstraints v1 for keys. Metadata read authorization and same-connection
+checks before transaction begin are mandatory; all fixed metadata statements
+consume the 32-command budget. No fallback on old peers. Contract and pending
+hub/MCP integration: docs/communication/sql_operations.md. Release stays blocked.
+
+Transactional sql.operation.execute requires exact resource names and bypasses legacy decision-cache reads/writes. Quote native namespace segments separately where supported; Firebird remains schema-less. No automatic snapshot/grant conversion. Contract: docs/communication/sql_operations.md.
+
+Managed pagination must order by verified output names. A qualified inner column
+requires an exact simple projection mapping, used for both wrapper SQL and cursor
+lookup; missing/ambiguous mappings fail closed. MCP/hub do not rewrite business
+SQL. Contract and narrow grammar: docs/communication/sql_operations.md.

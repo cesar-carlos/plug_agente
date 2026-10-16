@@ -26,7 +26,7 @@ void main() {
       });
 
       test('accepts enrolled source identity v1 on sql.execute', () {
-        for (final dialect in ['postgres', 'mssql', 'sybase', 'firebird']) {
+        for (final dialect in ['postgres', 'mssql', 'sybase']) {
           final result = validator.validateSingle({
             'jsonrpc': '2.0',
             'method': 'sql.execute',
@@ -49,6 +49,7 @@ void main() {
           <String, dynamic>{},
           {'version': 2, 'dialect': 'mssql', 'identityHash': 'a' * 64},
           {'version': 1, 'dialect': 'unknown', 'identityHash': 'a' * 64},
+          {'version': 1, 'dialect': 'firebird', 'identityHash': 'a' * 64},
           {'version': 1, 'dialect': 'mssql', 'identityHash': 'short'},
           {'version': 1, 'dialect': 'mssql', 'identityHash': 'a' * 64, 'extra': true},
         ]) {

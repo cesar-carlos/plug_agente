@@ -52,4 +52,5 @@ std::string process_user_sid(HANDLE process);
 bool active_user_session(DWORD session, const std::string& sid);
 Json pipe_call(const Json& request);
 bool pipe_transfer(HANDLE pipe, void* buffer, DWORD size, bool writing, DWORD timeout_ms);
+bool pipe_reply(HANDLE pipe, const std::string& bytes, DWORD timeout_ms);
 }  // namespace plug::updater

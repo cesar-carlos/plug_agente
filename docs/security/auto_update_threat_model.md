@@ -19,6 +19,20 @@ permanece bloqueada até concluir a transição e homologar recuperação e roll
 consulte o [plano atualizado](../implemente/plano_auto_update_evolution.md).
 
 
+## Bounded reply delivery — 2026-10-15
+
+Local recovery contract 2 requires complete byte-pipe transfers under a single
+per-transfer deadline. Before disconnecting, the server waits for a receipt or
+legacy-client close with a bounded timeout; it never calls an unbounded
+FlushFileBuffers on an untrusted peer. The client's receipt is advisory only: a
+fully parsed response stays confirmed when an older supervisor has already closed.
+A receipt neither confirms setup/health success nor authorizes automatic retry.
+
+The new installer requires explicit host migration for contract-1 registrations;
+the app refuses them before entering maintenance. IPC identity, signatures, ACLs
+and production activation blocks remain intact. See the qualified acceptance and
+remaining limitations in the [current plan](../implemente/plano_auto_update_evolution.md).
+
 ## Escopo
 
 Este documento descreve o modelo de ameacas do pipeline de auto-update do

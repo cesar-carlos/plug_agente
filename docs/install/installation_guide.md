@@ -132,6 +132,17 @@ desinstalar o aplicativo principal.
 
 ---
 
+## Reparo opcional e atualização automática
+
+O reparo `/REPAIR=optional` repete apenas a configuração e os diagnósticos,
+sem copiar novamente o aplicativo. Em modo silencioso, a configuração do
+atualizador exige `/AUTOUPDATE=1` nessa execução. O padrão e `/AUTOUPDATE=0`
+não reinstalam nem registram novamente o atualizador, mesmo que ele já esteja
+autorizado. Nesse reparo silencioso, a autorização existente é preservada.
+Na interface, selecione somente os recursos que deseja reparar.
+
+---
+
 ## Problemas Comuns
 
 ### "Você precisa de permissões de administrador"

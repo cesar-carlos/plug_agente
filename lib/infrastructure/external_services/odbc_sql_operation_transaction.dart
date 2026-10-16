@@ -8,6 +8,7 @@ import 'package:plug_agente/domain/repositories/i_config_connection_string_sourc
 import 'package:plug_agente/domain/repositories/i_sql_operation_transaction.dart';
 import 'package:plug_agente/infrastructure/errors/odbc_error_inspector.dart';
 import 'package:plug_agente/infrastructure/external_services/odbc_source_discovery.dart';
+import 'package:plug_agente/infrastructure/external_services/odbc_source_schema.dart';
 import 'package:plug_agente/infrastructure/external_services/sql_operation_connection_string.dart';
 import 'package:plug_agente/infrastructure/pool/direct_odbc_connection_limiter.dart';
 import 'package:result_dart/result_dart.dart';
@@ -18,7 +19,11 @@ class OdbcSqlOperationTransactionFactory implements ISqlOperationTransactionFact
   final IConfigConnectionStringSource _connections;
   final DirectOdbcConnectionLimiter _limiter;
   @override
-  Future<Result<ISqlOperationTransaction>> open(SqlOperationTarget target, Duration timeout) async {
+  Future<Result<ISqlOperationTransaction>> open(
+    SqlOperationTarget target,
+    Duration timeout, {
+    SqlOperationPlan? plan,
+  }) async {
     final watch = Stopwatch()..start();
     DirectOdbcConnectionLease? lease;
     String? connectionId;
@@ -88,14 +93,24 @@ class OdbcSqlOperationTransactionFactory implements ISqlOperationTransactionFact
         rethrow;
       }
       final info = (await tracked(_service.getConnectionDbmsInfo(connectionId), remaining())).getOrThrow();
-      final name = info.dbmsName.toLowerCase();
       final engine = switch (info.engineId) {
         'postgres' => 'postgres',
         'sqlserver' => 'mssql',
         'sybase_asa' => 'sybase',
-        _ when name.contains('firebird') => 'firebird',
         _ => throw _failure('SQL_OPERATION_CAPABILITY_UNAVAILABLE', 'Database engine is not supported.'),
       };
+      if (plan != null && plan.nativeStatementCount(engine) > 32) {
+        throw _failure(
+          'SQL_OPERATION_STEP_LIMIT',
+          'Identity, structure and row-count checks exceed the 32-statement budget.',
+        );
+      }
+      if (plan?.expectedStructure != null && target.expectedSource == null) {
+        throw _failure(
+          'SQL_OPERATION_CAPABILITY_UNAVAILABLE',
+          'Structural verification requires executing-source identity.',
+        );
+      }
       if (!info.capabilities.supportsPreparedStatements) {
         throw _failure('SQL_OPERATION_CAPABILITY_UNAVAILABLE', 'Typed prepared parameters are required.');
       }
@@ -135,6 +150,20 @@ class OdbcSqlOperationTransactionFactory implements ISqlOperationTransactionFact
         if (catalog.isEmpty || identity(catalog) != identity(target.database)) {
           throw _failure('SQL_OPERATION_SOURCE_MISMATCH', 'Live connection selected a different database.');
         }
+      }
+      if (plan?.expectedStructure case final structure?) {
+        final discovery = OdbcSourceDiscovery(_service, _connections, _limiter);
+        await tracked(
+          OdbcSourceSchema(discovery).verifyColumns(connectionId, structure, engine, remaining),
+          remaining(),
+        );
+        // The structure proof and the identity bracketing it use this same connection.
+        final proof = await tracked(
+          OdbcSourceDiscovery.inspectConnection(_service, connectionId, target.config, target.database),
+          remaining(),
+        );
+        target.expectedSource!.verify(proof);
+        remaining();
       }
       // Do not retry begin with weaker options when the driver refuses them.
       final transactionId = (await tracked(
@@ -195,10 +224,7 @@ class _OdbcSqlOperationTransaction implements ISqlOperationTransaction {
 
   @override
   Result<void> validatePlan(SqlOperationPlan plan) {
-    final statements = plan.steps.fold<int>(
-      1,
-      (n, s) => n + (s.effect != SqlOperationEffect.select && {'mssql', 'sybase'}.contains(_engine) ? 2 : 1),
-    );
+    final statements = plan.nativeStatementCount(_engine);
     if (statements > 32) {
       return Failure(
         _failure('SQL_OPERATION_STEP_LIMIT', 'Native row-count queries also count toward the 32-statement limit.'),
@@ -336,7 +362,9 @@ class _OdbcSqlOperationTransaction implements ISqlOperationTransaction {
 SqlOperationFailure _failure(String code, String message) => SqlOperationFailure(code: code, message: message);
 SqlOperationFailure _nativeFailure(Object error, String stage) => error is SqlOperationFailure
     ? error
-    : stage == 'open' && error is domain.Failure && error.code == 'SOURCE_IDENTITY_MISMATCH'
+    : stage == 'open' &&
+          error is domain.Failure &&
+          {'SOURCE_IDENTITY_MISMATCH', 'SOURCE_STRUCTURE_MISMATCH'}.contains(error.code)
     ? SqlOperationFailure(
         code: error.code,
         message: error.message,

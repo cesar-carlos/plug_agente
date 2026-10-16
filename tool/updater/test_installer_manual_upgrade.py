@@ -34,7 +34,7 @@ class ManualUpgradeTests(unittest.TestCase):
                 raise AssertionError(f"Missing production function: {name}")
             functions.append(match.group())
         source = "\n".join(functions)
-        source = source.replace("'{app}'", "'{tmp}\\fixture-app'")
+        source = source.replace("{app}", "{tmp}\\fixture-app")
         for name in ("IsAdminInstallMode", "WizardSilent", "WizardIsTaskSelected",
                      "RegQueryDWordValue", "FileExists", "ExtractTemporaryFile",
                      "TaskDialogMsgBox", "WizardSelectTasks"):
@@ -64,5 +64,18 @@ class ManualUpgradeTests(unittest.TestCase):
                 if case == "upgrade_flag_unchecked":
                     arguments.append("/UPGRADEUPDATERHOST=1")
                 subprocess.run(arguments, capture_output=True, timeout=60)
+                self.assertTrue(result.exists(), log.read_text(encoding="utf-8-sig", errors="replace") if log.exists() else case)
+                self.assertEqual(result.read_text(), "passed")
+
+    def test_silent_optional_repair_requires_its_own_explicit_updater_selection(self):
+        for case, extra in (("silent_repair_default", []),
+                            ("silent_repair_disabled", ["/AUTOUPDATE=0"]),
+                            ("silent_repair_enabled", ["/AUTOUPDATE=1"])):
+            with self.subTest(case=case):
+                result = self.root / f"{case}.result"
+                log = self.root / f"{case}.log"
+                subprocess.run([str(self.executable), "/VERYSILENT", "/SUPPRESSMSGBOXES", "/NORESTART",
+                                "/REPAIR=optional", f"/CASE={case}", f"/RESULT={result}", f"/LOG={log}", *extra],
+                               capture_output=True, timeout=60)
                 self.assertTrue(result.exists(), log.read_text(encoding="utf-8-sig", errors="replace") if log.exists() else case)
                 self.assertEqual(result.read_text(), "passed")

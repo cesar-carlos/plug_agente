@@ -419,8 +419,7 @@ void WINAPI service_main(DWORD, LPWSTR*) {
         const bool code = reason.size() <= 64 && std::regex_match(reason, std::regex("[a-z][a-z_]*"));
         response = Json{{"ok", false}, {"code", code ? reason : "invalid_request"}};
       }
-      bytes = response.dump(); length = static_cast<DWORD>(bytes.size());
-      pipe_transfer(pipe.get(), &length, sizeof(length), true, 5000); pipe_transfer(pipe.get(), bytes.data(), length, true, 5000);
+      if (!pipe_reply(pipe.get(), response.dump(), 5000)) throw std::runtime_error("response_delivery_failed");
     } catch (const std::exception&) {
       const HANDLE event_log = RegisterEventSourceW(nullptr, kServiceName);
       if (event_log) {

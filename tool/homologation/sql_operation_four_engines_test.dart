@@ -7,16 +7,20 @@ import 'package:odbc_fast/odbc_fast.dart' as odbc;
 import 'package:plug_agente/application/rpc/sql_operation_params_reader.dart';
 import 'package:plug_agente/application/services/sql_operation_executor.dart';
 import 'package:plug_agente/application/services/sql_operation_statement_guard.dart';
+import 'package:plug_agente/domain/entities/client_token_policy.dart';
 import 'package:plug_agente/domain/entities/config.dart';
 import 'package:plug_agente/domain/entities/expected_source.dart';
 import 'package:plug_agente/domain/entities/query_request.dart';
 import 'package:plug_agente/domain/entities/query_response.dart';
+import 'package:plug_agente/domain/entities/source_schema.dart';
 import 'package:plug_agente/domain/entities/sql_operation_journal_entry.dart';
 import 'package:plug_agente/domain/entities/sql_operation_plan.dart';
 import 'package:plug_agente/domain/errors/sql_operation_failure.dart';
 import 'package:plug_agente/domain/repositories/i_config_connection_string_source.dart';
 import 'package:plug_agente/domain/repositories/i_sql_operation_transaction.dart';
+import 'package:plug_agente/domain/value_objects/client_permission_set.dart';
 import 'package:plug_agente/infrastructure/external_services/odbc_source_discovery.dart';
+import 'package:plug_agente/infrastructure/external_services/odbc_source_schema.dart';
 import 'package:plug_agente/infrastructure/external_services/odbc_sql_operation_transaction.dart';
 import 'package:plug_agente/infrastructure/external_services/odbc_verified_query.dart';
 import 'package:plug_agente/infrastructure/pool/direct_odbc_connection_limiter.dart';
@@ -46,7 +50,7 @@ void main() {
     (await service.initialize()).getOrThrow();
   });
   tearDownAll(() => locator.shutdown());
-  for (final engine in ['postgres', 'mssql', 'sybase', 'firebird']) {
+  for (final engine in ['postgres', 'mssql', 'sybase']) {
     final fixture = engines[engine] as Map<String, dynamic>?;
     if (fixture == null) throw StateError('Missing mandatory engine: $engine');
     final database = fixture['database'] as String;
@@ -93,7 +97,12 @@ void main() {
         'outputs': outputs ?? {},
         if (effect == 'select') 'expectedRows': {'min': min, 'max': max} else 'affectedRows': {'min': min, 'max': max},
       };
-      SqlOperationPlan plan(List<Map<String, dynamic>> steps, {String? id}) => const SqlOperationParamsReader().plan({
+      SqlOperationPlan plan(
+        List<Map<String, dynamic>> steps, {
+        String? id,
+        ExpectedSource? identity,
+        Map<String, Object?>? structure,
+      }) => const SqlOperationParamsReader().plan({
         'contractVersion': 1,
         'operationId': id ?? const Uuid().v4(),
         'fingerprint': 'b' * 64,
@@ -102,6 +111,8 @@ void main() {
         'timeoutMs': 30000,
         'maxAffectedRows': 8,
         'steps': steps,
+        if (identity != null) 'expectedSource': identity.toJson(),
+        'expectedStructure': ?structure,
       });
       Map<String, dynamic> insert(String marker) => step(
         'insert_row',
@@ -216,6 +227,78 @@ void main() {
             database,
             const Duration(seconds: 15),
           );
+      Future<Map<String, Object?>> operationStructure(ExpectedSource identity) async {
+        final discovery = OdbcSourceDiscovery(
+          service,
+          _Strings(),
+          DirectOdbcConnectionLimiter(maxConcurrent: 2, acquireTimeout: const Duration(seconds: 5)),
+        );
+        final schema = switch (engine) {
+          'postgres' => 'public',
+          'mssql' => 'dbo',
+          'sybase' => 'DBA',
+          _ => null,
+        };
+        final resource = SchemaResource(
+          schema: schema,
+          name: engine == 'firebird' ? 'OPERATION_FIXTURE' : 'operation_fixture',
+          type: 'table',
+        );
+        final request = SourceSchemaRequest.fromJson({
+          'contractVersion': 1,
+          'database': database,
+          'client_token': 'fixture-only',
+          'expectedSource': identity.toJson(),
+          'resources': [resource.toJson()],
+          'offset': 0,
+          'pageSize': 1,
+        });
+        final policy = ClientTokenPolicy(
+          clientId: 'fixture-client',
+          agentId: 'fixture-agent',
+          allTables: true,
+          allViews: false,
+          globalPermissions: ClientPermissionSet.fullAccess,
+          rules: const [],
+          payload: {'database': database},
+        );
+        final observed = await OdbcSourceSchema(
+          discovery,
+        ).readResource(connectionId!, resource, request, policy, () => const Duration(seconds: 10));
+        expect(observed['status'], 'available');
+        final columns = [
+          for (final column in observed['columns']! as List)
+            Map<String, Object?>.from(column as Map)..remove('ordinal'),
+        ];
+        return {
+          'version': 1,
+          'resources': [
+            {'resource': resource.toJson(), 'columns': columns},
+          ],
+        };
+      }
+
+      test('structural operation verifies native metadata on its connection before real INSERT', () async {
+        final identity = await expected();
+        authority.expectedSource = identity;
+        final structure = await operationStructure(identity);
+        final receipt = await execute(plan([insert('structure-verified')], identity: identity, structure: structure));
+        expect(receipt.state, SqlOperationJournalState.completed);
+        expect(receipt.directlyAffectedRows, 1);
+        expect(await count(), 1);
+      });
+      test('structural operation mismatch is terminal before any real DML, including duplicate calls', () async {
+        final identity = await expected();
+        authority.expectedSource = identity;
+        final structure = await operationStructure(identity);
+        final resource = (structure['resources']! as List).single as Map;
+        final columns = resource['columns']! as List;
+        (columns.first as Map)['nativeType'] = '__incompatible__';
+        final operation = plan([insert('structure-denied')], identity: identity, structure: structure);
+        expect((await execute(operation)).state, SqlOperationJournalState.cancelled);
+        expect((await execute(operation)).state, SqlOperationJournalState.cancelled);
+        expect(await count(), 0);
+      });
       test('verified SELECT uses enrolled durable identity on the executing connection', () async {
         final result = await verifiedRead(await expected(), 'SELECT revision FROM operation_fixture');
         expect(result.isSuccess(), isTrue);
@@ -481,8 +564,11 @@ class _LoseCommit implements ISqlOperationTransactionFactory {
   _LoseCommit(this.delegate);
   final ISqlOperationTransactionFactory delegate;
   @override
-  Future<Result<ISqlOperationTransaction>> open(SqlOperationTarget target, Duration timeout) async =>
-      (await delegate.open(target, timeout)).map(_LostAcknowledgement.new);
+  Future<Result<ISqlOperationTransaction>> open(
+    SqlOperationTarget target,
+    Duration timeout, {
+    SqlOperationPlan? plan,
+  }) async => (await delegate.open(target, timeout, plan: plan)).map(_LostAcknowledgement.new);
 }
 
 class _LostAcknowledgement implements ISqlOperationTransaction {

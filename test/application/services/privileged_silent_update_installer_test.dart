@@ -15,6 +15,7 @@ import 'package:plug_agente/application/services/update_maintenance_admission.da
 import 'package:plug_agente/application/services/update_maintenance_coordinator.dart';
 import 'package:plug_agente/domain/entities/pending_silent_update.dart';
 import 'package:plug_agente/domain/errors/failures.dart' as domain;
+import 'package:plug_agente/domain/services/i_privileged_updater.dart';
 import 'package:plug_agente/domain/services/i_update_manifest_downloader.dart';
 import 'package:plug_agente/domain/services/i_update_secrets_snapshot.dart';
 import 'package:plug_agente/domain/services/silent_update_installer.dart';
@@ -89,7 +90,7 @@ void main() {
   var rejectStart = false;
   var loseStartReply = false;
   var recoveries = 0;
-  var recoveryContract = 1;
+  var recoveryContract = UpdaterCapabilities.requiredRecoveryContract;
   var now = DateTime(2026);
   final recoveryPhases = <bool>[];
 
@@ -135,7 +136,7 @@ void main() {
     rejectStart = false;
     loseStartReply = false;
     recoveries = 0;
-    recoveryContract = 1;
+    recoveryContract = UpdaterCapabilities.requiredRecoveryContract;
     now = DateTime(2026);
     recoveryPhases.clear();
     installer = PrivilegedSilentUpdateInstaller(
@@ -308,6 +309,13 @@ void main() {
     recoveryContract = 0;
     expect((await installer.launchPreparedHelper(launch())).isError(), isTrue);
     expect(maintenanceCalls, 0);
+  });
+
+  test('supervisor without reliable reply delivery blocks before maintenance', () async {
+    recoveryContract = 1;
+    expect((await installer.launchPreparedHelper(launch())).isError(), isTrue);
+    expect(maintenanceCalls, 0);
+    expect(commands, isNot(contains('start')));
   });
 
   test('accepted start with a lost reply reconciles without second dispatch', () async {

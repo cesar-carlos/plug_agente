@@ -22,7 +22,7 @@ Future<bool> evaluateChainCase(
   }
   final plan = const SqlOperationParamsReader().plan(job['command']);
   final target = (await authorizer.authorize(plan, token, agentId, plan.steps)).getOrThrow();
-  final transaction = (await factory.open(target, const Duration(seconds: 30))).getOrThrow();
+  final transaction = (await factory.open(target, const Duration(seconds: 30), plan: plan)).getOrThrow();
   var passed = false;
   try {
     transaction.validatePlan(plan).getOrThrow();
@@ -31,7 +31,7 @@ Future<bool> evaluateChainCase(
       SqlOperationStep(
         id: 'fixture_clear',
         effect: SqlOperationEffect.delete,
-        sql: ['postgres', 'firebird'].contains(target.expectedSource?.dialect)
+        sql: ['postgres'].contains(target.expectedSource?.dialect)
             ? 'DELETE FROM operation_fixture RETURNING id AS "id"'
             : 'DELETE FROM operation_fixture',
         params: {},
