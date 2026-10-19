@@ -9419,7 +9419,7 @@ abstract class AppLocalizations {
   /// No description provided for @agentActionsEditorScheduleHint.
   ///
   /// In en, this message translates to:
-  /// **'Triggers run the saved action and require the agent to remain open. Form changes take effect after saving.'**
+  /// **'Triggers run the saved action and require the agent to remain open. Save trigger applies the change immediately, even if you close or discard this form. Other changes require Save action.'**
   String get agentActionsEditorScheduleHint;
 
   /// No description provided for @agentActionsEditorStopDependency.

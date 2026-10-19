@@ -37,12 +37,10 @@ class AgentActionEditorSaveButton extends StatelessWidget {
     );
 
     return Column(
+      mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.end,
       children: [
-        Align(
-          alignment: Alignment.centerRight,
-          child: button,
-        ),
+        button,
         if (!enabled && !saving) ...[
           const SizedBox(height: AppSpacing.xs),
           Text(

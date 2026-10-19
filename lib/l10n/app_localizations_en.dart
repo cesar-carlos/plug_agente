@@ -5056,7 +5056,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get agentActionsEditorScheduleHint =>
-      'Triggers run the saved action and require the agent to remain open. Form changes take effect after saving.';
+      'Triggers run the saved action and require the agent to remain open. Save trigger applies the change immediately, even if you close or discard this form. Other changes require Save action.';
 
   @override
   String get agentActionsEditorStopDependency =>

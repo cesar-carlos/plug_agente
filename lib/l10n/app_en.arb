@@ -2132,7 +2132,7 @@
   "agentActionsEditorActivationSteps": "Save the action, use Test action to validate it, then change its state to Active. Validation checks the configuration without running the task.",
   "agentActionsEditorScheduleSaveFirst": "Save the action before adding triggers. Then open it and configure its schedule in this section.",
   "agentActionsEditorScheduleLocalOnly": "This type only supports local manual execution. To schedule it, create an Executable or Script action.",
-  "agentActionsEditorScheduleHint": "Triggers run the saved action and require the agent to remain open. Form changes take effect after saving.",
+  "agentActionsEditorScheduleHint": "Triggers run the saved action and require the agent to remain open. Save trigger applies the change immediately, even if you close or discard this form. Other changes require Save action.",
   "agentActionsEditorStopDependency": "To use a stop time, enable “Stop process when the limit is reached”. Otherwise, only the maximum duration applies according to the monitoring policy.",
   "agentActionsEditorWaitHint": "Waits between 0.001 and 30 seconds when closing the agent; stops the process if it remains active.",
   "agentActionsEditorContextTitle": "Parameters and context",

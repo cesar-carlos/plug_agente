@@ -89,7 +89,6 @@ class AppPagedView extends StatelessWidget {
                     maintainState: true,
                     maintainAnimation: true,
                     maintainSize: true,
-                    maintainFocusability: true,
                     child: _AppPageBody(
                       page: pages[pageIndex],
                       scrollController: pageIndex == index ? scrollController : null,

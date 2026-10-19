@@ -29,6 +29,26 @@ void main() {
     expect(find.text(l10n.pagedViewPrevious), findsOneWidget);
     expect(find.text(l10n.pagedViewPosition(1, 6)), findsNothing);
     expect(filledButtonWithText(l10n.agentActionsFormSave), findsOneWidget);
+    expect(
+      tester.getCenter(filledButtonWithText(l10n.agentActionsFormSave)).dy,
+      closeTo(tester.getCenter(find.text(l10n.pagedViewNext)).dy, 1),
+    );
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('missing execution field opens execution and focuses the command', (tester) async {
+    final harness = AgentActionsPageHarness();
+    await pumpHarness(tester, harness);
+    await openCreateActionDialog(tester, l10n, expandPolicies: false);
+    await tester.enterText(agentActionFormTextBox(l10n.agentActionsFormName), 'Atualizar estoque');
+    await tester.tap(filledButtonWithText(l10n.agentActionsFormSave));
+    await tester.pumpAndSettle();
+
+    expect(isAppPageSelected(tester, 'target'), isTrue);
+    final command = agentActionFormTextBox(l10n.agentActionsFormCommand);
+    expect(tester.widget<TextBox>(command).focusNode!.hasFocus, isTrue);
+    expect(find.text(l10n.formFieldRequired(l10n.agentActionsFormCommand)), findsOneWidget);
+    expect(harness.repository.definitions, isEmpty);
     expect(tester.takeException(), isNull);
   });
 
@@ -165,6 +185,7 @@ void main() {
     await openSelectedActionDialog(tester, expandPolicies: false);
     await showActionEditorPage(tester, 'schedule');
     expect(find.textContaining('Próximo disparo:'), findsOneWidget);
+    expect(find.text(l10n.agentActionsEditorScheduleHint), findsOneWidget);
     final add = find.byKey(const ValueKey('agent_action_editor_add_trigger'));
     await tester.ensureVisible(add);
     await tester.pumpAndSettle();

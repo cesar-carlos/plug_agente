@@ -5067,7 +5067,7 @@ class AppLocalizationsPt extends AppLocalizations {
 
   @override
   String get agentActionsEditorScheduleHint =>
-      'Os gatilhos executam a versão salva da ação e exigem que o agente esteja aberto. As alterações deste formulário só entram em vigor após salvar.';
+      'Os gatilhos executam a versão salva da ação e exigem que o agente esteja aberto. Salvar gatilho aplica a alteração imediatamente, mesmo que você feche ou descarte este formulário. As demais alterações dependem de Salvar ação.';
 
   @override
   String get agentActionsEditorStopDependency =>

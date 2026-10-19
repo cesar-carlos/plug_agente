@@ -114,7 +114,9 @@ class _AgentActionEditorState extends State<AgentActionEditor> {
       _focusController = errors.keys.firstOrNull;
       _focusRequest++;
       _pageIndex = AgentActionEditorPages.indexForSection(
-        AgentActionEditorFieldFeedback.sectionFor(invalid.field),
+        invalid.field == DraftValidationField.requiredFields
+            ? (_focusController == _draft.identity.name ? 0 : 1)
+            : AgentActionEditorFieldFeedback.sectionFor(invalid.field),
       );
     });
     return false;

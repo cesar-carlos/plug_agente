@@ -631,6 +631,7 @@ void main() {
     expect(commandField, findsOneWidget);
 
     await tester.enterText(nameField, 'Run dir');
+    await showActionEditorPage(tester, 'target');
     await tester.enterText(commandField, 'dir');
 
     final saveAction = filledButtonWithText(ptL10n.agentActionsFormSave);
@@ -666,6 +667,7 @@ void main() {
     await selectActionFormType(tester, ptL10n, ptL10n.agentActionsTypePowerShell);
 
     await tester.enterText(agentActionFormTextBox(ptL10n.agentActionsFormName), 'Run PowerShell');
+    await showActionEditorPage(tester, 'target');
     await tester.enterText(
       agentActionFormTextBox(ptL10n.agentActionsFormPowerShellCommand),
       'Write-Output "ok" | Out-String',
@@ -698,7 +700,9 @@ void main() {
     await selectActionFormType(tester, ptL10n, ptL10n.agentActionsTypePowerShell);
     await selectPowerShellExecutable(tester, ptL10n, ptL10n.agentActionsFormPowerShellExecutablePwsh);
 
+    await showActionEditorPage(tester, 'identity');
     await tester.enterText(agentActionFormTextBox(ptL10n.agentActionsFormName), 'Run pwsh');
+    await showActionEditorPage(tester, 'target');
     await tester.enterText(
       agentActionFormTextBox(ptL10n.agentActionsFormPowerShellCommand),
       'Write-Output "ok" & whoami',
@@ -731,7 +735,9 @@ void main() {
     await selectActionFormType(tester, ptL10n, ptL10n.agentActionsTypePowerShell);
     await selectPowerShellMode(tester, ptL10n, ptL10n.agentActionsFormPowerShellModeScript);
 
+    await showActionEditorPage(tester, 'identity');
     await tester.enterText(agentActionFormTextBox(ptL10n.agentActionsFormName), 'Run script');
+    await showActionEditorPage(tester, 'target');
     await tester.enterText(agentActionFormTextBox(ptL10n.agentActionsFormPowerShellScriptPath), r'C:\Jobs\backup.ps1');
     await tester.enterText(agentActionFormTextBox(ptL10n.agentActionsFormArguments), '-Verbose');
 
@@ -761,7 +767,9 @@ void main() {
     await selectPowerShellMode(tester, ptL10n, ptL10n.agentActionsFormPowerShellModeScript);
     await selectPowerShellExecutable(tester, ptL10n, ptL10n.agentActionsFormPowerShellExecutablePwsh);
 
+    await showActionEditorPage(tester, 'identity');
     await tester.enterText(agentActionFormTextBox(ptL10n.agentActionsFormName), 'Run pwsh script');
+    await showActionEditorPage(tester, 'target');
     await tester.enterText(agentActionFormTextBox(ptL10n.agentActionsFormPowerShellScriptPath), r'C:\Jobs\backup.ps1');
 
     tester.widget<FilledButton>(filledButtonWithText(ptL10n.agentActionsFormSave)).onPressed!.call();
