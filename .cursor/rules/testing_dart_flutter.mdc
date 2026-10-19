@@ -9,7 +9,7 @@ alwaysApply: false
 ## Escopo
 
 Este arquivo complementa `testing.mdc` com convencoes especificas para testes
-em Dart/Flutter.
+em Dart/Flutter. Correcao de bug segue a secao Regressao de `testing.mdc`.
 
 ## Assertions
 

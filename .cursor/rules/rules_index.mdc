@@ -12,6 +12,8 @@ alwaysApply: true
 - Prefira codigo autoexplicativo por nome, estrutura e abstracoes focadas
 - Nunca engula erro em silencio
 - Prefira falha clara e acionavel a mensagem generica
+- Toda correcao de bug inclui teste de regressao; o contrato esta em
+  `testing.mdc`
 - Nao duplique a mesma regra em varios arquivos; um tema tem um dono e os
   demais fazem referencia curta
 

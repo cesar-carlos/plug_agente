@@ -14,6 +14,7 @@ Este arquivo e a fonte de verdade para estrategia universal de testes:
 - isolamento e mocking
 - estilo de validacao por comportamento
 - cobertura de caminhos de sucesso e falha
+- teste de regressao obrigatorio em correcao de bug
 
 Para convencoes especificas de Dart/Flutter, use `testing_dart_flutter.mdc`.
 
@@ -78,7 +79,18 @@ Para convencoes especificas de Dart/Flutter, use `testing_dart_flutter.mdc`.
 
 - Priorize alta cobertura no dominio e nas fronteiras de erro
 - Prefira poucos testes precisos a muitos testes redundantes
-- Quando uma regressao ocorrer, adicione um teste que a capture de forma direta
+
+## Regressao
+
+- Toda correcao de bug inclui um teste de regressao antes de considerar a
+  correcao completa
+- Escolha o nivel mais simples que reproduza o defeito observado: unit,
+  component, integration ou widget
+- O teste deve falhar por esse defeito antes da correcao e passar depois dela
+- Nao substitua o defeito observado por um assert generico de ausencia de
+  excecao
+- Depois de refatorar, o teste continua expressivo: ele protege o comportamento,
+  nao a implementacao interna
 
 ## Testes Como Contrato de Design
 
@@ -90,8 +102,6 @@ Para convencoes especificas de Dart/Flutter, use `testing_dart_flutter.mdc`.
   nao fizer parte do contrato
 - Quando uma mudanca altera fronteira entre camadas, adicione ou atualize teste
   no nivel mais simples que capture essa fronteira
-- Teste de regressao deve falhar pelo bug observado antes da correcao e continuar
-  expressivo depois da refatoracao
 
 ## Referencias Cruzadas
 
@@ -106,5 +116,6 @@ Para convencoes especificas de Dart/Flutter, use `testing_dart_flutter.mdc`.
 - [ ] Dependencias externas foram isoladas adequadamente
 - [ ] Caminhos de falha relevantes estao cobertos
 - [ ] Casos criticos de dominio e integracao estao cobertos
+- [ ] Correcao de bug inclui teste de regressao que reproduz o defeito observado
 - [ ] Refatoracoes relevantes preservaram comportamento por testes ou analise
       explicita de risco
