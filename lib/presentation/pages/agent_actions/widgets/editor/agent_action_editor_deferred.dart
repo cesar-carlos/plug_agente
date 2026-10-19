@@ -13,6 +13,7 @@ class DeferredAgentActionEditor extends StatefulWidget {
     this.definition,
     this.dirtyNotifier,
     this.titleNotifier,
+    this.savingNotifier,
     super.key,
   });
 
@@ -22,6 +23,7 @@ class DeferredAgentActionEditor extends StatefulWidget {
   final VoidCallback onSaved;
   final ValueNotifier<bool>? dirtyNotifier;
   final ValueNotifier<String>? titleNotifier;
+  final ValueNotifier<bool>? savingNotifier;
 
   @override
   State<DeferredAgentActionEditor> createState() => _DeferredAgentActionEditorState();
@@ -57,6 +59,7 @@ class _DeferredAgentActionEditorState extends State<DeferredAgentActionEditor> {
       onSaved: widget.onSaved,
       dirtyNotifier: widget.dirtyNotifier,
       titleNotifier: widget.titleNotifier,
+      savingNotifier: widget.savingNotifier,
     );
   }
 }

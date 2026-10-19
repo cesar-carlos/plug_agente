@@ -1,8 +1,14 @@
+import 'dart:async';
+
 import 'package:fluent_ui/fluent_ui.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:plug_agente/domain/actions/actions.dart';
+import 'package:plug_agente/domain/errors/failures.dart' as domain;
 import 'package:plug_agente/l10n/app_localizations.dart';
+import 'package:plug_agente/shared/widgets/common/feedback/app_content_dialog.dart';
 import 'package:plug_agente/shared/widgets/common/navigation/app_paged_view.dart';
+import 'package:result_dart/result_dart.dart';
 
 import 'agent_actions_page_test_harness.dart';
 
@@ -14,6 +20,90 @@ void main() {
     await tester.binding.setSurfaceSize(const Size(1200, 900));
     addTearDown(() => tester.binding.setSurfaceSize(null));
     await harness.pumpPage(tester);
+  }
+
+  testWidgets('selection-only changes preserve state and close without discard confirmation', (tester) async {
+    final harness = AgentActionsPageHarness();
+    harness.repository.definitions['action-1'] = const AgentActionDefinition(
+      id: 'action-1',
+      name: 'Original',
+      state: AgentActionState.active,
+      config: CommandLineActionConfig(command: 'echo ok'),
+    );
+    await pumpHarness(tester, harness);
+    await openSelectedActionDialog(tester, expandPolicies: false);
+    final name = tester.widget<TextBox>(agentActionFormTextBox(l10n.agentActionsFormName)).controller!;
+    name.selection = const TextSelection.collapsed(offset: 1);
+    await tester.pump();
+    expect(name.text, 'Original');
+    expect(
+      tester.widget<ComboBox<AgentActionState>>(find.byType(ComboBox<AgentActionState>)).value,
+      AgentActionState.active,
+    );
+    await tester.tap(find.byTooltip(l10n.btnClose).first);
+    await tester.pumpAndSettle();
+    expect(find.text(l10n.agentActionsEditorDiscardConfirmTitle), findsNothing);
+    expect(find.byType(ContentDialog), findsNothing);
+
+    await openSelectedActionDialog(tester, expandPolicies: false);
+    await tester.enterText(agentActionFormTextBox(l10n.agentActionsFormName), 'Alterada');
+    await tester.pump();
+    expect(
+      tester.widget<ComboBox<AgentActionState>>(find.byType(ComboBox<AgentActionState>)).value,
+      AgentActionState.needsValidation,
+    );
+    await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+    await tester.pumpAndSettle();
+    expect(find.text(l10n.agentActionsEditorDiscardConfirmTitle), findsOneWidget);
+    await tester.tap(find.text(l10n.agentActionsEditorKeepEditing));
+    await tester.pumpAndSettle();
+    expect(tester.widget<TextBox>(agentActionFormTextBox(l10n.agentActionsFormName)).controller!.text, 'Alterada');
+  });
+
+  for (final succeeds in [true, false]) {
+    testWidgets('blocks closing during save and handles ${succeeds ? 'success' : 'failure'}', (tester) async {
+      final harness = AgentActionsPageHarness();
+      final pendingSave = Completer<Result<AgentActionDefinition>>();
+      AgentActionDefinition? submitted;
+      harness.repository.saveDefinitionOverride = (definition) {
+        submitted = definition;
+        return pendingSave.future;
+      };
+      await pumpHarness(tester, harness);
+      await openCreateActionDialog(tester, l10n, expandPolicies: false);
+      await tester.enterText(agentActionFormTextBox(l10n.agentActionsFormName), 'Salvar teste');
+      await showActionEditorPage(tester, 'target');
+      await tester.enterText(agentActionFormTextBox(l10n.agentActionsFormCommand), 'echo ok');
+      await tester.tap(filledButtonWithText(l10n.agentActionsFormSave));
+      for (var frame = 0; frame < 10 && submitted == null; frame++) {
+        await tester.pump(const Duration(milliseconds: 10));
+      }
+      expect(submitted, isNotNull);
+      final dialog = tester.widget<AppContentDialog>(find.byType(AppContentDialog));
+      expect(dialog.canClose, isFalse);
+      dialog.onClose!();
+      await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+      await tester.pump();
+      expect(find.byType(ContentDialog), findsOneWidget);
+      expect(find.text(l10n.agentActionsEditorDiscardConfirmTitle), findsNothing);
+      pendingSave.complete(
+        succeeds ? Success(submitted!) : Failure(domain.ValidationFailure('Falha de gravação de teste')),
+      );
+      await tester.pumpAndSettle();
+      if (succeeds) {
+        expect(find.byType(ContentDialog), findsNothing);
+      } else {
+        expect(find.byType(ContentDialog), findsOneWidget);
+        expect(tester.widget<AppContentDialog>(find.byType(AppContentDialog)).canClose, isTrue);
+        expect(
+          tester.widget<TextBox>(agentActionFormTextBox(l10n.agentActionsFormCommand)).controller!.text,
+          'echo ok',
+        );
+        expect(find.textContaining('Falha de gravação de teste'), findsWidgets);
+        expect(tester.widget<FilledButton>(filledButtonWithText(l10n.agentActionsFormSave)).onPressed, isNotNull);
+      }
+      expect(tester.takeException(), isNull);
+    });
   }
 
   testWidgets('editor opens on the identification page', (tester) async {

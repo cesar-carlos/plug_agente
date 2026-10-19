@@ -135,19 +135,36 @@ class AgentActionDraft {
     yield displayBindings.powerShellModeDisplay;
   }
 
+  final Map<VoidCallback, Map<TextEditingController, VoidCallback>> _textListeners = {};
+
   void attachChangeListeners(VoidCallback callback) {
+    detachChangeListeners(callback);
+    final listeners = <TextEditingController, VoidCallback>{};
     for (final controller in _userEditableControllers) {
-      controller.addListener(callback);
+      var previousText = controller.text;
+      void onChanged() {
+        final text = controller.text;
+        if (text == previousText) return;
+        previousText = text;
+        callback();
+      }
+
+      listeners[controller] = onChanged;
+      controller.addListener(onChanged);
     }
+    _textListeners[callback] = listeners;
   }
 
   void detachChangeListeners(VoidCallback callback) {
-    for (final controller in _userEditableControllers) {
-      controller.removeListener(callback);
+    final listeners = _textListeners.remove(callback);
+    if (listeners == null) return;
+    for (final entry in listeners.entries) {
+      entry.key.removeListener(entry.value);
     }
   }
 
   void dispose() {
+    _textListeners.keys.toList().forEach(detachChangeListeners);
     for (final controller in _allControllers) {
       controller.dispose();
     }
@@ -207,7 +224,9 @@ class AgentActionDraft {
   }
 
   AgentActionExitCodePolicy exitCodePolicy(Set<int> acceptedExitCodes) {
-    return AgentActionExitCodePolicy(acceptedExitCodes: acceptedExitCodes);
+    return capturesProcessOutput()
+        ? AgentActionExitCodePolicy(acceptedExitCodes: acceptedExitCodes)
+        : const AgentActionExitCodePolicy();
   }
 
   AgentActionLifecyclePolicy lifecyclePolicy() {

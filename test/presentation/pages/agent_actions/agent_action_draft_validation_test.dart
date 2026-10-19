@@ -73,6 +73,31 @@ void main() {
       expect(invalid.message, l10n.agentActionsFormInvalidExitCodes);
     });
 
+    for (final type in [AgentActionType.email, AgentActionType.comObject]) {
+      test('ignores hidden exit codes for $type and preserves them when switching back', () {
+        final draft = _commandLineDraft();
+        addTearDown(draft.dispose);
+        draft.executionPolicy.acceptedExitCodes.text = 'invalid';
+        draft.draftType = type;
+        draft.draftKind = type == AgentActionType.email ? AgentActionDraftKind.email : AgentActionDraftKind.comObject;
+        draft.email.smtpProfileId.text = 'smtp';
+        draft.email.from.text = 'from@example.com';
+        draft.email.to.text = 'to@example.com';
+        draft.email.subject.text = 'Subject';
+        draft.email.body.text = 'Body';
+        draft.comObject.progId.text = 'Example.Application';
+        draft.comObject.memberName.text = 'Run';
+        const validators = AgentActionDraftValidators();
+        expect(validators.validateBeforeSave(draft, l10n: l10n, canSetActive: false), isA<DraftValidationValid>());
+        expect(draft.exitCodePolicy({7}).acceptedExitCodes, {0});
+        draft.draftType = AgentActionType.commandLine;
+        draft.draftKind = AgentActionDraftKind.commandLine;
+        final invalid = validators.validateBeforeSave(draft, l10n: l10n, canSetActive: false) as DraftValidationInvalid;
+        expect(invalid.field, DraftValidationField.acceptedExitCodes);
+        expect(draft.executionPolicy.acceptedExitCodes.text, 'invalid');
+      });
+    }
+
     test('flags missing remote approval when remote is enabled', () {
       final draft = _commandLineDraft();
       draft.remoteEnabled = true;

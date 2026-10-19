@@ -858,6 +858,7 @@ class MissingDeveloperData7ConnectionGateway implements IDeveloperData7Connectio
 }
 
 class FakeAgentActionRepository implements IAgentActionRepository {
+  Future<Result<AgentActionDefinition>> Function(AgentActionDefinition)? saveDefinitionOverride;
   final Map<String, AgentActionDefinition> definitions = {};
   final Map<String, AgentActionTrigger> triggers = {};
   final Map<String, AgentActionExecution> executions = {};
@@ -875,6 +876,8 @@ class FakeAgentActionRepository implements IAgentActionRepository {
   Future<Result<AgentActionDefinition>> saveDefinition(
     AgentActionDefinition definition,
   ) async {
+    final override = saveDefinitionOverride;
+    if (override != null) return override(definition);
     definitions[definition.id] = definition;
     return Success(definition);
   }

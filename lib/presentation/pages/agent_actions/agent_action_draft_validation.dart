@@ -91,7 +91,7 @@ class AgentActionDraftValidators {
     final acceptedExitCodes = AgentActionDraftParsers.acceptedExitCodes(
       draft.executionPolicy.acceptedExitCodes.text,
     );
-    if (acceptedExitCodes == null) {
+    if (draft.capturesProcessOutput() && acceptedExitCodes == null) {
       return DraftValidationInvalid(
         field: DraftValidationField.acceptedExitCodes,
         message: l10n.agentActionsFormInvalidExitCodes,

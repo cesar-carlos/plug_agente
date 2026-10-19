@@ -341,23 +341,27 @@ class _AgentActionsPageState extends State<AgentActionsPage> {
     AgentActionDefinition? definition,
   }) async {
     final dirtyNotifier = ValueNotifier<bool>(false);
+    final savingNotifier = ValueNotifier<bool>(false);
     final titleNotifier = ValueNotifier<String>('');
     try {
       // Fluent's showDialog already defaults to barrierDismissible: false,
       // so accidental clicks outside the editor do not drop the draft.
-      // The close button and Esc go through _confirmEditorClose below.
+      // The shell handles Esc so Fluent cannot bypass the save/discard guard.
       await showDialog<void>(
         context: context,
+        dismissWithEsc: false,
         builder: (dialogContext) {
           return _AgentActionEditorDialogShell(
             l10n: l10n,
             dirtyNotifier: dirtyNotifier,
+            savingNotifier: savingNotifier,
             titleNotifier: titleNotifier,
             child: DeferredAgentActionEditor(
               provider: provider,
               definition: definition,
               l10n: l10n,
               dirtyNotifier: dirtyNotifier,
+              savingNotifier: savingNotifier,
               titleNotifier: titleNotifier,
               onSaved: () {
                 Navigator.pop(dialogContext);
@@ -368,6 +372,7 @@ class _AgentActionsPageState extends State<AgentActionsPage> {
       );
     } finally {
       dirtyNotifier.dispose();
+      savingNotifier.dispose();
       titleNotifier.dispose();
     }
   }
@@ -497,6 +502,7 @@ class _AgentActionEditorDialogShell extends StatelessWidget {
   const _AgentActionEditorDialogShell({
     required this.l10n,
     required this.dirtyNotifier,
+    required this.savingNotifier,
     required this.titleNotifier,
     required this.child,
   });
@@ -511,6 +517,7 @@ class _AgentActionEditorDialogShell extends StatelessWidget {
 
   final AppLocalizations l10n;
   final ValueNotifier<bool> dirtyNotifier;
+  final ValueNotifier<bool> savingNotifier;
   final ValueNotifier<String> titleNotifier;
   final Widget child;
 
@@ -531,6 +538,7 @@ class _AgentActionEditorDialogShell extends StatelessWidget {
   }
 
   Future<bool> _confirmClose(BuildContext context) async {
+    if (savingNotifier.value) return false;
     if (!dirtyNotifier.value) {
       return true;
     }
@@ -546,7 +554,7 @@ class _AgentActionEditorDialogShell extends StatelessWidget {
   Future<void> _tryClose(BuildContext context) async {
     final navigator = Navigator.of(context);
     final confirmed = await _confirmClose(context);
-    if (!confirmed || !navigator.mounted) {
+    if (!confirmed || !navigator.mounted || savingNotifier.value) {
       return;
     }
     // Clear dirty before pop so PopScope does not show a second confirm.
@@ -556,41 +564,55 @@ class _AgentActionEditorDialogShell extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return ValueListenableBuilder<bool>(
-      valueListenable: dirtyNotifier,
-      builder: (_, isDirty, _) {
-        return widgets.PopScope<Object?>(
-          canPop: !isDirty,
-          onPopInvokedWithResult: (didPop, _) async {
-            if (didPop) {
-              return;
-            }
-            await _tryClose(context);
+    return AnimatedBuilder(
+      animation: Listenable.merge([dirtyNotifier, savingNotifier]),
+      builder: (_, _) {
+        return Actions(
+          actions: {
+            DismissIntent: CallbackAction<DismissIntent>(
+              onInvoke: (_) {
+                unawaited(_tryClose(context));
+                return null;
+              },
+            ),
           },
-          child: Builder(
-            builder: (dialogContext) {
-              final contentSize = _editorDialogContentSize(dialogContext);
-              return AppContentDialog(
-                constraints: BoxConstraints(
-                  maxWidth: contentSize.width + _editorDialogChromeWidth,
-                  maxHeight: contentSize.height + _editorDialogChromeHeight,
-                ),
-                contentWidth: contentSize.width,
-                contentHeight: contentSize.height,
-                closeTooltip: l10n.btnClose,
-                title: ValueListenableBuilder<String>(
-                  valueListenable: titleNotifier,
-                  builder: (_, title, _) {
-                    if (title.isEmpty) {
-                      return const SizedBox.shrink();
-                    }
-                    return Text(title, maxLines: 1, overflow: TextOverflow.ellipsis);
-                  },
-                ),
-                onClose: () => unawaited(_tryClose(dialogContext)),
-                content: child,
-              );
-            },
+          child: FocusScope(
+            autofocus: true,
+            child: widgets.PopScope<Object?>(
+              canPop: !dirtyNotifier.value && !savingNotifier.value,
+              onPopInvokedWithResult: (didPop, _) async {
+                if (didPop) {
+                  return;
+                }
+                await _tryClose(context);
+              },
+              child: Builder(
+                builder: (dialogContext) {
+                  final contentSize = _editorDialogContentSize(dialogContext);
+                  return AppContentDialog(
+                    constraints: BoxConstraints(
+                      maxWidth: contentSize.width + _editorDialogChromeWidth,
+                      maxHeight: contentSize.height + _editorDialogChromeHeight,
+                    ),
+                    contentWidth: contentSize.width,
+                    contentHeight: contentSize.height,
+                    closeTooltip: l10n.btnClose,
+                    canClose: !savingNotifier.value,
+                    title: ValueListenableBuilder<String>(
+                      valueListenable: titleNotifier,
+                      builder: (_, title, _) {
+                        if (title.isEmpty) {
+                          return const SizedBox.shrink();
+                        }
+                        return Text(title, maxLines: 1, overflow: TextOverflow.ellipsis);
+                      },
+                    ),
+                    onClose: () => unawaited(_tryClose(dialogContext)),
+                    content: child,
+                  );
+                },
+              ),
+            ),
           ),
         );
       },

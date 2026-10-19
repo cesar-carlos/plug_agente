@@ -43,6 +43,7 @@ class AgentActionEditor extends StatefulWidget {
     this.onSaved,
     this.dirtyNotifier,
     this.titleNotifier,
+    this.savingNotifier,
     super.key,
   });
 
@@ -60,6 +61,7 @@ class AgentActionEditor extends StatefulWidget {
   /// Optional external notifier that mirrors the editor title when the host
   /// dialog owns the title bar.
   final ValueNotifier<String>? titleNotifier;
+  final ValueNotifier<bool>? savingNotifier;
 
   @override
   State<AgentActionEditor> createState() => _AgentActionEditorState();
@@ -89,6 +91,7 @@ class _AgentActionEditorState extends State<AgentActionEditor> {
   final AgentActionFilePicker _filePicker = const AgentActionFilePicker();
 
   int _pageIndex = 0;
+  bool _saving = false;
   final Set<String> _shownDialogWarnings = <String>{};
   Map<TextEditingController, String> _fieldErrors = {};
   TextEditingController? _focusController;
@@ -469,6 +472,23 @@ class _AgentActionEditorState extends State<AgentActionEditor> {
   Set<int>? _tryParseAcceptedExitCodes(String input) => AgentActionDraftParsers.acceptedExitCodes(input);
 
   Future<bool> _save() async {
+    if (_saving || !widget.provider.canSaveAction) return false;
+    setState(() => _saving = true);
+    widget.savingNotifier?.value = true;
+    bool saved;
+    try {
+      saved = await _saveDraft();
+    } finally {
+      if (mounted) {
+        setState(() => _saving = false);
+        widget.savingNotifier?.value = false;
+      }
+    }
+    if (saved && mounted) widget.onSaved?.call();
+    return saved;
+  }
+
+  Future<bool> _saveDraft() async {
     final preSaveResult = _validators.validateBeforeSave(
       _draft,
       l10n: widget.l10n,
@@ -493,7 +513,9 @@ class _AgentActionEditorState extends State<AgentActionEditor> {
     }
     // accepted-exit-codes payload, but we still need the parsed set
     // for the policy builders below.
-    final acceptedExitCodes = _tryParseAcceptedExitCodes(_draft.executionPolicy.acceptedExitCodes.text);
+    final acceptedExitCodes = _draft.capturesProcessOutput()
+        ? _tryParseAcceptedExitCodes(_draft.executionPolicy.acceptedExitCodes.text)
+        : const <int>{0};
     if (acceptedExitCodes == null) {
       final message = widget.l10n.agentActionsFormInvalidExitCodes;
       _setValidationMessage(message);
@@ -535,7 +557,6 @@ class _AgentActionEditorState extends State<AgentActionEditor> {
       _draft.isDraftModifiedSinceLoad = false;
     });
     widget.dirtyNotifier?.value = false;
-    widget.onSaved?.call();
     return true;
   }
 
@@ -636,7 +657,7 @@ class _AgentActionEditorState extends State<AgentActionEditor> {
   );
 
   Widget _buildContent(BuildContext context) {
-    final saving = widget.provider.isSaving;
+    final saving = _saving || widget.provider.isSaving;
     final fieldsEnabled = !saving && widget.provider.canSaveAction;
     final saveButton = AgentActionEditorSaveButton(
       l10n: widget.l10n,
