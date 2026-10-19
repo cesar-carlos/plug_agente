@@ -482,3 +482,18 @@ UPDATE/DELETE triggers are not fired during provisioning. Composite cascade case
 preserve a second tenant and verify rollback after a descendant CHECK or later
 step fails. Direct row counts exclude cascaded changes and trigger rows, which the
 MCP runner checks separately. This adds no public RPC capability or production DDL.
+
+
+## Binary column metadata in verified SELECTs
+
+Rich column metadata preserves the odbc_fast protocol discriminant in odbc_type
+with type_system=odbc_fast. Discriminant 7 means raw binary in that namespace;
+it is not native ODBC SQL_REAL (7). Do not infer binary from untagged positive
+codes or base64-looking strings. Existing names/codes remain unchanged and
+metadata schemas remain additive. Verified expectedSource responses explicitly
+report truncated=false only when no cut occurred. A single binary projection
+can order by its physical key without managed pagination; an explicit response
+limit and completeness flag must prove the one-record result. The private chain
+fixture seeds binary_fixture only after checking its disposable database name,
+grants read only, and never recreates its rows after vault recovery. Production
+release, public HTTPS and real ChatGPT acceptance remain blocked.

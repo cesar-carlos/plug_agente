@@ -5,6 +5,11 @@ and version bump instructions remain in `docs/install/release_guide.md`.
 
 ## Unreleased
 
+### Fixed — binary column type namespace
+
+- Rich result metadata now identifies odbc_fast discriminants explicitly, preserving existing names/codes. The isolated three-engine companion adds read-only binary fixtures and metadata-only diagnostics. No production DDL, credential migration or release is authorized.
+
+
 ### Fixed — exact transactional resource authorization
 
 - sql.operation.execute no longer authorizes homonymous resources by basename or reuses/overwrites legacy authorization decisions. Preserve other methods and global-scope semantics. Qualified DML, outputs and refusal paths are tested in dedicated fixtures; no existing grants/snapshots are enlarged. Production remains blocked.

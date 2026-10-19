@@ -44,6 +44,11 @@
       "maxItems": 1024,
       "items": {
         "type": "object",
+        "properties": {
+          "name": { "type": "string" },
+          "odbc_type": { "type": "integer", "description": "Type code in the explicitly identified type_system; not necessarily a native ODBC SQL_* code." },
+          "type_system": { "type": "string", "description": "odbc_fast uses internal discriminants (7 = binary). Native ODBC codes use odbc or omit this field. Unknown namespaces must not authorize binary delivery." }
+        },
         "additionalProperties": true
       }
     },

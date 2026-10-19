@@ -79,6 +79,7 @@ class OdbcGatewayQueryResultMapper {
             (metadata) => <String, dynamic>{
               'name': metadata.name,
               'odbc_type': metadata.odbcType,
+              'type_system': 'odbc_fast',
             },
           )
           .toList(growable: false);

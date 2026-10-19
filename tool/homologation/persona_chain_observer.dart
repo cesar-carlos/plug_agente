@@ -40,6 +40,20 @@ class ChainFixtureObserver implements IRpcRequestDispatcher {
             if (data.containsKey(key)) key: data[key],
         },
         if (response.result is Map) 'resultKeys': (response.result as Map).keys.toList(),
+        if (request.method == 'sql.execute' && response.result is Map) ...{
+          'columnMetadata': (response.result as Map)['column_metadata'],
+          'rowCount': (response.result as Map)['row_count'],
+          'truncated': (response.result as Map)['truncated'],
+          'effectiveMaxRows': (response.result as Map)['effective_max_rows'],
+          'rowShapes': [
+            for (final row in ((response.result as Map)['rows'] as List<dynamic>?) ?? [])
+              if (row is Map) {
+                  'keys': row.keys.toList(),
+                  'cellTypes': row.values.map((v) => v.runtimeType.toString()).toList(),
+                  'cellLengths': row.values.map((v) => v is String ? v.length : null).toList(),
+                },
+          ],
+        },
       })}\n',
       mode: FileMode.append,
       flush: true,

@@ -100,10 +100,27 @@ void main() {
       final meta = OdbcGatewayQueryResultMapper.buildColumnMetadata(result);
 
       expect(meta, [
-        {'name': 'id', 'odbc_type': 2},
+        {'name': 'id', 'odbc_type': 2, 'type_system': 'odbc_fast'},
       ]);
     });
 
+    test('binary discriminants retain an explicit namespace instead of native ODBC codes', () {
+      const result = QueryResult(
+        columns: ['file', 'text', 'future'],
+        rows: [],
+        rowCount: 0,
+        columnsMetadata: [
+          ColumnMetadata(name: 'file', odbcType: 7),
+          ColumnMetadata(name: 'text', odbcType: 1),
+          ColumnMetadata(name: 'future', odbcType: 99),
+        ],
+      );
+      expect(OdbcGatewayQueryResultMapper.buildColumnMetadata(result), [
+        {'name': 'file', 'odbc_type': 7, 'type_system': 'odbc_fast'},
+        {'name': 'text', 'odbc_type': 1, 'type_system': 'odbc_fast'},
+        {'name': 'future', 'odbc_type': 99, 'type_system': 'odbc_fast'},
+      ]);
+    });
     test(
       'should set hasNextPage and nextCursor when lookahead row exists',
       () {

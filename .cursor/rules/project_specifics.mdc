@@ -379,3 +379,8 @@ Managed pagination must order by verified output names. A qualified inner column
 requires an exact simple projection mapping, used for both wrapper SQL and cursor
 lookup; missing/ambiguous mappings fail closed. MCP/hub do not rewrite business
 SQL. Contract and narrow grammar: docs/communication/sql_operations.md.
+
+Binary metadata must distinguish odbc_fast discriminants from native ODBC
+codes with type_system; unknown types never authorize binary delivery. See
+docs/communication/sql_operations.md. The closed binary fixture is read only
+and must survive restart without reseeding. Deployment remains blocked.

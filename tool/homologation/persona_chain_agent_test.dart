@@ -39,6 +39,7 @@ import 'package:plug_agente/infrastructure/services/authorization_policy_resolve
 import 'package:plug_agente/infrastructure/settings/odbc_connection_settings.dart';
 import 'package:plug_agente/infrastructure/stores/sql_operation_journal_runtime.dart';
 import 'package:uuid/uuid.dart';
+import 'persona_chain_binary_fixture.dart';
 import 'persona_chain_cases.dart';
 import 'persona_chain_faults.dart';
 import 'persona_chain_observer.dart';
@@ -137,6 +138,7 @@ void main() {
               (await service.executeQuery(sql, connectionId: setupId)).getOrThrow();
             }
             await provisionWideStructureFixture(service, setupId);
+            await provisionBinaryChainFixture(service, setupId, engine, database);
           } finally {
             (await service.disconnect(setupId)).getOrThrow();
           }

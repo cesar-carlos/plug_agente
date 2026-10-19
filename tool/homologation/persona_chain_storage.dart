@@ -102,6 +102,7 @@ class ChainAgentStorage {
           rules: [
             for (final table in [
               'operation_fixture',
+              'binary_fixture',
               ...publicationTables,
               'schema_parent',
               'schema_child',
