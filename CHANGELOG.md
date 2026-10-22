@@ -5,6 +5,37 @@ and version bump instructions remain in `docs/install/release_guide.md`.
 
 ## Unreleased
 
+### Fixed — concurrent fixture evidence
+
+- Serialize RPC metadata appends in the isolated chain observer. Concurrent
+  Windows file handles could overwrite/interleave JSON records, invalidating
+  SQL call counts and cascading into otherwise unrelated acceptance scenarios.
+  Write failures remain visible and block subsequent evidence writes; no SQL,
+  policy, journal or production runtime behavior changes.
+
+### Fixed — isolated installer lifecycle evidence
+
+- Historical supervisor fixtures require an explicit full ancestor commit with
+  disabled recovery contract 1, instead of implicitly selecting the current HEAD.
+  Incompatible history fails before fixture creation; no checkout or fetch occurs.
+
+- Reject external manifests and artifact paths before reading their contents;
+  enforce owned non-linked fixture roots, size/format/hash checks and disabled
+  production activation. Existing or external build outputs fail before creation.
+
+- The namespaced Windows lifecycle runner no longer requires or opens an
+  operational configuration database, vault, updater policy or executable set.
+  Its host check compares Windows registration metadata only; fixture SQLite
+  and DPAPI retention checks stay scoped to the fixture.
+- Final verification failure or changed registrations invalidate the report.
+  A successful check cannot promote an installation failure to success.
+  The report explicitly distinguishes registration preservation from complete
+  operational-installation preservation. Automatic apply and release stay blocked.
+
+### Fixed — Windows vault concurrency
+
+- O backend Windows local de flutter_secure_storage coordena processos por lock de arquivo com espera limitada, grava cifras em arquivo temporário antes de substituição atômica e preserva o cofre em erros de leitura/decifragem. Regressão isolada cobre 200 chaves concorrentes, timeout, morte do proprietário e arquivo inválido. Não habilita produção nem torna várias chaves uma transação; usuários antigos do cofre devem parar antes da atualização coordenada.
+
 ### Fixed — binary column type namespace
 
 - Rich result metadata now identifies odbc_fast discriminants explicitly, preserving existing names/codes. The isolated three-engine companion adds read-only binary fixtures and metadata-only diagnostics. No production DDL, credential migration or release is authorized.

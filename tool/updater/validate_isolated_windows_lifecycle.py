@@ -13,28 +13,36 @@ import sqlite3
 import subprocess
 import time
 
-from tool.updater.isolated_windows_fixture import PROJECT, require_identity, assert_isolated_sources
+from tool.updater.isolated_windows_fixture import (
+    require_identity, assert_isolated_sources, require_fixture_root, require_fixture_artifact,
+)
 from tool.updater.manifest import sign
 from tool.updater.validate_existing_windows_installation import (
-    configured_profile_digest, installation_paths, registry_snapshot, updater_snapshot, verify_no_updater_mutations,
+    registry_snapshot, verify_no_updater_mutations,
 )
 from tool.updater.validate_windows_installation import sha256, lock_core_against_replacement
 
 
 def load_fixture(path: Path) -> dict:
-    path = path.resolve(strict=True)
+    if path.name != "fixture.json":
+        raise RuntimeError("The owned fixture.json manifest is required")
+    root = require_fixture_root(path.parent)
+    path = require_fixture_artifact(root, path)
+    if path.stat().st_size > 256 * 1024:
+        raise RuntimeError("Lifecycle manifest exceeds its size limit")
     state = json.loads(path.read_text(encoding="utf-8"))
     identity = require_identity(state["identity"])
-    root = Path(state["root"]).resolve(strict=True)
-    if root != path.parent or root.parent != PROJECT / "build/homologation" or not root.name.startswith("windows-lifecycle-"):
-        raise RuntimeError("Only an owned workspace lifecycle fixture is accepted")
+    if (type(state.get("format")) is not int or state["format"] != 1
+            or state.get("productionActivationGate") is not False
+            or Path(state["root"]) != root):
+        raise RuntimeError("Fixture format, activation gate or root mismatch")
     if state["appName"] != "Plug Agente Homologacao " + identity[-12:] or state["protocol"] != identity.lower().replace("_", "-"):
         raise RuntimeError("Fixture Windows identity mismatch")
-    installer = Path(state["installer"]).resolve(strict=True)
+    installer = require_fixture_artifact(root, Path(state["installer"]))
     if installer.parent != root / "package" or sha256(installer) != state["installerSha256"]:
         raise RuntimeError("Fixture installer binding mismatch")
     if "legacyService" in state:
-        legacy = Path(state["legacyService"]).resolve(strict=True)
+        legacy = require_fixture_artifact(root, Path(state["legacyService"]))
         if legacy != root / "legacy/native/Release/plug_update_service.exe" or sha256(legacy) != state["legacyServiceSha256"]:
             raise RuntimeError("Historical supervisor binding mismatch")
     assert_isolated_sources(root, identity)
@@ -46,10 +54,21 @@ def load_fixture(path: Path) -> dict:
 
 
 def host_snapshot() -> dict:
-    app, data, vault = installation_paths()
-    return {"profile": configured_profile_digest(data / "agent_config.db"), "vault": sha256(vault),
-            "registry": registry_snapshot(), "updater": updater_snapshot(),
-            "executables": {path.name: sha256(path) for path in app.glob("*.exe")}}
+    """Observe registration metadata only, even on hosts without an installed agent."""
+    return {"registry": registry_snapshot()}
+
+
+def verify_host_registration_preservation(result: dict, before: dict) -> None:
+    try:
+        unchanged = host_snapshot() == before
+    except Exception as error:
+        result["status"] = "failed"
+        result["operationalRegistrationsPreserved"] = None
+        raise RuntimeError("Operational registrations could not be verified") from error
+    result["operationalRegistrationsPreserved"] = unchanged
+    if not unchanged:
+        result["status"] = "failed"
+        raise RuntimeError("Operational registrations changed during the scoped lifecycle")
 
 
 def run(command: list[str], *, log: Path | None = None, input_bytes: bytes | None = None, accepted=(0,)) -> bytes:
@@ -203,7 +222,8 @@ def administrator_phase(state: dict) -> None:
     if registry_value(winreg.HKEY_LOCAL_MACHINE, rf"SYSTEM\CurrentControlSet\Services\{service}", "ImagePath") is not None:
         raise RuntimeError("Fixture service already exists")
     before = host_snapshot()
-    result = {"status": "failed", "phases": [], "identity": state["identity"], "productionActivationGate": False}
+    result = {"status": "failed", "phases": [], "identity": state["identity"], "productionActivationGate": False,
+              "operationalStateInspection": "registration_metadata_only"}
     installer = state["installer"]
     common = ["/VERYSILENT", "/SUPPRESSMSGBOXES", "/NORESTART", "/NOCLOSEAPPLICATIONS", f"/DIR={app}"]
     client = control / "plug_update_client.exe"
@@ -294,10 +314,7 @@ def administrator_phase(state: dict) -> None:
         raise
     finally:
         try:
-            result["operationalInstallationPreserved"] = host_snapshot() == before
-            if not result["operationalInstallationPreserved"]:
-                result["status"] = "failed"
-                raise RuntimeError("Operational installation changed during the scoped lifecycle")
+            verify_host_registration_preservation(result, before)
         finally:
             (root / "lifecycle-result.json").write_text(json.dumps(result, indent=2), encoding="utf-8")
 

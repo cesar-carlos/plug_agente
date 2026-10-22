@@ -1,5 +1,14 @@
 # SQL operations â€” journal and transaction integration
 
+## Concurrent chain evidence
+
+The isolated chain observer serializes metadata file appends before returning
+each RPC response. Windows concurrent append handles must not lose/interleave
+records used to count dispatches. A failed write remains a fixture failure and
+blocks later writes; malformed or missing evidence is never ignored to pass a
+test. This changes only the observer, not SQL execution, journals or authority.
+The regression uses a private temporary file and concurrent delegated responses.
+
 The agent now registers `sql.operation.execute`, `sql.operation.get` and
 `sql.operation.cancel` in the dispatcher. Production installer/appcast publishing
 remains blocked by contracts/persona-v2-release.json. The hub forwards only after
@@ -497,3 +506,30 @@ limit and completeness flag must prove the one-record result. The private chain
 fixture seeds binary_fixture only after checking its disposable database name,
 grants read only, and never recreates its rows after vault recovery. Production
 release, public HTTPS and real ChatGPT acceptance remain blocked.
+
+## Windows vault concurrency correction (2026-10-20)
+
+The production adapters still use flutter_secure_storage. The local Windows
+backend override preserves the DPAPI format and keys while serializing complete
+map operations across processes, replacing only fully flushed ciphertext, and
+refusing unreadable content without deletion. Provenance and limits are in
+third_party/flutter_secure_storage_windows/README.md. Never edit Pub cache.
+
+The MCP probe-persona-agent-vault.ps1 runner reproduced missing keys before the
+fix. Afterward, two processes preserved 200 synthetic keys; contention failed
+within its deadline without changing ciphertext, terminating the private lock
+holder released the lock, and corrupt input was preserved on refused read/write.
+No operational vault was opened. This does not certify power loss, atomic groups
+of credentials, old/new concurrent binaries or the installed upgrade lifecycle.
+Keep deploy and installer/appcast blocked; stop all vault users before upgrade.
+
+
+## Bounded manual training companion
+
+The MCP manual-training controller may supply manualTraining with format
+persona-manual-training-v1 and an absolute UTC expiresAt, at most two hours ahead.
+The private companion preserves that fixed deadline and exits cleanly on deadline
+or its agents-stop file. Without the option the twelve-minute automated watchdog
+and fourteen-minute test timeout remain unchanged. SQL budgets, journal semantics,
+authentication and approval lifetimes are not extended. This is a disposable
+Flutter companion with native ODBC/vault, not proof of the installed desktop app.

@@ -5,6 +5,15 @@ alwaysApply: true
 
 # Plug Agente - Project Specifics
 
+The chain companion accepts a bounded manualTraining deadline (at most two hours)
+only in its private fixture manifest. Default automated lifetime stays unchanged;
+this never changes SQL, approval or authentication limits. Stop remains cooperative.
+
+
+The isolated chain RPC observer serializes metadata appends and awaits them
+before completing responses. Never discard malformed/missing evidence or retry
+SQL to repair a call count. Evidence-write failures must remain visible.
+
 ## Escopo
 
 Este arquivo concentra somente decisoes especificas deste repositorio:
@@ -384,3 +393,42 @@ Binary metadata must distinguish odbc_fast discriminants from native ODBC
 codes with type_system; unknown types never authorize binary delivery. See
 docs/communication/sql_operations.md. The closed binary fixture is read only
 and must survive restart without reseeding. Deployment remains blocked.
+
+## Windows vault process coordination
+
+flutter_secure_storage remains mandatory. Its Windows backend is pinned to the
+licensed local copy in third_party/flutter_secure_storage_windows; never patch
+the global Pub cache. Every map operation uses the same support-directory file
+lock, a bounded contention wait, and flushed atomic ciphertext replacement.
+Unreadable/decryption-invalid content fails closed without deletion. Never remove
+a lock pathname while another process may own it or promote orphan .next files.
+Old binaries do not follow this lock: stop all vault users before coordinated
+upgrade. Multiple keys are still separate operations, not a transaction.
+Validate only private DPAPI fixtures with the MCP vault-concurrency runner;
+operational vaults, configured credentials and production release remain excluded.
+
+## Isolated Windows installer acceptance
+
+The namespaced lifecycle runner must work without an operational installation.
+Never open its configuration, vault or updater policy to validate an isolated
+fixture. Observe only Windows registration metadata; read retained SQLite/DPAPI
+content exclusively inside the owned fixture. The result identifies this limited
+scope and never claims complete operational-installation preservation. Changed
+or unavailable final metadata invalidates the report; a passed metadata check
+does not override a failed installation. Administrative installation remains a
+separate elevated phase; compiled Pascal fixtures do not certify installed
+service apply/probation/rollback. Keep automatic apply and release blocked.
+
+Validate owned lifecycle roots before reading a manifest: a direct new child
+`build/homologation/windows-lifecycle-*`, without reparse points in its parents.
+Only `fixture.json` up to 256 KiB is accepted, with format 1 and a disabled
+production gate. Installer/legacy artifacts must stay inside that fixture, with
+non-linked paths and matching hashes. Reject an existing/external output before
+creating files or compiling. These checks are fixture isolation, not release
+authorization or authentication of arbitrary supplied packages.
+
+Historical supervisor fixtures require an explicit exact local ancestor revision
+with disabled recovery contract 1. Never infer the old supervisor from HEAD or
+fetch/checkout a different revision automatically. Validate before output creation
+and retain the exact commit with the derived fixture binary. Building a historical
+fixture never authorizes service replacement or automatic application.

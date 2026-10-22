@@ -41,6 +41,65 @@ Os testes de aplicação usam transportes controlados para IPC; os testes nativo
 locais não executam enrollment nem instalação como serviço SYSTEM. O build de
 validação usa a chave pública da fixture e não é um artefato de distribuição.
 
+## Isolated lifecycle runner correction (2026-10-22)
+
+The namespaced runner now compares only operational Windows registration
+metadata. It no longer opens the installed configuration database, user vault,
+updater policy or application binaries, and works on hosts with no operational
+agent. `operationalStateInspection=registration_metadata_only` identifies scope;
+`operationalRegistrationsPreserved` replaces the broader historical field.
+Unavailable final verification records failure with a null preservation result;
+changed registrations fail, and unchanged metadata never promotes a failed install.
+SQLite/DPAPI retention checks remain restricted to fixture data.
+
+The provisioner now requires a new direct `build/homologation/windows-lifecycle-*`
+child before creation. The loader validates ownership and reparse points before
+opening `fixture.json`; it checks a 256 KiB limit, format 1, disabled activation
+and contained installer/historical-service artifacts before hashing. It refuses
+existing/external output roots without building. These checks do not authenticate
+arbitrary packages or replace private fixture provenance and elevated acceptance.
+
+The original clean-VM validator and explicitly invoked existing-installation
+repair tool keep their distinct contracts. Historical evidence below is not
+revalidated by this correction. Current tests cover isolated runner behavior and
+compiled Pascal installer repair/manual-upgrade orchestration; they do not rerun
+elevated SCM installation or certify newer application builds, logon or rollback.
+Automatic apply and production release remain blocked.
+
+### Repeating the installed fixture safely
+
+The historical supervisor source now requires `--legacy-revision` with an exact
+40-character local ancestor commit containing disabled recovery contract 1.
+It no longer follows HEAD, whose contract is already version 2. Missing,
+unrelated or incompatible history fails before creating the fixture; the chosen
+commit remains in `legacySourceCommit`. The documented commit below was checked
+against local history; there is no automatic fetch, checkout or source migration.
+
+
+Use a complete private candidate Release payload, including the corrected vault;
+an old bundle is not proof of a newer app build. From the agent checkout, create
+a new owned directory (never reuse an earlier fixture):
+
+```powershell
+python -m tool.updater.isolated_windows_fixture --output build/homologation/windows-lifecycle-new-id --legacy-revision fdb44d86b2a36df85c0133cf72167217fc1bd16e
+```
+
+In an elevated Windows terminal run the administrator phase with that exact
+`fixture.json`. It refuses existing namespaces, verifies its bound artifacts and
+waits for the separate non-elevated phase. After `standard-phase-ready` exists,
+run the second command from the original standard-user terminal:
+
+```powershell
+python -m tool.updater.validate_isolated_windows_lifecycle --fixture build/homologation/windows-lifecycle-new-id/fixture.json --phase administrator --allow-machine-changes
+python -m tool.updater.validate_isolated_windows_lifecycle --fixture build/homologation/windows-lifecycle-new-id/fixture.json --phase standard-user --allow-machine-changes
+```
+
+These are two different terminals/tokens, not a sequential script. The explicit
+flag authorizes only the owned fixture namespace; it does not authorize an
+operational-installation repair. Preserve failed/uncertain state for inspection;
+do not reuse the namespace or blindly rerun an installer. Keep fixture evidence
+private and distinguish successful uninstall from complete application recovery.
+
 ## Qualified Windows lifecycle and IPC delivery (2026-10-15)
 
 Windows 11 build 26300 passed a namespaced, real-machine lifecycle derived from

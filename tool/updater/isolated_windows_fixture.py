@@ -14,6 +14,7 @@ import os
 from pathlib import Path
 import re
 import shutil
+import stat
 import subprocess
 import uuid
 
@@ -32,6 +33,47 @@ def require_identity(name: str) -> str:
     if not IDENTITY.fullmatch(name):
         raise ValueError("An exclusive PlugAgenteHomologacao_<12 hex> identity is required")
     return name
+
+
+def reject_reparse(path: Path) -> None:
+    metadata = path.lstat()
+    if stat.S_ISLNK(metadata.st_mode) or getattr(metadata, "st_file_attributes", 0) & getattr(stat, "FILE_ATTRIBUTE_REPARSE_POINT", 0x400):
+        raise RuntimeError("Linked lifecycle fixture paths are not accepted")
+
+
+def require_fixture_root(path: Path, *, fresh: bool = False) -> Path:
+    owned = Path(os.path.abspath(path))
+    parent = PROJECT / "build/homologation"
+    if owned.parent != parent or not re.fullmatch(r"windows-lifecycle-[a-z0-9-]{1,80}", owned.name):
+        raise RuntimeError("Only an owned workspace lifecycle fixture is accepted")
+    for candidate in (PROJECT / "build", parent, owned):
+        try:
+            reject_reparse(candidate)
+        except FileNotFoundError:
+            if fresh:
+                continue
+            raise
+        if not candidate.is_dir():
+            raise RuntimeError("Lifecycle fixture directory is invalid")
+    if fresh and owned.exists():
+        raise RuntimeError("Refusing an existing lifecycle fixture")
+    return owned
+
+
+def require_fixture_artifact(root: Path, path: Path) -> Path:
+    artifact = Path(os.path.abspath(path))
+    try:
+        relative = artifact.relative_to(root)
+    except ValueError as error:
+        raise RuntimeError("Lifecycle artifact is outside its owned fixture") from error
+    current = root
+    reject_reparse(current)
+    for part in relative.parts:
+        current = current / part
+        reject_reparse(current)
+    if not artifact.is_file():
+        raise RuntimeError("Lifecycle fixture artifact is not a regular file")
+    return artifact
 
 
 def rewrite_native(source: str, identity: str) -> str:
@@ -88,13 +130,29 @@ def cmake_path() -> str:
     return str(candidate)
 
 
-def build_legacy_supervisor(output: Path, identity: str, public_key: str) -> dict:
+def require_legacy_revision(revision: str) -> str:
+    if not re.fullmatch(r"[a-f0-9]{40}", revision):
+        raise RuntimeError("An explicit full historical commit is required")
+    try:
+        subprocess.run(["git", "merge-base", "--is-ancestor", revision, "HEAD"], cwd=PROJECT,
+                       capture_output=True, check=True)
+        contract = subprocess.run(["git", "show", f"{revision}:windows/updater/contract.h"], cwd=PROJECT,
+                                  capture_output=True, text=True, check=True).stdout
+    except subprocess.CalledProcessError as error:
+        raise RuntimeError("Historical supervisor must exist in the local ancestry") from error
+    if "kRecoveryContractVersion = 1;" not in contract or "kApplicationContractImplemented = false;" not in contract:
+        raise RuntimeError("The explicit historical source must be the disabled recovery-v1 supervisor")
+    return revision
+
+
+def build_legacy_supervisor(output: Path, identity: str, public_key: str, revision: str) -> dict:
     """Preserve an actual previous supervisor, rather than only editing policy."""
     require_identity(identity)
+    output = require_fixture_root(output)
+    revision = require_legacy_revision(revision)
     legacy = output / "legacy"
     if legacy.exists():
         raise RuntimeError("Refusing to replace a historical supervisor fixture")
-    revision = subprocess.run(["git", "rev-parse", "HEAD"], cwd=PROJECT, capture_output=True, text=True, check=True).stdout.strip()
     for name in ("updater", "update_helper"):
         destination = legacy / "windows" / name
         shutil.copytree(PROJECT / "windows" / name, destination)
@@ -122,9 +180,11 @@ def build_legacy_supervisor(output: Path, identity: str, public_key: str) -> dic
     return {"legacyService": str(binary), "legacyServiceSha256": sha256(binary), "legacySourceCommit": revision}
 
 
-def build_fixture(output: Path) -> Path:
-    if os.name != "nt" or output.exists():
+def build_fixture(output: Path, legacy_revision: str) -> Path:
+    if os.name != "nt":
         raise RuntimeError("Windows and a new private output directory are required")
+    output = require_fixture_root(output, fresh=True)
+    legacy_revision = require_legacy_revision(legacy_revision)
     output.mkdir(parents=True)
     protect_backup(output)
     identity = require_identity("PlugAgenteHomologacao_" + uuid.uuid4().hex[:12])
@@ -176,7 +236,7 @@ def build_fixture(output: Path) -> Path:
              "appName": "Plug Agente Homologacao " + identity[-12:], "root": str(output.resolve()),
              "installer": str(installer), "installerSha256": sha256(installer), "publicKey": public,
              "originalSourceHashes": sources, "payloadVersion": "1.8.7+1", "productionActivationGate": False}
-    state.update(build_legacy_supervisor(output, identity, public))
+    state.update(build_legacy_supervisor(output, identity, public, legacy_revision))
     manifest = output / "fixture.json"
     manifest.write_text(json.dumps(state, indent=2), encoding="utf-8")
     return manifest
@@ -185,4 +245,7 @@ def build_fixture(output: Path) -> Path:
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--output", type=Path, required=True)
-    print(build_fixture(parser.parse_args().output.resolve()))
+    parser.add_argument("--legacy-revision", required=True,
+                        help="Exact ancestor commit containing the disabled recovery-v1 supervisor")
+    args = parser.parse_args()
+    print(build_fixture(args.output.absolute(), args.legacy_revision))

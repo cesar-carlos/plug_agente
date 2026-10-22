@@ -1,6 +1,11 @@
 from pathlib import Path
 import tempfile
 import unittest
+import subprocess
+import os
+from unittest.mock import patch
+
+from tool.updater import isolated_windows_fixture as fixtures
 
 from tool.updater.isolated_windows_fixture import PROJECT, require_identity, rewrite_installer, rewrite_native, assert_isolated_sources
 
@@ -49,3 +54,43 @@ class IsolatedWindowsFixtureTests(unittest.TestCase):
             (root / "installer/setup.iss").write_text('Root: HKA; Subkey: "Software\\Classes\\plugdb";', encoding="utf-8")
             with self.assertRaisesRegex(RuntimeError, "Operational identity"):
                 assert_isolated_sources(root, self.identity)
+
+
+class HistoricalSupervisorTests(unittest.TestCase):
+    revision = "a" * 40
+
+    def test_implicit_or_partial_revisions_are_refused_before_git(self):
+        with patch.object(fixtures.subprocess, "run") as run:
+            for value in ("HEAD", "main", "a" * 39, "a" * 40 + "\n", "--help"):
+                with self.subTest(value=value), self.assertRaisesRegex(RuntimeError, "explicit full"):
+                    fixtures.require_legacy_revision(value)
+            run.assert_not_called()
+
+    def test_exact_ancestor_with_disabled_old_contract_is_accepted(self):
+        contract = "constexpr int kRecoveryContractVersion = 1; constexpr bool kApplicationContractImplemented = false;"
+        with patch.object(fixtures.subprocess, "run", side_effect=[
+            subprocess.CompletedProcess([], 0), subprocess.CompletedProcess([], 0, stdout=contract),
+        ]) as run:
+            self.assertEqual(fixtures.require_legacy_revision(self.revision), self.revision)
+        self.assertEqual(run.call_args_list[0].args[0], ["git", "merge-base", "--is-ancestor", self.revision, "HEAD"])
+        self.assertEqual(run.call_args_list[1].args[0], ["git", "show", self.revision + ":windows/updater/contract.h"])
+
+    def test_new_or_enabled_contract_is_refused_instead_of_treated_as_historical(self):
+        for contract in ("kRecoveryContractVersion = 2; kApplicationContractImplemented = false;",
+                         "kRecoveryContractVersion = 1; kApplicationContractImplemented = true;"):
+            with self.subTest(contract=contract), patch.object(fixtures.subprocess, "run", side_effect=[
+                subprocess.CompletedProcess([], 0), subprocess.CompletedProcess([], 0, stdout=contract),
+            ]):
+                with self.assertRaisesRegex(RuntimeError, "disabled recovery-v1"):
+                    fixtures.require_legacy_revision(self.revision)
+
+    @unittest.skipUnless(os.name == "nt", "Windows fixture provisioner preflight")
+    def test_missing_or_unrelated_revision_does_not_create_fixture_output(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            project = Path(temporary)
+            output = project / "build/homologation/windows-lifecycle-private"
+            with patch.object(fixtures, "PROJECT", project), \
+                    patch.object(fixtures.subprocess, "run", side_effect=subprocess.CalledProcessError(1, ["git"])):
+                with self.assertRaisesRegex(RuntimeError, "local ancestry"):
+                    fixtures.build_fixture(output, self.revision)
+            self.assertFalse(output.exists())

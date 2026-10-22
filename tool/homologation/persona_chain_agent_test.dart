@@ -45,6 +45,7 @@ import 'persona_chain_faults.dart';
 import 'persona_chain_observer.dart';
 import 'persona_chain_storage.dart';
 import 'persona_chain_structure_fixture.dart';
+import 'persona_manual_session.dart';
 import 'persona_publication_fixture.dart';
 
 // Explicit isolated fixture only; production config and native vault adapters.
@@ -66,6 +67,10 @@ void main() {
       Uri.parse(hubUrl).host != '127.0.0.1') {
     throw StateError('Only loopback, explicitly named fixture environments are accepted.');
   }
+  final manualSession = manifest.containsKey('manualTraining');
+  final testLifetime = manualSession
+      ? fixtureSessionDeadline(manifest, Duration.zero).difference(DateTime.now()) + const Duration(minutes: 2)
+      : const Duration(minutes: 14);
   test('four real engines through production RPC, policy, socket and journal', () async {
     registerChainVault(Directory(sessionRoot));
     final locator = odbc.ServiceLocator()..initialize(useAsync: true, asyncWorkerCount: 4);
@@ -294,7 +299,7 @@ void main() {
         };
       }
       await File('$sessionRoot/agents-ready.json').writeAsString(jsonEncode(ready), flush: true);
-      final deadline = DateTime.now().add(const Duration(minutes: 12));
+      final deadline = fixtureSessionDeadline(manifest, const Duration(minutes: 12));
       while (!File('$sessionRoot/agents-stop').existsSync()) {
         for (final item in Directory(
           sessionRoot,
@@ -314,7 +319,10 @@ void main() {
           await result.rename('${item.path}.result');
           await item.rename('${item.path}.processed');
         }
-        if (DateTime.now().isAfter(deadline)) throw StateError('Fixture controller did not finish.');
+        if (DateTime.now().isAfter(deadline)) {
+          if (manualSession) break;
+          throw StateError('Fixture controller did not finish.');
+        }
         await Future<void>.delayed(const Duration(milliseconds: 200));
       }
     } finally {
@@ -324,5 +332,5 @@ void main() {
       await TransportWorkPool.shared.dispose();
       locator.shutdown();
     }
-  }, timeout: const Timeout(Duration(minutes: 14)));
+  }, timeout: Timeout(testLifetime));
 }
