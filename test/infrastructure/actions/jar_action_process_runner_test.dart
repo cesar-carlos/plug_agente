@@ -410,7 +410,7 @@ class _NoopProcessTreeController implements AgentActionProcessTreeController {
   }
 
   @override
-  Future<void> release(AgentActionProcessTreeLease lease) async {}
+  Future<Result<void>> release(AgentActionProcessTreeLease lease) async => const Success(unit);
 
   @override
   Future<Result<void>> terminate(AgentActionProcessTreeLease lease) async {

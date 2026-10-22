@@ -448,7 +448,7 @@ class _NoopProcessTreeController implements AgentActionProcessTreeController {
   Future<Result<AgentActionProcessTreeLease>> attach(Process process) async => const Success(_NoopProcessTreeLease());
 
   @override
-  Future<void> release(AgentActionProcessTreeLease lease) async {}
+  Future<Result<void>> release(AgentActionProcessTreeLease lease) async => const Success(unit);
 
   @override
   Future<Result<void>> terminate(AgentActionProcessTreeLease lease) async => const Success(unit);

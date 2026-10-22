@@ -72,192 +72,220 @@ class AgentActionProcessLifecycle {
   }) async {
     final effectiveInvocation = invocation;
     AgentActionProcessTreeLease? processTreeLease;
-    try {
-      final startedAt = _now();
-      final deadline = definition.policies.timeout.deadlineFrom(startedAt);
-      late final Process process;
+    Result<void> cleanupResult = const Success(unit);
+    ActionProcessOutputCaptureSession? stdoutCapture;
+    ActionProcessOutputCaptureSession? stderrCapture;
+    Future<Result<AgentActionProcessResult>> run() async {
       try {
-        process = await _startBeforeDeadline(
-          deadline: deadline,
-          executable: effectiveInvocation.executable,
-          arguments: effectiveInvocation.arguments,
-          workingDirectory: workingDirectory,
-          environment: processEnvironment.isEmpty ? null : processEnvironment,
-          includeParentEnvironment: includeParentEnvironment,
-          runInShell: effectiveInvocation.runInShell,
-          mode: startMode,
+        final startedAt = _now();
+        final deadline = definition.policies.timeout.deadlineFrom(startedAt);
+        late final Process process;
+        try {
+          process = await _startBeforeDeadline(
+            deadline: deadline,
+            executable: effectiveInvocation.executable,
+            arguments: effectiveInvocation.arguments,
+            workingDirectory: workingDirectory,
+            environment: processEnvironment.isEmpty ? null : processEnvironment,
+            includeParentEnvironment: includeParentEnvironment,
+            runInShell: effectiveInvocation.runInShell,
+            mode: startMode,
+          );
+        } on TimeoutException catch (error) {
+          _metrics?.recordProcessTimeout();
+          return Failure(
+            _timeoutFailure(
+              definition: definition,
+              phase: 'start_process',
+              cause: error,
+              failureMessages: failureMessages,
+            ),
+          );
+        } on Exception catch (error) {
+          _metrics?.recordProcessSpawnFailure();
+          return Failure(
+            ActionRuntimeFailure.withContext(
+              message: failureMessages.processStartMessage,
+              cause: AgentActionProcessFailureCause.fromException(
+                phase: 'start_process',
+                error: error,
+              ),
+              code: failureMessages.processExceptionCode,
+              context: {
+                'action_id': definition.id,
+                ...AgentActionProcessInvocationDiagnostics.forInvocation(
+                  invocation: effectiveInvocation,
+                  capturePolicy: definition.policies.capture,
+                ),
+                'phase': 'start_process',
+                'reason': AgentActionProcessConstants.processStartFailedReason,
+                'user_message': failureMessages.processStartUserMessage,
+              },
+            ),
+          );
+        }
+
+        final treeResult = await _processTreeController.attach(process);
+        if (treeResult.isError()) {
+          _metrics?.recordProcessTreeAttachFailure();
+          process.kill();
+          return Failure(treeResult.exceptionOrNull()!);
+        }
+        processTreeLease = treeResult.getOrThrow();
+        _metrics?.recordProcessStarted(_now().difference(startedAt));
+        _activeProcessesByExecutionId[executionId] = _ActiveProcess(process, processTreeLease!);
+        final stdoutFuture = stdoutCapture = ActionProcessOutputCaptureSession(
+          process.stdout,
+          isEnabled: definition.policies.capture.captureStdout,
+          maxBytes: definition.policies.capture.maxCapturedOutputBytes,
+          encoding: definition.policies.encoding.stdout,
+          redactor: _redactor,
+          redactBeforePersisting: definition.policies.capture.redactBeforePersisting,
         );
-      } on TimeoutException catch (error) {
-        _metrics?.recordProcessTimeout();
-        return Failure(
-          _timeoutFailure(
-            definition: definition,
-            phase: 'start_process',
-            cause: error,
-            failureMessages: failureMessages,
+        final stderrFuture = stderrCapture = ActionProcessOutputCaptureSession(
+          process.stderr,
+          isEnabled: definition.policies.capture.captureStderr,
+          maxBytes: definition.policies.capture.maxCapturedOutputBytes,
+          encoding: definition.policies.encoding.stderr,
+          redactor: _redactor,
+          redactBeforePersisting: definition.policies.capture.redactBeforePersisting,
+        );
+
+        final diagnostics = AgentActionProcessInvocationDiagnostics.forInvocation(
+          invocation: effectiveInvocation,
+          capturePolicy: definition.policies.capture,
+        );
+        final stdinSetupResult = await _stdinSetup.configure(
+          process: process,
+          definition: definition,
+          request: request,
+          actionId: definition.id,
+          diagnostics: diagnostics,
+          ioTimeout: _remainingUntil(deadline),
+        );
+        if (stdinSetupResult.isError()) {
+          await _abortStartedProcess(
+            process: process,
+            processTreeLease: processTreeLease!,
+            stdoutFuture: stdoutFuture,
+            stderrFuture: stderrFuture,
+          );
+          return Failure(stdinSetupResult.exceptionOrNull()!);
+        }
+
+        var timedOut = false;
+        var killed = false;
+        final executionTimeout = _remainingUntil(deadline);
+        if (executionTimeout <= Duration.zero) {
+          timedOut = true;
+        }
+        final exitCode = await process.exitCode
+            .then<int?>((value) => value)
+            .timeout(
+              executionTimeout <= Duration.zero ? Duration.zero : executionTimeout,
+              onTimeout: () async {
+                timedOut = true;
+                _metrics?.recordProcessTimeout();
+                if (definition.policies.timeout.killMainProcessOnTimeout) {
+                  killed = await _terminateProcessTree(process, processTreeLease!);
+                  if (killed) {
+                    _killedExecutionIds.add(executionId);
+                  }
+                  // The deadline belongs to the whole operation. Do not add an
+                  // arbitrary second wait after requesting termination.
+                  return null;
+                }
+
+                // The operator explicitly chose not to kill the process. Keep
+                // the registry entry until it actually exits so cancellation and
+                // retry admission cannot lose ownership or start a duplicate.
+                return process.exitCode.then<int?>((value) => value);
+              },
+            );
+
+        final finishedAt = _now();
+        final drainTimeout = timedOut && killed ? Duration.zero : _boundedDrainTimeout(deadline);
+        final stdout = await _awaitCapturedOutput(stdoutFuture, timeout: drainTimeout);
+        final stderr = await _awaitCapturedOutput(stderrFuture, timeout: drainTimeout);
+
+        return Success(
+          AgentActionProcessResult(
+            status: _statusFor(
+              definition: definition,
+              executionId: executionId,
+              exitCode: exitCode,
+              timedOut: timedOut,
+              killed: killed,
+            ),
+            pid: process.pid,
+            exitCode: exitCode,
+            processStartedAt: startedAt,
+            finishedAt: finishedAt,
+            processExecutable: effectiveInvocation.executable,
+            processArgumentCount: effectiveInvocation.arguments.length,
+            processCommandPreview: AgentActionProcessInvocationDiagnostics.logSafeCommandPreview(
+              invocation: effectiveInvocation,
+              capturePolicy: definition.policies.capture,
+            ),
+            stdout: stdout,
+            stderr: stderr,
+            contextHash: contextHash,
+            timedOut: timedOut,
+            killed: killed,
+            redactionApplied: definition.policies.capture.redactBeforePersisting,
           ),
         );
       } on Exception catch (error) {
-        _metrics?.recordProcessSpawnFailure();
         return Failure(
           ActionRuntimeFailure.withContext(
-            message: failureMessages.processStartMessage,
+            message: failureMessages.processRuntimeMessage,
             cause: AgentActionProcessFailureCause.fromException(
-              phase: 'start_process',
+              phase: 'process_runtime',
               error: error,
             ),
-            code: failureMessages.processExceptionCode,
             context: {
               'action_id': definition.id,
               ...AgentActionProcessInvocationDiagnostics.forInvocation(
                 invocation: effectiveInvocation,
                 capturePolicy: definition.policies.capture,
               ),
-              'phase': 'start_process',
-              'reason': AgentActionProcessConstants.processStartFailedReason,
-              'user_message': failureMessages.processStartUserMessage,
+              'phase': 'process_runtime',
+              'reason': AgentActionProcessConstants.processRuntimeErrorReason,
+              'user_message': failureMessages.processRuntimeUserMessage,
             },
           ),
         );
-      }
-
-      final treeResult = await _processTreeController.attach(process);
-      if (treeResult.isError()) {
-        _metrics?.recordProcessTreeAttachFailure();
-        process.kill();
-        return Failure(treeResult.exceptionOrNull()!);
-      }
-      processTreeLease = treeResult.getOrThrow();
-      _metrics?.recordProcessStarted(_now().difference(startedAt));
-      _activeProcessesByExecutionId[executionId] = _ActiveProcess(process, processTreeLease);
-      final stdoutFuture = ActionProcessOutputCapture.capture(
-        process.stdout,
-        isEnabled: definition.policies.capture.captureStdout,
-        maxBytes: definition.policies.capture.maxCapturedOutputBytes,
-        encoding: definition.policies.encoding.stdout,
-        redactor: _redactor,
-        redactBeforePersisting: definition.policies.capture.redactBeforePersisting,
-      );
-      final stderrFuture = ActionProcessOutputCapture.capture(
-        process.stderr,
-        isEnabled: definition.policies.capture.captureStderr,
-        maxBytes: definition.policies.capture.maxCapturedOutputBytes,
-        encoding: definition.policies.encoding.stderr,
-        redactor: _redactor,
-        redactBeforePersisting: definition.policies.capture.redactBeforePersisting,
-      );
-
-      final diagnostics = AgentActionProcessInvocationDiagnostics.forInvocation(
-        invocation: effectiveInvocation,
-        capturePolicy: definition.policies.capture,
-      );
-      final stdinSetupResult = await _stdinSetup.configure(
-        process: process,
-        definition: definition,
-        request: request,
-        actionId: definition.id,
-        diagnostics: diagnostics,
-        ioTimeout: _remainingUntil(deadline),
-      );
-      if (stdinSetupResult.isError()) {
-        await _abortStartedProcess(
-          process: process,
-          processTreeLease: processTreeLease,
-          stdoutFuture: stdoutFuture,
-          stderrFuture: stderrFuture,
-        );
-        return Failure(stdinSetupResult.exceptionOrNull()!);
-      }
-
-      var timedOut = false;
-      var killed = false;
-      final executionTimeout = _remainingUntil(deadline);
-      if (executionTimeout <= Duration.zero) {
-        timedOut = true;
-      }
-      final exitCode = await process.exitCode
-          .then<int?>((value) => value)
-          .timeout(
-            executionTimeout <= Duration.zero ? Duration.zero : executionTimeout,
-            onTimeout: () async {
-              timedOut = true;
-              _metrics?.recordProcessTimeout();
-              if (definition.policies.timeout.killMainProcessOnTimeout) {
-                killed = await _terminateProcessTree(process, processTreeLease!);
-                if (killed) {
-                  _killedExecutionIds.add(executionId);
-                }
-                // The deadline belongs to the whole operation. Do not add an
-                // arbitrary second wait after requesting termination.
-                return null;
-              }
-
-              // The operator explicitly chose not to kill the process. Keep
-              // the registry entry until it actually exits so cancellation and
-              // retry admission cannot lose ownership or start a duplicate.
-              return process.exitCode.then<int?>((value) => value);
-            },
-          );
-
-      final finishedAt = _now();
-      final drainTimeout = timedOut && killed ? Duration.zero : _boundedDrainTimeout(deadline);
-      final stdout = await _awaitCapturedOutput(stdoutFuture, timeout: drainTimeout);
-      final stderr = await _awaitCapturedOutput(stderrFuture, timeout: drainTimeout);
-
-      return Success(
-        AgentActionProcessResult(
-          status: _statusFor(
-            definition: definition,
-            executionId: executionId,
-            exitCode: exitCode,
-            timedOut: timedOut,
-            killed: killed,
-          ),
-          pid: process.pid,
-          exitCode: exitCode,
-          processStartedAt: startedAt,
-          finishedAt: finishedAt,
-          processExecutable: effectiveInvocation.executable,
-          processArgumentCount: effectiveInvocation.arguments.length,
-          processCommandPreview: AgentActionProcessInvocationDiagnostics.logSafeCommandPreview(
-            invocation: effectiveInvocation,
-            capturePolicy: definition.policies.capture,
-          ),
-          stdout: stdout,
-          stderr: stderr,
-          contextHash: contextHash,
-          timedOut: timedOut,
-          killed: killed,
-          redactionApplied: definition.policies.capture.redactBeforePersisting,
-        ),
-      );
-    } on Exception catch (error) {
-      return Failure(
-        ActionRuntimeFailure.withContext(
-          message: failureMessages.processRuntimeMessage,
-          cause: AgentActionProcessFailureCause.fromException(
-            phase: 'process_runtime',
-            error: error,
-          ),
-          context: {
-            'action_id': definition.id,
-            ...AgentActionProcessInvocationDiagnostics.forInvocation(
-              invocation: effectiveInvocation,
-              capturePolicy: definition.policies.capture,
+      } finally {
+        _activeProcessesByExecutionId.remove(executionId);
+        _killedExecutionIds.remove(executionId);
+        try {
+          await Future.wait([
+            if (stdoutCapture != null) stdoutCapture!.cancel(),
+            if (stderrCapture != null) stderrCapture!.cancel(),
+          ]);
+        } on Exception catch (error) {
+          cleanupResult = Failure(
+            ActionRuntimeFailure.withContext(
+              message: 'Failed to close action output streams.',
+              cause: error,
+              context: const {
+                'reason': 'process_output_cleanup_failed',
+                'user_message': 'Falha ao finalizar a captura de saida da acao.',
+              },
             ),
-            'phase': 'process_runtime',
-            'reason': AgentActionProcessConstants.processRuntimeErrorReason,
-            'user_message': failureMessages.processRuntimeUserMessage,
-          },
-        ),
-      );
-    } finally {
-      _activeProcessesByExecutionId.remove(executionId);
-      _killedExecutionIds.remove(executionId);
-      if (processTreeLease != null) {
-        await _processTreeController.release(processTreeLease);
+          );
+        } finally {
+          if (processTreeLease != null) {
+            final released = await _processTreeController.release(processTreeLease!);
+            if (released.isError()) cleanupResult = released;
+          }
+        }
       }
     }
+
+    final result = await run();
+    if (cleanupResult.isError()) return Failure(cleanupResult.exceptionOrNull()!);
+    return result;
   }
 
   Future<Result<AgentActionCancellationResult>> cancel({
@@ -318,51 +346,27 @@ class AgentActionProcessLifecycle {
   Future<void> _abortStartedProcess({
     required Process process,
     required AgentActionProcessTreeLease processTreeLease,
-    required Future<AgentActionCapturedOutput> stdoutFuture,
-    required Future<AgentActionCapturedOutput> stderrFuture,
+    required ActionProcessOutputCaptureSession stdoutFuture,
+    required ActionProcessOutputCaptureSession stderrFuture,
   }) async {
     await _terminateProcessTree(process, processTreeLease);
     await _drainOutputCaptures(stdoutFuture, stderrFuture);
   }
 
   Future<void> _drainOutputCaptures(
-    Future<AgentActionCapturedOutput> stdoutFuture,
-    Future<AgentActionCapturedOutput> stderrFuture,
+    ActionProcessOutputCaptureSession stdoutFuture,
+    ActionProcessOutputCaptureSession stderrFuture,
   ) async {
-    await Future.wait(<Future<AgentActionCapturedOutput>>[
-      stdoutFuture.timeout(
-        _outputCaptureDrainTimeout,
-        onTimeout: () => const AgentActionCapturedOutput(
-          text: '',
-          isCaptured: true,
-          isTruncated: true,
-        ),
-      ),
-      stderrFuture.timeout(
-        _outputCaptureDrainTimeout,
-        onTimeout: () => const AgentActionCapturedOutput(
-          text: '',
-          isCaptured: true,
-          isTruncated: true,
-        ),
-      ),
+    await Future.wait([
+      _awaitCapturedOutput(stdoutFuture, timeout: _outputCaptureDrainTimeout),
+      _awaitCapturedOutput(stderrFuture, timeout: _outputCaptureDrainTimeout),
     ]);
   }
 
   Future<AgentActionCapturedOutput> _awaitCapturedOutput(
-    Future<AgentActionCapturedOutput> captureFuture, {
+    ActionProcessOutputCaptureSession capture, {
     required Duration timeout,
-  }) {
-    return captureFuture.timeout(
-      timeout,
-      onTimeout: () => const AgentActionCapturedOutput(
-        text: '',
-        isCaptured: true,
-        isTruncated: true,
-      ),
-    );
-  }
-
+  }) => capture.result.timeout(timeout, onTimeout: capture.cancel);
   Future<Process> _startBeforeDeadline({
     required DateTime deadline,
     required String executable,

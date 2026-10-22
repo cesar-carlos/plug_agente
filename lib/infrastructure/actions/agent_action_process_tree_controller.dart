@@ -1,88 +1,137 @@
 import 'dart:io';
 
-import 'package:plug_agente/core/constants/agent_action_command_line_constants.dart';
 import 'package:plug_agente/domain/actions/actions.dart';
+import 'package:plug_agente/infrastructure/actions/windows_action_job_api.dart';
 import 'package:result_dart/result_dart.dart';
 import 'package:win32/win32.dart';
 
 abstract interface class AgentActionProcessTreeController {
   bool get requiresAttachment;
-
   Future<Result<AgentActionProcessTreeLease>> attach(Process process);
-
   Future<Result<void>> terminate(AgentActionProcessTreeLease lease);
-
-  Future<void> release(AgentActionProcessTreeLease lease);
+  Future<Result<void>> release(AgentActionProcessTreeLease lease);
 }
 
 abstract interface class AgentActionProcessTreeLease {
   bool get supportsTreeTermination;
 }
 
-/// Windows Job Object controller. A process is not published as active until
-/// its job association succeeds, so cancellation always owns the whole tree.
 final class WindowsJobObjectProcessTreeController implements AgentActionProcessTreeController {
+  WindowsJobObjectProcessTreeController({
+    WindowsActionJobApi? api,
+    this.memoryLimitBytes = defaultMemoryLimitBytes,
+  }) : _api = api ?? WindowsActionJobApi(),
+       _nativeTest = api != null;
+
+  /// Total committed memory of one action's process tree, not working-set RAM.
+  static const int defaultMemoryLimitBytes = 2 * 1024 * 1024 * 1024;
+  final int memoryLimitBytes;
+  final WindowsActionJobApi _api;
+  final bool _nativeTest;
+
   @override
-  bool get requiresAttachment => Platform.isWindows && !_isFlutterTestRuntime;
+  bool get requiresAttachment =>
+      _nativeTest || (Platform.isWindows && !Platform.executable.toLowerCase().contains('flutter_tester'));
 
   @override
   Future<Result<AgentActionProcessTreeLease>> attach(Process process) async {
     if (!requiresAttachment) return const Success(_NoopProcessTreeLease());
-    final jobResult = CreateJobObject(null, null);
-    final job = jobResult.value;
-    if (!jobResult.value.isNull) {
-      final processResult = OpenProcess(PROCESS_TERMINATE | PROCESS_SET_QUOTA, false, process.pid);
-      final processHandle = processResult.value;
-      if (!processHandle.isNull) {
-        final assigned = AssignProcessToJobObject(job, processHandle);
-        CloseHandle(processHandle);
-        if (assigned.value) return Success(_WindowsJobObjectLease(job));
-      }
-      CloseHandle(job);
+    if (memoryLimitBytes <= 0) return Failure(_failure('configure_memory_limit', 0));
+    final created = _api.create();
+    final job = created.value;
+    if (job.isNull) return Failure(_failure('create_job', created.error.toInt()));
+    final configured = _api.configure(job, memoryLimitBytes);
+    if (!configured.value) {
+      final closed = _api.close(job);
+      return Failure(
+        _failure(
+          'configure_memory_limit',
+          configured.error.toInt(),
+          cleanupError: closed.value ? null : closed.error.toInt(),
+        ),
+      );
     }
-    return Failure(_attachFailure());
+    final opened = _api.open(process.pid);
+    if (opened.value.isNull) {
+      final closed = _api.close(job);
+      return Failure(
+        _failure('open_process', opened.error.toInt(), cleanupError: closed.value ? null : closed.error.toInt()),
+      );
+    }
+    final assigned = _api.assign(job, opened.value);
+    final processClosed = _api.close(opened.value);
+    if (!assigned.value || !processClosed.value) {
+      final closed = _api.close(job);
+      return Failure(
+        _failure(
+          assigned.value ? 'close_process_handle' : 'assign_job',
+          assigned.value ? processClosed.error.toInt() : assigned.error.toInt(),
+          cleanupError: closed.value ? null : closed.error.toInt(),
+        ),
+      );
+    }
+    return Success(_WindowsJobObjectLease(job));
   }
 
   @override
   Future<Result<void>> terminate(AgentActionProcessTreeLease lease) async {
     if (lease case _WindowsJobObjectLease(:final handle)) {
-      final result = TerminateJobObject(handle, 1);
-      if (!result.value) return Failure(_attachFailure());
+      final result = _api.terminate(handle, 1);
+      if (!result.value) return Failure(_failure('terminate_job', result.error.toInt()));
     }
     return const Success(unit);
   }
 
   @override
-  Future<void> release(AgentActionProcessTreeLease lease) async {
-    if (lease case _WindowsJobObjectLease(:final handle, :final released)) {
-      if (!released.value) {
-        released.value = true;
-        // A successful parent exit must not detach descendants and leave them
-        // running after the action has been finalized.
-        TerminateJobObject(handle, 0);
-        CloseHandle(handle);
-      }
+  Future<Result<void>> release(AgentActionProcessTreeLease lease) async {
+    if (lease case _WindowsJobObjectLease(:final handle)) {
+      if (lease.released) return lease.releaseResult!;
+      final terminated = _api.terminate(handle, 0);
+      // KILL_ON_JOB_CLOSE is a second line of defense even if termination fails.
+      final closed = _api.close(handle);
+      final Result<void> result = !terminated.value
+          ? Failure(
+              _failure(
+                'terminate_job',
+                terminated.error.toInt(),
+                cleanupError: closed.value ? null : closed.error.toInt(),
+              ),
+            )
+          : !closed.value
+          ? Failure(_failure('close_job', closed.error.toInt()))
+          : const Success(unit);
+      lease.released = closed.value;
+      lease.releaseResult = result;
+      return result;
     }
+    return const Success(unit);
   }
 
-  ActionRuntimeFailure _attachFailure() => ActionRuntimeFailure.withContext(
-    message: 'Unable to attach the process to a Windows Job Object.',
-    code: AgentActionFailureCode.processTreeAttachFailed,
-    context: const {
-      'reason': AgentActionCommandLineConstants.processTreeAttachFailedReason,
-      'user_message': 'Nao foi possivel proteger a arvore de processos desta acao.',
+  ActionRuntimeFailure _failure(String phase, int error, {int? cleanupError}) => ActionRuntimeFailure.withContext(
+    message: 'Windows action process tree operation failed.',
+    code: phase == 'terminate_job' || phase == 'close_job'
+        ? AgentActionFailureCode.killFailed
+        : AgentActionFailureCode.processTreeAttachFailed,
+    context: {
+      'phase': phase,
+      'reason': phase == 'terminate_job' || phase == 'close_job'
+          ? 'process_tree_cleanup_failed'
+          : 'process_tree_attach_failed',
+      'os_error_code': error,
+      'memory_limit_bytes': memoryLimitBytes,
+      'cleanup_os_error_code': ?cleanupError,
+      'user_message': phase == 'terminate_job' || phase == 'close_job'
+          ? 'Nao foi possivel confirmar o encerramento dos processos da acao. Verifique os processos no Gerenciador de Tarefas.'
+          : 'Nao foi possivel aplicar a protecao de processos e memoria desta acao.',
     },
   );
-
-  // Unit tests use in-memory Process fakes which Windows cannot associate with
-  // a native job. Production desktop executables never take this fallback.
-  bool get _isFlutterTestRuntime => Platform.executable.toLowerCase().contains('flutter_tester');
 }
 
 final class _WindowsJobObjectLease implements AgentActionProcessTreeLease {
   _WindowsJobObjectLease(this.handle);
   final HANDLE handle;
-  final _ReleaseState released = _ReleaseState();
+  bool released = false;
+  Result<void>? releaseResult;
   @override
   bool get supportsTreeTermination => true;
 }
@@ -91,8 +140,4 @@ final class _NoopProcessTreeLease implements AgentActionProcessTreeLease {
   const _NoopProcessTreeLease();
   @override
   bool get supportsTreeTermination => false;
-}
-
-final class _ReleaseState {
-  bool value = false;
 }

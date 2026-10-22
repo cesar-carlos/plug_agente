@@ -12,42 +12,92 @@ abstract final class ActionProcessOutputCapture {
     required AgentActionOutputEncodingMode encoding,
     required AgentActionRedactor redactor,
     required bool redactBeforePersisting,
-  }) async {
+  }) => ActionProcessOutputCaptureSession(
+    stream,
+    isEnabled: isEnabled,
+    maxBytes: maxBytes,
+    encoding: encoding,
+    redactor: redactor,
+    redactBeforePersisting: redactBeforePersisting,
+  ).result;
+}
+
+/// Owns the subscription and bounded buffer, including after a process timeout.
+final class ActionProcessOutputCaptureSession {
+  ActionProcessOutputCaptureSession(
+    Stream<List<int>> stream, {
+    required this.isEnabled,
+    required int maxBytes,
+    required this.encoding,
+    required this.redactor,
+    required this.redactBeforePersisting,
+  }) : _maxBytes = maxBytes < 0 ? 0 : maxBytes {
+    _subscription = stream.listen(_add, onError: _onError, onDone: _finish, cancelOnError: true);
+    // Observe early pipe failures while the lifecycle is still awaiting exit.
+    unawaited(_completion.future.then<void>((_) {}, onError: (Object _, StackTrace _) {}));
+  }
+
+  final bool isEnabled;
+  final int _maxBytes;
+  final AgentActionOutputEncodingMode encoding;
+  final AgentActionRedactor redactor;
+  final bool redactBeforePersisting;
+  final _builder = BytesBuilder(copy: false);
+  final _completion = Completer<AgentActionCapturedOutput>();
+  late final StreamSubscription<List<int>> _subscription;
+  Future<AgentActionCapturedOutput>? _cancellation;
+  bool _truncated = false;
+
+  Future<AgentActionCapturedOutput> get result => _completion.future;
+
+  void _add(List<int> chunk) {
+    if (!isEnabled || _completion.isCompleted) return;
+    final available = _maxBytes - _builder.length;
+    if (chunk.length > available) _truncated = true;
+    if (available > 0) {
+      _builder.add(chunk.length <= available ? chunk : chunk.take(available).toList(growable: false));
+    }
+  }
+
+  void _onError(Object error, StackTrace stackTrace) {
+    _builder.clear();
+    if (!_completion.isCompleted) _completion.completeError(error, stackTrace);
+  }
+
+  void _finish() {
+    if (_completion.isCompleted) return;
     if (!isEnabled) {
-      await stream.drain<void>();
-      return AgentActionCapturedOutput.disabled;
+      _completion.complete(AgentActionCapturedOutput.disabled);
+      return;
     }
-
-    final safeMaxBytes = maxBytes < 0 ? 0 : maxBytes;
-    final builder = BytesBuilder(copy: false);
-    var collectedBytes = 0;
-    var isTruncated = false;
-
-    await for (final chunk in stream) {
-      if (collectedBytes < safeMaxBytes) {
-        final available = safeMaxBytes - collectedBytes;
-        final bytesToTake = chunk.length <= available ? chunk : chunk.take(available).toList(growable: false);
-        builder.add(bytesToTake);
+    try {
+      List<int> bytes = _builder.takeBytes();
+      if (encoding == AgentActionOutputEncodingMode.utf8) {
+        bytes = ActionProcessOutputDecoder.clipIncompleteTrailingUtf8(bytes);
       }
-      collectedBytes += chunk.length;
-      if (collectedBytes > safeMaxBytes) {
-        isTruncated = true;
-      }
+      final decoded = ActionProcessOutputDecoder.decode(bytes, mode: encoding);
+      _completion.complete(
+        AgentActionCapturedOutput(
+          text: redactBeforePersisting ? redactor.redactText(decoded) : decoded,
+          isCaptured: true,
+          isTruncated: _truncated,
+        ),
+      );
+    } on Object catch (error, stackTrace) {
+      _onError(error, stackTrace);
     }
+  }
 
-    List<int> capturedBytes = builder.takeBytes();
-    if (encoding == AgentActionOutputEncodingMode.utf8) {
-      capturedBytes = ActionProcessOutputDecoder.clipIncompleteTrailingUtf8(capturedBytes);
+  Future<AgentActionCapturedOutput> cancel() => _cancellation ??= _cancel();
+
+  Future<AgentActionCapturedOutput> _cancel() async {
+    if (!_completion.isCompleted) _truncated = true;
+    try {
+      await _subscription.cancel();
+      _finish();
+    } on Object catch (error, stackTrace) {
+      _onError(error, stackTrace);
     }
-    final decoded = ActionProcessOutputDecoder.decode(
-      capturedBytes,
-      mode: encoding,
-    );
-    final text = redactBeforePersisting ? redactor.redactText(decoded) : decoded;
-    return AgentActionCapturedOutput(
-      text: text,
-      isCaptured: true,
-      isTruncated: isTruncated,
-    );
+    return result;
   }
 }
