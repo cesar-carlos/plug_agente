@@ -25,10 +25,13 @@ final class OdbcStatementExecutor {
     required OdbcService service,
     required MetricsCollector metrics,
     required void Function(String connectionId) markConnectionForDiscard,
+    Stopwatch Function()? pollingStopwatchFactory,
   }) : _service = service,
        _metrics = metrics,
-       _markConnectionForDiscard = markConnectionForDiscard;
+       _markConnectionForDiscard = markConnectionForDiscard,
+       _pollingStopwatchFactory = pollingStopwatchFactory ?? Stopwatch.new;
 
+  final Stopwatch Function() _pollingStopwatchFactory;
   final OdbcService _service;
   final MetricsCollector _metrics;
   final void Function(String connectionId) _markConnectionForDiscard;
@@ -309,7 +312,7 @@ final class OdbcStatementExecutor {
     }
     var completionUnconfirmed = true;
     var initialPollIndex = 0;
-    final pollingWatch = Stopwatch()..start();
+    final pollingWatch = _pollingStopwatchFactory()..start();
 
     try {
       while (true) {
