@@ -27,6 +27,8 @@ environment:
 # the latest version available on pub.dev. To see which dependencies have newer
 # versions available, run `flutter pub outdated`.
 dependencies:
+  windows_action_runtime:
+    path: packages/windows_action_runtime
   flutter:
     sdk: flutter
   flutter_localizations:

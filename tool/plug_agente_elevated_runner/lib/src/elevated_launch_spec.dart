@@ -4,6 +4,7 @@ class ElevatedLaunchSpec {
     required this.arguments,
     required this.commandPreview,
     this.workingDirectory,
+    this.cpuLimitPercent = 0,
   });
 
   factory ElevatedLaunchSpec.fromJson(Map<String, dynamic> launch) {
@@ -17,7 +18,12 @@ class ElevatedLaunchSpec {
       );
     }
 
+    final cpuLimit = launch['cpuLimitPercent'] ?? 0;
+    if (cpuLimit is! int || cpuLimit < 0 || cpuLimit > 100) {
+      throw const FormatException('Invalid CPU limit; expected 0..100.');
+    }
     return ElevatedLaunchSpec(
+      cpuLimitPercent: cpuLimit,
       executable: executable.trim(),
       arguments: arguments
           .map((Object? value) => '$value')
@@ -28,6 +34,7 @@ class ElevatedLaunchSpec {
     );
   }
 
+  final int cpuLimitPercent;
   final String executable;
   final List<String> arguments;
   final String? workingDirectory;

@@ -2201,5 +2201,10 @@
   "triggerPreviewDisabled": "Disabled trigger: no run will be scheduled.",
   "triggerPreviewLocal": "Preview in the computer’s local time zone",
   "triggerPreviewCatchUp": "Missed run: it may start as soon as the trigger is saved.",
-  "triggerApply": "Apply"
+  "triggerApply": "Apply",
+  "agentActionsCpuLimitTitle": "CPU per action",
+  "agentActionsCpuLimitHelp": "Local limit for each new action and its child processes. Concurrent actions have separate limits. Does not change running tasks, email or COM. A lower limit can increase task duration. Windows may refuse this control in remote sessions.",
+  "agentActionsCpuUnlimited": "No additional limit",
+  "agentActionsLiveCpu": "Action and child CPU (machine total)",
+  "agentActionsCpuUnavailable": "Unavailable"
 }

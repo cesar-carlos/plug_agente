@@ -7,6 +7,12 @@ class ElevatedActionStatusFile {
     required this.status,
     required this.finishedAt,
     required this.redactionApplied,
+    this.pid,
+    this.actionId,
+    this.processExecutable,
+    this.processStartedAt,
+    this.cpuMicroseconds,
+    this.cpuLimitPercent,
     this.exitCode,
     this.failureCode,
     this.failureMessage,
@@ -21,6 +27,12 @@ class ElevatedActionStatusFile {
   final AgentActionExecutionStatus status;
   final DateTime finishedAt;
   final bool redactionApplied;
+  final int? pid;
+  final String? actionId;
+  final String? processExecutable;
+  final DateTime? processStartedAt;
+  final int? cpuMicroseconds;
+  final int? cpuLimitPercent;
   final int? exitCode;
   final String? failureCode;
   final String? failureMessage;

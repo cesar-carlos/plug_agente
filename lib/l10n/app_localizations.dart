@@ -9715,6 +9715,36 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Apply'**
   String get triggerApply;
+
+  /// No description provided for @agentActionsCpuLimitTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'CPU per action'**
+  String get agentActionsCpuLimitTitle;
+
+  /// No description provided for @agentActionsCpuLimitHelp.
+  ///
+  /// In en, this message translates to:
+  /// **'Local limit for each new action and its child processes. Concurrent actions have separate limits. Does not change running tasks, email or COM. A lower limit can increase task duration. Windows may refuse this control in remote sessions.'**
+  String get agentActionsCpuLimitHelp;
+
+  /// No description provided for @agentActionsCpuUnlimited.
+  ///
+  /// In en, this message translates to:
+  /// **'No additional limit'**
+  String get agentActionsCpuUnlimited;
+
+  /// No description provided for @agentActionsLiveCpu.
+  ///
+  /// In en, this message translates to:
+  /// **'Action and child CPU (machine total)'**
+  String get agentActionsLiveCpu;
+
+  /// No description provided for @agentActionsCpuUnavailable.
+  ///
+  /// In en, this message translates to:
+  /// **'Unavailable'**
+  String get agentActionsCpuUnavailable;
 }
 
 class _AppLocalizationsDelegate extends LocalizationsDelegate<AppLocalizations> {

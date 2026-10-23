@@ -8,6 +8,7 @@ import 'package:plug_agente/application/actions/elevated_action_status_file.dart
 import 'package:plug_agente/core/constants/agent_action_elevated_constants.dart';
 import 'package:plug_agente/core/storage/global_storage_path_resolver.dart';
 import 'package:plug_agente/domain/actions/actions.dart';
+import 'package:plug_agente/domain/actions/i_agent_action_process_observer.dart';
 import 'package:result_dart/result_dart.dart';
 
 /// Reads elevated helper status JSON files and maps them to process results.
@@ -16,10 +17,13 @@ class ElevatedActionStatusFileSyncer {
     required GlobalStorageContext storageContext,
     AgentActionExecutionMetricsCollector? metrics,
     DateTime Function()? now,
+    IAgentActionProcessObserver? liveProcesses,
   }) : _storageContext = storageContext,
        _metrics = metrics,
-       _now = now ?? DateTime.now;
+       _now = now ?? DateTime.now,
+       _liveProcesses = liveProcesses;
 
+  final IAgentActionProcessObserver? _liveProcesses;
   final GlobalStorageContext _storageContext;
   final AgentActionExecutionMetricsCollector? _metrics;
   final DateTime Function() _now;
@@ -40,7 +44,8 @@ class ElevatedActionStatusFileSyncer {
       if (decoded is! Map) {
         return null;
       }
-      return _parseStatus(Map<String, dynamic>.from(decoded));
+      final status = _parseStatus(Map<String, dynamic>.from(decoded));
+      return status?.executionId == executionId.trim() ? status : null;
     } on FormatException {
       return null;
     } on FileSystemException {
@@ -88,9 +93,71 @@ class ElevatedActionStatusFileSyncer {
     required Duration timeout,
     Future<void>? abort,
   }) async {
+    try {
+      return await _waitForTerminalResult(
+        executionId: executionId,
+        processStartedAt: processStartedAt,
+        timeout: timeout,
+        abort: abort,
+      );
+    } finally {
+      _liveProcesses?.finished(executionId);
+    }
+  }
+
+  Future<Result<AgentActionProcessResult>> _waitForTerminalResult({
+    required String executionId,
+    required DateTime processStartedAt,
+    required Duration timeout,
+    Future<void>? abort,
+  }) async {
+    ElevatedActionStatusFile? latest;
+    var published = false;
+    var aborted = false;
+    Object? abortError;
+    if (abort != null) {
+      unawaited(
+        abort.then<void>(
+          (_) {
+            aborted = true;
+          },
+          onError: (Object error) {
+            abortError = error;
+            aborted = true;
+          },
+        ),
+      );
+    }
     final deadline = _now().add(timeout);
     while (_now().isBefore(deadline)) {
       final status = await tryReadStatus(executionId);
+      if (status != null && !status.isTerminal && status.pid != null && _liveProcesses != null) {
+        latest = status;
+        if (!published) {
+          final saved = await _liveProcesses.started(
+            AgentActionLiveProcess(
+              executionId: executionId,
+              actionId: status.actionId!,
+              pid: status.pid!,
+              executable: status.processExecutable!,
+              startedAt: status.processStartedAt!,
+              cpuLimitPercent: status.cpuLimitPercent ?? 0,
+              readCpu: () {
+                final sample = latest;
+                if (sample?.cpuMicroseconds == null ||
+                    _now().difference(sample!.finishedAt).abs() > const Duration(seconds: 3)) {
+                  return Failure(
+                    ActionRuntimeFailure('A amostra de CPU do executor elevado está indisponível ou desatualizada.'),
+                  );
+                }
+                return Success(Duration(microseconds: sample.cpuMicroseconds!));
+              },
+            ),
+          );
+          if (saved.isError()) return Failure(saved.exceptionOrNull()!);
+          published = true;
+        }
+      }
       if (status != null && status.isTerminal) {
         await deleteStatusFile(executionId);
         _metrics?.recordElevatedStatusFileTerminalRead();
@@ -102,16 +169,13 @@ class ElevatedActionStatusFileSyncer {
         continue;
       }
 
-      final delay = Future<void>.delayed(AgentActionElevatedConstants.statusPollInterval);
-      final abortedDuringWait = await Future.any<bool>([
-        delay.then((_) => false),
-        abort.then((_) => true),
-      ]);
-      if (abortedDuringWait) {
+      await Future<void>.delayed(AgentActionElevatedConstants.statusPollInterval);
+      if (aborted) {
         return Failure(
           ActionRuntimeFailure.withContext(
             message: 'Elevated execution was cancelled before completion.',
             code: AgentActionFailureCode.executionCancelled,
+            cause: abortError,
             context: {
               'execution_id': executionId.trim(),
               'user_message': 'A execucao elevada foi cancelada.',
@@ -140,8 +204,9 @@ class ElevatedActionStatusFileSyncer {
   ) {
     return AgentActionProcessResult(
       status: status.status,
-      pid: 0,
-      processStartedAt: processStartedAt,
+      pid: status.pid ?? 0,
+      processExecutable: status.processExecutable,
+      processStartedAt: status.processStartedAt ?? processStartedAt,
       finishedAt: status.finishedAt,
       exitCode: status.exitCode,
       processCommandPreview: status.processCommandPreview,
@@ -189,7 +254,32 @@ class ElevatedActionStatusFileSyncer {
       return null;
     }
 
+    final pid = json['pid'];
+    final actionId = json['actionId'];
+    final executable = json['processExecutable'];
+    final startedRaw = json['processStartedAt'];
+    final started = startedRaw is String ? DateTime.tryParse(startedRaw) : null;
+    final cpu = json['cpuMicroseconds'];
+    final limit = json['cpuLimitPercent'];
+    if (pid != null && (pid is! int || pid <= 0)) return null;
+    if (cpu != null && (cpu is! int || cpu < 0)) return null;
+    if (limit != null && (limit is! int || limit < 0 || limit > 100)) return null;
+    if (!status.isTerminal &&
+        (pid == null ||
+            actionId is! String ||
+            actionId.isEmpty ||
+            executable is! String ||
+            executable.isEmpty ||
+            started == null)) {
+      return null;
+    }
     return ElevatedActionStatusFile(
+      pid: pid as int?,
+      actionId: actionId as String?,
+      processExecutable: executable as String?,
+      processStartedAt: started,
+      cpuMicroseconds: cpu as int?,
+      cpuLimitPercent: limit as int?,
       executionId: executionId.trim(),
       status: status,
       finishedAt: finishedAt,

@@ -5214,4 +5214,20 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get triggerApply => 'Apply';
+
+  @override
+  String get agentActionsCpuLimitTitle => 'CPU per action';
+
+  @override
+  String get agentActionsCpuLimitHelp =>
+      'Local limit for each new action and its child processes. Concurrent actions have separate limits. Does not change running tasks, email or COM. A lower limit can increase task duration. Windows may refuse this control in remote sessions.';
+
+  @override
+  String get agentActionsCpuUnlimited => 'No additional limit';
+
+  @override
+  String get agentActionsLiveCpu => 'Action and child CPU (machine total)';
+
+  @override
+  String get agentActionsCpuUnavailable => 'Unavailable';
 }

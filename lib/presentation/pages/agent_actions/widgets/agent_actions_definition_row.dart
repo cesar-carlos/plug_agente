@@ -7,6 +7,7 @@ import 'package:plug_agente/l10n/app_localizations.dart';
 import 'package:plug_agente/presentation/pages/agent_actions/widgets/agent_action_presenter_labels.dart';
 import 'package:plug_agente/presentation/pages/agent_actions/widgets/agent_actions_page_confirmations.dart';
 import 'package:plug_agente/presentation/providers/agent_actions_provider.dart';
+import 'package:plug_agente/presentation/widgets/agent_actions/agent_action_progress_ring.dart';
 import 'package:plug_agente/presentation/widgets/agent_actions/agent_action_risk_labels.dart';
 
 class AgentActionDefinitionNameCell extends StatelessWidget {
@@ -97,7 +98,7 @@ class AgentActionDefinitionRowActions extends StatelessWidget {
             icon: provider.isDefinitionRunning(definition.id)
                 ? const SizedBox.square(
                     dimension: 16,
-                    child: ProgressRing(strokeWidth: 2),
+                    child: AgentActionProgressRing(),
                   )
                 : const Icon(FluentIcons.play, size: 16),
             onPressed: provider.canRunDefinition(definition)
@@ -134,7 +135,7 @@ class AgentActionDefinitionRowActions extends StatelessWidget {
               icon: provider.isSaving && provider.selectedActionId == definition.id
                   ? const SizedBox.square(
                       dimension: 16,
-                      child: ProgressRing(strokeWidth: 2),
+                      child: AgentActionProgressRing(),
                     )
                   : const Icon(FluentIcons.accept, size: 16),
               onPressed: () {
@@ -149,7 +150,7 @@ class AgentActionDefinitionRowActions extends StatelessWidget {
             icon: provider.isTesting && provider.selectedActionId == definition.id
                 ? const SizedBox.square(
                     dimension: 16,
-                    child: ProgressRing(strokeWidth: 2),
+                    child: AgentActionProgressRing(),
                   )
                 : const Icon(FluentIcons.test_beaker, size: 16),
             onPressed: provider.canTestDefinition(definition)

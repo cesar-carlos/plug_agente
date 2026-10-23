@@ -11,7 +11,7 @@ abstract final class AgentActionElevatedConstants {
   static const int requestSchemaVersion = 1;
   static const int statusSchemaVersion = 1;
   static const int cancelSchemaVersion = 1;
-  static const int materializedSchemaVersion = 1;
+  static const int materializedSchemaVersion = 2;
 
   /// Written by the elevated helper installer when the scheduled task is ready.
   static const String readyMarkerFileName = 'elevated_runner.ready';

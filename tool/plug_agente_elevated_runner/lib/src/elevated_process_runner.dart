@@ -3,6 +3,9 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:plug_agente_elevated_runner/src/elevated_contract.dart';
+import 'package:plug_agente_elevated_runner/src/elevated_output_reader.dart';
+import 'package:plug_agente_elevated_runner/src/elevated_process_job.dart';
+import 'package:windows_action_runtime/windows_action_runtime.dart';
 import 'package:plug_agente_elevated_runner/src/elevated_launch_spec.dart';
 import 'package:plug_agente_elevated_runner/src/elevated_materialized_reader.dart';
 import 'package:plug_agente_elevated_runner/src/elevated_sqlite_store.dart';
@@ -21,9 +24,19 @@ class ElevatedProcessRunner {
     required this.appDirectoryPath,
     ProcessStarter? processStarter,
     DateTime Function()? now,
+    ElevatedStatusWriter? statusWriter,
+    WindowsActionJobApi? jobApi,
   }) : _processStarter = processStarter ?? _defaultProcessStarter,
-       _now = now ?? DateTime.now;
+       _now = now ?? DateTime.now,
+       _usesDefaultStarter = processStarter == null,
+       _jobApi = jobApi,
+       _statusWriter =
+           statusWriter ??
+           ElevatedStatusWriter(appDirectoryPath: appDirectoryPath);
 
+  final bool _usesDefaultStarter;
+  final WindowsActionJobApi? _jobApi;
+  final ElevatedStatusWriter _statusWriter;
   final String appDirectoryPath;
   final ProcessStarter _processStarter;
   final DateTime Function() _now;
@@ -69,52 +82,123 @@ class ElevatedProcessRunner {
     final workingDirectory = _resolveWorkingDirectory(launch.workingDirectory);
 
     final startedAt = _now();
+    Process? process;
+    ElevatedProcessJob? job;
+    ElevatedOutputReader? outputReader;
+    ElevatedOutputReader? errorReader;
+    final capture = context.policies['capture'];
+    final captureStdout = capture is! Map || capture['captureStdout'] != false;
+    final captureStderr = capture is! Map || capture['captureStderr'] != false;
     try {
-      final process = await _processStarter(
-        launch.executable,
-        launch.arguments,
-        workingDirectory: workingDirectory,
-        runInShell: false,
-      );
+      if (launch.cpuLimitPercent < 0 || launch.cpuLimitPercent > 100) {
+        throw const FormatException('CPU limit must be between 0 and 100.');
+      }
+      final nativeStart = _usesDefaultStarter && Platform.isWindows;
+      process = nativeStart
+          ? await WindowsSilentActionProcess.start(
+              launch.executable,
+              launch.arguments,
+              workingDirectory: workingDirectory,
+              startSuspended: true,
+              captureStdoutBytes: captureStdout ? maxOutputBytes : 0,
+              captureStderrBytes: captureStderr ? maxOutputBytes : 0,
+            )
+          : await _processStarter(
+              launch.executable,
+              launch.arguments,
+              workingDirectory: workingDirectory,
+              runInShell: false,
+            );
 
-      final stdoutFuture = _readStream(
+      outputReader = ElevatedOutputReader(
         process.stdout,
+        enabled: captureStdout,
         maxBytes: maxOutputBytes,
       );
-      final stderrFuture = _readStream(
+      errorReader = ElevatedOutputReader(
         process.stderr,
+        enabled: captureStderr,
         maxBytes: maxOutputBytes,
       );
-
+      if (_usesDefaultStarter && Platform.isWindows) {
+        job = ElevatedProcessJob.attach(
+          process.pid,
+          launch.cpuLimitPercent,
+          api: _jobApi,
+        );
+      } else if (launch.cpuLimitPercent > 0) {
+        throw UnsupportedError('CPU limit requires a Windows process job.');
+      }
+      Future<void> publishRunning() => _statusWriter.write(
+        ElevatedStatusPayload(
+          executionId: context.executionId,
+          actionId: context.actionId,
+          status: 'running',
+          finishedAt: _now(),
+          pid: process!.pid,
+          processExecutable: launch.executable,
+          processStartedAt: startedAt,
+          cpuMicroseconds: job?.readCpuMicroseconds(),
+          cpuLimitPercent: launch.cpuLimitPercent,
+        ),
+      );
+      await publishRunning();
+      if (process is WindowsSilentActionProcess) process.resume();
+      await process.stdin.close();
+      final elapsed = Stopwatch()..start();
+      var lastPublished = elapsed.elapsed;
       var timedOut = false;
       var cancelled = false;
       int? exitCode;
-      final deadline = startedAt.add(maxRuntime);
-      while (_now().isBefore(deadline)) {
+      Object? exitError;
+      var exited = false;
+      unawaited(
+        process.exitCode.then<void>(
+          (code) {
+            exitCode = code;
+            exited = true;
+          },
+          onError: (Object error) {
+            exitError = error;
+            exited = true;
+          },
+        ),
+      );
+      while (!exited && elapsed.elapsed < maxRuntime) {
         if (_isCancellationRequested(context.executionId, materializedNonce)) {
           cancelled = true;
-          process.kill(ProcessSignal.sigkill);
+          if (job != null) {
+            job.terminate();
+          } else {
+            process.kill(ProcessSignal.sigkill);
+          }
           exitCode = null;
           break;
         }
 
-        try {
-          exitCode = await process.exitCode.timeout(
-            ElevatedContract.pollInterval,
-          );
-          break;
-        } on TimeoutException {
-          continue;
+        if (elapsed.elapsed - lastPublished >= const Duration(seconds: 1)) {
+          await publishRunning();
+          lastPublished = elapsed.elapsed;
+        }
+        await Future<void>.delayed(ElevatedContract.pollInterval);
+      }
+      if (exitError != null)
+        throw StateError('Unable to wait for action process: $exitError');
+
+      if (!cancelled && exitCode == null) {
+        timedOut = true;
+        if (job != null) {
+          job.terminate();
+        } else {
+          process.kill(ProcessSignal.sigkill);
         }
       }
 
-      if (!cancelled && exitCode == null && _now().isAfter(deadline)) {
-        timedOut = true;
-        process.kill(ProcessSignal.sigkill);
-      }
-
-      final stdout = await stdoutFuture;
-      final stderr = await stderrFuture;
+      // Release the job before draining: descendants must not keep pipes alive.
+      job?.close();
+      job = null;
+      final stdout = await outputReader.finish();
+      final stderr = await errorReader.finish();
       final finishedAt = _now();
       final preview = launch.commandPreview;
 
@@ -122,6 +206,9 @@ class ElevatedProcessRunner {
         await _deleteCancelMarker(context.executionId);
         return ElevatedStatusPayload(
           executionId: context.executionId,
+          pid: process.pid,
+          processExecutable: launch.executable,
+          processStartedAt: startedAt,
           status: 'killed',
           finishedAt: finishedAt,
           failureCode: 'ACTION_KILLED',
@@ -137,6 +224,9 @@ class ElevatedProcessRunner {
       if (timedOut) {
         return ElevatedStatusPayload(
           executionId: context.executionId,
+          pid: process.pid,
+          processExecutable: launch.executable,
+          processStartedAt: startedAt,
           status: 'timedOut',
           finishedAt: finishedAt,
           failureCode: 'ACTION_EXECUTION_TIMED_OUT',
@@ -153,6 +243,9 @@ class ElevatedProcessRunner {
       final succeeded = acceptedExitCodes.contains(normalizedExitCode);
       return ElevatedStatusPayload(
         executionId: context.executionId,
+        pid: process.pid,
+        processExecutable: launch.executable,
+        processStartedAt: startedAt,
         status: succeeded ? 'succeeded' : 'failed',
         finishedAt: finishedAt,
         exitCode: normalizedExitCode,
@@ -166,13 +259,23 @@ class ElevatedProcessRunner {
         stderrTruncated: stderr.truncated,
         processCommandPreview: preview,
       );
-    } on Exception catch (error) {
+    } on Object catch (error) {
+      if (process != null) {
+        process.kill(ProcessSignal.sigkill);
+        await process.exitCode.timeout(const Duration(seconds: 5));
+      }
       return _failed(
         executionId: context.executionId,
         failureCode: 'ACTION_RUNTIME_ERROR',
         failureMessage: 'Elevated process failed: $error',
       );
     } finally {
+      try {
+        job?.close();
+      } finally {
+        await outputReader?.dispose();
+        await errorReader?.dispose();
+      }
       await ElevatedMaterializedReader(
         appDirectoryPath: appDirectoryPath,
       ).delete(context.executionId);
@@ -249,31 +352,6 @@ class ElevatedProcessRunner {
       return File(trimmed).parent.path;
     }
     return trimmed;
-  }
-
-  Future<({String text, bool truncated})> _readStream(
-    Stream<List<int>> stream, {
-    required int maxBytes,
-  }) async {
-    final buffer = <int>[];
-    var truncated = false;
-    await for (final chunk in stream) {
-      if (buffer.length >= maxBytes) {
-        truncated = true;
-        continue;
-      }
-      final remaining = maxBytes - buffer.length;
-      if (chunk.length <= remaining) {
-        buffer.addAll(chunk);
-      } else {
-        buffer.addAll(chunk.take(remaining));
-        truncated = true;
-      }
-    }
-    return (
-      text: utf8.decode(buffer, allowMalformed: true),
-      truncated: truncated,
-    );
   }
 
   /// Verifies that a cancel marker exists AND echoes the materialized nonce.

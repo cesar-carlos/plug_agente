@@ -12,7 +12,7 @@ abstract final class ElevatedContract {
   static const String materializedSubdirectoryName =
       'agent_actions/elevated/materialized';
 
-  static const int materializedSchemaVersion = 1;
+  static const int materializedSchemaVersion = 2;
   static const String databaseFileName = 'agent_config.db';
 
   static const Duration requestTtl = Duration(minutes: 5);

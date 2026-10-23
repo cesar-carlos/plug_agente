@@ -1,0 +1,9 @@
+name: windows_action_runtime
+description: Shared native process primitives for Plug Agente and its elevated helper.
+publish_to: none
+version: 0.0.1
+environment:
+  sdk: ^3.10.4
+dependencies:
+  ffi: ^2.2.0
+  win32: ^6.4.0

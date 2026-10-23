@@ -5,6 +5,7 @@ import 'package:plug_agente/core/theme/theme.dart';
 import 'package:plug_agente/l10n/app_localizations.dart';
 import 'package:plug_agente/presentation/pages/agent_actions/widgets/agent_actions_status_strip.dart';
 import 'package:plug_agente/presentation/providers/agent_actions_provider.dart';
+import 'package:plug_agente/presentation/widgets/agent_actions/agent_actions_cpu_settings_card.dart';
 import 'package:plug_agente/presentation/widgets/agent_actions/agent_actions_dangerous_command_warn_card.dart';
 import 'package:plug_agente/presentation/widgets/agent_actions/agent_actions_preflight_settings_card.dart';
 import 'package:plug_agente/presentation/widgets/agent_actions/agent_actions_retention_card.dart';
@@ -47,6 +48,10 @@ class AgentActionsSettingsTab extends StatelessWidget {
               AgentActionsSummaryCard(provider: provider, l10n: l10n),
               const SizedBox(height: AppSpacing.md),
               ...buildAgentActionElevatedRunnerStatusWidgets(provider, l10n),
+              if (provider.cpuSettings case final settings?) ...[
+                AgentActionsCpuSettingsCard(settings: settings),
+                const SizedBox(height: AppSpacing.md),
+              ],
               AgentActionsPreflightSettingsCard(provider: provider, l10n: l10n),
               const SizedBox(height: AppSpacing.md),
               AgentActionsDangerousCommandWarnCard(provider: provider, l10n: l10n),

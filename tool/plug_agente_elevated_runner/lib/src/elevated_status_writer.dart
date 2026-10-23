@@ -8,6 +8,12 @@ class ElevatedStatusPayload {
     required this.executionId,
     required this.status,
     required this.finishedAt,
+    this.pid,
+    this.actionId,
+    this.processExecutable,
+    this.processStartedAt,
+    this.cpuMicroseconds,
+    this.cpuLimitPercent,
     this.exitCode,
     this.failureCode,
     this.failureMessage,
@@ -22,6 +28,12 @@ class ElevatedStatusPayload {
   final String executionId;
   final String status;
   final DateTime finishedAt;
+  final int? pid;
+  final String? actionId;
+  final String? processExecutable;
+  final DateTime? processStartedAt;
+  final int? cpuMicroseconds;
+  final int? cpuLimitPercent;
   final int? exitCode;
   final String? failureCode;
   final String? failureMessage;
@@ -54,6 +66,16 @@ class ElevatedStatusWriter {
       'status': payload.status,
       'finishedAt': payload.finishedAt.toUtc().toIso8601String(),
       'redactionApplied': payload.redactionApplied,
+      if (payload.pid != null) 'pid': payload.pid,
+      if (payload.actionId != null) 'actionId': payload.actionId,
+      if (payload.processExecutable != null)
+        'processExecutable': payload.processExecutable,
+      if (payload.processStartedAt != null)
+        'processStartedAt': payload.processStartedAt!.toUtc().toIso8601String(),
+      if (payload.cpuMicroseconds != null)
+        'cpuMicroseconds': payload.cpuMicroseconds,
+      if (payload.cpuLimitPercent != null)
+        'cpuLimitPercent': payload.cpuLimitPercent,
       if (payload.exitCode != null) 'exitCode': payload.exitCode,
       if (payload.failureCode != null) 'failureCode': payload.failureCode,
       if (payload.failureMessage != null)

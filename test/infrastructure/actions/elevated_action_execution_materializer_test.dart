@@ -27,6 +27,10 @@ void main() {
     });
 
     test('should write materialized commandLine launch plan', () async {
+      materializer = ElevatedActionExecutionMaterializer(
+        storageContext: GlobalStorageContext(appDirectoryPath: tempDir.path),
+        cpuLimitProvider: () => 50,
+      );
       final protectedRequest = ElevatedProtectedRequest(
         executionId: 'exec-1',
         nonce: 'nonce-1',
@@ -52,8 +56,10 @@ void main() {
               )
               as Map<String, dynamic>;
       expect(materialized['nonce'], 'nonce-1');
+      expect(materialized['version'], 2);
       expect(materialized['actionType'], 'commandLine');
       final launch = materialized['launch'] as Map<String, dynamic>;
+      expect(launch['cpuLimitPercent'], 50);
       expect(launch['executable'], 'cmd.exe');
       expect(launch['arguments'], <String>['/C', 'echo hello']);
       expect(launch['commandPreview'], 'cmd.exe /C [REDACTED_COMMAND]');

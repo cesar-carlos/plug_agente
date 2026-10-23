@@ -9,6 +9,7 @@ import 'package:plug_agente/presentation/pages/agent_actions/widgets/agent_actio
 import 'package:plug_agente/presentation/pages/agent_actions/widgets/agent_actions_test_preview.dart';
 import 'package:plug_agente/presentation/pages/agent_actions/widgets/agent_actions_triggers_section.dart';
 import 'package:plug_agente/presentation/providers/agent_actions_provider.dart';
+import 'package:plug_agente/presentation/widgets/agent_actions/agent_action_live_process_panel.dart';
 import 'package:plug_agente/presentation/widgets/agent_actions/agent_action_risk_labels.dart';
 import 'package:plug_agente/presentation/widgets/agent_actions/agent_action_secrets_section.dart';
 import 'package:plug_agente/presentation/widgets/agent_actions/agent_action_trigger_save_dialog.dart';
@@ -34,6 +35,8 @@ class AgentActionSelectedDetailContent extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
+        if (provider.liveProcesses case final processes?)
+          AgentActionLiveProcessPanel(processes: processes, actionId: definition.id),
         Row(
           children: [
             Icon(agentActionDefinitionIconFor(definition), size: 20),

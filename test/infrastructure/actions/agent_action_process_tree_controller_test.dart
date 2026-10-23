@@ -9,6 +9,51 @@ import 'package:plug_agente/infrastructure/actions/windows_action_job_api.dart';
 import 'package:win32/win32.dart';
 
 void main() {
+  test('applies CPU cap before assignment and reads job accounting', () async {
+    final api = _FakeApi();
+    final controller = WindowsJobObjectProcessTreeController(api: api, cpuLimitPercent: 50);
+    final lease = (await controller.attach(_Process())).getOrThrow();
+    expect(api.calls.indexOf('cpu:50'), lessThan(api.calls.indexOf('assign')));
+    expect(controller.readCpu(lease).getOrThrow(), const Duration(seconds: 2));
+    await controller.release(lease);
+    expect(controller.readCpu(lease).isError(), isTrue);
+  });
+  test('CPU policy failure closes the job and refuses to start unprotected', () async {
+    final api = _FakeApi()..cpuOk = false;
+    final result = await WindowsJobObjectProcessTreeController(api: api, cpuLimitPercent: 25).attach(_Process());
+    expect(result.exceptionOrNull(), isA<ActionRuntimeFailure>());
+    expect(api.calls, ['create', 'configure', 'cpu:25', 'close:1']);
+  });
+  test('invalid CPU policy fails before allocating a job', () async {
+    final api = _FakeApi();
+    final result = await WindowsJobObjectProcessTreeController(api: api, cpuLimitPercent: 101).attach(_Process());
+    expect(result.isError(), isTrue);
+    expect(api.calls, isEmpty);
+  });
+  test('Windows stores the requested CPU hard cap', () {
+    final api = WindowsActionJobApi();
+    final job = api.create().value;
+    final limits = calloc<ActionJobCpuLimits>();
+    try {
+      expect(api.configureCpu(job, 50).value, isTrue);
+      expect(
+        QueryInformationJobObject(
+          job,
+          JobObjectCpuRateControlInformation,
+          limits,
+          sizeOf<ActionJobCpuLimits>(),
+          null,
+        ).value,
+        isTrue,
+      );
+      expect(limits.ref.flags, 5);
+      expect(limits.ref.rate, 5000);
+    } finally {
+      calloc.free(limits);
+      api.close(job);
+    }
+  }, skip: !Platform.isWindows);
+
   test('configures a finite tree memory limit before attaching the process', () async {
     final api = _FakeApi();
     final controller = WindowsJobObjectProcessTreeController(api: api);
@@ -86,6 +131,15 @@ class _Process implements Process {
 
 class _FakeApi extends WindowsActionJobApi {
   final calls = <String>[];
+  bool cpuOk = true;
+  @override
+  Win32Result<bool> configureCpu(HANDLE job, int percent) {
+    calls.add('cpu:$percent');
+    return _result(cpuOk);
+  }
+
+  @override
+  Win32Result<int> cpuTicks(HANDLE job) => const Win32Result(value: 20000000, error: ERROR_SUCCESS);
   int? memory;
   bool configureOk = true;
   bool terminateOk = true;

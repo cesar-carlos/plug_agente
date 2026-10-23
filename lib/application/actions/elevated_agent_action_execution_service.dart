@@ -99,11 +99,9 @@ class ElevatedAgentActionExecutionService {
         );
       }
       final failure = terminalResult.exceptionOrNull();
-      if (failure is ActionFailure && failure.code == AgentActionFailureCode.executionTimedOut) {
-        if (definition.policies.timeout.killMainProcessOnTimeout) {
-          final cancelled = await _canceller?.cancel(executionId: trimmedExecutionId);
-          if (cancelled != null && cancelled.isError()) return Failure(cancelled.exceptionOrNull()!);
-        }
+      if (failure != null && !(failure is ActionFailure && failure.code == AgentActionFailureCode.executionCancelled)) {
+        final cancelled = await _canceller?.cancel(executionId: trimmedExecutionId);
+        if (cancelled != null && cancelled.isError()) return Failure(cancelled.exceptionOrNull()!);
       }
       if (terminalResult.isSuccess()) {
         final output = terminalResult.getOrThrow();

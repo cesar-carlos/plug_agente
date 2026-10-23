@@ -4,6 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:get_it/get_it.dart';
 import 'package:mocktail/mocktail.dart';
 import 'package:odbc_fast/odbc_fast.dart' as odbc;
+import 'package:plug_agente/application/actions/agent_action_live_processes.dart';
 import 'package:plug_agente/application/services/active_config_resolver.dart';
 import 'package:plug_agente/application/services/hub_session_coordinator.dart';
 import 'package:plug_agente/application/use_cases/connect_to_hub.dart';
@@ -14,12 +15,15 @@ import 'package:plug_agente/core/config/payload_signing_config.dart';
 import 'package:plug_agente/core/di/plug_dependency_registrar.dart';
 import 'package:plug_agente/core/runtime/agent_runtime_identity.dart';
 import 'package:plug_agente/core/runtime/odbc_runtime_tuning.dart';
+import 'package:plug_agente/core/settings/agent_action_cpu_settings.dart';
 import 'package:plug_agente/core/settings/app_settings_store.dart' show GlobalAppSettingsStore, IAppSettingsStore;
 import 'package:plug_agente/core/storage/global_storage_path_resolver.dart';
 import 'package:plug_agente/domain/repositories/i_agent_config_repository.dart';
 import 'package:plug_agente/domain/repositories/i_authorization_trust_invalidator.dart';
 import 'package:plug_agente/domain/repositories/i_odbc_connection_settings.dart';
 import 'package:plug_agente/domain/repositories/i_transport_client.dart';
+import 'package:plug_agente/infrastructure/actions/agent_action_process_lifecycle.dart';
+import 'package:plug_agente/infrastructure/actions/script_action_process_runner.dart';
 import 'package:plug_agente/infrastructure/repositories/agent_config_drift_database.dart';
 import 'package:plug_agente/infrastructure/settings/odbc_connection_settings.dart';
 
@@ -101,6 +105,13 @@ void main() {
     if (tempDir.existsSync()) {
       await tempDir.delete(recursive: true);
     }
+  });
+
+  test('action diagnostics and CPU policy resolve without a dependency cycle', () {
+    expect(sl<AgentActionCpuSettings>().limitPercent, 0);
+    expect(sl<AgentActionLiveProcesses>().forAction('unused'), isEmpty);
+    expect(sl<AgentActionProcessLifecycle>(), same(sl<AgentActionProcessLifecycle>()));
+    expect(sl<ScriptActionProcessRunner>(), isA<ScriptActionProcessRunner>());
   });
 
   test('registers persistence before transport hub dependencies resolve', () {

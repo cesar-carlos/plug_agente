@@ -25,6 +25,26 @@ class _FakeElevatedBridge implements IElevatedActionRunnerBridge {
 
 void main() {
   group('ElevatedAgentActionExecutionService', () {
+    test('cancels the helper when running identity cannot be persisted', () async {
+      final canceller = _Canceller();
+      final service = ElevatedAgentActionExecutionService(
+        bridge: _FakeElevatedBridge(submitResult: const Success(unit)),
+        statusFileSyncer: _RecordingStatusSyncer(result: Failure(ActionRuntimeFailure('disk full'))),
+        readiness: ElevatedActionRunnerReadinessService(),
+        canceller: canceller,
+      );
+      final result = await service.run(
+        executionId: 'identity-failed',
+        definition: const AgentActionDefinition(
+          id: 'a',
+          name: 'Elevated',
+          config: CommandLineActionConfig(command: 'echo hi'),
+        ),
+      );
+      expect((result.exceptionOrNull()! as ActionFailure).message, 'disk full');
+      expect(canceller.cancelledIds, ['identity-failed']);
+    });
+
     test('signals elevated helper cancellation when the absolute deadline is reached', () async {
       final canceller = _Canceller();
       final syncer = _RecordingStatusSyncer(

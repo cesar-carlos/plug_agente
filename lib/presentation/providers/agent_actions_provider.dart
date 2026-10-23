@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart';
 import 'package:plug_agente/application/actions/action_execution_queue.dart';
 import 'package:plug_agente/application/actions/agent_action_definition_save_options.dart';
 import 'package:plug_agente/application/actions/agent_action_failure_diagnostics.dart';
+import 'package:plug_agente/application/actions/agent_action_live_processes.dart';
 import 'package:plug_agente/application/actions/agent_action_runtime_state_guard.dart';
 import 'package:plug_agente/application/actions/agent_action_secret_availability_checker.dart';
 import 'package:plug_agente/application/actions/agent_action_subsystem_coordinator.dart';
@@ -29,6 +30,7 @@ import 'package:plug_agente/application/use_cases/slice_agent_action_captured_ou
 import 'package:plug_agente/application/use_cases/test_agent_action_definition.dart';
 import 'package:plug_agente/core/constants/agent_action_command_safety_constants.dart';
 import 'package:plug_agente/core/constants/agent_action_rpc_constants.dart';
+import 'package:plug_agente/core/settings/agent_action_cpu_settings.dart';
 import 'package:plug_agente/core/settings/agent_action_preflight_settings.dart';
 import 'package:plug_agente/core/storage/global_storage_path_resolver.dart';
 import 'package:plug_agente/domain/actions/actions.dart';
@@ -78,6 +80,8 @@ class AgentActionsProvider extends ChangeNotifier {
     AgentActionTriggerScheduler? triggerScheduler,
     IComObjectInvocationDiagnostics? comObjectInvocationDiagnostics,
     AgentActionPreflightSettings? preflightSettings,
+    this.cpuSettings,
+    this.liveProcesses,
     DateTime Function()? now,
     AgentActionsHistoryController? historyController,
     AgentActionsDefinitionsController? definitionsController,
@@ -244,6 +248,9 @@ class AgentActionsProvider extends ChangeNotifier {
       canTransferBundle: () => canTransferBundle,
     );
   }
+
+  final AgentActionCpuSettings? cpuSettings;
+  final AgentActionLiveProcesses? liveProcesses;
 
   final SaveAgentActionDefinition _saveDefinition;
   final DeleteAgentActionDefinition _deleteDefinition;

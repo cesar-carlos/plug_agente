@@ -37,8 +37,8 @@ class ElevatedMaterializedReader {
       final decoded =
           jsonDecode(file.readAsStringSync()) as Map<String, dynamic>;
       final version = decoded['version'];
-      if (version is! num ||
-          version.toInt() != ElevatedContract.materializedSchemaVersion) {
+      if (version is! int ||
+          version != ElevatedContract.materializedSchemaVersion) {
         return null;
       }
 

@@ -96,7 +96,8 @@ class ElevatedRequestProcessor {
       await _writeFailure(
         executionId: executionId,
         failureCode: 'ACTION_ELEVATED_REQUEST_PROTECTION_FAILED',
-        failureMessage: 'Materialized launch plan was not found.',
+        failureMessage:
+            'Materialized launch plan is missing or incompatible. Update the elevated helper and retry.',
       );
       await _safeDelete(file);
       return true;
@@ -147,11 +148,22 @@ class ElevatedRequestProcessor {
       return true;
     }
 
-    final status = await _processRunner.run(
-      context: context,
-      launch: materialized.launch,
-      materializedNonce: materialized.nonce,
-    );
+    ElevatedStatusPayload status;
+    try {
+      status = await _processRunner.run(
+        context: context,
+        launch: materialized.launch,
+        materializedNonce: materialized.nonce,
+      );
+    } on Object catch (error) {
+      status = ElevatedStatusPayload(
+        executionId: executionId,
+        status: 'failed',
+        finishedAt: _now(),
+        failureCode: 'ACTION_RUNTIME_ERROR',
+        failureMessage: 'Elevated execution cleanup failed: $error',
+      );
+    }
     await _statusWriter.write(status);
     await _safeDelete(file);
     return true;

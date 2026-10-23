@@ -3,6 +3,7 @@ import 'dart:io';
 
 import 'package:plug_agente/core/constants/agent_action_process_constants.dart';
 import 'package:plug_agente/domain/actions/actions.dart';
+import 'package:plug_agente/domain/actions/i_agent_action_process_observer.dart';
 import 'package:plug_agente/domain/repositories/agent_action_execution_metrics_collector.dart';
 import 'package:plug_agente/infrastructure/actions/action_command_normalizer.dart';
 import 'package:plug_agente/infrastructure/actions/action_process_output_capture.dart';
@@ -13,6 +14,7 @@ import 'package:plug_agente/infrastructure/actions/agent_action_process_kill_gua
 import 'package:plug_agente/infrastructure/actions/agent_action_process_killer.dart';
 import 'package:plug_agente/infrastructure/actions/agent_action_process_starter.dart';
 import 'package:plug_agente/infrastructure/actions/agent_action_process_tree_controller.dart';
+import 'package:plug_agente/infrastructure/actions/windows_silent_action_process.dart';
 import 'package:result_dart/result_dart.dart';
 
 class AgentActionProcessFailureMessages {
@@ -40,7 +42,10 @@ class AgentActionProcessLifecycle {
     DateTime Function()? now,
     AgentActionProcessTreeController? processTreeController,
     AgentActionExecutionMetricsCollector? metrics,
-  }) : _stdinSetup = stdinSetup,
+    IAgentActionProcessObserver? liveProcesses,
+  }) : _liveProcesses = liveProcesses,
+       _usesDefaultStarter = processStarter == null,
+       _stdinSetup = stdinSetup,
        _processStarter = processStarter ?? Process.start,
        _redactor = redactor,
        _outputCaptureDrainTimeout = outputCaptureDrainTimeout,
@@ -48,6 +53,8 @@ class AgentActionProcessLifecycle {
        _processTreeController = processTreeController ?? WindowsJobObjectProcessTreeController(),
        _metrics = metrics;
 
+  final IAgentActionProcessObserver? _liveProcesses;
+  final bool _usesDefaultStarter;
   final ActionProcessStdinSetup _stdinSetup;
   final AgentActionProcessStarter _processStarter;
   final AgentActionRedactor _redactor;
@@ -82,6 +89,10 @@ class AgentActionProcessLifecycle {
         late final Process process;
         try {
           process = await _startBeforeDeadline(
+            discardOutput:
+                !definition.policies.capture.captureStdout &&
+                !definition.policies.capture.captureStderr &&
+                definition.policies.context.injectionMode != AgentActionContextInjectionMode.stdin,
             deadline: deadline,
             executable: effectiveInvocation.executable,
             arguments: effectiveInvocation.arguments,
@@ -151,10 +162,29 @@ class AgentActionProcessLifecycle {
           redactBeforePersisting: definition.policies.capture.redactBeforePersisting,
         );
 
+        final monitor = _liveProcesses;
+        if (monitor != null) {
+          final controller = _processTreeController;
+          final recorded = await monitor.started(
+            AgentActionLiveProcess(
+              executionId: executionId,
+              actionId: definition.id,
+              pid: process.pid,
+              executable: effectiveInvocation.executable,
+              startedAt: startedAt,
+              cpuLimitPercent: controller is WindowsJobObjectProcessTreeController ? controller.cpuLimitPercent : 0,
+              readCpu: () => controller is WindowsJobObjectProcessTreeController
+                  ? controller.readCpu(processTreeLease!)
+                  : Failure(ActionRuntimeFailure('Medição de CPU indisponível neste executor.')),
+            ),
+          );
+          if (recorded.isError()) return Failure(recorded.exceptionOrNull()!);
+        }
         final diagnostics = AgentActionProcessInvocationDiagnostics.forInvocation(
           invocation: effectiveInvocation,
           capturePolicy: definition.policies.capture,
         );
+        if (process is WindowsSilentActionProcess) process.resume();
         final stdinSetupResult = await _stdinSetup.configure(
           process: process,
           definition: definition,
@@ -256,6 +286,7 @@ class AgentActionProcessLifecycle {
           ),
         );
       } finally {
+        _liveProcesses?.finished(executionId);
         _activeProcessesByExecutionId.remove(executionId);
         _killedExecutionIds.remove(executionId);
         try {
@@ -368,6 +399,7 @@ class AgentActionProcessLifecycle {
     required Duration timeout,
   }) => capture.result.timeout(timeout, onTimeout: capture.cancel);
   Future<Process> _startBeforeDeadline({
+    required bool discardOutput,
     required DateTime deadline,
     required String executable,
     required List<String> arguments,
@@ -382,15 +414,24 @@ class AgentActionProcessLifecycle {
       throw TimeoutException('Process start deadline elapsed.');
     }
 
-    final start = _processStarter(
-      executable,
-      arguments,
-      workingDirectory: workingDirectory,
-      environment: environment,
-      includeParentEnvironment: includeParentEnvironment,
-      runInShell: runInShell,
-      mode: mode,
-    );
+    final start = _usesDefaultStarter && Platform.isWindows && discardOutput && !runInShell
+        ? WindowsSilentActionProcess.start(
+            executable,
+            arguments,
+            startSuspended: true,
+            workingDirectory: workingDirectory,
+            environment: environment,
+            includeParentEnvironment: includeParentEnvironment,
+          )
+        : _processStarter(
+            executable,
+            arguments,
+            workingDirectory: workingDirectory,
+            environment: environment,
+            includeParentEnvironment: includeParentEnvironment,
+            runInShell: runInShell,
+            mode: mode,
+          );
     return start.timeout(
       remaining,
       onTimeout: () {

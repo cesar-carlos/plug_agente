@@ -2,6 +2,18 @@ part of 'bootstrap_dependency_registrar.dart';
 
 void _registerActionsInfrastructure(GetIt getIt) {
   getIt
+    ..registerLazySingleton(() => AgentActionCpuSettings(getIt<IAppSettingsStore>()))
+    ..registerLazySingleton(() => AgentActionLiveProcesses(getIt<IAgentActionRepository>()))
+    ..registerLazySingleton(
+      () => AgentActionProcessLifecycle(
+        stdinSetup: getIt<ActionProcessStdinSetup>(),
+        liveProcesses: getIt<AgentActionLiveProcesses>(),
+        metrics: getIt<MetricsCollector>(),
+        processTreeController: WindowsJobObjectProcessTreeController(
+          cpuLimitProvider: () => getIt<AgentActionCpuSettings>().limitPercent,
+        ),
+      ),
+    )
     ..registerLazySingleton(
       () => ActiveConfigMetadataCache(
         activeConfigResolverProvider: () => getIt<ActiveConfigResolver>(),
@@ -116,6 +128,7 @@ void _registerActionsInfrastructure(GetIt getIt) {
         environmentResolver: getIt<ActionEnvironmentResolver>(),
         operationalProfileResolver: const AgentOperationalProfileResolver(),
         stdinSetup: getIt<ActionProcessStdinSetup>(),
+        lifecycle: getIt<AgentActionProcessLifecycle>(),
         metrics: getIt<MetricsCollector>(),
       ),
     )
@@ -125,6 +138,7 @@ void _registerActionsInfrastructure(GetIt getIt) {
         environmentResolver: getIt<ActionEnvironmentResolver>(),
         operationalProfileResolver: const AgentOperationalProfileResolver(),
         stdinSetup: getIt<ActionProcessStdinSetup>(),
+        lifecycle: getIt<AgentActionProcessLifecycle>(),
       ),
     )
     ..registerLazySingleton<ScriptActionProcessRunner>(
@@ -133,6 +147,7 @@ void _registerActionsInfrastructure(GetIt getIt) {
         environmentResolver: getIt<ActionEnvironmentResolver>(),
         operationalProfileResolver: const AgentOperationalProfileResolver(),
         stdinSetup: getIt<ActionProcessStdinSetup>(),
+        lifecycle: getIt<AgentActionProcessLifecycle>(),
       ),
     )
     ..registerLazySingleton<JarActionProcessRunner>(
@@ -141,6 +156,7 @@ void _registerActionsInfrastructure(GetIt getIt) {
         environmentResolver: getIt<ActionEnvironmentResolver>(),
         operationalProfileResolver: const AgentOperationalProfileResolver(),
         stdinSetup: getIt<ActionProcessStdinSetup>(),
+        lifecycle: getIt<AgentActionProcessLifecycle>(),
       ),
     )
     ..registerLazySingleton<EmailActionMailerRunner>(
@@ -161,6 +177,7 @@ void _registerActionsInfrastructure(GetIt getIt) {
         environmentResolver: getIt<ActionEnvironmentResolver>(),
         operationalProfileResolver: const AgentOperationalProfileResolver(),
         stdinSetup: getIt<ActionProcessStdinSetup>(),
+        lifecycle: getIt<AgentActionProcessLifecycle>(),
       ),
     )
     ..registerLazySingleton<ActionExecutionQueue>(
@@ -237,6 +254,7 @@ void _registerActionsInfrastructure(GetIt getIt) {
     )
     ..registerLazySingleton(
       () => ElevatedActionExecutionMaterializer(
+        cpuLimitProvider: () => getIt<AgentActionCpuSettings>().limitPercent,
         storageContext: getIt<GlobalStorageContext>(),
       ),
     )
@@ -248,6 +266,7 @@ void _registerActionsInfrastructure(GetIt getIt) {
     )
     ..registerLazySingleton(
       () => ElevatedActionStatusFileSyncer(
+        liveProcesses: getIt<AgentActionLiveProcesses>(),
         storageContext: getIt<GlobalStorageContext>(),
         metrics: getIt<MetricsCollector>(),
       ),

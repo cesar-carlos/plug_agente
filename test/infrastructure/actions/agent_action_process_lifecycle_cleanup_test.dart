@@ -3,14 +3,42 @@ import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:plug_agente/domain/actions/actions.dart';
+import 'package:plug_agente/domain/actions/i_agent_action_process_observer.dart';
 import 'package:plug_agente/infrastructure/actions/action_command_normalizer.dart';
 import 'package:plug_agente/infrastructure/actions/agent_action_process_lifecycle.dart';
 import 'package:plug_agente/infrastructure/actions/agent_action_process_tree_controller.dart';
+import 'package:plug_agente/infrastructure/actions/windows_silent_action_process.dart';
 import 'package:result_dart/result_dart.dart';
 
 import 'agent_action_process_runner_test_support.dart';
 
 void main() {
+  test('publishes PID while running and removes it during failure cleanup', () async {
+    final process = _Process();
+    final tree = _Tree();
+    final observer = _Observer();
+    final running = _run(process, tree, observer: observer);
+    final snapshot = await observer.arrived.future;
+    expect(snapshot.pid, 123);
+    expect(snapshot.actionId, 'action');
+    expect(tree.released, isFalse);
+    observer.answer.complete(Failure(ActionRuntimeFailure('cannot record identity')));
+    expect((await running).isError(), isTrue);
+    expect(observer.finishedId, 'memory-test');
+    expect(tree.released, isTrue);
+    expect(process.output.hasListener, isFalse);
+    await process.output.close();
+    await process.errors.close();
+  });
+  test('real Windows action with both captures disabled has no parent output pipes', () async {
+    final tree = _Tree()..expectSilent = true;
+    final result = await _run(_Process(), tree, capture: false, native: true);
+    expect(result.isSuccess(), isTrue);
+    expect(result.getOrThrow().stdout.isCaptured, isFalse);
+    expect(result.getOrThrow().stderr.isCaptured, isFalse);
+    expect(result.getOrThrow().exitCode, 7);
+  }, skip: !Platform.isWindows);
+
   for (final enabled in [true, false]) {
     test('cancels held output pipes after drain timeout (capture=$enabled)', () async {
       final process = _Process();
@@ -55,21 +83,29 @@ void main() {
   });
 }
 
-Future<Result<AgentActionProcessResult>> _run(_Process process, _Tree tree, {bool capture = true}) {
+Future<Result<AgentActionProcessResult>> _run(
+  _Process process,
+  _Tree tree, {
+  bool capture = true,
+  IAgentActionProcessObserver? observer,
+  bool native = false,
+}) {
   final lifecycle = AgentActionProcessLifecycle(
     stdinSetup: kTestActionProcessStdinSetup,
+    liveProcesses: observer,
     outputCaptureDrainTimeout: const Duration(milliseconds: 10),
     processTreeController: tree,
-    processStarter:
-        (
-          executable,
-          arguments, {
-          workingDirectory,
-          environment,
-          includeParentEnvironment = true,
-          runInShell = false,
-          mode = ProcessStartMode.normal,
-        }) async => process,
+    processStarter: native
+        ? null
+        : (
+            executable,
+            arguments, {
+            workingDirectory,
+            environment,
+            includeParentEnvironment = true,
+            runInShell = false,
+            mode = ProcessStartMode.normal,
+          }) async => process,
   );
   return lifecycle.execute(
     executionId: 'memory-test',
@@ -85,9 +121,9 @@ Future<Result<AgentActionProcessResult>> _run(_Process process, _Tree tree, {boo
       ),
     ),
     request: const AgentActionExecutionRequest(actionId: 'action', source: AgentActionRequestSource.localUi),
-    invocation: const AgentActionCommandInvocation(
-      executable: 'unused',
-      arguments: [],
+    invocation: AgentActionCommandInvocation(
+      executable: native ? '${Platform.environment['SystemRoot']}\\System32\\cmd.exe' : 'unused',
+      arguments: native ? ['/d', '/c', 'echo synthetic output & exit /b 7'] : [],
       runInShell: false,
       mode: ProcessStartMode.normal,
       redactedPreview: 'unused',
@@ -135,12 +171,17 @@ class _Sink implements IOSink {
 }
 
 class _Tree implements AgentActionProcessTreeController {
+  bool expectSilent = false;
   bool failRelease = false;
   bool released = false;
   @override
   bool get requiresAttachment => false;
   @override
-  Future<Result<AgentActionProcessTreeLease>> attach(Process process) async => const Success(_Lease());
+  Future<Result<AgentActionProcessTreeLease>> attach(Process process) async {
+    if (expectSilent) expect(process, isA<WindowsSilentActionProcess>());
+    return const Success(_Lease());
+  }
+
   @override
   Future<Result<void>> terminate(AgentActionProcessTreeLease lease) async => const Success(unit);
   @override
@@ -154,4 +195,20 @@ class _Lease implements AgentActionProcessTreeLease {
   const _Lease();
   @override
   bool get supportsTreeTermination => true;
+}
+
+class _Observer implements IAgentActionProcessObserver {
+  final arrived = Completer<AgentActionLiveProcess>();
+  final answer = Completer<Result<void>>();
+  String? finishedId;
+  @override
+  Future<Result<void>> started(AgentActionLiveProcess process) {
+    arrived.complete(process);
+    return answer.future;
+  }
+
+  @override
+  void finished(String executionId) {
+    finishedId = executionId;
+  }
 }

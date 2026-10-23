@@ -1,10 +1,12 @@
 import 'package:plug_agente/application/actions/action_execution_queue.dart';
+import 'package:plug_agente/application/actions/agent_action_live_processes.dart';
 import 'package:plug_agente/application/actions/agent_action_runtime_state_guard.dart';
 import 'package:plug_agente/application/actions/agent_action_secret_availability_checker.dart';
 import 'package:plug_agente/application/actions/agent_action_subsystem_coordinator.dart';
 import 'package:plug_agente/application/actions/agent_action_trigger_scheduler.dart';
 import 'package:plug_agente/application/actions/elevated_action_runner_readiness_service.dart';
 import 'package:plug_agente/application/use_cases/prepare_elevated_action_runner.dart';
+import 'package:plug_agente/core/settings/agent_action_cpu_settings.dart';
 import 'package:plug_agente/core/settings/agent_action_preflight_settings.dart';
 import 'package:plug_agente/core/storage/global_storage_path_resolver.dart';
 import 'package:plug_agente/domain/repositories/i_agent_action_secret_store.dart';
@@ -17,6 +19,8 @@ final class AgentActionsProviderWiring {
   const AgentActionsProviderWiring({
     required this.dependencies,
     required this.preflightSettings,
+    this.cpuSettings,
+    this.liveProcesses,
     this.runtimeStateGuard,
     this.subsystemCoordinator,
     this.executionQueue,
@@ -30,6 +34,8 @@ final class AgentActionsProviderWiring {
 
   final AgentActionsProviderDependencies dependencies;
   final AgentActionPreflightSettings preflightSettings;
+  final AgentActionCpuSettings? cpuSettings;
+  final AgentActionLiveProcesses? liveProcesses;
   final AgentActionRuntimeStateGuard? runtimeStateGuard;
   final AgentActionSubsystemCoordinator? subsystemCoordinator;
   final ActionExecutionQueue? executionQueue;
@@ -60,5 +66,7 @@ AgentActionsProvider createAgentActionsProvider(AgentActionsProviderWiring wirin
     triggerScheduler: wiring.triggerScheduler,
     comObjectInvocationDiagnostics: wiring.comObjectInvocationDiagnostics,
     preflightSettings: wiring.preflightSettings,
+    cpuSettings: wiring.cpuSettings,
+    liveProcesses: wiring.liveProcesses,
   );
 }

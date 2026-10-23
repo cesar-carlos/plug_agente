@@ -1,4 +1,5 @@
 import 'package:plug_agente/application/actions/action_execution_queue.dart';
+import 'package:plug_agente/application/actions/agent_action_live_processes.dart';
 import 'package:plug_agente/application/actions/agent_action_runtime_state_guard.dart';
 import 'package:plug_agente/application/actions/agent_action_subsystem_coordinator.dart';
 import 'package:plug_agente/application/actions/agent_action_trigger_scheduler.dart';
@@ -61,6 +62,7 @@ import 'package:plug_agente/core/di/service_locator.dart';
 import 'package:plug_agente/core/runtime/runtime_capabilities.dart';
 import 'package:plug_agente/core/runtime/runtime_detection_diagnostics.dart';
 import 'package:plug_agente/core/services/i_auto_update_orchestrator.dart';
+import 'package:plug_agente/core/settings/agent_action_cpu_settings.dart';
 import 'package:plug_agente/core/settings/agent_action_preflight_settings.dart';
 import 'package:plug_agente/core/settings/agent_action_retention_settings.dart';
 import 'package:plug_agente/core/storage/global_storage_path_resolver.dart';
@@ -242,6 +244,8 @@ List<SingleChildWidget> buildAppRootProviders() {
                 : null,
           ),
           preflightSettings: getIt<AgentActionPreflightSettings>(),
+          cpuSettings: getIt.isRegistered<AgentActionCpuSettings>() ? getIt<AgentActionCpuSettings>() : null,
+          liveProcesses: getIt.isRegistered<AgentActionLiveProcesses>() ? getIt<AgentActionLiveProcesses>() : null,
           runtimeStateGuard: getIt.isRegistered<AgentActionRuntimeStateGuard>()
               ? getIt<AgentActionRuntimeStateGuard>()
               : null,

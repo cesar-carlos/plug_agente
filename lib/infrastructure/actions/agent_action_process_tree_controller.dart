@@ -20,12 +20,17 @@ final class WindowsJobObjectProcessTreeController implements AgentActionProcessT
   WindowsJobObjectProcessTreeController({
     WindowsActionJobApi? api,
     this.memoryLimitBytes = defaultMemoryLimitBytes,
-  }) : _api = api ?? WindowsActionJobApi(),
+    int cpuLimitPercent = 0,
+    int Function()? cpuLimitProvider,
+  }) : _cpuLimitProvider = cpuLimitProvider ?? (() => cpuLimitPercent),
+       _api = api ?? WindowsActionJobApi(),
        _nativeTest = api != null;
 
   /// Total committed memory of one action's process tree, not working-set RAM.
   static const int defaultMemoryLimitBytes = 2 * 1024 * 1024 * 1024;
   final int memoryLimitBytes;
+  final int Function() _cpuLimitProvider;
+  int get cpuLimitPercent => _cpuLimitProvider();
   final WindowsActionJobApi _api;
   final bool _nativeTest;
 
@@ -37,6 +42,7 @@ final class WindowsJobObjectProcessTreeController implements AgentActionProcessT
   Future<Result<AgentActionProcessTreeLease>> attach(Process process) async {
     if (!requiresAttachment) return const Success(_NoopProcessTreeLease());
     if (memoryLimitBytes <= 0) return Failure(_failure('configure_memory_limit', 0));
+    if (cpuLimitPercent < 0 || cpuLimitPercent > 100) return Failure(_failure('configure_cpu_limit', 0));
     final created = _api.create();
     final job = created.value;
     if (job.isNull) return Failure(_failure('create_job', created.error.toInt()));
@@ -50,6 +56,15 @@ final class WindowsJobObjectProcessTreeController implements AgentActionProcessT
           cleanupError: closed.value ? null : closed.error.toInt(),
         ),
       );
+    }
+    if (cpuLimitPercent > 0) {
+      final cpu = _api.configureCpu(job, cpuLimitPercent);
+      if (!cpu.value) {
+        final closed = _api.close(job);
+        return Failure(
+          _failure('configure_cpu_limit', cpu.error.toInt(), cleanupError: closed.value ? null : closed.error.toInt()),
+        );
+      }
     }
     final opened = _api.open(process.pid);
     if (opened.value.isNull) {
@@ -71,6 +86,13 @@ final class WindowsJobObjectProcessTreeController implements AgentActionProcessT
       );
     }
     return Success(_WindowsJobObjectLease(job));
+  }
+
+  Result<Duration> readCpu(AgentActionProcessTreeLease lease) {
+    if (lease is! _WindowsJobObjectLease || lease.released) return Failure(_failure('read_cpu', 0));
+    final result = _api.cpuTicks(lease.handle);
+    if (result.error.toInt() != 0) return Failure(_failure('read_cpu', result.error.toInt()));
+    return Success(Duration(microseconds: result.value ~/ 10));
   }
 
   @override
@@ -119,8 +141,11 @@ final class WindowsJobObjectProcessTreeController implements AgentActionProcessT
           : 'process_tree_attach_failed',
       'os_error_code': error,
       'memory_limit_bytes': memoryLimitBytes,
+      'cpu_limit_percent': cpuLimitPercent,
       'cleanup_os_error_code': ?cleanupError,
-      'user_message': phase == 'terminate_job' || phase == 'close_job'
+      'user_message': phase == 'configure_cpu_limit'
+          ? 'O Windows não permitiu aplicar o limite de CPU. Revise a opção nas preferências de Ações; sessões remotas podem restringir esse controle.'
+          : phase == 'terminate_job' || phase == 'close_job'
           ? 'Nao foi possivel confirmar o encerramento dos processos da acao. Verifique os processos no Gerenciador de Tarefas.'
           : 'Nao foi possivel aplicar a protecao de processos e memoria desta acao.',
     },

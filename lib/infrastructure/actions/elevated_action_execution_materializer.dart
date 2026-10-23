@@ -16,15 +16,18 @@ class ElevatedActionExecutionMaterializer {
   ElevatedActionExecutionMaterializer({
     required GlobalStorageContext storageContext,
     DeveloperData7DefinitionResolver? developerResolver,
+    int Function()? cpuLimitProvider,
     ActionCommandNormalizer commandNormalizer = const ActionCommandNormalizer(),
   }) : _storageContext = storageContext,
        _developerResolver = developerResolver ?? DeveloperData7DefinitionResolver(),
-       _commandNormalizer = commandNormalizer;
+       _commandNormalizer = commandNormalizer,
+       _cpuLimitProvider = cpuLimitProvider ?? (() => 0);
   static final RegExp _secretPlaceholderPattern = RegExp(
     r'\$\{secret:([^}]+)\}',
     caseSensitive: false,
   );
 
+  final int Function() _cpuLimitProvider;
   final GlobalStorageContext _storageContext;
   final DeveloperData7DefinitionResolver _developerResolver;
   final ActionCommandNormalizer _commandNormalizer;
@@ -33,6 +36,15 @@ class ElevatedActionExecutionMaterializer {
     required ElevatedProtectedRequest protectedRequest,
     required AgentActionDefinition definition,
   }) async {
+    final cpuLimit = _cpuLimitProvider();
+    if (cpuLimit < 0 || cpuLimit > 100) {
+      return Failure(
+        ActionValidationFailure.withContext(
+          message: 'Invalid local CPU limit for elevated execution.',
+          context: {'user_message': 'Ajuste o limite de CPU nas preferências de Ações para um valor entre 0 e 100.'},
+        ),
+      );
+    }
     final launchResult = await _buildLaunch(definition);
     if (launchResult.isError()) {
       return Failure(launchResult.exceptionOrNull()!);
@@ -48,7 +60,7 @@ class ElevatedActionExecutionMaterializer {
       'nonce': protectedRequest.nonce,
       'expiresAt': protectedRequest.expiresAt.toUtc().toIso8601String(),
       'actionType': definition.type.name,
-      'launch': launchResult.getOrThrow(),
+      'launch': {...launchResult.getOrThrow(), 'cpuLimitPercent': cpuLimit},
     };
 
     try {

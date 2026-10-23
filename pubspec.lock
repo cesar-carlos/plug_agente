@@ -1545,6 +1545,13 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "0.5.2"
+  windows_action_runtime:
+    dependency: "direct main"
+    description:
+      path: "packages/windows_action_runtime"
+      relative: true
+    source: path
+    version: "0.0.1"
   windows_file_picker:
     dependency: transitive
     description:

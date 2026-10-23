@@ -6,6 +6,9 @@ environment:
   sdk: ^3.10.4
 
 dependencies:
+  windows_action_runtime:
+    path: ../../packages/windows_action_runtime
+  win32: ^6.4.0
   args: ^2.7.0
   meta: ^1.16.0
   path: ^1.9.1
