@@ -7,6 +7,7 @@ import 'dart:typed_data';
 import 'package:ffi/ffi.dart';
 import 'package:win32/win32.dart';
 import 'package:windows_action_runtime/src/windows_command_line_quoter.dart';
+import 'package:windows_action_runtime/src/windows_pipe_reader.dart';
 
 const _inheritedHandleListAttribute = 0x00020002;
 
@@ -353,34 +354,24 @@ void _forwardOutput(int address, int maxBytes, SendPort destination) {
 }
 
 void _drainOutput(int address, int maxBytes, SendPort destination) {
-  final handle = HANDLE(Pointer.fromAddress(address));
+  final reader = WindowsPipeReader.takeOwnership(address);
   try {
     using((arena) {
       const chunkSize = 65536;
       final buffer = arena<Uint8>(chunkSize);
-      final read = arena<Uint32>();
       var remaining = maxBytes + 1;
       while (true) {
-        final result = ReadFile(handle, buffer, chunkSize, read, null);
-        if (!result.value) {
-          if (result.error == ERROR_BROKEN_PIPE) break;
-          throw ProcessException(
-            '',
-            const [],
-            'Unable to drain action output (Win32 ${result.error.toInt()})',
-            result.error.toInt(),
-          );
-        }
-        if (read.value == 0) break;
+        final bytes = reader.read(buffer, chunkSize);
+        if (bytes == 0) break;
         // One extra byte tells the consumer that capture was truncated.
         if (remaining > 0) {
-          final length = read.value < remaining ? read.value : remaining;
+          final length = bytes < remaining ? bytes : remaining;
           destination.send(Uint8List.fromList(buffer.asTypedList(length)));
           remaining -= length;
         }
       }
     });
   } finally {
-    _closeHandle(handle);
+    reader.close();
   }
 }
