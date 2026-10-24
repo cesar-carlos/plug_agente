@@ -75,7 +75,7 @@ jobs:
 
       - name: Upload analyzer diagnostics
         if: always()
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: analyzer-diagnostics-${{ github.run_id }}
           path: artifacts/analyze/**/*
@@ -150,7 +150,7 @@ jobs:
           python tool/odbc/prepare_package_native.py --github-env "${{ github.env }}"
           flutter test test/docs/openrpc_contract_test.dart test/docs/communication test/infrastructure/external_services/transport/hub_inbound_catalog_codec_test.dart
       - name: Set up Node
-        uses: actions/setup-node@v6
+        uses: actions/setup-node@v7
         with:
           node-version-file: plug_server/.nvmrc
       - name: Hub contract fixtures
@@ -163,7 +163,7 @@ jobs:
           npx vitest run tests/contract
       - name: Upload contract revisions
         if: always()
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: communication-revisions
           path: artifacts/communication/revisions.txt
@@ -275,7 +275,7 @@ jobs:
         run: python3 -m unittest tool.tests.test_workflow_regressions tool.release.test_publish_release -v
 
       - name: Set up Node for alert tests
-        uses: actions/setup-node@v6
+        uses: actions/setup-node@v7
         with:
           node-version: '24'
 
@@ -335,7 +335,7 @@ jobs:
 
       - name: Upload native updater contract diagnostics
         if: always()
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: windows-updater-contracts-${{ github.run_id }}-${{ github.run_attempt }}
           path: |
@@ -388,7 +388,7 @@ jobs:
 
       - name: Upload helper smoke diagnostics on failure
         if: failure()
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: windows-helper-smoke-diagnostics
           path: ${{ runner.temp }}\windows-helper-smoke\*
@@ -416,7 +416,7 @@ jobs:
 
       - name: Upload elevated helper smoke diagnostics on failure
         if: failure()
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: windows-elevated-helper-smoke-diagnostics
           path: ${{ runner.temp }}\elevated-helper-smoke\*

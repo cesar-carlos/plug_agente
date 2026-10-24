@@ -366,7 +366,7 @@ jobs:
 
       - name: Preserve release installer and diagnostics
         if: always()
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: windows-release-${{ github.run_id }}-${{ github.run_attempt }}
           path: |
