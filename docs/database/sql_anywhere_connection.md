@@ -36,8 +36,8 @@ DRIVER={SQL Anywhere 16};UID=dba;PWD=sql;DBN=VL;HOST=localhost:2650
 SQL Anywhere stays on the **lease/direct** path. It is not eligible for
 the native adaptive pool.
 
-Streaming sessions are **not** reused. `odbc_fast` 4.5.1 does not
-document SQL Anywhere connect reuse after a finished stream as safe.
+Streaming sessions are **not** reused. See the
+[runtime policy](../runtime/odbc_pool_and_transactions.md) for safety constraints.
 
 ## Troubleshooting
 

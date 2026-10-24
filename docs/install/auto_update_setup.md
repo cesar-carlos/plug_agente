@@ -49,9 +49,10 @@ e o worker que executa a tentativa permanecem fora do bundle substituído.
 **A aplicação automática pelo serviço permanece bloqueada** por
 `kApplicationContractImplemented=false` no código e
 `applicationContractValidated=false` na política. Enrollment não comprova recuperação.
-Ainda faltam conectar o launcher da sessão original, a manutenção ao runtime,
-o bootstrap em validação, a restauração DPAPI/SQLite e a homologação nas VMs.
-O caminho ativo do aplicativo continua sendo o helper legado e pode pedir UAC.
+Implementation progress and remaining installed-lifecycle acceptance are tracked
+in the updater plan; isolated bootstrap and recovery evidence do not unlock release.
+Windows bootstrap registers `PrivilegedSilentUpdateInstaller`. Service failure
+never falls back to the legacy helper or a UAC prompt.
 Não distribuir esta implementação como automação concluída; veja o status em
 [plano_auto_update_evolution.md](../implemente/plano_auto_update_evolution.md).
 
@@ -76,15 +77,14 @@ repita uma instalação cuja conclusão ainda não foi confirmada.
 
 ## Visao Geral
 
-O app tem dois fluxos de update:
+The app exposes manual update checks and a background coordinator. On Windows,
+preparation/application uses the privileged service adapter. It checks service
+readiness before downloading/staging through that adapter and refuses an
+unready service. Automatic application remains disabled by the native contract
+and protected policy gates; enabling a UI preference does not override them.
 
-- verificacao manual via `auto_updater`/WinSparkle, mantendo interacao do
-  usuario;
-- fluxo silencioso legado, ligado por padrao, com verificacao e download em
-  background e instalacao pelo helper nativo quando auto-apply esta ligado.
-  Instalacoes globais ainda podem exigir UAC. Com auto-apply desligado, o apply
-  permanece explicito via banner ou shutdown natural. A autorizacao do servico
-  e separada dessa preferencia; sua aplicacao ainda esta bloqueada.
+The helper remains packaged for legacy compatibility and isolated tests.
+Its behavior below must not be read as the current Windows application path.
 
 O recurso fica ativo quando:
 
@@ -153,18 +153,16 @@ e a configuracao do `.env.example`. Quando ligado, o gate atua em dois pontos:
 A protecao em camadas inclui ainda o `plug:sha256` validado em Dart durante o
 download e novamente no helper antes de elevar privilegios.
 
-Estado atual do rollout (plano `docs/implemente/plano_auto_update_evolution.md`
-fase 1E.2): o workflow `Publish Windows Release` ainda compila releases com
-`AUTO_UPDATE_REQUIRE_VALID_SIGNATURE=false` por padrao. Para promover, vire o
-input `require_valid_update_signature` para `true` ao acionar o workflow apos
-duas releases consecutivas com Authenticode valido em helper, runner elevado e
-installer. Builds locais de desenvolvedor sem certificado configurado devem
-manter `false` no `.env`; o status da assinatura continua sendo verificado e
-registrado em `signatureStatus`/`helperSignatureStatus`. Nunca distribua builds
-para usuarios finais quando o gate estiver desligado e o pipeline Authenticode
-nao estiver verde.
+`signing_provider=manifest` compiles with Authenticode enforcement disabled,
+while requiring Ed25519 feed/manifest signatures. The `pfx` and `signpath`
+providers require Authenticode validation in production. See the
+[release guide](release_guide.md) for provider inputs and secrets.
+The legacy helper checks above describe that component, not a service fallback.
 
 ## Assinatura Ed25519 do Feed (opt-in)
+
+The heading describes legacy runtime configurability. Current production release
+workflows require signed feeds and manifests for every signing provider.
 
 Alem do `plug:sha256` por asset, o feed pode trazer assinatura Ed25519 por
 item via atributo `plug:edSignature`. O cliente verifica a assinatura sobre a
@@ -264,69 +262,42 @@ alguns segundos para propagar.
 
 ## Fluxo Silencioso
 
-O app executa o fluxo silencioso no boot e no intervalo configurado por
-`AUTO_UPDATE_CHECK_INTERVAL_SECONDS`, respeitando `AUTO_UPDATE_CHANNEL`,
-rollout, cooldown, quiet hours e pending update.
-
-O ciclo divide-se em **verificacao + download** (automaticos) e **apply**
-(automatico quando `AUTO_UPDATE_AUTO_APPLY` e a preferencia
-`settings.automatic_silent_updates_auto_apply_enabled` estao ligadas; caso
-contrario, explicito via banner ou no shutdown natural). Enquanto o instalador
-esta apenas *staged* em disco, o agente permanece online e conectado ao hub.
+The coordinator checks the feed at boot and at
+`AUTO_UPDATE_CHECK_INTERVAL_SECONDS`, respecting channel, rollout, cooldown,
+quiet hours and pending state. On Windows, the service adapter owns preparation
+and application; see
+[bootstrap registration](../../lib/bootstrap/bootstrap_dependency_registrar_auto_update.dart)
+and [PrivilegedSilentUpdateInstaller](../../lib/application/services/privileged_silent_update_installer.dart).
 
 ### Fase automatica (boot / timer)
 
-1. Validar pending persistido: stage sem evidencia de launch pode ser limpo
-   pela politica de expiracao; launch sem conclusao confirmada preserva os
-   artefatos e bloqueia novo ciclo. Update ja staged pode seguir para auto-apply.
-2. Ler o appcast e selecionar a maior versao elegivel no canal configurado.
-3. Comparar a versao remota com `AppConstants.appVersion`.
-4. Rejeitar o fluxo se `plug:sha256`, tamanho, nome do asset, URL do
-   instalador ou assinatura Ed25519 (quando exigida) estiverem ausentes ou
-   invalidos. Nos enclosures com manifesto, verificar tambem o binding
-   assinado, hash, assinatura e identidade antes do download do setup.
-   O gate UAC nao bloqueia o download automatico.
-5. Baixar o `.exe` para a pasta global de updates, primeiro como `.part`.
-6. Validar tamanho e SHA-256.
-7. Copiar `plug_update_helper.exe` do bundle instalado para a pasta global de
-   updates (`deferHelperLaunch: true` — o helper **nao** e iniciado nesta
-   fase quando auto-apply esta desligado).
-8. Persistir pending update (`PendingSilentUpdateDownloaded`) e concluir com
-   `SilentUpdateOutcome.installerReady`.
-9. Quando auto-apply esta ligado, lancar o helper e fechar o app logo apos o
-   staging (toast de pre-fechamento conforme
-   `AUTO_UPDATE_PRE_CLOSE_DELAY_SECONDS`).
+1. Inspect persisted pending state. An unconfirmed launched operation requires
+   reconciliation; do not delete its evidence or start a replacement attempt.
+2. Select an eligible feed item and validate its signed metadata.
+3. Ask the service for capabilities. An unavailable/unready service fails before
+   the adapter downloads or stages the installer (`service_not_ready` when the
+   service responds but cannot apply).
+4. Only when readiness permits, verify the manifest, download/verify the setup
+   and ask the service to prepare the bound operation.
+5. Persist the returned service operation identity for later application.
+
+Production gates currently prevent successful automatic preparation/application.
 
 ### Fase de apply (automatica, explicita ou no shutdown)
 
-O helper nativo e lancado quando:
+The adapter rechecks service readiness, caller ownership, version and operation
+identity. It then coordinates maintenance and an encrypted secrets snapshot
+before asking the service to start. An uncertain dispatch is reconciled through
+service state; it is never silently replayed through the legacy helper.
 
-- auto-apply esta ligado e o download terminou com sucesso (caminho padrao
-  para agentes 24/7); ou
-- o operador confirma no banner in-app (`applyPendingSilentUpdate` ou
-  `applyAvailableUpdate` para sessoes legadas com estado `awaitingUserConsent`);
-  ou
-- o app encerra naturalmente com update staged (`shutdownApp` chama
-  `applyPendingSilentUpdate(triggerAppClose: false)` antes de parar o
-  orchestrator).
-
-No apply explicito pelo banner ou no auto-apply, o app exibe toast de
-pre-fechamento (`AUTO_UPDATE_PRE_CLOSE_DELAY_SECONDS`) e fecha para o helper
-instalar. No shutdown natural, o helper e lancado sem reentrar na logica de
-close.
-
-Em instalacoes sob `Program Files`, o Windows ainda pode exibir prompt UAC
-**na instalacao** (elevacao do setup). Isso e esperado e nao bloqueia o
-download automatico.
-
-O helper recebe argumentos explicitos, incluindo versao, instalador,
-diretorio atual de instalacao, log, status JSON, PID do app, estrategia de
-permissao e `--wait-pid-timeout-seconds` (piso 70, mesmo default do helper
-em `kDefaultWaitPidTimeoutSeconds`). A espera do PID precisa cobrir o
-pre-close; um timeout menor (por exemplo 45 s) deixaria o Inno iniciar
-enquanto o app ainda esta no aviso de fechamento.
+The original-session launcher, probation and recovery acceptance are tracked in
+the [updater plan](../implemente/plano_auto_update_evolution.md). Fixture success
+alone does not certify the installed lifecycle or enable automatic application.
 
 ## Modo de instalação e helper legado
+
+This section documents the retained legacy component and its tests. Current
+Windows bootstrap does not fall back to this helper when the service is unavailable.
 
 O modo vem de `install-mode.ini`: `user` permite `/CURRENTUSER`; `global`
 (ou ausência do registro antigo) usa `/ALLUSERS`. Gravabilidade da pasta é
@@ -481,88 +452,33 @@ silenciosa do gate de assinatura.
 
 ## Workflow de Publicacao
 
-1. Publique a versao pelo workflow manual **Publish Windows Release** seguindo
-   [release_guide.md](release_guide.md) (inputs e secrets do workflow estao
-   la).
-2. O workflow cria a tag, gera o instalador e publica a GitHub Release.
-3. O workflow **Update Appcast on Release** valida tag, versao e asset.
-4. O workflow calcula SHA-256 do asset publicado.
-5. O workflow atualiza `appcast.xml` em `main` e, quando
-   `APPCAST_SIGNING_PRIVATE_KEY` esta configurado em GitHub Secrets, anexa o
-   atributo `plug:edSignature` no item recem-publicado.
-6. O workflow publica o feed em GitHub Pages.
-7. O smoke check confirma que o feed publicado aponta para o asset esperado.
+The [release guide](release_guide.md) owns publication order, inputs, signing
+providers and secrets. `Publish Windows Release` calls `update-appcast.yml` as a
+reusable workflow; no secondary release event or PAT dispatch is required.
+Publication, Pages deployment and smoke checks use the published commit.
 
-O publish chama `update-appcast.yml` como workflow reutilizável. Não depende
-de PAT, de `release.published` ou de redespacho secundário. Mutação de `main`
-usa uma fila compartilhada; publicação/deploy/smoke do feed também são
-serializados. Deploy e smoke usam o SHA do commit que publicou o appcast.
+The release gate must pass before production installer/appcast publication.
+Use provider-appropriate preflight/dry-run checks for preparation; they do not
+remove the independent Windows automatic-application gate.
 
-Prerelease usa `beta`; publicação de prerelease em `stable` é bloqueada.
-O item é deduplicado por versão, plataforma e canal, e é reassinado quando
-publicado com chave, inclusive durante rotação. Releases novas incluem
-`PlugAgente-Manifest-<versão>.json`: assinatura Ed25519 cobre commit/tag,
-versão/canal, hash/tamanho do setup, requisitos e protocolos de dados.
-`plug:manifestSignature` vincula URL/hash do manifesto ao item, preservando
-`plug:edSignature` para clientes antigos. O serviço rejeita formato legado
-como autorização de aplicação privilegiada.
-
-Produção exige certificado Authenticode e chaves de feed válidas. O workflow
-seleciona exatamente o asset esperado, valida bytes, assinatura, tag/commit e
-canal antes de escrever o feed. A primeira publicação pelo workflow começa
-em 5%; mudanças para 25% e 100% exigem as observações previstas no plano.
-
-Para ensaio completo sem publicacao, execute o workflow manual
-**Release Preflight**. Ele atualiza a versao apenas no workspace temporario do
-runner, roda validacoes, gera o instalador, valida o helper nativo e publica
-artefatos de diagnostico, mas nao cria commit, tag, GitHub Release nem deploy
-Pages. Use `require_valid_update_signature=true` somente em staging assinado.
-
-O workflow **Validate Current Appcast** roda diariamente contra o feed oficial
-do GitHub Pages e continua disponivel manualmente para validar uma URL custom.
-Quando falha, ele publica o appcast baixado e os arquivos de diagnostico como
-artifact do GitHub Actions.
-
-O job Windows de smoke do helper no CI publica `manifest.txt`, stdout/stderr e
-status JSON quando falha, para diagnosticar o helper sem reproduzir localmente.
-
-Nome esperado do asset:
-
-```text
-PlugAgente-Setup-{MAJOR.MINOR.PATCH}.exe
-```
+`Validate Current Appcast` checks the deployed feed and retains diagnostics on
+failure. Appcast tooling and validation commands are listed above.
 
 ## Teste Operacional
 
-1. Instale uma versao antiga.
-2. Abra **Configuracoes** > **Atualizacoes**.
-3. Confirme que **Instalar atualizacoes automaticamente** esta ligado.
-4. Opcional: confirme o toggle de **aplicar automaticamente** (ligado por
-   padrao; desligue para testar o fluxo legado com banner).
-5. Clique em **Tentar atualizacao automatica agora** para exercitar o fluxo
-   silencioso com as mesmas validacoes do boot.
-6. Se quiser testar o fluxo manual, clique no botao de refresh da verificacao
-   manual.
-7. Confirme:
-   - com versao nova e auto-apply ligado: download, staging e apply ocorrem
-     sem clicar no banner (o app fecha para o helper instalar);
-   - com auto-apply desligado: download e staging concluem; o banner oferece
-     apply manual;
-   - em `Program Files`, UAC pode aparecer **na instalacao**, nao no download;
-   - se o UAC for cancelado: o pending permanece Ready para retry; a UI nao
-     trata o apply como sucesso;
-   - **Instalar agora** funciona mesmo em cooldown ou quiet hours;
-   - sem versao nova: a UI informa que nao ha atualizacao;
-   - em cooldown (fluxo automatico / **Tentar atualizacao automatica agora**):
-     a UI registra `automaticCooldown`;
-   - com falha: a UI mostra detalhes tecnicos copiaveis.
+Use the private fixture procedures and acceptance boundaries in the
+[updater plan](../implemente/plano_auto_update_evolution.md). Do not use a
+production installation to demonstrate an automatic application that is still gated.
 
-Para cruzar a GitHub Release com o feed publicado, use
-`tool/appcast/validate_release.py` conforme [release_guide.md](release_guide.md).
+For the current Windows runtime, verify that an unavailable or unready service
+returns an actionable failure, without launching the helper, prompting UAC or
+claiming that installation succeeded. Unknown operations retain their evidence
+and require reconciliation.
 
-Os comandos `inspect-url` e `smoke-validate-url` de `tool/appcast/appcast_manager.py`
-adicionam `cb=` por padrao. Use `--no-cache-bust` apenas quando precisar
-reproduzir exatamente a URL original.
+For feed inspection, use `tool/appcast/validate_release.py` as described in the
+[release guide](release_guide.md). `inspect-url` and `smoke-validate-url` in
+`tool/appcast/appcast_manager.py` add `cb=` by default; use `--no-cache-bust` only
+to reproduce the original URL exactly.
 
 ## Falhas Comuns
 

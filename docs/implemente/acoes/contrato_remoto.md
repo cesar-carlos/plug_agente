@@ -15,17 +15,12 @@ depende de RA-01 / RA-02 / RA-05.
 | Flags, rollback, live Hub | [`seguranca_acoes.md`](seguranca_acoes.md) |
 | UI | [`ui_acoes.md`](ui_acoes.md) |
 
-## Metodos (resumo)
+## Methods
 
-| Metodo | Side effect | Nota |
-| --- | --- | --- |
-| `agent.action.run` | Sim | `idempotency_key` obrigatorio; gatilho `remote` habilitado antes do rate limit |
-| `agent.action.validateRun` | Nao | Preflight sem persistir/iniciar; mesmo gate de gatilho `remote` |
-| `agent.action.cancel` | Sim | Fila ou arvore de processo local quando houver Job Object; rate limit / auditoria por `action_id` da execucao |
-| `agent.action.getExecution` | Nao | Leitura redigida; janela UTF-8; prefetch sem hidratar output |
-
-Constantes: `lib/core/constants/agent_action_rpc_constants.dart`.
-Transporte: so `rpc:request` / `rpc:response` em `PayloadFrame`.
+The method catalog, side effects and transport requirements are maintained in
+[socket_agent_actions.md](../../communication/socket_agent_actions.md) and
+[OpenRPC](../../communication/openrpc.json). Use those contracts when implementing
+a caller; the table is not duplicated here.
 
 ## Implementacao (paths)
 

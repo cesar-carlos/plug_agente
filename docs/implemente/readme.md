@@ -1,7 +1,10 @@
 # Implemente
 
-Planos vivos de implementacao. Cada plano e a **fonte de verdade** da feature
-correspondente: os subdocs `acoes/` sao indices que apontam aqui.
+Implementation plans own feature status, backlog and acceptance evidence.
+Wire contracts remain in [communication](../communication/readme.md); repository
+rules remain in [.cursor/rules](../../.cursor/rules/rules_index.mdc).
+The action subdocuments provide focused UI and operational guidance and link
+to the plan for status; they are not interchangeable copies of it.
 
 | Arquivo | Quando consultar |
 | --- | --- |

@@ -26,7 +26,7 @@ conexão, não do nome do driver configurado. Dialeto desconhecido é recusado.
 | ------------ | --------------------------------------------------------------------- | ---------------------------------------------- |
 | PostgreSQL   | current_database, system_identifier de pg_control_system, OID da base | native; requer acesso aos metadados            |
 | SQL Server   | DB_NAME, MachineName/ServerName, database_guid/recovery_fork_guid     | native; metadados incompletos são recusados    |
-| Firebird 4+  | MON$DATABASE_NAME, MON$GUID, MON$FILE_ID                              | native; motores sem esses campos são recusados |
+| Firebird 4+ (historical; unsupported) | MON$DATABASE_NAME, MON$GUID, MON$FILE_ID                              | native; motores sem esses campos são recusados |
 | SQL Anywhere | DB_NAME, UUID/version de DBA.se7e_source_identity                     | provisioned; exige provisionamento DBA manual |
 
 O hash SHA-256 combina versão, motor, endpoint da configuração e identificadores
@@ -143,8 +143,8 @@ troca real por base homônima, timeout e configuração alterada durante dispatc
 Deploy e aceite integral permanecem bloqueados.
 
 
-A cadeia isolada MCP/REST/Socket.IO/ODBC também verifica consulta, DML e identidade
-nos quatro motores, incluindo o marcador SQL Anywhere provisionado na fixture.
+Historical isolated MCP/REST/Socket.IO/ODBC evidence covered four engines,
+including the SQL Anywhere identity marker provisioned within the fixture.
 O validador de entrada sql.execute aceita expectedSource v1 estritamente, sem
 remover os portões de negociação, policy, banco e identidade no executor.
 Perfil remoto incompleto falha com ValidationFailure, sem interromper callbacks.
@@ -155,3 +155,56 @@ plug_mcp/docs/persona-v2/homologation-chain.md.
 O transporte v1 preserva seu enum histórico por compatibilidade; isso não
 concede suporte ao motor. O runtime recusa Firebird antes de metadados ou SQL
 de negócio. A matriz atual exige PostgreSQL, SQL Server e SQL Anywhere.
+
+
+## Structural inspection (sourceSchema v1)
+
+Current engine scope is PostgreSQL, SQL Server and SQL Anywhere. Firebird
+examples and fixture results below are historical only; the runtime rejects
+that engine before metadata or business SQL. These results do not replace
+acceptance of the current three-engine candidate.
+
+
+Extensão aditiva, em desenvolvimento e sem liberação de deploy. `sql.describeSchema`
+exige `sourceSchema`/`sourceIdentity` v1, ID correlacionável, token vigente,
+ClientAgentAccess upstream e banco obrigatório da policy. Inspeciona somente recursos
+explicitamente autorizados; recebe até 16 recursos únicos e pagina até quatro.
+Schemas são explícitos; Firebird usa schema nulo. SQL, DSN ou conexão do consumidor
+não entram nesse contrato. As consultas aos catálogos são fixas e os nomes são valores
+parametrizados. O agente usa a mesma conexão para identidade antes/depois e metadados.
+
+Retorna tipos/nulabilidade, PKs, índices únicos e FKs com pares ordenados e somente
+alvos no escopo autorizado. Defaults, comentários e linhas de negócio não são enviados.
+`coverage`/`limitations` distinguem informação incompleta; visibilidade limitada
+não prova inexistência. Estados são enabled/disabled/unvalidated/unknown por recurso.
+PostgreSQL verifica índices/validação e triggers de FK; SQL Server índices e confiança
+das FKs; Firebird índices associados. Índices parciais ou por expressão não provam
+unicidade global. SQL Anywhere mantém enforcement desconhecido: o indicador interno
+not_enforced não habilita dependências. SQL Anywhere distingue tabelas BASE de views
+regulares VIEW por SYSTAB.table_type_str; materialized views não entram como views
+regulares nem como tabelas implicitamente. `metadataPage` é separado da paginação SQL;
+nulos obrigatórios são preservados, inclusive schema Firebird.
+
+`sql.execute.expectedStructure` exige as mesmas capabilities e `expectedSource`.
+Contém recursos, colunas e constraints utilizadas; constraints exigem também
+sourceConstraints v1. Destinos de FK devem pertencer ao escopo autorizado. A policy
+autoriza os recursos; a mesma conexão confere colunas e chaves/ordem/status antes e
+depois do SELECT. Divergência descarta linhas com SOURCE_STRUCTURE_MISMATCH, sem
+reconectar/repetir. DML, prova de enforcement SQL Anywhere e matriz completa de
+mínimos privilégios/views continuam pendentes. Prova não aprova significado de negócio.
+
+Referências técnicas dos catálogos: [PostgreSQL pg_constraint](https://www.postgresql.org/docs/15/catalog-pg-constraint.html),
+[SQL Server sys.columns](https://learn.microsoft.com/en-us/sql/relational-databases/system-catalog-views/sys-columns-transact-sql?view=sql-server-ver16),
+[SQL Anywhere SYSIDXCOL](https://help.sap.com/docs/SAP_SQL_Anywhere/93079d4ba8e44920ae63ffb4def91f5b/3be8e1416c5f1014aa0185d6ff33803a.html)
+e [Firebird RDB$RELATION_FIELDS](https://firebirdsql.org/file/documentation/chunk/en/refdocs/fblangref25/fblangref-appx04-relfields.html).
+SQL e schemas efetivos estão no runtime e nos JSON/OpenRPC empacotados; referências
+não substituem execução dos testes reais de cada versão/driver.
+
+A fixture da cadeia persistente acrescenta rel_left/rel_link/rel_right, com FKs
+compostas e policy somente leitura. O MCP fixa a FK na filha na navegação 1:N e
+preserva intermediárias/elos N:N; a relação conceitual não autoriza JOIN direto.
+A ação fixa relationship-drop-right-fk do companion confere a base descartável
+antes de remover fk_rel_right, sem receber SQL ou identificadores do consumidor.
+PostgreSQL, SQL Server e Firebird recusam a consulta após a remoção; SQL Anywhere
+continua recusando adoção dependente de enforcement desconhecido. Esse alcance
+não conclui a matriz integral nem libera instalador/appcast/deploy.

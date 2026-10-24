@@ -1,8 +1,12 @@
 # plug_agente
 
-Agente Windows com Socket.IO + ODBC para monitoramento e execução de consultas SQL.
+Windows agent for Socket.IO requests, ODBC SQL execution and approved local actions.
 
-[Documentação completa](docs/readme.md) | [Instalação](docs/install/readme.md)
+[Documentation](docs/readme.md) | [Project overview](docs/project_overview.md) | [Installation](docs/install/readme.md)
+
+Production installer/appcast publication remains blocked by the
+[persona-v2 release manifest](contracts/persona-v2-release.json).
+See the [implementation plans](docs/implemente/readme.md) for current acceptance.
 
 ## License
 

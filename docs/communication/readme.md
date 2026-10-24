@@ -2,12 +2,10 @@
 
 Documentos do contrato Socket.IO / Plug JSON-RPC entre o agente e o hub.
 
-Reviewed on **2026-10-03** against repository HEAD `abbbf9a4` and the local
-runtime sources. Protocol and OpenRPC remain **2.11.2**. The review covers
-event framing exceptions, stream arrival order and columnar chunks, admission
-limits/reasons, SQL source-read authorization, health schemas, and client
-examples. Live hub deployment settings and pending E2E rollout items require
-separate validation; see the backlog.
+Protocol version and available methods are recorded in [OpenRPC](openrpc.json).
+Development extensions require explicit capability negotiation and authorization;
+their presence does not imply production release. Current scope is PostgreSQL,
+SQL Server and SQL Anywhere. Historical Firebird evidence is not current support.
 
 | Arquivo                                                                    | Quando consultar                                                                                                                                         |
 | -------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -17,6 +15,8 @@ separate validation; see the backlog.
 | [socket_communication_roadmap.md](socket_communication_roadmap.md)         | Changelog historico do que ja foi entregue por versao do protocolo + criterios de rollout.                                                               |
 | [socket_communication_backlog.md](socket_communication_backlog.md)         | Backlog ativo: itens ainda pendentes de evolucao.                                                                                                        |
 | [openrpc.json](openrpc.json)                                               | Documento OpenRPC publicado pelo `rpc.discover`.                                                                                                         |
+| [source_discovery.md](source_discovery.md) | Physical identity, structural inspection and verified SELECT requirements. |
+| [sql_operations.md](sql_operations.md) | Durable operation journal, transactions, reconciliation and scoped acceptance evidence. |
 | [schemas/](schemas/)                                                       | Schemas JSON dos params e results de cada metodo + envelopes RPC + frames de transporte.                                                                 |
 
 ## Validacao
@@ -66,48 +66,7 @@ separate validation; see the backlog.
 - Metodos `agent.action.*`: detalhe em
   [`socket_agent_actions.md`](socket_agent_actions.md).
 
-## Inspeção estrutural sourceSchema v1
+<a id="inspeção-estrutural-sourceschema-v1"></a>
 
-Extensão aditiva, em desenvolvimento e sem liberação de deploy. `sql.describeSchema`
-exige `sourceSchema`/`sourceIdentity` v1, ID correlacionável, token vigente,
-ClientAgentAccess upstream e banco obrigatório da policy. Inspeciona somente recursos
-explicitamente autorizados; recebe até 16 recursos únicos e pagina até quatro.
-Schemas são explícitos; Firebird usa schema nulo. SQL, DSN ou conexão do consumidor
-não entram nesse contrato. As consultas aos catálogos são fixas e os nomes são valores
-parametrizados. O agente usa a mesma conexão para identidade antes/depois e metadados.
-
-Retorna tipos/nulabilidade, PKs, índices únicos e FKs com pares ordenados e somente
-alvos no escopo autorizado. Defaults, comentários e linhas de negócio não são enviados.
-`coverage`/`limitations` distinguem informação incompleta; visibilidade limitada
-não prova inexistência. Estados são enabled/disabled/unvalidated/unknown por recurso.
-PostgreSQL verifica índices/validação e triggers de FK; SQL Server índices e confiança
-das FKs; Firebird índices associados. Índices parciais ou por expressão não provam
-unicidade global. SQL Anywhere mantém enforcement desconhecido: o indicador interno
-not_enforced não habilita dependências. SQL Anywhere distingue tabelas BASE de views
-regulares VIEW por SYSTAB.table_type_str; materialized views não entram como views
-regulares nem como tabelas implicitamente. `metadataPage` é separado da paginação SQL;
-nulos obrigatórios são preservados, inclusive schema Firebird.
-
-`sql.execute.expectedStructure` exige as mesmas capabilities e `expectedSource`.
-Contém recursos, colunas e constraints utilizadas; constraints exigem também
-sourceConstraints v1. Destinos de FK devem pertencer ao escopo autorizado. A policy
-autoriza os recursos; a mesma conexão confere colunas e chaves/ordem/status antes e
-depois do SELECT. Divergência descarta linhas com SOURCE_STRUCTURE_MISMATCH, sem
-reconectar/repetir. DML, prova de enforcement SQL Anywhere e matriz completa de
-mínimos privilégios/views continuam pendentes. Prova não aprova significado de negócio.
-
-Referências técnicas dos catálogos: [PostgreSQL pg_constraint](https://www.postgresql.org/docs/15/catalog-pg-constraint.html),
-[SQL Server sys.columns](https://learn.microsoft.com/en-us/sql/relational-databases/system-catalog-views/sys-columns-transact-sql?view=sql-server-ver16),
-[SQL Anywhere SYSIDXCOL](https://help.sap.com/docs/SAP_SQL_Anywhere/93079d4ba8e44920ae63ffb4def91f5b/3be8e1416c5f1014aa0185d6ff33803a.html)
-e [Firebird RDB$RELATION_FIELDS](https://firebirdsql.org/file/documentation/chunk/en/refdocs/fblangref25/fblangref-appx04-relfields.html).
-SQL e schemas efetivos estão no runtime e nos JSON/OpenRPC empacotados; referências
-não substituem execução dos testes reais de cada versão/driver.
-
-A fixture da cadeia persistente acrescenta rel_left/rel_link/rel_right, com FKs
-compostas e policy somente leitura. O MCP fixa a FK na filha na navegação 1:N e
-preserva intermediárias/elos N:N; a relação conceitual não autoriza JOIN direto.
-A ação fixa relationship-drop-right-fk do companion confere a base descartável
-antes de remover fk_rel_right, sem receber SQL ou identificadores do consumidor.
-PostgreSQL, SQL Server e Firebird recusam a consulta após a remoção; SQL Anywhere
-continua recusando adoção dependente de enforcement desconhecido. Esse alcance
-não conclui a matriz integral nem libera instalador/appcast/deploy.
+Structural inspection and its historical fixtures now live in
+[source discovery](source_discovery.md#structural-inspection-sourceschema-v1).

@@ -16,9 +16,9 @@ publicador desconhecido na instalação manual.
 O novo adaptador Windows usa exclusivamente o serviço: indisponibilidade não
 aciona o helper com UAC. A aplicação automática **continua bloqueada** pelos gates
 `kApplicationContractImplemented=false` e `applicationContractValidated=false`.
-A implementação de transição e a homologação ainda estão em andamento; não
-publicar esse build como atualização automática pronta. O modo manual permanece
-utilizável. Consulte o [estado detalhado](../docs/implemente/plano_auto_update_evolution.md).
+Transition acceptance is still in progress. Do not publish this candidate as
+a completed automatic updater; production distribution remains subject to the
+coordinated release gate. Consulte o [estado detalhado](../docs/implemente/plano_auto_update_evolution.md).
 
 ## SignPath opcional
 
@@ -65,12 +65,8 @@ MIT and Montserrat licenses. The interface uses bundled fonts without Google
 font requests. The original dependency scan found MIT, BSD, Apache and MPL
 texts; this remains a heuristic, not a complete binary redistribution audit.
 
-Automatic update application is a separate outstanding feature:
-`kApplicationContractImplemented=false` and
-`applicationContractValidated=false` remain until a non-elevated launcher,
-authenticated health/probation, original-user data recovery and rollback
-migration handling are integrated and validated. See
-[updater status](../docs/implemente/plano_auto_update_evolution.md).
+Automatic-application status and acceptance are maintained only in the
+[updater plan](../docs/implemente/plano_auto_update_evolution.md).
 
 References: [SignPath conditions](https://signpath.org/terms.html),
 [GitHub integration](https://docs.signpath.io/trusted-build-systems/github),
@@ -132,11 +128,7 @@ silenciosa nova exige `/AUTOUPDATE=1`. Upgrades silenciosos preservam a
 autorização administrativa existente. Desmarcar a opção revoga aplicações
 futuras. Enrollment valida publicador, ACL e contrato do serviço já registrado.
 
-**Estado atual:** enrollment e controle estão implementados, mas
-`kApplicationContractImplemented=false` e `applicationContractValidated=false` bloqueiam aplicação automática. Launcher,
-manutenção ligada ao runtime e recuperação completa ainda precisam ser
-integrados e homologados antes de distribuição; veja
-[status](../docs/implemente/plano_auto_update_evolution.md).
+Enrollment does not override the automatic-application gates described above.
 
 Para validar a sintaxe do Inno Setup sem o bundle Flutter (o mesmo gate do
 job `iss-syntax` no Flutter CI), rode:
@@ -149,45 +141,10 @@ Esse comando chama `ISCC /DCOMPILE_SCRIPT_ONLY` e grava o exe em um diretorio
 temporario (nunca em `installer/dist`). A diretiva omite a secao `[Files]`
 porque o payload Release nao existe em PRs.
 
-Antes de publicar manualmente, rode:
-
-```bash
-python tool/release/release_preflight.py --version {versao} --allow-dirty --require-iscc --check-pages
-```
-
-`--allow-dirty` libera o gate de working tree limpo enquanto voce ainda esta
-ajustando arquivos antes do bump; remova quando rodar a validacao final do
-commit de release. O preflight precisa de `git`, `python`, `flutter` e `gh`
-(quando `--check-pages`) no PATH; se faltar, o erro lista o comando
-ausente.
-
-Para tambem validar que a chave publica Ed25519 do feed esta embutida no
-instalador (evita builds que esqueceram o `--dart-define`), rode apos o
-`build_installer.py`:
-
-```bash
-python tool/release/release_preflight.py --version {versao} --allow-dirty --check-installer \
-  --feed-public-key "$AUTO_UPDATE_FEED_PUBLIC_KEY"
-```
-
-Para uma validacao completa no GitHub Actions sem publicar, use o workflow
-manual **Release Preflight**. Ele gera o instalador, valida o helper nativo,
-roda `tool/appcast/validate_launcher_status.py` contra o status JSON e salva os
-artifacts sem criar commit, tag ou release.
-
-Assinatura de código é obrigatória em produção e opcional somente em desenvolvimento sem distribuição. Se `WINDOWS_CODE_SIGNING_CERT_PATH` apontar
-para um certificado PFX, o script assina `plug_agente.exe`,
-`plug_update_helper.exe`, `plug_agente_elevated_runner.exe` e os componentes
-`plug_update_service.exe`, `plug_update_client.exe`, `plug_update_worker.exe`, e passa
-`SignTool` ao ISCC (`SignedUninstaller=yes`) para o instalador e o
-uninstaller embutido. Use `WINDOWS_CODE_SIGNING_CERT_PASSWORD` para senha do
-PFX e `WINDOWS_CODE_SIGNING_REQUIRED=true` para falhar quando a assinatura
-nao estiver configurada. Builds locais unsigned nao definem `SignTool`.
-
-No workflow `Publish Windows Release`, o passo `Verify Authenticode
-signatures` valida `signtool verify /pa /v` para installer e helper apos o
-build. Ele falha o release se qualquer dos dois nao estiver assinado pela
-cadeia confiável. O gate inclui aplicativo, helper, runner elevado, serviço, cliente, worker e setup. `skip_authenticode_check=true` é restrito a dry-run sem distribuição.
+Version preflight, embedded feed-key checks, release workflow inputs and
+provider-specific signing requirements are maintained in the
+[release guide](../docs/install/release_guide.md). Follow that guide before
+publication. Do not use local build success to bypass its release gates.
 
 ## Saida
 

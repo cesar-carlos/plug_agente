@@ -22,7 +22,7 @@ Tuning e troubleshooting: [QUICKSTART.md](QUICKSTART.md).
 - Sql RPC modularization (maintainers): handlers em `lib/application/rpc/`
   (`sql_execute_handler.dart`, `sql_batch_handler.dart`, etc.); ponto de entrada
   `sql_rpc_method_handler_operations.dart`. Mapa resumido em
-  `docs/project_overview.md` (secao Sql RPC).
+  `docs/project_overview.md` (Layers).
 - Wrappers operacionais: `python tool/odbc/run_odbc_operational_validation.py`,
   `python tool/benchmarks/run_benchmark_suite.py`,
   `python tool/benchmarks/odbc_async_benchmark.py`,

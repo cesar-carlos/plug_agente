@@ -43,9 +43,8 @@ SQL Server e elegivel para o pool adaptativo nativo do `odbc_fast`. Por
 default o agente usa o caminho native-compatible quando aplicavel; o pool
 lease-based continua disponivel como fallback.
 
-Streaming sessions are **not** reused for SQL Server. `odbc_fast` 4.5.1
-does not document connect reuse after a finished stream as safe; each
-stream connect/disconnects. Lease and streaming connect without a
+Streaming sessions are **not** reused for SQL Server; each stream connects
+and disconnects. See the [runtime policy](../runtime/odbc_pool_and_transactions.md). Lease and streaming connect without a
 profile use `blockFetchBatchSize: 256`.
 
 ## Troubleshooting

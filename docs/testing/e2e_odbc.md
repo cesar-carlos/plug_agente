@@ -49,7 +49,7 @@ persistido `feature_enable_odbc_experimental_driver_adaptive_pooling=false`
 funciona como opt-out operacional.
 
 Streaming session reuse: PostgreSQL pode reutilizar conexoes idle; SQL
-Server e SQL Anywhere **nao** (`odbc_fast` 4.5.1). Cancel no ultimo chunk
+Server e SQL Anywhere **nao** (`odbc_fast` 5.0.1). Cancel no ultimo chunk
 nao reutiliza sessao dirty. `blockFetchBatchSize` default **256** em lease
 e streaming connect sem profile.
 

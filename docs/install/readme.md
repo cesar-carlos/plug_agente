@@ -1,75 +1,28 @@
-# Instalacao - Plug Agente
+# Windows installation and releases
 
-Indice canonico da documentacao de instalacao, empacotamento Windows e
-atualizacao automatica.
+## Current status
 
-## Compatibilidade
+Production installer/appcast publication is blocked by the
+[persona-v2 release manifest](../../contracts/persona-v2-release.json).
+Windows automatic application is also disabled pending the
+[updater acceptance plan](../implemente/plano_auto_update_evolution.md).
+The procedures below do not override either gate.
 
-- **Windows 10/11**: suporte completo
-- **Windows Server 2016+**: suporte com possiveis recursos degradados
-- **Windows 8/8.1 e Windows Server 2012/2012 R2 ou inferiores**: nao suportado
-  pelo instalador
+## Guides
 
-Checklist e matriz detalhada em [requirements.md](requirements.md).
+| Task | Document |
+| --- | --- |
+| Check Windows compatibility, prerequisites and startup behavior | [Requirements](requirements.md) |
+| Install, uninstall and verify the application | [Installation guide](installation_guide.md) |
+| Prepare versions, signing, builds and release publication | [Release guide](release_guide.md) |
+| Configure feeds and diagnose the updater | [Auto-update guide](auto_update_setup.md) |
+| Inspect local installer build details and optional SignPath setup | [Installer directory](../../installer/readme.md) |
+| Review update threats and accepted limitations | [Threat model](../security/auto_update_threat_model.md) |
 
-## Fluxos mais comuns
+For a client installation, read requirements before following the installation
+guide. [PlugPortMon](../../install_monitor.bat) is optional and should be installed
+only when required.
 
-### Instalar no cliente
-
-1. Validar ambiente em [requirements.md](requirements.md)
-2. Executar [installation_guide.md](installation_guide.md)
-3. Usar [install_monitor.bat](../../install_monitor.bat) apenas se houver
-   necessidade de PlugPortMon
-
-### Gerar instalador e publicar release
-
-1. Revisar versionamento em [release_guide.md](release_guide.md)
-2. (Opcional, recomendado) Executar o workflow manual **Release Preflight**
-   para ensaiar build, signtool e helper sem criar commit/tag/release
-3. Executar o workflow manual **Publish Windows Release** no GitHub Actions
-4. Confirmar a chamada reutilizavel **Update Appcast on Release**, incluindo
-   deploy do Pages e smoke criptografico do commit publicado
-5. Validar o auto-update em [auto_update_setup.md](auto_update_setup.md)
-
-Saida esperada:
-
-```text
-installer/dist/PlugAgente-Setup-{versao}.exe
-```
-
-## Documentos operacionais
-
-- [installation_guide.md](installation_guide.md): instalacao, desinstalacao e
-  validacao basica no Windows
-- [requirements.md](requirements.md): pre-requisitos, compatibilidade, auto-start
-  (HKCU, `--autostart`, Startup Apps) e notas opcionais de ODBC/PATH
-- [release_guide.md](release_guide.md): versionamento, build, tag, release e
-  pos-release
-- [auto_update_setup.md](auto_update_setup.md): feed oficial, appcast, helper
-  silencioso (PID wait, Inno flags, UAC cancelado, cooldown) e testes
-
-## Scripts uteis
-
-- `python installer/build_installer.py`: fluxo recomendado de build Windows
-- `python installer/update_version.py`: sincroniza versao sem gerar instalador
-- `python tool/release/release_preflight.py`: valida sincronizacao, tag, ferramentas
-  no PATH, presenca do instalador, chave publica embutida (`--feed-public-key`)
-  e Pages habilitado (`--check-pages`) antes da publicacao
-- `python tool/appcast/validate_release.py`: valida GitHub Release e appcast local ou
-  remoto
-- `python tool/appcast/validate_launcher_status.py`: valida o JSON do
-  `plug_update_helper.exe` contra o schema canonico
-- `python tool/appcast/generate_appcast_signing_key.py`: gera keypair Ed25519 para o
-  feed (privada vira `APPCAST_SIGNING_PRIVATE_KEY` em Secrets; publica vira
-  `AUTO_UPDATE_FEED_PUBLIC_KEY` nos builds de release)
-- `python tool/appcast/appcast_manager.py`: comandos `update` / `validate-file` /
-  `smoke-validate-url` / `inspect-url` do feed (chamado pelos workflows)
-- [install_monitor.bat](../../install_monitor.bat): instala PlugPortMon como
-  administrador
-
-## Validacoes de CI
-
-- O workflow **Flutter CI** executa `actionlint` nos arquivos em
-  `.github/workflows/`.
-- O workflow **Publish Windows Release** tem modo `dry_run` para gerar o
-  instalador e validar o fluxo sem criar commit, tag ou GitHub Release.
+For release preparation, follow the release guide and its gates before invoking
+publication workflows. Build or dry-run evidence alone does not authorize release.
+Expected installer output: `installer/dist/PlugAgente-Setup-{version}.exe`.

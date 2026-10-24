@@ -3,7 +3,7 @@
 Este documento separa dois assuntos que nao devem ser misturados:
 
 - **Worker pool interno do `odbc_fast`**: suporte oficial do pacote
-  **4.5.1** (async workers desde 3.8.x). Agora e o default do app,
+  **5.0.1** (async workers desde 3.8.x). Agora e o default do app,
   configurado por `ODBC_ASYNC_WORKER_COUNT` e
   `ODBC_ASYNC_MAX_PENDING_REQUESTS`.
 - **Arquitetura customizada multi-`ServiceLocator`/multi-pool**: continuamos
@@ -80,7 +80,7 @@ latencia p95/p99 e rejeicoes antes de aumentar limites.
 
 | Driver family | Recomendacao |
 | --- | --- |
-| SQL Anywhere | Lease-based pool como default. Nao usar native pool global. Sem reuse de sessao de streaming (`odbc_fast` 4.5.1). Validar qualquer aumento de concorrencia com burst e soak test. |
+| SQL Anywhere | Lease-based pool como default. Nao usar native pool global. Sem reuse de sessao de streaming (`odbc_fast` 5.0.1). Validar qualquer aumento de concorrencia com burst e soak test. |
 | SQL Server | Bom candidato para benchmarks de throughput, mantendo rollback por env/config. Sem reuse de sessao de streaming. |
 | PostgreSQL | Validar streaming, paginacao, lock timeout e cancelamento antes de aumentar agressivamente. Pode reutilizar sessoes de streaming idle (TTL curto). |
 

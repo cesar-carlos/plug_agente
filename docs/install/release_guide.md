@@ -25,7 +25,11 @@ Plug Agente.
 
 ## Bloqueio coordenado persona-v2
 
-`python tool/release/check_persona_release.py` exige os 14 gates coordenados, incluindo `shared-knowledge-and-compatibility`. Manifesto permanece `ready: false`, sem gates concluídos, até evidências aceitas. Homologação parcial não libera instalador, appcast ou publicação.
+`python tool/release/check_persona_release.py` requires all coordinated gates in
+[contracts/persona-v2-release.json](../../contracts/persona-v2-release.json),
+including `shared-knowledge-and-compatibility`. The manifest remains
+`ready: false` with no completed gates. Partial homologation does not authorize
+installer, appcast or production publication.
 
 ## Pre-validacao local (antes do CI)
 
@@ -72,7 +76,8 @@ Ordem sugerida:
    - `version`: versao curta, exemplo `1.6.6`;
    - `build_number`: sufixo do `pubspec.yaml`, exemplo `1`;
    - `run_tests`: mantenha ativo para release estavel;
-   - `require_signing`: obrigatório em produção; configure o certificado antes de publicar;
+   - `signing_provider`: `manifest` (default), `pfx` or `signpath`;
+   - `require_signing` / `require_valid_update_signature`: required for certificate providers; `manifest` uses Ed25519 without Authenticode;
    - `prerelease`: use apenas para versoes de validacao;
    - `dry_run`: gera e valida o instalador sem criar commit, tag ou release.
 5. Apos a publicacao, confirme que o workflow **Update Appcast on Release**
@@ -82,16 +87,20 @@ Use `dry_run=true` para validar uma versao antes de publica-la. O workflow
 continua atualizando a versao no workspace temporario do runner, rodando
 preflight e gerando o instalador, mas encerra antes dos passos destrutivos.
 
-Secrets exigidos para produção:
+Signing requirements:
 
-- `WINDOWS_CODE_SIGNING_CERT_BASE64`: certificado PFX válido em Base64.
-- `WINDOWS_CODE_SIGNING_CERT_PASSWORD`: senha do PFX.
-- `APPCAST_SIGNING_PRIVATE_KEY`: chave Ed25519 já utilizada pelo feed.
-- `AUTO_UPDATE_FEED_PUBLIC_KEY`: CSV das chaves públicas confiáveis, incluindo a chave da assinatura emitida.
+| Provider | Required trust material |
+| --- | --- |
+| All providers | `APPCAST_SIGNING_PRIVATE_KEY` and `AUTO_UPDATE_FEED_PUBLIC_KEY` for the signed feed/manifest |
+| `manifest` (default) | Ed25519; no Authenticode certificate. Windows executables have no verified Authenticode publisher. |
+| `pfx` | `WINDOWS_CODE_SIGNING_CERT_BASE64` and `WINDOWS_CODE_SIGNING_CERT_PASSWORD`, plus Authenticode validation |
+| `signpath` | Approved SignPath project/policy and settings in the [installer guide](../../installer/readme.md#signpath-opcional), plus Authenticode validation |
 
-Produção exige testes, assinatura de todos os executáveis e validação
-Authenticode. Ausência de certificado/chaves bloqueia publicação. Desligar gates
-ou `skip_authenticode_check=true` só é permitido em dry-run sem distribuição.
+The workflow requires tests and provider-specific trust checks for production.
+For `pfx`/`signpath`, disabling Authenticode checks is limited to a dry run.
+`manifest` disables Authenticode only; feed and manifest signing remain required.
+These settings do not bypass the persona-v2 release gate.
+
 O token padrão `github.token` publica a release; `update-appcast.yml` é chamado
 como workflow reutilizável e não depende de `RELEASE_PUBLISH_TOKEN`.
 
@@ -124,7 +133,7 @@ version: 1.2.7+2
 ```bash
 python installer/update_version.py
 python tool/release/release_preflight.py --version 1.2.7 --allow-dirty --require-iscc --check-pages
-python installer/build_installer.py
+python installer/build_installer.py --manifest-only
 python tool/release/release_preflight.py --version 1.2.7 --allow-dirty --check-installer \
   --feed-public-key "$AUTO_UPDATE_FEED_PUBLIC_KEY"
 ```
@@ -137,23 +146,11 @@ ao hook por `ODBC_FAST_NATIVE_LIBRARY`. Nao compila o engine Rust nem altera
 o cache do Pub. Antes de empacotar, exige que a DLL no bundle tenha esse mesmo
 hash. A origem, versao e hashes ficam em `data/odbc_native_manifest.json`.
 
-O script tambem executa:
-
-1. Recusa o build se `AUTO_UPDATE_REQUIRE_VALID_SIGNATURE` resolver para
-   `true` (default quando ausente) sem assinatura configurada; para build local
-   sem certificado, defina `AUTO_UPDATE_REQUIRE_VALID_SIGNATURE=false`
-2. `installer/update_version.py` somente com `--sync-version`
-3. `flutter build windows --release`
-4. `python tool/elevated/build_elevated_runner.py --release-only` (`dart build cli`, copia
-   `plug_agente_elevated_runner.exe` e sidecars nativos para o bundle
-   Release; obrigatorio)
-5. Validacao de presenca do aplicativo, helper, runner elevado e componentes
-   `updater/plug_update_service.exe`, `plug_update_client.exe` e
-   `plug_update_worker.exe` no bundle Release
-6. Assinatura desses executaveis, obrigatoria para producao; artefatos sem
-   assinatura sao restritos a desenvolvimento/dry-run sem distribuicao
-7. `ISCC installer/setup.iss` (com `SignTool` + `SignedUninstaller` quando o
-   certificado estiver configurado) e `signtool verify` do instalador assinado
+Local build stages and component packaging are maintained in the
+[installer guide](../../installer/readme.md#fluxo-recomendado).
+Use `--manifest-only` for the Ed25519 provider; configure the corresponding
+certificate/provider workflow for Authenticode builds. Do not treat an unsigned
+development build as a release artifact.
 
 A segunda chamada do preflight (`--check-installer --feed-public-key`)
 confirma que a chave publica Ed25519 esta embutida no `.exe` gerado; sem isso,
@@ -235,41 +232,25 @@ workflow de update, atualize primeiro o tooling e rode os testes listados la.
 
 ## Fluxo Manual para Depuracao
 
-Use apenas quando precisar isolar uma etapa:
+Use the [local installer workflow](../../installer/readme.md#fluxo-recomendado)
+to debug packaging. A raw Flutter build followed by ISCC omits required native
+components and signing checks.
 
-```bash
-python installer/update_version.py
-flutter build windows --release
-python tool/elevated/build_elevated_runner.py
-ISCC installer/setup.iss
-```
+For Inno syntax only (without a Flutter payload):
 
-Para validar so a sintaxe do `setup.iss` (sem payload Flutter), use
-`python tool/release/release_preflight.py --compile-iss`.
-
-Preflight local completo antes de publicar manualmente:
-
-```bash
-python tool/release/release_preflight.py --version 1.2.7 --require-iscc --check-pages --analyze --tests
+```powershell
+python tool/release/release_preflight.py --compile-iss
 ```
 
 ## Seguranca Operacional
 
-- Producao exige assinatura Authenticode dos executaveis proprios e do
-  instalador, alem de feed e manifesto assinados. Ausencia de certificado ou
-  validacao inconclusiva bloqueiam a publicacao.
-- O script `installer/build_installer.py` assina aplicativo, helper, runner
-  elevado, servico, cliente e worker, e passa `SignTool` ao ISCC
-  (`SignedUninstaller=yes`) para o instalador e o uninstaller embutido quando
-  `WINDOWS_CODE_SIGNING_CERT_PATH` aponta para um PFX.
-- O workflow `Publish Windows Release` verifica Authenticode do instalador e
-  de todos os executaveis proprios. `skip_authenticode_check=true` e a ausencia
-  de certificado ficam restritos a dry-run sem distribuicao; nao ha bypass
-  automatico desse gate em producao.
-- O workflow tambem expoe o input `require_valid_update_signature`: quando
-  `true`, compila o release com `AUTO_UPDATE_REQUIRE_VALID_SIGNATURE=true` e
-  forca `WINDOWS_CODE_SIGNING_REQUIRED=true`. Criterio de promocao em
-  [auto_update_setup.md](auto_update_setup.md).
+- Apply the signing-provider requirements above. Certificate providers require
+  Authenticode on project executables and the installer; `manifest` requires
+  Ed25519 feed/manifest signatures without claiming an Authenticode publisher.
+- Never publish while the coordinated release manifest remains blocked.
+- The [installer guide](../../installer/readme.md) owns component signing details;
+  the [auto-update guide](auto_update_setup.md) owns runtime feed validation.
+
 - A retencao do `appcast.xml` e limitada pelo workflow (`MAX_APPCAST_ITEMS=10`)
   para evitar crescimento indefinido do feed.
 - O feed oficial e publicado via GitHub Pages; a configuracao unica esta em

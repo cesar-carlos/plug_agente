@@ -1,4 +1,13 @@
-# SQL operations â€” journal and transaction integration
+# SQL operations: journal and transaction integration
+
+Current scope: PostgreSQL, SQL Server and SQL Anywhere. Firebird cases and
+four-engine matrices in dated sections are retained as historical evidence;
+Firebird is no longer supported. Current acceptance requires the three-engine
+matrix and all gates in the [release manifest](../../contracts/persona-v2-release.json).
+Production publication remains blocked. Never retry an unknown operation.
+
+For physical identity and structural inspection, see
+[source discovery](source_discovery.md).
 
 ## Concurrent chain evidence
 
