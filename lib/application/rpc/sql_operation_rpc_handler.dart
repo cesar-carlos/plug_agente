@@ -108,10 +108,13 @@ class SqlOperationRpcHandler implements RpcMethodHandler {
     error: RpcError(
       code: rpcCode,
       message: 'SQL operation refused.',
-      data: {
-        'failure_code': code,
-        'retryable': false,
-      },
+      data: RpcErrorCode.buildErrorData(
+        code: rpcCode,
+        technicalMessage: 'SQL operation refused.',
+        correlationId: request.meta?.requestId ?? request.id?.toString(),
+        retryable: false,
+        extra: {'failure_code': code},
+      ),
     ),
   );
 }

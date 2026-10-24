@@ -66,10 +66,16 @@ class SourceDiscoveryRpcHandler implements RpcMethodHandler {
 
   RpcResponse denied(RpcRequest request) => RpcResponse.error(
     id: request.id,
-    error: const RpcError(
+    error: RpcError(
       code: -32000,
       message: 'Source discovery unavailable or refused.',
-      data: {'failure_code': 'SOURCE_DISCOVERY_UNAVAILABLE', 'retryable': false},
+      data: RpcErrorCode.buildErrorData(
+        code: -32000,
+        technicalMessage: 'Source discovery unavailable or refused.',
+        correlationId: request.meta?.requestId ?? request.id?.toString(),
+        retryable: false,
+        extra: const {'failure_code': 'SOURCE_DISCOVERY_UNAVAILABLE'},
+      ),
     ),
   );
 }

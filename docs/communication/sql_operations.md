@@ -27,8 +27,9 @@ The agent's response ACK retry mechanism is distinct from hub request replay:
 `sql.operation.*` responses are not in the `sql.execute`/`sql.executeBatch` ACK
 bypass set. Clients must tolerate duplicate response delivery without repeating
 execution. The [contract review backlog](socket_communication_backlog.md#contract-review-findings-2026-10-24)
-also records the compact operation/source error shape that currently fails the
-structured outgoing error schema; it remains a blocker to full contract acceptance.
+records the resolved compact-error defect and remaining acceptance gaps.
+Operation refusals retain their RPC ID and safe failure code through outgoing
+validation, with structured error data and `retryable: false`.
 
 ## Structural operation guard in development
 

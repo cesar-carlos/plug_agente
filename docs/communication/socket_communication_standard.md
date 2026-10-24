@@ -1634,14 +1634,14 @@ enviar `rpc.discover` com `id` definido.
 
 ## Contrato obrigatorio de erro (`error.data`)
 
-Known deviation: the development source/operation handlers currently construct
-compact errors with only `failure_code` and `retryable: false`. With loaded
-schemas and both validation flags enabled, `RpcResponsePreparer` rejects those
-errors and emits `-32603` with `id: null`, losing the original correlation and
-failure code. Without that validation the compact error may reach the wire.
-This is an implementation defect, not a supported alternative error contract;
-see the [backlog](socket_communication_backlog.md#contract-review-findings-2026-10-24).
-Do not infer business success or authorize replay from either form.
+Source/operation refusals use the standard structured error builder, retain the
+original JSON-RPC ID and safe `failure_code`, and explicitly set `retryable: false`.
+`correlation_id` uses `meta.request_id` when supplied, otherwise the string form
+of the RPC ID (or a generated identifier when no ID exists). Unary and mixed-batch
+responses pass the outgoing schemas without replacement. Native exception text
+and failure context are not exposed. The earlier compact-error defect is recorded
+as resolved in the [review findings](socket_communication_backlog.md#contract-review-findings-2026-10-24).
+An error does not prove rollback or authorize replay of an unknown operation.
 
 Para padronizar UX e troubleshooting, toda resposta de erro deve incluir:
 
@@ -2524,7 +2524,7 @@ enabled; `rpc.discover` and authenticated hub profile sync are exceptions.
 - Preserve required nullable metadata and journal fields across transport.
 - Exercise operation opt-in off/on, limit negotiation, duplicate identities,
   cancellation and uncertain results without automatic replay.
-- Resolve the compact-error/correlation defect before claiming full extension acceptance.
+- Preserve structured refusal errors and correlation through outgoing validation; complete the remaining extension acceptance gates.
 
 ### Contrato v2.1
 

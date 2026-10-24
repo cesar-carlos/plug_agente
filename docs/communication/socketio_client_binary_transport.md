@@ -29,10 +29,10 @@ means permission to repeat `execute`. An unknown operation requires `get` and
 reconciliation with its original identity. Preserve required nullable fields,
 including `directlyAffectedRows: null` and source metadata.
 
-Current source/operation compact errors can fail outgoing schema validation and
-be replaced with `-32603`, `id: null`. This remains an implementation defect,
-not a new error profile; [tracked findings](socket_communication_backlog.md#contract-review-findings-2026-10-24)
-must be resolved before complete extension acceptance.
+Source/operation errors retain the request ID and safe `failure_code` with the
+required structured error fields and `retryable: false`. The compact-error
+validation defect is fixed; [remaining findings](socket_communication_backlog.md#contract-review-findings-2026-10-24)
+still limit complete extension acceptance.
 
 ## Regra principal
 

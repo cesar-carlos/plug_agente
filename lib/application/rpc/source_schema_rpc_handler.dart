@@ -61,10 +61,13 @@ class SourceSchemaRpcHandler implements RpcMethodHandler {
         error: RpcError(
           code: -32000,
           message: 'Schema inspection unavailable or refused.',
-          data: {
-            'failure_code': error is domain.Failure ? error.code : 'SOURCE_SCHEMA_UNAVAILABLE',
-            'retryable': false,
-          },
+          data: RpcErrorCode.buildErrorData(
+            code: -32000,
+            technicalMessage: 'Schema inspection unavailable or refused.',
+            correlationId: request.meta?.requestId ?? request.id?.toString(),
+            retryable: false,
+            extra: {'failure_code': error is domain.Failure ? error.code : 'SOURCE_SCHEMA_UNAVAILABLE'},
+          ),
         ),
       );
     }

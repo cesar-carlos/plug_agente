@@ -13,6 +13,12 @@ itens.
 
 ## Itens concluidos
 
+Source/operation error correction (2026-10-24, profile **2.11.2**): the three
+handlers now build schema-conformant structured errors, preserving request IDs,
+safe failure codes and non-retryable semantics through unary and batch outgoing
+validation. Regression tests cover refusals, parameter errors and exceptions.
+No schema relaxation, write replay or production activation is introduced.
+
 Documentation alignment (2026-10-24, profile **2.11.2**, no wire-version change):
 source discovery/schema and SQL-operation methods are now indexed in the standard;
 capability/opt-in gates, durable reconciliation, response-vs-request ACK behavior,

@@ -15,22 +15,18 @@ Plug JSON-RPC.
 The documentation review at `eb1888b4` found the following implementation/schema
 boundaries. Updating prose does not resolve runtime defects or authorize release.
 
-### Compact errors lose correlation under outgoing validation
+### Resolved: compact errors losing correlation
 
-`SourceDiscoveryRpcHandler`, `SourceSchemaRpcHandler` and
-`SqlOperationRpcHandler` construct errors with only `failure_code` and
-`retryable: false`. [rpc.error.schema.json](schemas/rpc.error.schema.json)
-requires seven structured fields when `data` is present. With loaded schemas
-and both validation flags on (the defaults), `RpcResponsePreparer.validateOutgoing`
-replaces these errors with `-32603`, `id: null`; the original failure code and
-request correlation are lost. Without validation, the compact error can escape.
-A focused local check through the production preparer reproduced this behavior.
+The review reproduced compact source/operation errors being replaced by
+`-32603`, `id: null` under outgoing schema validation. The three handlers now use
+`RpcErrorCode.buildErrorData`, preserving the RPC ID, safe `failure_code` and
+`retryable: false`. The schema and outgoing validation remain unchanged.
 
-Required correction: construct schema-conformant structured errors while keeping
-safe failure codes and the original RPC ID, then cover unary and batch refusal
-paths through the real response pipeline. Do not weaken the error schema or
-disable validation to declare this complete. Unknown SQL-operation outcomes
-still require journal reconciliation rather than replay.
+Regression coverage exercises all five methods with string/numeric IDs, mixed
+batches with a successful sibling, invalid operation parameters, domain failures
+and unexpected exceptions through the real loaded schemas and response preparer.
+Request metadata and safe correlation survive; exception details remain private.
+Unknown SQL-operation outcomes still require reconciliation rather than replay.
 
 ### Published shapes and procedural validation differ
 
@@ -59,7 +55,7 @@ incomplete documentation response examples (now corrected). A second selection
 covering documentation, runtime validators, health and source metadata passed
 236 tests, including the focused checks; the selections overlap. These are local
 checks, not real hub/driver/installation homologation. Required next coverage
-includes extension denial through outgoing framing, schema-vs-reader boundary
+includes live extension denial through outgoing framing, schema-vs-reader boundary
 cases and the current three-engine coordinated release matrix.
 
 ## Politica futura: execution_mode em sql.executeBatch
