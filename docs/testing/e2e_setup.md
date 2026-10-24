@@ -155,7 +155,8 @@ subdocs correspondentes. Testes que dependem de variaveis nao definidas sao
 ### Persona SQL mandatory homologation
 
 The dedicated tool/homologation/sql_operation_four_engines_test.dart matrix
-requires an explicit private fixture manifest for all four engines. Unlike
+requires an explicit private fixture manifest for PostgreSQL, SQL Server and
+SQL Anywhere. Its four-engine filename is historical; Firebird is unsupported. Unlike
 optional legacy E2E tests, a missing environment is a failure, not a skip.
 It never reads .env or registered user sources. Run through the MCP
 scripts/run-four-engine-homologation.ps1 after creating dedicated databases;
@@ -167,3 +168,5 @@ that marker. The dedicated sql_anywhere_source_identity_test.dart runner also
 tests minimum grants, restart, restore preserving UUID and offline copy re-enrollment.
 MCP script run-sql-anywhere-identity-homologation.ps1 creates only a new private
 temporary fixture; never point these tests at a registered source.
+
+Latest local execution and remaining blockers: [2026-10-24 homologation report](homologation_2026-10-24.md).

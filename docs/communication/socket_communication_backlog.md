@@ -24,6 +24,10 @@ mandatory runtime checks documented in OpenRPC and the schemas.
 
 ### Acceptance scope
 
+See the [2026-10-24 homologation report](../testing/homologation_2026-10-24.md)
+for current native results, isolated hub recovery, live-token and reviewed-base
+blockers. Passing a local suite does not mark coordinated release gates complete.
+
 The existing contract/transport test selection passed (295 tests), and focused
 checks confirmed the error-shape defect, six-parameter parser support and the
 incomplete documentation response examples (now corrected). A second selection

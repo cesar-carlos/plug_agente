@@ -221,13 +221,16 @@ is executed in configured user sources and no operational app is launched.
 
 ## Mandatory real-engine matrix
 
+Current execution evidence and blockers: [2026-10-24 homologation report](../testing/homologation_2026-10-24.md).
+
 Run tool/homologation/sql_operation_four_engines_test.dart explicitly, using
-PERSONA_SQL_FIXTURE_MANIFEST for four newly created private fixtures. It never
+PERSONA_SQL_FIXTURE_MANIFEST for three newly created private fixtures. It never
 loads .env or configured sources. Missing engines/driver/connections fail; no
 skips. The MCP scripts/run-four-engine-homologation.ps1 compiles synthetic
 INSERT/UPDATE/DELETE commands with the real MCP compiler before invoking it.
-Names must match se7e_persona_<12 hex>_test, and Firebird must use the matching
-private fixture file. Only operation_fixture is recreated in those databases.
+Names must match se7e_persona_<12 hex>_test. The four-engine runner filename is
+historical; its current mandatory engine list excludes Firebird. Only
+operation_fixture is recreated in those databases.
 
 The matrix exercises real DML, direct counts, scalar ID binding, rollback,
 revocation before commit, duplicate suppression and file-journal reopen.
