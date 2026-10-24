@@ -5,6 +5,40 @@ and version bump instructions remain in `docs/install/release_guide.md`.
 
 ## Unreleased
 
+## 1.8.7 - 2026-10-24
+
+Packaged locally as `installer/dist/PlugAgente-Setup-1.8.7.exe` from
+`1.8.7+3`. Appcast publication remains pending. This build has no
+Authenticode signature, and automatic application remains blocked.
+
+### Fixed — action process capture
+
+- Ordinary execution drains stdout and stderr outside the UI isolate and
+  forwards only the bounded prefix. A timeout keeps the partial capture, and
+  stdin injection stays available.
+- Stdin injection uses the same native pipe path, so its output stays off the
+  calling isolate. A failed pipe close preserves the original read error.
+- Windows pipe reads use the system CRT in binary mode. End of stream stays
+  distinct from a native read failure, and a single owner holds the handle.
+
+### Fixed — action process limits
+
+- Each newly started local or elevated action tree can take a CPU limit from
+  1 to 100 percent. Zero leaves Windows scheduling unchanged. Live process
+  status is reported for both paths.
+- The Windows job enforces the process memory limit, and output readers are
+  released when the process ends.
+
+### Fixed — elevated helper SQLite
+
+- The elevated helper loads a pinned SQLite library from beside its executable
+  by absolute path, instead of searching `PATH` or the working directory.
+
+### Performance
+
+- Large SQL results skip repeated column scans and extra byte copies during
+  normalization, compression, and payload signing.
+
 ### Fixed — isolation and real installer asset checks
 
 - Private native derivations also namespace the update-helper mutex and refuse

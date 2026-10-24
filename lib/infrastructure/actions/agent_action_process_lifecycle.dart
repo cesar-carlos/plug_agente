@@ -1,7 +1,10 @@
 import 'dart:async';
+import 'dart:ffi';
 import 'dart:io';
 
+import 'package:ffi/ffi.dart';
 import 'package:plug_agente/core/constants/agent_action_process_constants.dart';
+import 'package:plug_agente/core/logger/app_logger.dart';
 import 'package:plug_agente/domain/actions/actions.dart';
 import 'package:plug_agente/domain/actions/i_agent_action_process_observer.dart';
 import 'package:plug_agente/domain/repositories/agent_action_execution_metrics_collector.dart';
@@ -16,6 +19,7 @@ import 'package:plug_agente/infrastructure/actions/agent_action_process_starter.
 import 'package:plug_agente/infrastructure/actions/agent_action_process_tree_controller.dart';
 import 'package:plug_agente/infrastructure/actions/windows_silent_action_process.dart';
 import 'package:result_dart/result_dart.dart';
+import 'package:win32/win32.dart';
 
 class AgentActionProcessFailureMessages {
   const AgentActionProcessFailureMessages({
@@ -65,6 +69,9 @@ class AgentActionProcessLifecycle {
   final Map<String, _ActiveProcess> _activeProcessesByExecutionId = <String, _ActiveProcess>{};
   final Set<String> _killedExecutionIds = <String>{};
 
+  /// Diagnostic sampling only; not a contractual SLA for resource reporting.
+  static const Duration _resourceDiagnosticsInterval = Duration(seconds: 20);
+
   Future<Result<AgentActionProcessResult>> execute({
     required String executionId,
     required AgentActionDefinition definition,
@@ -82,6 +89,7 @@ class AgentActionProcessLifecycle {
     Result<void> cleanupResult = const Success(unit);
     ActionProcessOutputCaptureSession? stdoutCapture;
     ActionProcessOutputCaptureSession? stderrCapture;
+    Timer? resourceDiagnosticsTimer;
     Future<Result<AgentActionProcessResult>> run() async {
       try {
         final startedAt = _now();
@@ -160,9 +168,19 @@ class AgentActionProcessLifecycle {
           redactBeforePersisting: definition.policies.capture.redactBeforePersisting,
         );
 
+        final controller = _processTreeController;
+        Result<Duration> readCpu() => controller is WindowsJobObjectProcessTreeController
+            ? controller.readCpu(processTreeLease!)
+            : Failure(ActionRuntimeFailure('Medição de CPU indisponível neste executor.'));
+        resourceDiagnosticsTimer = _startResourceDiagnostics(
+          actionId: definition.id,
+          executionId: executionId,
+          pid: process.pid,
+          startedAt: startedAt,
+          readCpu: readCpu,
+        );
         final monitor = _liveProcesses;
         if (monitor != null) {
-          final controller = _processTreeController;
           final recorded = await monitor.started(
             AgentActionLiveProcess(
               executionId: executionId,
@@ -171,9 +189,7 @@ class AgentActionProcessLifecycle {
               executable: effectiveInvocation.executable,
               startedAt: startedAt,
               cpuLimitPercent: controller is WindowsJobObjectProcessTreeController ? controller.cpuLimitPercent : 0,
-              readCpu: () => controller is WindowsJobObjectProcessTreeController
-                  ? controller.readCpu(processTreeLease!)
-                  : Failure(ActionRuntimeFailure('Medição de CPU indisponível neste executor.')),
+              readCpu: readCpu,
             ),
           );
           if (recorded.isError()) return Failure(recorded.exceptionOrNull()!);
@@ -236,6 +252,23 @@ class AgentActionProcessLifecycle {
         final stdout = await _awaitCapturedOutput(stdoutFuture, timeout: drainTimeout);
         final stderr = await _awaitCapturedOutput(stderrFuture, timeout: drainTimeout);
 
+        AppLogger.operational(
+          'Agent action execution finished',
+          context: {
+            'action_id': definition.id,
+            'execution_id': executionId,
+            'pid': process.pid,
+            'duration_ms': finishedAt.difference(startedAt).inMilliseconds,
+            'exit_code': exitCode,
+            'timed_out': timedOut,
+            'killed': killed,
+            'stdout_truncated': stdout.isTruncated,
+            'stderr_truncated': stderr.isTruncated,
+            'agent_process_current_rss_bytes': ProcessInfo.currentRss,
+            'agent_process_max_rss_bytes': ProcessInfo.maxRss,
+          },
+        );
+
         return Success(
           AgentActionProcessResult(
             status: _statusFor(
@@ -284,6 +317,7 @@ class AgentActionProcessLifecycle {
           ),
         );
       } finally {
+        resourceDiagnosticsTimer?.cancel();
         _liveProcesses?.finished(executionId);
         _activeProcessesByExecutionId.remove(executionId);
         _killedExecutionIds.remove(executionId);
@@ -392,10 +426,70 @@ class AgentActionProcessLifecycle {
     ]);
   }
 
+  /// Isolates whether CPU load comes from this process (render/IO isolates,
+  /// pipe draining) versus the spawned action's job, which `readCpu` already
+  /// reports separately. Returns null rather than failing diagnostics.
+  Duration? _ownProcessCpuTime() {
+    if (!Platform.isWindows) return null;
+    try {
+      return using((arena) {
+        final creation = arena<FILETIME>();
+        final exit = arena<FILETIME>();
+        final kernel = arena<FILETIME>();
+        final user = arena<FILETIME>();
+        final result = GetProcessTimes(GetCurrentProcess(), creation, exit, kernel, user);
+        if (!result.value) return null;
+        final kernelTicks = (kernel.ref.dwHighDateTime << 32) | kernel.ref.dwLowDateTime;
+        final userTicks = (user.ref.dwHighDateTime << 32) | user.ref.dwLowDateTime;
+        return Duration(microseconds: (kernelTicks + userTicks) ~/ 10);
+      });
+    } on Object {
+      return null;
+    }
+  }
+
   Future<AgentActionCapturedOutput> _awaitCapturedOutput(
     ActionProcessOutputCaptureSession capture, {
     required Duration timeout,
   }) => capture.result.timeout(timeout, onTimeout: capture.cancel);
+  /// Logs own-process RSS and the action job's cumulative CPU while it runs,
+  /// so sustained resource growth is visible without live process inspection.
+  Timer _startResourceDiagnostics({
+    required String actionId,
+    required String executionId,
+    required int pid,
+    required DateTime startedAt,
+    required Result<Duration> Function() readCpu,
+  }) {
+    void sample() {
+      final baseContext = {
+        'action_id': actionId,
+        'execution_id': executionId,
+        'pid': pid,
+        'elapsed_ms': _now().difference(startedAt).inMilliseconds,
+        'agent_process_current_rss_bytes': ProcessInfo.currentRss,
+        'agent_process_max_rss_bytes': ProcessInfo.maxRss,
+        'agent_process_own_cpu_ms': ?_ownProcessCpuTime()?.inMilliseconds,
+      };
+      readCpu().fold(
+        (cpu) => AppLogger.operational(
+          'Agent action resource sample',
+          context: {...baseContext, 'action_job_cpu_ms': cpu.inMilliseconds},
+        ),
+        (failure) => AppLogger.operational(
+          'Agent action resource sample',
+          context: {
+            ...baseContext,
+            'action_job_cpu_error': failure is ActionFailure ? failure.message : '$failure',
+          },
+        ),
+      );
+    }
+
+    sample();
+    return Timer.periodic(_resourceDiagnosticsInterval, (_) => sample());
+  }
+
   Future<Process> _startBeforeDeadline({
     required AgentActionCapturePolicy capture,
     required bool requiresStdin,
