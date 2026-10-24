@@ -78,7 +78,8 @@ def require_fixture_artifact(root: Path, path: Path) -> Path:
 
 def rewrite_native(source: str, identity: str) -> str:
     require_identity(identity)
-    return (source.replace("PlugAgenteUpdater", identity + "Updater")
+    return (source.replace("PlugAgenteUpdateHelper", identity + "UpdateHelper")
+            .replace("PlugAgenteUpdater", identity + "Updater")
             .replace('L"PlugAgente"', f'L"{identity}"')
             .replace("Plug Agente Updater", "Plug Agente Homologacao " + identity[-12:] + " Updater")
             .replace("PlugAgenteSetup", identity + "Setup"))
@@ -87,7 +88,7 @@ def rewrite_native(source: str, identity: str) -> str:
 def rewrite_installer(source: str, identity: str, app_id: str, payload: Path) -> str:
     require_identity(identity)
     uuid.UUID(app_id)
-    source = (source.replace("{commonappdata}\\PlugAgente", "{commonappdata}\\" + identity)
+    source = (source.replace("CloseApplications=yes", "CloseApplications=no").replace("{commonappdata}\\PlugAgente", "{commonappdata}\\" + identity)
               .replace("PlugAgenteUpdater", identity + "Updater")
               .replace('"Plug Agente"', f'"Plug Agente Homologacao {identity[-12:]}"')
               .replace("{A1B2C3D4-E5F6-4A5B-8C9D-0E1F2A3B4C5E}", "{" + app_id + "}")
@@ -106,9 +107,10 @@ def rewrite_installer(source: str, identity: str, app_id: str, payload: Path) ->
 
 def assert_isolated_sources(root: Path, identity: str) -> None:
     require_identity(identity)
-    forbidden = ("PlugAgenteUpdater", 'L"PlugAgente"', "Classes\\plugdb", "Global\\PlugAgenteSetup",
+    forbidden = ("PlugAgenteUpdateHelper", "CloseApplications=yes", "PlugAgenteUpdater", 'L"PlugAgente"', "Classes\\plugdb", "Global\\PlugAgenteSetup",
                  "{commonappdata}\\PlugAgente\\", "{A1B2C3D4-E5F6-4A5B-8C9D-0E1F2A3B4C5E}")
-    for directory, extensions in ((root / "installer", {".iss"}), (root / "windows/updater", {".cpp", ".h"})):
+    for directory, extensions in ((root / "installer", {".iss"}), (root / "windows/updater", {".cpp", ".h"}),
+                                  (root / "windows/update_helper", {".cpp", ".h"})):
         for path in directory.rglob("*"):
             if path.suffix not in extensions or "third_party" in path.parts:
                 continue
@@ -180,23 +182,31 @@ def build_legacy_supervisor(output: Path, identity: str, public_key: str, revisi
     return {"legacyService": str(binary), "legacyServiceSha256": sha256(binary), "legacySourceCommit": revision}
 
 
-def build_fixture(output: Path, legacy_revision: str) -> Path:
+def build_fixture(output: Path, legacy_revision: str, application_build: Path | None = None) -> Path:
+    from tool.updater.lifecycle_payload import capture_payload, payload_tree_hash, verify_payload
     if os.name != "nt":
         raise RuntimeError("Windows and a new private output directory are required")
     output = require_fixture_root(output, fresh=True)
     legacy_revision = require_legacy_revision(legacy_revision)
+    application = reference = None
+    source_project = PROJECT
+    if application_build is not None:
+        from tool.updater.application_package_binding import application_input
+        application, reference = application_input(application_build)
+        source_project = Path(application["sourceRoot"])
     output.mkdir(parents=True)
     protect_backup(output)
-    identity = require_identity("PlugAgenteHomologacao_" + uuid.uuid4().hex[:12])
+    identity = require_identity(application["identity"] if application else "PlugAgenteHomologacao_" + uuid.uuid4().hex[:12])
     app_id = str(uuid.uuid4()).upper()
     payload = output / "payload"
-    shutil.copytree(PROJECT / "build/windows/x64/runner/Release", payload,
+    application_payload = Path(application["root"]) / "payload" if application else PROJECT / "build/windows/x64/runner/Release"
+    shutil.copytree(application_payload, payload,
                     ignore=shutil.ignore_patterns("*.pdb", "*.ilk", "*.lib", "*.exp", "*.log", "updater"))
     if not (payload / "data/app.so").is_file():
         raise RuntimeError("An existing complete Release bundle is required")
     sources = {}
     for name in ("updater", "update_helper"):
-        source = PROJECT / "windows" / name
+        source = source_project / "windows" / name
         destination = output / "windows" / name
         shutil.copytree(source, destination)
         for path in destination.rglob("*"):
@@ -205,9 +215,9 @@ def build_fixture(output: Path, legacy_revision: str) -> Path:
                 sources[str(path.relative_to(output))] = hashlib.sha256(original.encode()).hexdigest()
                 path.write_text(rewrite_native(original, identity), encoding="utf-8")
     (output / "test/fixtures").mkdir(parents=True)
-    shutil.copy2(PROJECT / "test/fixtures/updater_manifest_v1.json", output / "test/fixtures/updater_manifest_v1.json")
+    shutil.copy2(source_project / "test/fixtures/updater_manifest_v1.json", output / "test/fixtures/updater_manifest_v1.json")
     (output / "installer").mkdir()
-    for path in (PROJECT / "installer").glob("*.iss"):
+    for path in (source_project / "installer").glob("*.iss"):
         original = path.read_text(encoding="utf-8-sig")
         sources["installer/" + path.name] = hashlib.sha256(original.encode()).hexdigest()
         (output / "installer" / path.name).write_text(rewrite_installer(original, identity, app_id, payload), encoding="utf-8")
@@ -227,18 +237,32 @@ def build_fixture(output: Path, legacy_revision: str) -> Path:
     updater.mkdir()
     for name in ("service", "client", "worker"):
         shutil.copy2(output / f"native/Release/plug_update_{name}.exe", updater)
+    payload_files = capture_payload(output)
+    payload_hash = payload_tree_hash(payload_files)
     installer = output / "package/PlugAgente-Setup-1.8.7.exe"
     installer.parent.mkdir()
     with (output / "installer-build.log").open("w", encoding="utf-8") as log:
         subprocess.run([find_iscc(), "/Q", f"/O{installer.parent}", "/DMyAppWorkerVersion=1.8.7+1",
                         str(output / "installer/setup.iss")], stdout=log, stderr=subprocess.STDOUT, check=True, timeout=240)
-    state = {"format": 1, "identity": identity, "appId": app_id, "protocol": identity.lower().replace("_", "-"),
+    verify_payload(output, payload_files, payload_hash)
+    state = {"format": 2, "payloadFiles": payload_files, "payloadTreeSha256": payload_hash,
+             "payloadQualification": "bytes_only", "identity": identity, "appId": app_id, "protocol": identity.lower().replace("_", "-"),
              "appName": "Plug Agente Homologacao " + identity[-12:], "root": str(output.resolve()),
              "installer": str(installer), "installerSha256": sha256(installer), "publicKey": public,
              "originalSourceHashes": sources, "payloadVersion": "1.8.7+1", "productionActivationGate": False}
+    if reference is not None:
+        from tool.updater.application_package_binding import verify_application_package
+        verify_application_package(reference, identity, payload_files)
+        state["applicationBuild"] = reference
     state.update(build_legacy_supervisor(output, identity, public, legacy_revision))
+    if reference is not None:
+        verify_application_package(reference, identity, capture_payload(output))
+    verify_payload(output, payload_files, payload_hash)
     manifest = output / "fixture.json"
-    manifest.write_text(json.dumps(state, indent=2), encoding="utf-8")
+    encoded = json.dumps(state, indent=2).encode("utf-8")
+    if len(encoded) > 256 * 1024:
+        raise RuntimeError("Lifecycle manifest exceeds its size limit")
+    manifest.write_bytes(encoded)
     return manifest
 
 
@@ -247,5 +271,7 @@ if __name__ == "__main__":
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--legacy-revision", required=True,
                         help="Exact ancestor commit containing the disabled recovery-v1 supervisor")
+    parser.add_argument("--application-build", type=Path,
+                        help="Explicit verified application-build.json; invalid proofs never fall back to Release")
     args = parser.parse_args()
-    print(build_fixture(args.output.absolute(), args.legacy_revision))
+    print(build_fixture(args.output.absolute(), args.legacy_revision, args.application_build))

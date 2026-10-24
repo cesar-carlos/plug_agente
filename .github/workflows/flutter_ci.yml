@@ -243,6 +243,17 @@ jobs:
         shell: pwsh
         run: choco install innosetup --yes --no-progress
 
+      - name: Install fixture test dependencies
+        run: python -m pip install "cryptography>=42.0.0"
+
+      - name: Validate isolated installer payload bindings
+        shell: pwsh
+        run: |
+          $log = Join-Path $env:RUNNER_TEMP "lifecycle-fixture-tests.log"
+          python -m unittest tool.updater.test_lifecycle_handoff tool.updater.test_isolated_runtime tool.updater.test_application_build tool.updater.test_lifecycle_payload tool.updater.test_isolated_lifecycle_paths tool.updater.test_isolated_windows_lifecycle tool.updater.test_isolated_windows_fixture -v 2>&1 | Tee-Object -FilePath $log
+          if ($LASTEXITCODE -ne 0) { throw "Isolated installer fixture tests failed." }
+          if (Select-String -LiteralPath $log -Pattern 'skipped=') { throw "Windows fixture tests must not be skipped." }
+
       - name: Compile installer script syntax
         run: python tool/release/release_preflight.py --compile-iss
 

@@ -2,6 +2,7 @@ import 'package:path/path.dart' as p;
 
 /// Contract constants aligned with `AgentActionElevatedConstants` in the main app.
 abstract final class ElevatedContract {
+  static const String sqliteSidecarFileName = 'plug_agente_elevated_sqlite3.dll';
   static const int requestSchemaVersion = 1;
   static const int statusSchemaVersion = 1;
 

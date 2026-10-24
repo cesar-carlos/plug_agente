@@ -14,6 +14,34 @@ The isolated chain RPC observer serializes metadata appends and awaits them
 before completing responses. Never discard malformed/missing evidence or retry
 SQL to repair a call count. Evidence-write failures must remain visible.
 
+The private lifecycle packager accepts source-bound application payloads only
+through explicit --application-build. Invalid/missing proofs never fall back to
+stock Release. The proof and original source/payload inventories are rechecked
+before output and at phase boundaries; application identity must match. Only the
+three named fixture updater tools may differ after rebuilding with its test key.
+applicationSourceVerified does not qualify the entire installer or installed
+recovery; buildSourceVerified stays false. Production activation remains disabled.
+
+Private fixture builds may explicitly select a verified runtime.json extracted
+from a signed Microsoft cached redistributable. Extraction never executes MSI or
+changes Windows/Visual Studio. DLLs require valid Microsoft signatures, AMD64,
+compatible version and stable hashes. The generated toolchain sets only the
+private MSVC_REDIST_DIR, remains bound to the application proof, and does not
+bypass the existing CMake version guard. Output hashes must match that runtime.
+
+Compiled bootstrap test input requires the double verified application proof
+before allocating a protected direct system-temp workspace. It returns only
+fixture metadata. Positive startup/restart uses the reviewed private entrypoint;
+this never certifies installed SCM lifecycle or enables production. Procedure:
+docs/implemente/plano_auto_update_evolution.md.
+
+Installed fixture acceptance rejects stale phase artifacts before installation.
+Administrator/standard-user phases use a one-attempt bound handoff and exclusive
+claim; terminal results are complete, non-overwriting and require every expected
+check. This is coordination evidence, not a substitute for native authorization.
+No automatic retry or elevation is introduced. Procedure and scope:
+docs/implemente/plano_auto_update_evolution.md.
+
 ## Escopo
 
 Este arquivo concentra somente decisoes especificas deste repositorio:
@@ -421,14 +449,32 @@ service apply/probation/rollback. Keep automatic apply and release blocked.
 
 Validate owned lifecycle roots before reading a manifest: a direct new child
 `build/homologation/windows-lifecycle-*`, without reparse points in its parents.
-Only `fixture.json` up to 256 KiB is accepted, with format 1 and a disabled
+Only `fixture.json` up to 256 KiB is accepted, with format 2 and a disabled
 production gate. Installer/legacy artifacts must stay inside that fixture, with
 non-linked paths and matching hashes. Reject an existing/external output before
 creating files or compiling. These checks are fixture isolation, not release
 authorization or authentication of arbitrary supplied packages.
+
+Lifecycle format 2 binds the entire payload inventory and canonical tree hash,
+including the shared installer executable list and app.so. Missing, extra,
+modified or linked files are refused before execution. Revalidate inputs at
+phase entry and exit; inconclusive/changed inputs invalidate the report. This
+is bytes_only evidence, never proof of the Flutter build's source revision.
+Historical format-1 records are preserved but require a new fixture to execute.
+
+Read-only phase inspect accepts no machine-change flag, does not probe installed
+state, and reports only artifact-integrity metadata. Its result must distinguish
+installationPerformed:false from installedState:not_checked. See the installer
+lifecycle procedure in docs/implemente/plano_auto_update_evolution.md.
+
 
 Historical supervisor fixtures require an explicit exact local ancestor revision
 with disabled recovery contract 1. Never infer the old supervisor from HEAD or
 fetch/checkout a different revision automatically. Validate before output creation
 and retain the exact commit with the derived fixture binary. Building a historical
 fixture never authorizes service replacement or automatic application.
+
+Fixture native derivations must isolate the update-helper global mutex as well
+as the runner/service identities. Require the derivation even when unchanged
+source still matches its Git blob. Fixture installers disable Restart Manager
+application closing; never rebuild or modify operational payloads for this test.

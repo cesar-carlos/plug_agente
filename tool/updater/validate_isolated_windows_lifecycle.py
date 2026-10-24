@@ -7,6 +7,7 @@ from contextlib import closing
 import ctypes
 import json
 import os
+import re
 from pathlib import Path
 import shutil
 import sqlite3
@@ -16,6 +17,8 @@ import time
 from tool.updater.isolated_windows_fixture import (
     require_identity, assert_isolated_sources, require_fixture_root, require_fixture_artifact,
 )
+from tool.updater.lifecycle_payload import verify_payload
+from tool.updater import lifecycle_handoff as handoffs
 from tool.updater.manifest import sign
 from tool.updater.validate_existing_windows_installation import (
     registry_snapshot, verify_no_updater_mutations,
@@ -32,7 +35,7 @@ def load_fixture(path: Path) -> dict:
         raise RuntimeError("Lifecycle manifest exceeds its size limit")
     state = json.loads(path.read_text(encoding="utf-8"))
     identity = require_identity(state["identity"])
-    if (type(state.get("format")) is not int or state["format"] != 1
+    if (type(state.get("format")) is not int or state["format"] != 2
             or state.get("productionActivationGate") is not False
             or Path(state["root"]) != root):
         raise RuntimeError("Fixture format, activation gate or root mismatch")
@@ -41,16 +44,40 @@ def load_fixture(path: Path) -> dict:
     installer = require_fixture_artifact(root, Path(state["installer"]))
     if installer.parent != root / "package" or sha256(installer) != state["installerSha256"]:
         raise RuntimeError("Fixture installer binding mismatch")
-    if "legacyService" in state:
-        legacy = require_fixture_artifact(root, Path(state["legacyService"]))
-        if legacy != root / "legacy/native/Release/plug_update_service.exe" or sha256(legacy) != state["legacyServiceSha256"]:
-            raise RuntimeError("Historical supervisor binding mismatch")
+    if not isinstance(state.get("legacyService"), str) or not isinstance(state.get("legacyServiceSha256"), str):
+        raise RuntimeError("Historical supervisor binding is required before lifecycle execution")
+    revision = state.get("legacySourceCommit")
+    if not isinstance(revision, str) or not re.fullmatch(r"[a-f0-9]{40}", revision):
+        raise RuntimeError("Historical supervisor source revision is missing or invalid")
+    legacy = require_fixture_artifact(root, Path(state["legacyService"]))
+    if legacy != root / "legacy/native/Release/plug_update_service.exe" or sha256(legacy) != state["legacyServiceSha256"]:
+        raise RuntimeError("Historical supervisor binding mismatch")
+    if state.get("payloadQualification") != "bytes_only":
+        raise RuntimeError("Fixture payload qualification is invalid")
+    verify_payload(root, state.get("payloadFiles"), state.get("payloadTreeSha256"))
+    if "applicationBuild" in state:
+        from tool.updater.application_package_binding import verify_application_package
+        verify_application_package(state["applicationBuild"], identity, state["payloadFiles"])
     assert_isolated_sources(root, identity)
     state["app"] = str(Path(os.environ["ProgramFiles"]) / state["appName"])
     state["data"] = str(Path(os.environ["ProgramData"]) / identity)
     state["control"] = str(Path(os.environ["ProgramFiles"]) / (identity + "Updater"))
     state["updaterData"] = str(Path(os.environ["ProgramData"]) / (identity + "Updater"))
     return state
+
+
+def verify_input_binding(state: dict, result: dict) -> None:
+    try:
+        current = load_fixture(Path(state["root"]) / "fixture.json")
+    except Exception as error:
+        result["status"] = "failed"
+        result["inputBindingVerified"] = False
+        raise RuntimeError("Fixture inputs could not be reverified") from error
+    if current != state:
+        result["status"] = "failed"
+        result["inputBindingVerified"] = False
+        raise RuntimeError("Fixture input binding changed during the lifecycle")
+    result["inputBindingVerified"] = True
 
 
 def host_snapshot() -> dict:
@@ -105,8 +132,13 @@ def standard_user_phase(state: dict) -> None:
         raise RuntimeError("The caller phase must run without Windows elevation")
     root = Path(state["root"])
     client = Path(state["control"]) / "plug_update_client.exe"
-    result = {"status": "failed", "elevated": False, "checks": []}
+    handoff = handoffs.claim_handoff(state)
+    result = {"status": "failed", "elevated": False, "checks": [], **handoffs.result_binding(handoff)}
+    result.update({"fixtureFormat": state["format"], "payloadTreeSha256": state["payloadTreeSha256"],
+                   "payloadQualification": state["payloadQualification"],
+                   "applicationSourceVerified": "applicationBuild" in state})
     try:
+        verify_input_binding(state, result)
         capabilities = ipc(client, {"command": "capabilities"})["capabilities"]
         if capabilities["authorized"] is not True or capabilities["applicationReady"] is not False or capabilities["recoveryContract"] != 2:
             raise RuntimeError("Enrollment must not activate the unqualified application contract")
@@ -169,7 +201,10 @@ def standard_user_phase(state: dict) -> None:
         result["error"] = str(error)
         raise
     finally:
-        (root / "standard-result.json").write_text(json.dumps(result, indent=2), encoding="utf-8")
+        try:
+            verify_input_binding(state, result)
+        finally:
+            handoffs.write_result(state, result)
 
 
 def registry_value(hive, path: str, name: str = ""):
@@ -221,9 +256,13 @@ def administrator_phase(state: dict) -> None:
         raise RuntimeError("Refusing an existing or already consumed fixture namespace")
     if registry_value(winreg.HKEY_LOCAL_MACHINE, rf"SYSTEM\CurrentControlSet\Services\{service}", "ImagePath") is not None:
         raise RuntimeError("Fixture service already exists")
+    handoffs.assert_fresh(state)
     before = host_snapshot()
     result = {"status": "failed", "phases": [], "identity": state["identity"], "productionActivationGate": False,
               "operationalStateInspection": "registration_metadata_only"}
+    result.update({"fixtureFormat": state["format"], "payloadTreeSha256": state["payloadTreeSha256"],
+                   "payloadQualification": state["payloadQualification"],
+                   "applicationSourceVerified": "applicationBuild" in state})
     installer = state["installer"]
     common = ["/VERYSILENT", "/SUPPRESSMSGBOXES", "/NORESTART", "/NOCLOSEAPPLICATIONS", f"/DIR={app}"]
     client = control / "plug_update_client.exe"
@@ -245,6 +284,7 @@ def administrator_phase(state: dict) -> None:
         result["phases"].append(phase)
 
     try:
+        verify_input_binding(state, result)
         install("clean_install_enrollment")
         verify_integrations(state, True)
         run([str(app / "plug_install_check.exe"), "--core"], log=root / "installed-core.log")
@@ -254,14 +294,13 @@ def administrator_phase(state: dict) -> None:
             connection.execute("INSERT INTO retained_profile VALUES ('private-retained-profile')")
         (data / "updates").mkdir(exist_ok=True)
         (data / "updates/download.tmp").write_bytes(b"disposable-download")
-        (root / "standard-phase-ready").write_text("ready", encoding="utf-8")
+        handoff = handoffs.create_handoff(state)
         deadline = time.monotonic() + 300
         while not (root / "standard-result.json").exists():
             if time.monotonic() > deadline:
                 raise RuntimeError("Standard-user controller did not complete")
             time.sleep(0.2)
-        if json.loads((root / "standard-result.json").read_text())["status"] != "passed":
-            raise RuntimeError("Standard-user service validation failed")
+        handoffs.verify_result(state, handoff)
         result["phases"].append("standard_user_service_ipc_dpapi_and_denials")
         retained = {name: sha256(data / name) for name in ("fixture-retention.sqlite", "fixture-vault.dpapi")}
         policy_before = sha256(updater_data / "policy.json")
@@ -316,16 +355,40 @@ def administrator_phase(state: dict) -> None:
         try:
             verify_host_registration_preservation(result, before)
         finally:
-            (root / "lifecycle-result.json").write_text(json.dumps(result, indent=2), encoding="utf-8")
+            try:
+                verify_input_binding(state, result)
+            finally:
+                (root / "lifecycle-result.json").write_text(json.dumps(result, indent=2), encoding="utf-8")
 
 
-if __name__ == "__main__":
+def inspect_fixture(path: Path) -> dict:
+    state = load_fixture(path)
+    return {"scope": "fixture-integrity-only", "integrity": "verified", "installationPerformed": False,
+            "installedState": "not_checked", "buildSourceVerified": False,
+            "applicationSourceVerified": "applicationBuild" in state, "fixtureFormat": state["format"],
+            "payloadQualification": state["payloadQualification"], "identity": state["identity"],
+            "payloadFiles": len(state["payloadFiles"]), "payloadTreeSha256": state["payloadTreeSha256"],
+            "installerSha256": state["installerSha256"], "legacySourceCommit": state["legacySourceCommit"]}
+
+
+def main(argv: list[str] | None = None) -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--fixture", type=Path, required=True)
-    parser.add_argument("--phase", choices=["administrator", "standard-user"], required=True)
+    parser.add_argument("--phase", choices=["inspect", "administrator", "standard-user"], required=True)
     parser.add_argument("--allow-machine-changes", action="store_true")
-    args = parser.parse_args()
-    if os.name != "nt" or not args.allow_machine_changes:
+    args = parser.parse_args(argv)
+    if os.name != "nt":
+        raise SystemExit("Windows fixture verification is required")
+    if args.phase == "inspect":
+        if args.allow_machine_changes:
+            raise SystemExit("Inspection does not accept machine-change authorization")
+        print(json.dumps(inspect_fixture(args.fixture), sort_keys=True))
+        return
+    if not args.allow_machine_changes:
         raise SystemExit("Explicit Windows fixture authorization is required")
     state = load_fixture(args.fixture)
     (administrator_phase if args.phase == "administrator" else standard_user_phase)(state)
+
+
+if __name__ == "__main__":
+    main()

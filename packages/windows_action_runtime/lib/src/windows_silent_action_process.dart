@@ -7,6 +7,7 @@ import 'dart:typed_data';
 import 'package:ffi/ffi.dart';
 import 'package:win32/win32.dart';
 import 'package:windows_action_runtime/src/windows_command_line_quoter.dart';
+import 'package:windows_action_runtime/src/windows_pipe_reader.dart';
 
 const _inheritedHandleListAttribute = 0x00020002;
 
@@ -311,35 +312,66 @@ String _commandLine(String executable, List<String> arguments) => [
 
 Stream<List<int>> _output(int address, int maxBytes) {
   if (address == 0) return const Stream.empty();
-  final pending = Isolate.run(() => _drainOutput(address, maxBytes));
-  unawaited(pending.then<void>((_) {}, onError: (Object _, StackTrace _) {}));
-  return Stream.fromFuture(pending);
+  final messages = ReceivePort();
+  final destination = messages.sendPort;
+  final output = StreamController<List<int>>(onCancel: messages.close);
+  messages.listen((message) {
+    switch (message) {
+      case final Uint8List bytes:
+        output.add(bytes);
+      case (final Object error, final StackTrace stack):
+        output.addError(error, stack);
+      case null:
+        messages.close();
+        unawaited(output.close());
+    }
+  });
+  // Use one port for bytes/errors/completion so the last prefix cannot be lost
+  // to an exit notification arriving first on a different port.
+  unawaited(
+    _startOutputReader(address, maxBytes, destination).catchError((Object error, StackTrace stack) {
+      // Failure to start the isolate must also finish the consumer.
+      destination.send((error, stack));
+      destination.send(null);
+    }),
+  );
+  return output.stream;
 }
 
-Uint8List _drainOutput(int address, int maxBytes) {
-  final handle = HANDLE(Pointer.fromAddress(address));
+// Separate scope prevents the worker closure from capturing the receive port
+// and stream controller, which cannot cross isolate boundaries.
+Future<void> _startOutputReader(int address, int maxBytes, SendPort destination) =>
+    Isolate.run(() => _forwardOutput(address, maxBytes, destination));
+
+void _forwardOutput(int address, int maxBytes, SendPort destination) {
   try {
-    return using((arena) {
+    _drainOutput(address, maxBytes, destination);
+  } on Object catch (error, stack) {
+    destination.send((error, stack));
+  } finally {
+    destination.send(null);
+  }
+}
+
+void _drainOutput(int address, int maxBytes, SendPort destination) {
+  final reader = WindowsPipeReader.takeOwnership(address);
+  try {
+    using((arena) {
       const chunkSize = 65536;
       final buffer = arena<Uint8>(chunkSize);
-      final read = arena<Uint32>();
-      final retained = BytesBuilder(copy: false);
+      var remaining = maxBytes + 1;
       while (true) {
-        final result = ReadFile(handle, buffer, chunkSize, read, null);
-        if (!result.value) {
-          if (result.error == ERROR_BROKEN_PIPE) break;
-          throw ProcessException('', const [], 'Unable to drain action output', result.error.toInt());
-        }
-        if (read.value == 0) break;
+        final bytes = reader.read(buffer, chunkSize);
+        if (bytes == 0) break;
         // One extra byte tells the consumer that capture was truncated.
-        final remaining = maxBytes + 1 - retained.length;
         if (remaining > 0) {
-          retained.add(Uint8List.fromList(buffer.asTypedList(read.value < remaining ? read.value : remaining)));
+          final length = bytes < remaining ? bytes : remaining;
+          destination.send(Uint8List.fromList(buffer.asTypedList(length)));
+          remaining -= length;
         }
       }
-      return retained.takeBytes();
     });
   } finally {
-    _closeHandle(handle);
+    reader.close();
   }
 }

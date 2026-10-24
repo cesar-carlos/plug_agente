@@ -7,6 +7,26 @@ import 'package:plug_agente/infrastructure/actions/windows_action_job_api.dart';
 import 'package:plug_agente/infrastructure/actions/windows_silent_action_process.dart';
 
 void main() {
+  test('delivers bounded captured prefix before a long-running process exits', () async {
+    final controller = WindowsJobObjectProcessTreeController(api: WindowsActionJobApi());
+    final process = await WindowsSilentActionProcess.start(
+      '${Platform.environment['SystemRoot']}\\System32\\cmd.exe',
+      ['/d', '/c', 'echo prefix & ping -n 30 127.0.0.1 >nul'],
+      startSuspended: true,
+      captureStdoutBytes: 4,
+    );
+    final lease = (await controller.attach(process)).getOrThrow();
+    final prefix = process.stdout.first;
+    try {
+      (process as WindowsSilentActionProcess).resume();
+      // The extra byte signals truncation without forwarding the whole output.
+      expect(await prefix.timeout(const Duration(seconds: 3)), ascii.encode('prefi'));
+    } finally {
+      expect((await controller.release(lease)).isSuccess(), isTrue);
+      await process.exitCode;
+    }
+  }, skip: !Platform.isWindows);
+
   test('fast actions stay suspended until the real Windows job protects them', () async {
     final controller = WindowsJobObjectProcessTreeController(api: WindowsActionJobApi(), cpuLimitPercent: 50);
     final process = await WindowsSilentActionProcess.start('${Platform.environment['SystemRoot']}\\System32\\cmd.exe', [
@@ -59,6 +79,27 @@ if ($value -ceq $env:PLUG_TEST_VALUE) { exit 7 } else { exit 9 }
   }, skip: !Platform.isWindows);
 
   final powershell = '${Platform.environment['SystemRoot']}\\System32\\WindowsPowerShell\\v1.0\\powershell.exe';
+  test('forwards at most limit plus one per stream while draining large native output', () async {
+    const limit = 128;
+    final process = await WindowsSilentActionProcess.start(
+      powershell,
+      [
+        '-NoProfile',
+        '-NonInteractive',
+        '-Command',
+        r"$s = 'x' * 1048576; 1..8 | ForEach-Object { [Console]::Out.Write($s); [Console]::Error.Write($s) }; exit 7",
+      ],
+      captureStdoutBytes: limit,
+      captureStderrBytes: limit,
+    );
+    addTearDown(process.kill);
+    final output = process.stdout.expand((chunk) => chunk).toList();
+    final errors = process.stderr.expand((chunk) => chunk).toList();
+    expect(await process.exitCode.timeout(const Duration(seconds: 15)), 7);
+    expect(await output, List.filled(limit + 1, 120));
+    expect(await errors, List.filled(limit + 1, 120));
+  }, skip: !Platform.isWindows);
+
   Future<Process> start(String command, {Map<String, String>? environment}) => WindowsSilentActionProcess.start(
     powershell,
     [

@@ -61,6 +61,16 @@ class WorkflowRegressionTests(unittest.TestCase):
                 self.assertIn("grep -q 'skipped='", tests)
                 self.assertIn("exit 1", tests)
 
+    def test_payload_binding_regressions_run_on_windows_without_skip_acceptance(self):
+        job = workflow("flutter_ci.yml")["jobs"]["iss-syntax"]
+        self.assertEqual(job["runs-on"], "windows-2022")
+        step = next(step for step in job["steps"] if step["name"] == "Validate isolated installer payload bindings")
+        for module in ("tool.updater.test_lifecycle_payload", "tool.updater.test_isolated_lifecycle_paths",
+                       "tool.updater.test_isolated_windows_lifecycle", "tool.updater.test_isolated_windows_fixture"):
+            self.assertIn(module, step["run"])
+        self.assertIn("skipped=", step["run"])
+        self.assertIn("$LASTEXITCODE -ne 0", step["run"])
+
     def test_all_workflow_unittest_modules_are_available(self):
         self.assertEqual(validate_configuration(ROOT), [])
 

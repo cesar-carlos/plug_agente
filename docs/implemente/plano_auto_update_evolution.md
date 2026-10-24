@@ -66,6 +66,158 @@ compiled Pascal installer repair/manual-upgrade orchestration; they do not rerun
 elevated SCM installation or certify newer application builds, logon or rollback.
 Automatic apply and production release remain blocked.
 
+### Fresh bootstrap application builder (2026-10-23)
+
+`py -3.13 -m tool.updater.build_isolated_application` accepts explicit
+`--output`, full `--revision`, `--flutter` and `--native-cache`. Output must be a
+new owned `build/homologation/windows-lifecycle-*` child. Sources are exported
+from that exact local ancestor into a new short `build/a<identity suffix>` root;
+neither the original checkout nor its DLL/output directory is built or replaced.
+The pinned bootstrap entrypoint is reviewed independently of production main.
+
+Git blobs are checked before compilation. Only exact PowerShell CRLF-to-LF
+reconstruction and declared native identity derivations are accepted. Mutex,
+window class, updater control path and title use the fixture identity. The native
+entrypoint requires bootstrap context before any single-instance/control access;
+Dart still enforces its private temporary root and loopback hub contract. Automatic
+crash restart is disabled in this derived runner only. Production activation stays
+false. Operational environment variables are excluded from build subprocesses.
+
+The builder uses offline locked dependencies and validates the published native
+cache and complete output. Its `application-build.json` verifier rechecks source
+and payload inventories instead of trusting stored hashes. This is application
+build scope, not proof of installed lifecycle, full installer provenance, or
+production readiness. The lifecycle packager accepts this proof only through explicit
+`--application-build <owned application-build.json>`. It verifies the proof before
+creating output, adopts the same identity and private source/payload roots, and
+rechecks the binding after packaging/historical compilation. It never falls back
+to stock Release when an explicit proof is invalid. Existing bytes_only packages
+remain distinguishable; their origin is not inferred or upgraded.
+
+Local validation passed 102 updater tests and 14 workflow regressions without
+skips. The actual build attempt passed export and offline dependency resolution,
+then failed the existing CMake guard: compiler 14.43 versus the Visual Studio
+redistributable 14.42.34438.0. No successful application receipt was produced.
+System32 runtime 14.50 is not substituted for the redistributable bundle. The
+required toolchain component must be corrected before repeating the full build;
+this task did not install or update Visual Studio. An earlier compiler probe
+confirmed SYSTEMDRIVE is required by MSBuild FileTracker; it is now retained in
+the otherwise restricted toolchain environment. Paths with spaces and executable
+shell arguments have regression coverage. No installer/service was launched.
+
+### Private compatible C++ runtime (2026-10-23)
+
+`py -3.13 -m tool.updater.isolated_runtime --output <new owned fixture> --msi
+<explicit cached Microsoft MSI> --cab <explicit cabinet>` extracts only the eight
+named AMD64 runtime DLLs with expand.exe. It never invokes MSI installation,
+repairs Visual Studio, writes System32 or copies installed System32 binaries.
+Inputs have size/reparse/hard-link checks and the MSI must have valid Microsoft
+Authenticode. Each output must have a valid Microsoft signature, AMD64 PE header,
+version at least 14.43 and stable hash; mixed versions are refused. The manifest
+binds package/cabinet hashes and all DLL metadata. Its loader repeats validation.
+
+The application builder accepts `--runtime-manifest <owned runtime.json>`.
+A generated private CMake toolchain sets only MSVC_REDIST_DIR; its exact contents
+and contained path are revalidated. The production CMake compatibility guard is
+unchanged. The application proof binds the runtime reference and requires those
+exact DLL hashes in the output. Inherited arbitrary toolchain settings remain
+excluded from the filtered environment. Missing/changed input fails without
+using an older runtime or modifying the host.
+
+A local cached Microsoft package supplied version 14.50.35719.0 with valid
+signatures; extraction/readback succeeded and the new CMake cache points at the
+private redist. The fresh application build then completed (Flutter Release in
+179.5 s), produced a reverified receipt, and the explicit source-bound lifecycle
+package completed. Its read-only inspector reports applicationSourceVerified:true,
+buildSourceVerified:false and installedState:not_checked. This resolves the local
+build mismatch without changing host components; installed acceptance is pending.
+
+Current private roots under build/homologation:
+windows-lifecycle-runtime-d055394996ca, windows-lifecycle-app-d0742b655205 and
+windows-lifecycle-sb-2b6a102aab41. The selected application commit is
+c1f21e992eb82ef1843fea007d671a972f371b6b; identity is
+PlugAgenteHomologacao_5f9733521924. Both application/package inventories contain
+93 files. The native executable refused absent bootstrap context with exit 1 in
+133 ms. No installer/service phase was executed. Final tooling regression:
+114 tests plus 14 workflow tests passed without skips. Positive compiled bootstrap was subsequently verified against the persistent
+fixture Hub below; installed update/recovery remains pending. These are private
+test artifacts.
+
+Microsoft compatibility/redistribution references:
+[latest supported runtime](https://learn.microsoft.com/en-us/cpp/windows/latest-supported-vc-redist?view=msvc-170)
+and [redistributable files](https://learn.microsoft.com/en-us/cpp/windows/redistributing-visual-cpp-files?view=msvc-170).
+Private fixture tooling does not authorize public distribution or production.
+
+### Compiled positive bootstrap with persistent Hub (2026-10-23)
+
+`tool.updater.bootstrap_fixture_input --proof <owned application-build.json>`
+reuses the double proof verification before allocating a protected direct
+system-temp child named sql-operation-bootstrap-*. Its output contains only
+workspace/executable paths, revision, fixture identity and proof hash. Invalid
+proofs cannot create a workspace. No operational profile or registration is read.
+
+The MCP native-desktop operator controller exercised the compiled source-qualified
+application with its private configured profile and a real Prisma/PostgreSQL Hub
+fixture. Cold start and restart passed first-frame, SQLite quick_check, DPAPI
+roundtrip, no plaintext config credentials, automatic session refresh, stable
+config/instance identity and a new runtime session. Each phase completed real
+REST-to-agent rpc.discover and cooperative clean shutdown. The REST normalized
+single/item envelope is verified, including explicit success flags; HTTP 200
+alone does not count as success. The first controller attempt used the raw RPC
+shape and failed; that parser was corrected and the successful repetition used
+fresh infrastructure. Three regression tests preserve the normalized contract.
+
+Final checks: 116 updater tests, 14 workflow regressions, three MCP contract tests,
+MCP lint/types and stable before/after source inventories. Private infrastructure
+and DPAPI workspace were removed only after confirmed process closure; metadata
+was retained. This is unpacked compiled bootstrap, not installed/SCM acceptance.
+No business SQL or production credentials were used; installed update/recovery
+and production gates remain pending.
+
+### Explicit application proof in lifecycle packages (2026-10-23)
+
+`applicationBuild` records the exact owned proof path/hash, commit, source tree
+and original application payload tree. All application files must remain equal
+to that proof; only the three named updater tools are rebuilt with the lifecycle
+public key. The loader rechecks both original proof and packaged application at
+every existing phase boundary. Missing/altered proofs, mismatched identities and
+changed application files fail instead of falling back or qualifying old bytes.
+
+Reports expose `applicationSourceVerified` separately. `buildSourceVerified`
+remains false: this does not attest the entire installer, its historical
+supervisor, all toolchain inputs, or installed recovery. `payloadQualification`
+remains bytes_only for package integrity. The private runtime/build
+round above subsequently exercised source-bound packaging successfully. This
+still does not prove positive bootstrap, installed recovery or production.
+
+All 107 updater tests and 14 workflow regressions passed locally without skips.
+The previous 98-file bytes_only package was inspected again without modification
+or installation; its hashes and false source-verification flags were preserved.
+
+### Payload binding for newly provisioned fixtures
+
+New lifecycle manifests use format 2 and bind every payload file plus a canonical
+SHA-256 tree digest. Capture occurs before packaging; rechecks after packaging
+and historical-supervisor compilation refuse drift. The loader checks the same
+inventory, executable completeness and path ownership before a phase can run.
+Reports include fixtureFormat, payloadTreeSha256 and payloadQualification.
+Inputs are reverified at phase entry/exit; failed or inconclusive verification
+invalidates the report and does not authorize retry or claim rollback.
+
+Qualification is deliberately bytes_only: binding an existing Release bundle
+does not attest which Dart sources built it, certify the corrected vault, or
+prove an upgrade between different builds. Fresh source-qualified application
+builds and installed elevated recovery still need their own evidence. Existing
+format-1 manifests/reports are not rewritten; reprovision a new owned fixture.
+Private fixture compilation/packaging is not installation or production release.
+
+The current provisioner copies an existing Release bundle and rewrites installer
+and updater identities. It does not rewrite the default Dart storage namespace
+(PlugAgente). Do not treat that copy as an isolated desktop/profile build or use
+it to qualify app startup/logon. A fresh source-qualified build with explicit
+isolated storage/bootstrap remains required for that acceptance.
+
+
 ### Repeating the installed fixture safely
 
 The historical supervisor source now requires `--legacy-revision` with an exact
@@ -84,6 +236,19 @@ a new owned directory (never reuse an earlier fixture):
 python -m tool.updater.isolated_windows_fixture --output build/homologation/windows-lifecycle-new-id --legacy-revision fdb44d86b2a36df85c0133cf72167217fc1bd16e
 ```
 
+First inspect the new fixture from a non-elevated terminal, without granting
+machine changes:
+
+```powershell
+python -m tool.updater.validate_isolated_windows_lifecycle --fixture build/homologation/windows-lifecycle-new-id/fixture.json --phase inspect
+```
+
+Inspection verifies only owned fixture files. Its output uses
+installationPerformed:false, installedState:not_checked and buildSourceVerified:false;
+it does not inspect the operational installation or claim that no installation
+exists. Do not pass --allow-machine-changes to inspection. A byte-valid package
+still needs source-qualified build evidence before installed acceptance.
+
 In an elevated Windows terminal run the administrator phase with that exact
 `fixture.json`. It refuses existing namespaces, verifies its bound artifacts and
 waits for the separate non-elevated phase. After `standard-phase-ready` exists,
@@ -99,6 +264,31 @@ flag authorizes only the owned fixture namespace; it does not authorize an
 operational-installation repair. Preserve failed/uncertain state for inspection;
 do not reuse the namespace or blindly rerun an installer. Keep fixture evidence
 private and distinguish successful uninstall from complete application recovery.
+
+### Bound two-token handoff (2026-10-23)
+
+Before any installer call, the administrator runner refuses previous standard
+phase markers, claims, results or partial result files, including dangling
+junction entries. It generates a one-attempt handoff bound to the owned manifest,
+fixture identity, installer and payload. The non-elevated phase requires that
+handoff, claims it exclusively before IPC, and cannot start after the admin
+phase has already terminated. Claims never expire into automatic retries.
+
+The administrator accepts only a result matching its handoff, with literal
+non-elevated status and the exact nine expected checks without omissions or
+duplicates. A copied {status:passed} cannot approve a phase. Final JSON is flushed
+and published by non-overwriting Windows rename; partial bytes are never exposed
+as a terminal result. Evidence cannot be overwritten. This coordinates fixture
+evidence only; native SCM/PID/SID checks, signatures and ACLs still authorize the
+actual operations. A nonce is not an authentication substitute.
+
+A regression reproduced the old problem (installer dispatch despite a stale
+standard result) before correction. Final local checks passed 126 tooling tests
+and 14 workflow tests without skips. A real-package negative probe, with IPC
+blocked by the test, refused absent handoff without claim/result creation. No
+installer or Windows service was started. The current process was checked and
+has no Windows administrative token; elevated/standard real phases remain
+pending an explicitly selected authorized environment and UAC/admin access.
 
 ## Qualified Windows lifecycle and IPC delivery (2026-10-15)
 
@@ -306,3 +496,34 @@ de 2026-10-07 no início deste documento.
 - Instalacao: [installation_guide.md](../install/installation_guide.md).
 - Publicacao: [release_guide.md](../install/release_guide.md).
 - Seguranca: [auto_update_threat_model.md](../security/auto_update_threat_model.md).
+
+### Isolamento complementar do helper na fixture
+
+A derivação privada isola também `PlugAgenteUpdateHelper` e exige a transformação
+nativa mesmo quando o arquivo sem alteração corresponde ao Git original. O
+instalador privado fixa `CloseApplications=no`, sem mudar o instalador operacional.
+Pacotes anteriores não comprovam essa revisão; gerar novo aplicativo e novo
+namespace antes do teste instalado. O responsável autorizou UAC nesta máquina
+para a fixture exclusiva; isso não autoriza deploy ou uso de perfis operacionais.
+
+### Rodada instalada privada aprovada em 2026-10-23
+
+Após corrigir o bootstrap derivado para executar a checagem real de assets com
+`--installation-check`, a fixture `PlugAgenteHomologacao_4bb659210098` passou as
+nove etapas administrativas e os nove grupos sem elevação, incluindo vinte
+prepare/cancel, reparos, migração explícita do supervisor antigo, reinstalação
+com retenção privada e desinstalação final. A primeira tentativa permaneceu
+registrada como falha e foi desinstalada; não houve retry desse namespace.
+
+Os 30 arquivos Python do operador permaneceram estáveis; inputs e registros
+operacionais observados foram reconferidos. Resíduos dos dois namespaces foram
+limpos por alvos exatos, sem links/serviços existentes. Evidências ficam em
+`build/homologation/windows-lifecycle-sb-df087f694ab2`, protegidas e privadas.
+Fonte do aplicativo: c1f21e992eb82ef1843fea007d671a972f371b6b, com derivações
+explícitas do bootstrap e identidades. Instalador SHA-256:
+`92cb42761d4ca63818187d3d03dd20d0e3aec711d82d81b40ca9a552bf193772`.
+
+129 regressões de tooling passaram sem omissões. Essa prova não certifica o
+aplicativo operacional nem todas as alterações atuais: o pacote inteiro conserva
+buildSourceVerified:false. Apply/probation/rollback automático, perfil instalado
+integrado à cadeia e aceite de produção continuam separados e bloqueados.

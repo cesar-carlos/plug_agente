@@ -5,6 +5,63 @@ and version bump instructions remain in `docs/install/release_guide.md`.
 
 ## Unreleased
 
+### Fixed — isolation and real installer asset checks
+
+- Private native derivations also namespace the update-helper mutex and refuse
+  unchanged Git bytes that omit required fixture transformations. Fixture-only
+  installers disable Restart Manager application closing.
+- The real UAC trial exposed the bootstrap refusing the installer's asset check.
+  The derived bootstrap now runs the existing asset check before fixture startup,
+  while normal launches remain blocked without private context. The failed
+  namespace was uninstalled. A fresh UAC round passed nine administrative stages
+  and nine non-elevated groups, with private residual cleanup and unchanged
+  operator inputs. Automatic apply/probation/rollback and release stay blocked.
+
+### Fixed — stale evidence in installed fixture acceptance
+
+- Refuse old standard-user phase artifacts before installer dispatch. Bind each
+  handoff/result to the exact fixture and attempt, claim once before IPC and
+  require all nine checks without duplicates. Publish complete terminal JSON by
+  non-overwriting Windows rename and reject resume after administrator exit.
+  No installation, native authorization or production gate is bypassed.
+
+### Added — verified compiled bootstrap input
+
+- Verify the explicit application-build proof twice before allocating a private
+  protected temporary workspace. Return only fixture paths/identity/hash; no
+  operational profile or registration access. Persistent-Hub cold/restart
+  validation is documented separately from installed update/recovery acceptance.
+
+### Added — private C++ runtime for isolated source builds
+
+- Extract only the named AMD64 runtime DLLs from an explicit cached Microsoft
+  package into a new owned fixture, checking signatures, versions and hashes.
+  No MSI installation or Windows/Visual Studio mutation occurs. Explicit
+  --runtime-manifest selects a generated bound CMake redist path; the existing
+  compatibility guard stays active and output must contain those exact DLLs.
+
+### Added — explicit application proof in private packages
+
+- Optional --application-build binds the exact verified proof, identity and
+  application files before packaging and at lifecycle phase boundaries; invalid
+  explicit proofs never fall back to stock Release. Only the named updater tools
+  may be rebuilt with the fixture public key. Reports separate application
+  source verification from whole-installer and installed acceptance; old
+  bytes_only fixtures are not promoted. Real source-bound packaging remains
+  pending a successful application build on a compatible C++ toolchain.
+
+### Added — isolated bootstrap source build
+
+- Export a full explicit ancestor commit into a private short build root, verify
+  Git blobs and reviewed bootstrap/native isolation, use offline locked
+  dependencies and published native cache, then bind the fresh application
+  source/payload inventories. This does not qualify the existing bytes-only
+  lifecycle package or enable installation/production. Full build validation is
+  pending correction of the local Visual C++ redistributable/compiler mismatch.
+- Preserve SYSTEMDRIVE in the restricted build environment for MSBuild
+  FileTracker and quote Flutter batch paths with spaces; reject shell operators
+  in build arguments. Windows CI includes the new source/proof regressions.
+
 ### Fixed — concurrent fixture evidence
 
 - Serialize RPC metadata appends in the isolated chain observer. Concurrent
@@ -14,6 +71,18 @@ and version bump instructions remain in `docs/install/release_guide.md`.
   policy, journal or production runtime behavior changes.
 
 ### Fixed — isolated installer lifecycle evidence
+
+- Format-2 fixtures bind the complete payload inventory and canonical SHA-256
+  tree, including all installer executables. Modified/missing/extra/linked
+  payload files and absent historical supervisors fail before phase dispatch.
+  Inputs are rechecked at phase entry/exit; failed verification invalidates
+  evidence without claiming rollback or authorizing retry. Historical fixture
+  files are not rewritten. Hash binding is bytes_only, not source-build proof.
+- Read-only --phase inspect verifies owned fixture artifacts without elevation
+  or machine-change authorization. It reports installedState:not_checked and
+  buildSourceVerified:false; it never inspects operational profiles or claims
+  installed qualification. Existing install phases retain explicit authorization.
+
 
 - Historical supervisor fixtures require an explicit full ancestor commit with
   disabled recovery contract 1, instead of implicitly selecting the current HEAD.

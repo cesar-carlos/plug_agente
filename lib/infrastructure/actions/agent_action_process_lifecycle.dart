@@ -89,10 +89,8 @@ class AgentActionProcessLifecycle {
         late final Process process;
         try {
           process = await _startBeforeDeadline(
-            discardOutput:
-                !definition.policies.capture.captureStdout &&
-                !definition.policies.capture.captureStderr &&
-                definition.policies.context.injectionMode != AgentActionContextInjectionMode.stdin,
+            capture: definition.policies.capture,
+            requiresStdin: definition.policies.context.injectionMode == AgentActionContextInjectionMode.stdin,
             deadline: deadline,
             executable: effectiveInvocation.executable,
             arguments: effectiveInvocation.arguments,
@@ -399,7 +397,8 @@ class AgentActionProcessLifecycle {
     required Duration timeout,
   }) => capture.result.timeout(timeout, onTimeout: capture.cancel);
   Future<Process> _startBeforeDeadline({
-    required bool discardOutput,
+    required AgentActionCapturePolicy capture,
+    required bool requiresStdin,
     required DateTime deadline,
     required String executable,
     required List<String> arguments,
@@ -414,7 +413,10 @@ class AgentActionProcessLifecycle {
       throw TimeoutException('Process start deadline elapsed.');
     }
 
-    final start = _usesDefaultStarter && Platform.isWindows && discardOutput && !runInShell
+    // Stdin injection and explicit shell launches retain Process.start semantics.
+    // Native readers forward only the bounded prefix, even for enabled capture.
+    final captureBytes = capture.maxCapturedOutputBytes > 0 ? capture.maxCapturedOutputBytes : 1;
+    final start = _usesDefaultStarter && Platform.isWindows && !requiresStdin && !runInShell
         ? WindowsSilentActionProcess.start(
             executable,
             arguments,
@@ -422,6 +424,8 @@ class AgentActionProcessLifecycle {
             workingDirectory: workingDirectory,
             environment: environment,
             includeParentEnvironment: includeParentEnvironment,
+            captureStdoutBytes: capture.captureStdout ? captureBytes : 0,
+            captureStderrBytes: capture.captureStderr ? captureBytes : 0,
           )
         : _processStarter(
             executable,
