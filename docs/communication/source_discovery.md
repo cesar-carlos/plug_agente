@@ -179,8 +179,10 @@ alvos no escopo autorizado. Defaults, comentários e linhas de negócio não sã
 não prova inexistência. Estados são enabled/disabled/unvalidated/unknown por recurso.
 PostgreSQL verifica índices/validação e triggers de FK; SQL Server índices e confiança
 das FKs; Firebird índices associados. Índices parciais ou por expressão não provam
-unicidade global. SQL Anywhere mantém enforcement desconhecido: o indicador interno
-not_enforced não habilita dependências. SQL Anywhere distingue tabelas BASE de views
+unicidade global. SQL Anywhere 16 now derives scoped constraint status from public catalogs,
+physical backing and session/server settings. Other versions or incomplete
+proof remain `unknown`; internal `not_enforced` is never authority. Details:
+[SQL Anywhere 16 constraint proof](sql_operations.md#sql-anywhere-16-constraint-proof). SQL Anywhere distingue tabelas BASE de views
 regulares VIEW por SYSTAB.table_type_str; materialized views não entram como views
 regulares nem como tabelas implicitamente. `metadataPage` é separado da paginação SQL;
 nulos obrigatórios são preservados, inclusive schema Firebird.
@@ -190,8 +192,8 @@ Contém recursos, colunas e constraints utilizadas; constraints exigem também
 sourceConstraints v1. Destinos de FK devem pertencer ao escopo autorizado. A policy
 autoriza os recursos; a mesma conexão confere colunas e chaves/ordem/status antes e
 depois do SELECT. Divergência descarta linhas com SOURCE_STRUCTURE_MISMATCH, sem
-reconectar/repetir. DML, prova de enforcement SQL Anywhere e matriz completa de
-mínimos privilégios/views continuam pendentes. Prova não aprova significado de negócio.
+reconectar/repetir. The full minimum-privilege/view matrix and coordinated publication acceptance
+remain pending; scoped SQL Anywhere 16 evidence is not full-engine acceptance. Prova não aprova significado de negócio.
 
 Referências técnicas dos catálogos: [PostgreSQL pg_constraint](https://www.postgresql.org/docs/15/catalog-pg-constraint.html),
 [SQL Server sys.columns](https://learn.microsoft.com/en-us/sql/relational-databases/system-catalog-views/sys-columns-transact-sql?view=sql-server-ver16),
@@ -205,6 +207,7 @@ compostas e policy somente leitura. O MCP fixa a FK na filha na navegação 1:N 
 preserva intermediárias/elos N:N; a relação conceitual não autoriza JOIN direto.
 A ação fixa relationship-drop-right-fk do companion confere a base descartável
 antes de remover fk_rel_right, sem receber SQL ou identificadores do consumidor.
-PostgreSQL, SQL Server e Firebird recusam a consulta após a remoção; SQL Anywhere
-continua recusando adoção dependente de enforcement desconhecido. Esse alcance
+In that historical fixture, PostgreSQL, SQL Server and Firebird refused the
+query after removal; SQL Anywhere refused adoption based on unknown enforcement.
+Current SQL Anywhere 16 scoped proof is described above; Firebird is unsupported. Esse alcance
 não conclui a matriz integral nem libera instalador/appcast/deploy.

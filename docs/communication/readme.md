@@ -19,8 +19,18 @@ SQL Server and SQL Anywhere. Historical Firebird evidence is not current support
 | [sql_operations.md](sql_operations.md) | Durable operation journal, transactions, reconciliation and scoped acceptance evidence. |
 | [schemas/](schemas/)                                                       | Schemas JSON dos params e results de cada metodo + envelopes RPC + frames de transporte.                                                                 |
 
+## Review baseline
+
+The [standard](socket_communication_standard.md) was reviewed on 2026-10-24
+against local handlers, negotiation, OpenRPC and schemas. Version remains 2.11.2.
+Known implementation/schema discrepancies and acceptance limits are in the
+[backlog](socket_communication_backlog.md#contract-review-findings-2026-10-24).
+
 ## Validacao
 
+- Local extension contracts and negotiation: `flutter test test/application/rpc/sql_operation_contract_test.dart test/application/rpc/source_discovery_test.dart test/infrastructure/validation/sql_operation_schema_test.dart test/infrastructure/external_services/transport/sql_operation_capability_test.dart`.
+- Response schema/error handling: `flutter test test/infrastructure/external_services/transport/rpc_response_preparer_test.dart test/infrastructure/external_services/transport/rpc_response_delivery_coordinator_test.dart`.
+- Source metadata with deterministic doubles: `flutter test test/infrastructure/external_services/odbc_source_schema_test.dart`. Real-driver acceptance remains separate.
 - Alteracoes em `openrpc.json`: `flutter test test/docs/openrpc_contract_test.dart`.
 - Fixtures de fio (envelope + params + result + error) versus schemas:
   `flutter test test/docs/communication/contract_fixtures_test.dart`.

@@ -1,5 +1,21 @@
 # Socket Communication Standard (Current Implementation)
 
+## Review scope — 2026-10-24
+
+Reviewed against the local agent implementation at `eb1888b4`, the bundled
+[OpenRPC](openrpc.json) and [schemas](schemas/). The protocol/API version remains
+**2.11.2**; source and SQL-operation extensions negotiate their own version **1**.
+This review covers registration/readiness, framing/signing, RPC routing and
+schemas, authentication, streaming, delivery, errors, quotas and cancellation.
+It does not certify a deployed hub or real-engine/installed-lifecycle acceptance.
+Production publication remains blocked by the
+[release manifest](../../contracts/persona-v2-release.json).
+
+The catalog includes development methods whose execution is gated. `rpc.discover`
+is a static contract catalog, not the session's enabled-method list. Known
+implementation/schema discrepancies are recorded in the
+[communication backlog](socket_communication_backlog.md#contract-review-findings-2026-10-24).
+
 ## Objetivo
 
 Este documento descreve **somente o que ja esta implementado** no
@@ -25,6 +41,8 @@ Visao geral por tema (links externos para subdocs e ancoras internas):
   [Regras formais de batch](#regras-formais-de-batch-contrato),
   [`api_version` e `meta`](#api_version-e-meta-contrato-formal)
 - [Contrato JSON-RPC 2.0 (v2)](#contrato-json-rpc-20-v2)
+- [Source discovery and structural inspection](#source-discovery-and-structural-inspection),
+  [Durable SQL operations](#durable-sql-operations)
 - Metodos SQL: [`sql.cancel`](#metodo-sqlcancel-via-feature-flag),
   [`sql.executeBatch`](#batch-implementado),
   [`sql.bulkInsert`](#bulk-insert-nativo-implementado)
@@ -74,6 +92,10 @@ Cross-references:
   - `agent.action.getExecution` (feature flag `enableRemoteAgentActions`)
   - `client_token.getPolicy`
   - `rpc.discover`
+  - `sql.describeSource` (`sourceDiscovery: 1`, live database-bound token)
+  - `sql.describeSchema` (`sourceSchema: 1` and `sourceIdentity: 1`)
+  - `sql.operation.execute`, `sql.operation.get`, `sql.operation.cancel`
+    (`sqlOperations` v1; `enableSqlOperations` defaults **off**)
 - Catalogo padronizado de erros RPC
 - Negociacao de capacidades
 
@@ -93,6 +115,8 @@ Cross-references:
 | Metodo `agent.action.cancel`                                         | implemented (via feature flag `enableRemoteAgentActions`; cancela fila ou encerra a arvore de processo local quando houver Job Object) |
 | Metodo `agent.action.getExecution`                                   | implemented (via feature flag `enableRemoteAgentActions`; leitura redigida de execucao de acao)                            |
 | Metodo `client_token.getPolicy`                                      | implemented                                                                                                                |
+| `sql.describeSource` / `sql.describeSchema` | implemented development extensions; explicit negotiation, non-null ID and live source authorization required |
+| `sql.operation.execute` / `get` / `cancel` | implemented development extensions; durable journal, negotiated v1 and explicit opt-in; production acceptance pending |
 | Catalogo de erros RPC                                                | implemented                                                                                                                |
 | Negociacao de capacidades                                            | implemented                                                                                                                |
 | Transporte binario em `PayloadFrame`                                 | implemented (obrigatorio; sem fallback para JSON cru)                                                                      |
@@ -139,7 +163,8 @@ Cross-references:
 funcionalidade esteja ativa em instalacao padrao. Flags abaixo iniciam
 **desligadas** (`FeatureFlags` / preferencias do app):
 `enablePayloadSigning`, `enableSocketIdempotency`,
-`enableSocketTimeoutByStage`. Flags de protocolo maduro / performance
+`enableSocketTimeoutByStage`, `enableSqlOperations`, `enableRemoteAgentActions`.
+Flags de protocolo maduro / performance
 (ex.: `enableSocketBackpressure`, `enableSocketCancelMethod`,
 `enableSocketSchemaValidation`, `enableClientTokenAuthorization`,
 `enableSocketStreamingFromDb`, `enableSocketStreamingChunks`,
@@ -370,20 +395,30 @@ chunks retain their existing forwarding path. Typed codec fixtures cover
 
 ## Garantia de entrega (`enableSocketDeliveryGuarantees`, default ON)
 
+Receipt ACKs confirm admission/receipt, not SQL execution, commit or durable
+completion. They do not provide exactly-once execution. Legacy SQL idempotency
+is separately disabled by default; do not resend writes merely because an ACK
+or response is missing. For `sql.operation.*`, reconcile using the durable
+operation identity and `get`; never automatically resend `execute` after an
+unknown outcome. The hub's operation request retry exclusion is separate from
+the agent's response ACK policy described below.
+
 
 | Tipo de evento                 | Garantia                   | Mecanismo                                                      |
 | ------------------------------ | -------------------------- | -------------------------------------------------------------- |
 | Telemetria/notification        | best effort                | sem ack                                                        |
-| Request critico hub -> agente  | at least once              | `rpc:request_ack` / `rpc:batch_ack` + retry hub + idempotencia |
-| Response critico agente -> hub | at least once (controlado) | `emitWithAck` + retry ate 3x em timeout de ack                 |
+| Request hub -> agent | Receipt acknowledgement only | `rpc:request_ack` / `rpc:batch_ack`; any retry must respect method-specific safety and journal reconciliation. |
+| Response critico agente -> hub | at least once (controlado) | `emitWithAck` + 10 s ACK timeout; up to 3 retries                 |
 
 The response ACK policy has a runtime exception: `sql.execute` and
 `sql.executeBatch` responses use plain Socket.IO `emit` even when delivery
 guarantees are enabled. A JSON-RPC batch containing either method also bypasses
 response ACKs. Other responses use one initial attempt plus three ACK retries,
 then one final emission without ACK if the session is still current. ACK
-delivery stops when the transport generation changes. Inbound request ACKs
-remain governed by the delivery-guarantee flag.
+delivery stops when the transport generation changes. This bypass set does not
+include `sql.operation.*`: its **response frames**
+can be redelivered by the ACK mechanism; that does not reexecute SQL. Inbound
+request ACKs remain governed by the delivery-guarantee flag.
 
 Acks de inbound `rpc:request` sao coalescidos em janela de 5 ms (cap de 32 ids,
 espelhando `HUB_MAX_BATCH_SIZE`). Bursts emitem um unico `rpc:batch_ack`;
@@ -397,8 +432,13 @@ Uma **notification** e um request JSON-RPC 2.0 sem campo `id`. O agente
 
 ### Regras
 
-- Request sem `id` (ou `id: null`) e tratado como notification.
-- O agente processa a notification mas **nao emite** `rpc:response`.
+- A request without `id` is a notification. Explicit `id: null` is accepted only
+  when `notificationNullIdCompatibility` is negotiated; otherwise it is rejected.
+- With the strict notification contract enabled, the agent emits no method
+  response for an accepted notification. `agent.action.*`, `sql.describeSource`,
+  `sql.describeSchema` and `sql.operation.*` require non-null IDs and refuse
+  notifications before executing their work. Transport/schema rejection can
+  still produce an error before the notification reaches dispatch.
 - Notifications nao contam para idempotencia (`idempotency_key` ignorado).
 - Notifications nao recebem `rpc:request_ack` (delivery guarantee = best effort).
 - Em batch, notifications sao processadas mas nao geram item no array de response.
@@ -423,9 +463,9 @@ Uma **notification** e um request JSON-RPC 2.0 sem campo `id`. O agente
 
 ### Feature flag
 
-- `enableSocketNotificationsContract`: quando ativo, o agente aplica
-as regras acima de forma estrita. Quando desativado, notifications
-ainda sao aceitas mas podem gerar response vazio.
+- `enableSocketNotificationsContract` enables strict notification handling.
+When disabled, notifications may produce a regular RPC response with `id: null`;
+callers must not rely on an empty response.
 
 ## Regras formais de batch (contrato)
 
@@ -450,6 +490,14 @@ Quando `enableSocketBatchStrictValidation` esta ativo:
 4. Cada item deve ser um objeto JSON-RPC 2.0 valido.
 
 ### Atomicidade
+
+A JSON-RPC array and the `commands` array inside `sql.executeBatch` are different
+contracts. The former has a negotiated 32-item default and invalid-request
+rejections (`-32600`); an oversized `sql.executeBatch.commands` array is an
+invalid-params error (`-32602`). Negotiation can lower either limit.
+`agent.action.run` and `agent.action.cancel` are rejected inside JSON-RPC arrays.
+Source/operation methods are not part of the parallel read-only allowlist;
+use unary requests for durable-operation orchestration and reconciliation.
 
 - Batch **nao** e atomico por padrao. Cada comando e executado independentemente.
 - Para atomicidade, use `options.transaction: true` em `sql.executeBatch`.
@@ -488,12 +536,24 @@ Response (notification nao gera item):
   {
     "jsonrpc": "2.0",
     "id": "q1",
-    "result": { "rows": [{ "1": 1 }], "row_count": 1 }
+    "result": {
+      "execution_id": "exec-1",
+      "started_at": "2026-10-24T12:00:00Z",
+      "finished_at": "2026-10-24T12:00:01Z",
+      "rows": [{ "1": 1 }],
+      "row_count": 1
+    }
   },
   {
     "jsonrpc": "2.0",
     "id": "q2",
-    "result": { "rows": [{ "2": 2 }], "row_count": 1 }
+    "result": {
+      "execution_id": "exec-2",
+      "started_at": "2026-10-24T12:00:00Z",
+      "finished_at": "2026-10-24T12:00:01Z",
+      "rows": [{ "2": 2 }],
+      "row_count": 1
+    }
   }
 ]
 ```
@@ -556,7 +616,7 @@ Request:
     "tracestate": "vendor=value",
     "request_id": "req-456",
     "agent_id": "agent-01",
-    "timestamp": "2026-03-13T10:00:00Z"
+    "timestamp": "2026-10-24T12:00:00Z"
   }
 }
 ```
@@ -567,17 +627,27 @@ Response:
 {
   "jsonrpc": "2.0",
   "id": "req-456",
-  "result": { "rows": [{ "1": 1 }], "row_count": 1 },
+  "result": {
+      "execution_id": "exec-1",
+      "started_at": "2026-10-24T12:00:00Z",
+      "finished_at": "2026-10-24T12:00:01Z",
+      "rows": [{ "1": 1 }],
+      "row_count": 1
+    },
   "api_version": "2.11.2",
   "meta": {
     "agent_id": "agent-01",
     "request_id": "req-456",
-    "timestamp": "2026-03-13T10:00:01Z"
+    "timestamp": "2026-10-24T12:00:01Z"
   }
 }
 ```
 
 ## Contrato JSON-RPC 2.0 (v2)
+
+Examples show logical payloads before framing. Supply a valid token wherever
+method authorization requires one; examples omitting credentials do not bypass
+authentication. JSON Schema defaults are annotations, not injected wire values.
 
 ### Fluxo completo (exemplo unico)
 
@@ -610,9 +680,10 @@ Response:
 
 - `client_token` (ou `clientToken` ou `auth`): obrigatorio quando `enableClientTokenAuthorization`
 esta ativo. Token opaco (hex) criado no agente ou JWT para fallback externo.
-- `options.timeout_ms`: teto opcional para a execucao ODBC desta request. O valor
-efetivo e o menor entre `timeout_ms` e qualquer budget interno ativo no
-runtime (quando `enableSocketTimeoutByStage` estiver ligado).
+- `options.timeout_ms` caps ODBC execution. Internal budgets also apply when
+`enableSocketTimeoutByStage` is **off**: `sql.execute` establishes a 65 s total
+budget and applies the remaining time and query-stage cap. The flag controls
+stage-specific error mapping; it does not make an unbounded request safe.
 - `options.page` e `options.page_size`: habilitam paginacao server-side para
 `SELECT`/`WITH`. Ambos devem ser enviados juntos, `page_size` deve respeitar
 o limite negociado de `max_rows` e a query precisa declarar `ORDER BY`
@@ -637,8 +708,10 @@ statement separado por `;` e avaliado isoladamente (mesmo modelo que
 leve (strings `'...'`, `"..."`, `[...]`, comentarios `--` e `/* */`), nao com
 parser SQL completo: nao cobre backticks estilo MySQL, dollar-quoting
 PostgreSQL (`$$`), nem delimitadores tipo `GO` (SQL Server).
-- O runtime atual suporta ate **5 parametros nomeados por comando**. Acima disso,
-a request e rejeitada com erro de validacao.
+- Named parameters are a map bound through `odbc_fast`'s named-parameter parser.
+There is no published five-parameter count gate in the current schemas or agent
+validators; the old five-parameter limit was obsolete. Driver and payload limits
+still apply, and missing bindings are refused.
 - `params.database`: override opcional do banco alvo para a request atual.
 Quando `payload.database` estiver presente na politica resolvida do token,
 este campo passa a ser obrigatorio e deve coincidir com o valor configurado
@@ -894,9 +967,10 @@ Com extensao v2.1 (quando `enableSocketApiVersionMeta` ativo):
 
 - `client_token` (ou `clientToken` ou `auth`): obrigatorio quando `enableClientTokenAuthorization`
 esta ativo.
-- `options.timeout_ms`: teto opcional para a execucao ODBC do batch. O valor
-efetivo e o menor entre `timeout_ms` e qualquer budget interno ativo no
-runtime (quando `enableSocketTimeoutByStage` estiver ligado).
+- `options.timeout_ms` caps ODBC execution together with the remaining batch
+budget. The handler establishes a 45 s total budget and a 35 s execution-stage
+cap independently of `enableSocketTimeoutByStage`. Sequential nontransactional
+commands consume the remaining shared budget.
 - `commands[*].execution_order` e opcional (inteiro `>= 0`).
 - Quando `execution_order` nao e enviado, o comando segue a ordem da lista
 recebida (comportamento atual).
@@ -910,7 +984,7 @@ no array `commands`.
 - Cada `commands[*].sql` deve conter **exatamente um statement SQL de topo**.
 Para scripts com multiplos statements/result sets na mesma execucao, use
 `sql.execute` com `options.multi_result: true`.
-- O runtime atual suporta ate **5 parametros nomeados por comando**.
+- Named parameter binding follows the same rules as `sql.execute`; no fixed five-parameter cap is enforced.
 - `params.database`: override opcional do banco alvo para o batch atual.
 Quando `payload.database` estiver presente na politica resolvida do token,
 este campo passa a ser obrigatorio e deve coincidir com o valor configurado
@@ -1016,6 +1090,98 @@ ordem crescente do indice do request no batch (mesma ordem de iteracao do
 processamento). Notifications nao geram entrada; correlacione cada resposta
 pelo `id` JSON-RPC.
 
+## Source discovery and structural inspection
+
+These methods are registered by
+[bootstrap_dependency_registrar_rpc.dart](../../lib/bootstrap/bootstrap_dependency_registrar_rpc.dart)
+in addition to the default handler registry. Both require a non-null JSON-RPC
+ID and a live token bound to the agent and requested database, even when legacy
+SQL authorization is disabled. Their closed params accept `client_token`, not
+`clientToken`/`auth`. Schemas make the token property optional, but the transport
+extracts it from params and the handlers require it; clients must supply it.
+
+| Method | Negotiation | Params and result |
+| --- | --- | --- |
+| `sql.describeSource` | `sourceDiscovery: 1` | `contractVersion: 1`, `database`, `client_token`; returns database, dialect, identity hash/kind, engine version and verification time. |
+| `sql.describeSchema` | `sourceSchema: 1`, `sourceIdentity: 1` | `contractVersion: 1`, `database`, `client_token`, `expectedSource`, `resources`, `offset`, `pageSize`; returns identity, resource observations and `metadataPage`. |
+
+Send explicit `offset` (starting at 0) and `pageSize` (1..4), although the domain
+reader has defaults: the published schema requires both. Resource scope is
+1..16 unique entries with explicit schema/name/type; offset must be inside that
+scope. Metadata pagination is independent of SQL row pagination. Missing metadata
+is not proof that a resource or constraint does not exist.
+
+Current dialects are `postgres`, `mssql` and `sybase`. Some v1 schemas retain
+`firebird` for historical compatibility, but `ExpectedSource` and the runtime
+reject it. SQL Anywhere source identity requires a DBA-provisioned marker;
+queries never create or repair it. SQL Anywhere **16** can report constraint
+status from scoped public-catalog evidence; unsupported or incomplete evidence
+remains `unknown`. See [source discovery](source_discovery.md) and
+[SQL Anywhere constraint proof](sql_operations.md#sql-anywhere-16-constraint-proof).
+
+### Verified SELECTs
+
+`sql.execute.params.expectedSource` contains `{version: 1, dialect, identityHash}`
+and requires `sourceIdentity: 1`, a database and live token. It forbids
+`multi_result`, `idempotency_key` and explicit `prefer_db_streaming: true`.
+The verified path uses one dedicated connection, checks identity before/after
+SELECT and does not reconnect/retry or stream from the database. Its 16 MiB
+materialization ceiling does not override a smaller negotiated frame limit.
+
+`expectedStructure` additionally requires `expectedSource` and `sourceSchema: 1`;
+constraint expectations require `sourceConstraints: 1`. Structure/identity
+mismatch discards the result. Managed pagination must use verified output names
+and unambiguous projection mappings; the hub does not rewrite business SQL.
+Detailed shapes and narrow grammar belong to [source discovery](source_discovery.md)
+and [SQL operations](sql_operations.md#managed-pagination-output-aliases).
+
+SQL null cells, required nullable source metadata and
+`directlyAffectedRows: null` are significant values, not omitted fields. Binary
+column metadata distinguishes ODBC-native codes from `odbc_fast` discriminants
+using `type_system`; unknown types do not authorize binary delivery.
+
+## Durable SQL operations
+
+`sql.operation.execute`, `sql.operation.get` and `sql.operation.cancel` share
+[SqlOperationRpcHandler](../../lib/application/rpc/sql_operation_rpc_handler.dart).
+They require non-null IDs, live database-bound credentials and negotiated
+`sqlOperations` v1; the live `enableSqlOperations` flag defaults **off** and is
+rechecked per call. `ENABLE_SQL_OPERATIONS=true` seeds an unset preference only.
+Reconnect after changing the flag to refresh the capability snapshot.
+
+All three take `contractVersion: 1`, `operationId` (UUID), `fingerprint` and
+`sourcePhysicalId` (64 lowercase hex characters), `database` and a token alias.
+Aliases may not conflict. `expectedSource` is optional in the v1 wire shape but
+requires `sourceIdentity: 1` when supplied; the verified MCP flow requires it.
+
+`execute` additionally requires `steps`, `maxAffectedRows` and `timeoutMs`.
+The effective negotiated ceilings are 32 steps, 100000 directly affected rows
+and 300000 ms. The strict reader also caps the plan at 2 MiB UTF-8 and each SQL
+statement at 1 MiB; internal metadata/count queries consume the native statement
+budget. Plans require at least one write, explicit row bounds and typed values
+or references to outputs of preceding steps. These semantic checks go beyond
+JSON Schema. Use the [operation guide](sql_operations.md) for the supported SQL
+subset, authorization, journal lifecycle and uncertain-result reconciliation.
+
+Optional `expectedStructure` on `execute` requires `expectedSource`, negotiated
+`sqlOperations.structureGuard: 1`, `sourceSchema: 1`, `sourceIdentity: 1`, and
+`sourceConstraints: 1` when constraints are included. Checks execute on the same
+connection before beginning the write transaction. The content hash is computed
+locally; clients cannot replace it with the supplied fingerprint.
+
+All three methods return journal metadata, not business row sets:
+`operationId`, `fingerprint`, `executionId`, `state`, `directlyAffectedRows` and
+`updatedAt`. `completedAt` appears for terminal records; it does not prove commit.
+Wire states are `executando`, `cancelamento_solicitado`, `concluida`,
+`rollback_confirmado`, `resultado_desconhecido`, `cancelada`. Optional `failureCode`
+is a safe durable category on failure terminal states; old records can omit it.
+`get` and `cancel` keep the exact original identity/fingerprint/source binding.
+
+Cancellation acceptance is not rollback. An unknown outcome must never trigger
+another `execute`, a new operation ID or a fallback to `sql.executeBatch`.
+Use `get` and authorized reconciliation. The operation journal is distinct from
+the optional legacy RPC idempotency cache and from transport replay windows.
+
 ## Catalogo de Erros
 
 ### JSON-RPC padrao
@@ -1085,16 +1251,16 @@ com bump de versao de protocolo.
 | `-32600` | request invalida                                                                                   | validar contrato antes de enviar                                                                    |
 | `-32601` | metodo inexistente                                                                                 | ajustar nome do metodo para um suportado                                                            |
 | `-32602` | parametros invalidos                                                                               | corrigir payload antes de reenviar                                                                  |
-| `-32603` | erro interno                                                                                       | retry com backoff; se persistir, acionar suporte                                                    |
+| `-32603` | Internal error | Diagnose first; do not infer a safe replay of a write from this code. |
 | `-32001` | falha de autenticacao ou token ausente                                                             | incluir `client_token` em params ou renovar credencial                                              |
 | `-32002` | sem permissao (token revogado, nao encontrado, ou negado)                                          | ocultar acao na UI e orientar contato com admin                                                     |
-| `-32008` | timeout                                                                                            | retry com backoff e observabilidade                                                                 |
+| `-32008` | Timeout | Determine whether execution began; reconcile uncertain writes before any retry. |
 | `-32009` | payload invalido                                                                                   | validar schema e encoding antes do envio                                                            |
 | `-32010` | falha de decode                                                                                    | verificar content-type/encoding e compatibilidade                                                   |
 | `-32011` | falha de compressao                                                                                | reenviar sem compressao (fallback) e registrar erro                                                 |
-| `-32012` | erro de rede                                                                                       | reconectar socket e repetir com controle                                                            |
+| `-32012` | Network error | Reconnect transport; do not automatically resend an uncertain write. |
 | `-32013` | Window, concurrent-handler or outstanding-response admission limit | Use `reason` to choose time backoff (`rate_window_exceeded`), reduced parallelism (`concurrent_handlers_exceeded`), or output draining (`outbound_response_capacity_exceeded`). |
-| `-32014` | request duplicada (replay)                                                                         | reenviar com novo `id`/correlation                                                                  |
+| `-32014` | Duplicate request/replay | Reconcile the original call; a new RPC ID is not evidence that repeating its side effects is safe. |
 
 
 ### Formato de erro
@@ -1370,7 +1536,7 @@ Eventos ODBC recentes usam somente codigos estaveis, classe de comando e
 duracao. O snapshot e os logs nao incluem SQL, parametros, connection strings,
 IDs nativos ou mensagens brutas do driver. Diagnosticos de pool podem indicar
 quarentena/reciclagem, e streaming pode indicar capacidade limitada de limpeza;
-ambos sao estados transitorios e seguros para retry.
+both can be transient, but safe execution retry still depends on the outcome of the original operation.
 
 ### Bloco `sql_execution_by_mode`
 
@@ -1457,6 +1623,8 @@ carregado por `OpenRpcDocumentLoader` (asset em runtime, fallback para disco em
 `<cwd>/docs/communication/openrpc.json`). Se nenhuma fonte estiver disponivel, o
 loader lanca `OpenRpcDocumentLoadException`; nao ha documento OpenRPC minimo
 embutido.
+- **Availability:** the document is not filtered by feature flags, token policy
+or negotiated capabilities. Inspect those gates separately before dispatch.
 - **Batch:** cada item de batch com `method: "rpc.discover"` e processado pelo
 dispatcher como qualquer outro metodo RPC.
 - **Notifications e contrato estrito:** com `enableSocketNotificationsContract`
@@ -1465,6 +1633,15 @@ ativo, um pedido **sem** `id` (notification JSON-RPC) **nao** recebe
 enviar `rpc.discover` com `id` definido.
 
 ## Contrato obrigatorio de erro (`error.data`)
+
+Known deviation: the development source/operation handlers currently construct
+compact errors with only `failure_code` and `retryable: false`. With loaded
+schemas and both validation flags enabled, `RpcResponsePreparer` rejects those
+errors and emits `-32603` with `id: null`, losing the original correlation and
+failure code. Without that validation the compact error may reach the wire.
+This is an implementation defect, not a supported alternative error contract;
+see the [backlog](socket_communication_backlog.md#contract-review-findings-2026-10-24).
+Do not infer business success or authorize replay from either form.
 
 Para padronizar UX e troubleshooting, toda resposta de erro deve incluir:
 
@@ -1576,7 +1753,10 @@ Regras:
 
 ### Retry
 
-- Retry automatico so deve ocorrer quando `retryable=true`.
+- `retryable=true` is necessary, not sufficient, for automatic execution retry.
+  The method must also be safe to repeat. A timeout, lost response or transport
+  reconnect does not prove that a write rolled back. `sql.operation.*` unknown
+  outcomes require `get`/reconciliation, never automatic execute replay.
 - Aplicar backoff exponencial em retries automaticos.
 
 ## Politica de operacao e quotas
@@ -1642,8 +1822,9 @@ O agente usa tres camadas de recuperacao de transporte (nao apenas o
 
 #### Heartbeat
 
-- `agent:heartbeat` a cada 20s; ausencia de `hub:heartbeat_ack` em 2 janelas
-  consecutivas aciona reconexao (escala via `onReconnectionNeeded`).
+- Heartbeat interval: 20 s; ACK wait after successful emission: 8 s.
+  Two missed acknowledgements trigger reconnection via `onReconnectionNeeded`.
+  Preparation time is separate; failed sends do not start the ACK timer.
 
 `healthPiggyback` and `agent.getHealth` serve socket-side diagnostics; they
 are separate from the agent's HTTP `/health` reachability probe. Extension
@@ -1719,6 +1900,10 @@ o modo efetivo perde `cursor-offset`).
   "encodings": ["json"],
   "compressions": ["gzip", "none"],
   "extensions": {
+    "sourceDiscovery": 1,
+    "sourceIdentity": 1,
+    "sourceSchema": 1,
+    "sourceConstraints": 1,
     "batchSupport": true,
     "bulkInsert": true,
     "binaryPayload": true,
@@ -1813,6 +1998,31 @@ o modo efetivo perde `cursor-offset`).
   }
 }
 ```
+
+This example includes optional remote actions for illustration: `agentActions`
+is omitted unless both action flags are enabled. Signing algorithms are empty
+when no signer is configured. `sqlOperations` is omitted by default. With
+explicit operation opt-in, the agent advertises:
+
+```json
+{
+  "enabled": true,
+  "version": 1,
+  "durableJournal": true,
+  "singleSourceTransaction": true,
+  "automaticReplay": false,
+  "maxSteps": 32,
+  "maxAffectedRows": 100000,
+  "timeoutMs": 300000,
+  "structureGuard": 1
+}
+```
+
+Both peers must advertise compatible base fields and positive integer limits;
+limits are their minima capped by the agent ceilings. `structureGuard: 1` is
+negotiated only when both advertise it. The four source extension keys also
+require version 1 on both peers. Neither `api_version` nor `rpc.discover` enables
+these extensions implicitly.
 
 Performance extensions are advertised by `ProtocolCapabilities.defaultCapabilities`:
 `clientRequestIdEcho: "v1"` preserves the caller's `meta.request_id`,
@@ -2018,7 +2228,8 @@ O agente anuncia limites em `agent:register` via campo `limits` dentro de `capab
 - A frame exceeding either negotiated byte limit is rejected with `-32009`
 (invalid payload); decompression also has a bounded inflation ratio.
 - Response que excede `max_rows`: truncado ou streamed (conforme feature flags).
-- Batch que excede `max_batch_size`: rejeitado com `-32600` (invalid request).
+- A JSON-RPC batch exceeding `max_batch_size` is rejected with `-32600`.
+An oversized `sql.executeBatch.commands` array is rejected with `-32602`.
 
 ## Assinatura opcional de transporte/payload
 
@@ -2071,8 +2282,8 @@ verificacao:** [`socketio_client_binary_transport.md`](socketio_client_binary_tr
 ## Limites operacionais atuais
 
 - `options.timeout_ms` suportado em `sql.execute` e `sql.executeBatch`.
-Quando timeouts por estagio do socket estao ativos, o timeout ODBC efetivo do
-batch e o **minimo** entre o orcamento do estagio SQL e `options.timeout_ms`
+The effective batch ODBC timeout is the minimum of the remaining execution
+budget and `options.timeout_ms`, including when the stage-timeout flag is off
 (este ultimo age como teto por pedido). Em `sql.executeBatch` com
 `transaction: false`, o agente aplica o **tempo restante** do orcamento a cada
 comando em sequencia; se o orcamento esgotar antes de um comando, o batch
@@ -2209,9 +2420,12 @@ uses `enableSocketSchemaValidation`. For large requests, full JSON Schema
 validation is skipped above an estimated 128 KiB by default, configurable with
 positive `INBOUND_SCHEMA_VALIDATION_SKIP_ABOVE_BYTES`; critical-field checks,
 frame limits, request validation and handler gates still apply. Clients must
-always adhere to the full published schemas.
+always adhere to the full published schemas. If a schema fails to load,
+`JsonSchemaContractValidator` skips it and relies on remaining procedural checks;
+passing a runtime call therefore does not prove complete schema conformance.
 - Validacao de contrato na **saida** (`rpc:response`, respostas batch e eventos
-de streaming) via `enableSocketOutgoingContractValidation` (default **true**);
+de streaming) requires both `enableSocketSchemaValidation` and
+`enableSocketOutgoingContractValidation` (both default **true**);
 para payloads de saida muito grandes (~2 MiB UTF-8 JSON estimados), a
 validacao de saida e omitida para limitar CPU (o frame ainda respeita limites
 negociados de tamanho).
@@ -2260,7 +2474,7 @@ local; nao altera o contrato no fio.
   e serve como recomendacao operacional para evitar materializacao de payloads
   grandes em memoria.
 - OpenRPC publicado em `docs/communication/openrpc.json` para descoberta do
-profile RPC.
+profile RPC. The static catalog includes gated development methods.
 - Autorizacao por client token: lookup local por hash SHA-256 (tokens opacos criados no agente).
 Permissoes armazenadas em SQLite local; token usado apenas para validacao e lookup.
 - Validacao criptografica de token (issuer/audience/kid/alg) disponivel via
@@ -2303,6 +2517,15 @@ enabled; `rpc.discover` and authenticated hub profile sync are exceptions.
 `odbc_reason: token_revoked` (and optional `subreason`) for the domain cause.
 - Homologa `client_token.getPolicy` com auth ativo (policy coerente com token).
 
+### Development extensions
+
+- Negotiate each source capability explicitly; send required metadata paging fields.
+- Check source replacement and structural mismatch without business-row leakage.
+- Preserve required nullable metadata and journal fields across transport.
+- Exercise operation opt-in off/on, limit negotiation, duplicate identities,
+  cancellation and uncertain results without automatic replay.
+- Resolve the compact-error/correlation defect before claiming full extension acceptance.
+
 ### Contrato v2.1
 
 - Inclui `api_version` e `meta` em requests (quando feature ativa).
@@ -2333,6 +2556,11 @@ Pendencias: [`socket_communication_backlog.md`](socket_communication_backlog.md)
 
 ### Params por metodo
 
+- [Source discovery](schemas/rpc.params.source-discovery.schema.json)
+- [Source schema](schemas/rpc.params.source-schema.schema.json)
+- [SQL operation execute](schemas/rpc.params.sql-operation-execute.schema.json)
+- [SQL operation get/cancel](schemas/rpc.params.sql-operation-reference.schema.json)
+
 - `docs/communication/schemas/rpc.params.sql-execute.schema.json`
 - `docs/communication/schemas/rpc.params.sql-execute-batch.schema.json`
 - `docs/communication/schemas/rpc.params.sql-bulk-insert.schema.json`
@@ -2346,6 +2574,10 @@ Pendencias: [`socket_communication_backlog.md`](socket_communication_backlog.md)
 - `docs/communication/schemas/rpc.params.client-token-get-policy.schema.json`
 
 ### Result por metodo
+
+- [Source discovery](schemas/rpc.result.source-discovery.schema.json)
+- [Source schema](schemas/rpc.result.source-schema.schema.json)
+- [SQL operation execute/get/cancel](schemas/rpc.result.sql-operation.schema.json)
 
 - `docs/communication/schemas/rpc.result.sql-execute.schema.json`
 - `docs/communication/schemas/rpc.result.sql-execute-batch.schema.json`

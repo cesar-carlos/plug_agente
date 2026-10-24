@@ -23,6 +23,13 @@ The agent now registers `sql.operation.execute`, `sql.operation.get` and
 remains blocked by contracts/persona-v2-release.json. The hub forwards only after
 sqlOperations version 1 negotiation. Legacy sql.executeBatch is not a substitute.
 
+The agent's response ACK retry mechanism is distinct from hub request replay:
+`sql.operation.*` responses are not in the `sql.execute`/`sql.executeBatch` ACK
+bypass set. Clients must tolerate duplicate response delivery without repeating
+execution. The [contract review backlog](socket_communication_backlog.md#contract-review-findings-2026-10-24)
+also records the compact operation/source error shape that currently fails the
+structured outgoing error schema; it remains a blocker to full contract acceptance.
+
 ## Structural operation guard in development
 
 Optional expectedStructure on sql.operation.execute is part of the locally
@@ -38,8 +45,9 @@ transaction. Metadata and extra identity statements count toward the existing
 32-statement budget, including per-driver row-count queries. No business DDL,
 reconnection, retry or extra connection is introduced. Structural mismatch
 refuses before transaction begin. The durable intent remains terminal and a
-repeat does not dispatch; its public receipt still requires a durable safe reason
-extension before the MCP can suspend the exact structural dependencies from it.
+repeat does not dispatch. Public receipts may include the optional durable
+`failureCode`; older journal records can omit it. MCP adoption of that reason
+for dependency suspension remains separate from agent receipt persistence.
 
 This is agent foundation, not shared DML adoption in the MCP. Hub transport/capability forwarding and its coordinated 1.14.0 snapshot are
 implemented in development. Qualified DML resources,

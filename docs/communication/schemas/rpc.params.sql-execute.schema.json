@@ -16,7 +16,7 @@
     },
     "params": {
       "type": "object",
-      "description": "Named parameters for the SQL statement (e.g. { \"id\": 1 }). Current runtime supports up to 5 named parameters per command.",
+      "description": "Named parameters for the SQL statement (e.g. { \"id\": 1 }). The current agent and named-parameter parser do not enforce a fixed five-parameter count limit. Missing bindings, payload limits and driver constraints still apply.",
       "additionalProperties": true
     },
     "client_token": {

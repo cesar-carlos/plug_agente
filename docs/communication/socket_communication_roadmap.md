@@ -13,6 +13,15 @@ itens.
 
 ## Itens concluidos
 
+Documentation alignment (2026-10-24, profile **2.11.2**, no wire-version change):
+source discovery/schema and SQL-operation methods are now indexed in the standard;
+capability/opt-in gates, durable reconciliation, response-vs-request ACK behavior,
+required nullable fields, always-bounded SQL budgets and examples are aligned
+with local implementation and schemas. Obsolete five-parameter and unconditional
+SQL Anywhere constraint-unknown descriptions were removed. Runtime discrepancies
+remain in the [backlog](socket_communication_backlog.md#contract-review-findings-2026-10-24);
+this review is not a release or extension-acceptance declaration.
+
 Communication implementation corrections (2026-10-03, profile **2.11.2**):
 active pool cancellation and fatal-worker handling; emitter expiry/identity;
 bounded FIFO admission and one drain; nonoverlapping heartbeat preparation;

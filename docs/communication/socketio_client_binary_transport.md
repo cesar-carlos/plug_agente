@@ -9,6 +9,31 @@ O documento `docs/communication/socket_communication_standard.md` continua
 descrevendo o estado implementado atual do agente. Este guia descreve o
 comportamento que clientes devem seguir no contrato de transporte em producao.
 
+## Review and method availability — 2026-10-24
+
+Compared with the current `PayloadFrameCodec`, negotiation and response delivery
+implementation, [OpenRPC](openrpc.json), and [schemas](schemas/). Framing remains
+JSON UTF-8 in `PayloadFrame` 1.0; the profile remains 2.11.2.
+
+The OpenRPC catalog is static. Source discovery/identity/schema/constraints each
+require explicit version-1 negotiation. SQL operations additionally require
+`sqlOperations` v1 and agent opt-in (default off). The catalog does not authorize
+a method or prove production readiness. See the
+[method requirements](socket_communication_standard.md#source-discovery-and-structural-inspection).
+
+An inbound ACK confirms receipt, not commit. Deduplicate response frames by the
+request identity; do not translate missing ACKs into automatic write replay.
+`sql.execute`/`sql.executeBatch` responses bypass response ACK retries; operation
+responses do not share that bypass. Repeated operation response delivery never
+means permission to repeat `execute`. An unknown operation requires `get` and
+reconciliation with its original identity. Preserve required nullable fields,
+including `directlyAffectedRows: null` and source metadata.
+
+Current source/operation compact errors can fail outgoing schema validation and
+be replaced with `-32603`, `id: null`. This remains an implementation defect,
+not a new error profile; [tracked findings](socket_communication_backlog.md#contract-review-findings-2026-10-24)
+must be resolved before complete extension acceptance.
+
 ## Regra principal
 
 Registration, capabilities, heartbeat, RPC, ACK and streaming payloads must
