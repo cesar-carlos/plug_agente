@@ -1,8 +1,8 @@
 import 'dart:ffi';
 import 'dart:io';
 
-import 'package:ffi/ffi.dart';
 import 'package:win32/win32.dart';
+import 'package:windows_action_runtime/src/windows_crt_runtime.dart';
 
 /// Owns a binary CRT descriptor and its native pipe handle until close.
 ///
@@ -15,7 +15,7 @@ final class WindowsPipeReader {
     if (address <= 0) throw ArgumentError.value(address, 'address', 'Expected an owned pipe handle.');
     try {
       final api = _CrtPipeApi.instance;
-      final descriptor = api.open(address, _CrtPipeApi.binaryMode | _CrtPipeApi.noInheritMode);
+      final descriptor = api.open(address, windowsCrtBinaryMode | windowsCrtNoInheritMode);
       if (descriptor < 0) throw const ProcessException('', [], 'Unable to adopt action output pipe');
       return WindowsPipeReader._(api, descriptor);
     } on Object {
@@ -61,22 +61,30 @@ final class _CrtPipeApi {
           ),
       close = library.lookupFunction<Int32 Function(Int32), int Function(int)>('_close');
 
-  static final _CrtPipeApi instance = _CrtPipeApi._(_loadSystemRuntime());
-  static const int binaryMode = 0x8000;
-  static const int noInheritMode = 0x0080;
+  static final _CrtPipeApi instance = _CrtPipeApi._(loadWindowsCrtRuntime());
   final int Function(int, int) open;
   final int Function(int, Pointer<Uint8>, int) read;
   final int Function(int) close;
+}
 
-  static DynamicLibrary _loadSystemRuntime() => using((arena) {
-    const capacity = 32768;
-    final path = arena<Uint16>(capacity);
-    final directory = GetSystemDirectory(PWSTR(path.cast()), capacity);
-    if (directory.value == 0 || directory.value >= capacity) {
-      throw const ProcessException('', [], 'Unable to locate the Windows system runtime');
+/// Runs [body] and then closes [reader].
+///
+/// A failure from [WindowsPipeReader.close] must not replace an error already
+/// thrown by [body]: the read failure is the actionable cause.
+void closePipeReaderAfter(WindowsPipeReader reader, void Function() body) => preserveActionError(body, reader.close);
+
+/// Runs [body] and then [release]. A failure from [release] never replaces an
+/// error already thrown by [body].
+void preserveActionError(void Function() body, void Function() release) {
+  try {
+    body();
+    release();
+  } on Object {
+    try {
+      release();
+    } on Object {
+      // Intentionally ignored: closing after a read failure is best-effort.
     }
-    // Use the OS-provided absolute directory; never search CWD, PATH or a
-    // user-configured environment variable for this runtime DLL.
-    return DynamicLibrary.open('${path.cast<Utf16>().toDartString()}\\ucrtbase.dll');
-  });
+    rethrow;
+  }
 }

@@ -68,6 +68,32 @@ void main() {
       });
     });
 
+    test('preserves the read error when closing also fails', () {
+      expect(
+        () => preserveActionError(
+          () => throw const ProcessException('', [], 'Unable to drain action output (CRT _read failed)', -1),
+          () => throw const ProcessException('', [], 'Unable to close action output pipe descriptor', -1),
+        ),
+        throwsA(
+          isA<ProcessException>().having((error) => error.message, 'message', contains('CRT _read failed')),
+        ),
+      );
+    });
+
+    test('preserves a native read failure when close succeeds', () {
+      using((arena) {
+        final pipe = _pipe(arena);
+        final reader = WindowsPipeReader.takeOwnership(pipe.write.address);
+        expect(
+          () => closePipeReaderAfter(reader, () => reader.read(arena<Uint8>(16), 16)),
+          throwsA(
+            isA<ProcessException>().having((error) => error.message, 'message', contains('CRT _read failed')),
+          ),
+        );
+        expect(CloseHandle(pipe.read).value, isTrue);
+      });
+    });
+
     test('rejects invalid buffers before invoking CRT parameter validation', () {
       using((arena) {
         final pipe = _pipe(arena);

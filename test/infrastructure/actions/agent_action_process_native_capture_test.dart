@@ -97,6 +97,20 @@ void main() {
       expect(result.stdout.text, contains('fixture-input'));
     });
 
+    test('stdin injection keeps capture bounded while stdout is flooded', () async {
+      final watch = Stopwatch()..start();
+      final result = (await _run(
+        'set /p value=&call echo %%value%%&for /L %i in (1,1,400) do @echo xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx',
+        stdin: 'fixture-input\r\n',
+        capture: const AgentActionCapturePolicy(maxCapturedOutputBytes: 128),
+      )).getOrThrow();
+      expect(result.succeeded, isTrue);
+      expect(result.stdout.text, contains('fixture-input'));
+      expect(result.stdout.isTruncated, isTrue);
+      expect(result.stdout.text.length, lessThanOrEqualTo(128));
+      expect(watch.elapsed, lessThan(const Duration(seconds: 15)));
+    });
+
     test('inherited pipes cannot block completion and retain their captured prefix', () async {
       final watch = Stopwatch()..start();
       final result = (await _run(

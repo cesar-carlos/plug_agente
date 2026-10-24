@@ -413,10 +413,12 @@ class AgentActionProcessLifecycle {
       throw TimeoutException('Process start deadline elapsed.');
     }
 
-    // Stdin injection and explicit shell launches retain Process.start semantics.
+    // Explicit shell launches retain Process.start semantics.
     // Native readers forward only the bounded prefix, even for enabled capture.
+    // Stdin injection stays on this path so output draining does not return to
+    // the calling isolate.
     final captureBytes = capture.maxCapturedOutputBytes > 0 ? capture.maxCapturedOutputBytes : 1;
-    final start = _usesDefaultStarter && Platform.isWindows && !requiresStdin && !runInShell
+    final start = _usesDefaultStarter && Platform.isWindows && !runInShell
         ? WindowsSilentActionProcess.start(
             executable,
             arguments,
@@ -426,6 +428,7 @@ class AgentActionProcessLifecycle {
             includeParentEnvironment: includeParentEnvironment,
             captureStdoutBytes: capture.captureStdout ? captureBytes : 0,
             captureStderrBytes: capture.captureStderr ? captureBytes : 0,
+            requiresStdin: requiresStdin,
           )
         : _processStarter(
             executable,

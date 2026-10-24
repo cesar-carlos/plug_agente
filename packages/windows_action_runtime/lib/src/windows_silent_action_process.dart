@@ -8,10 +8,11 @@ import 'package:ffi/ffi.dart';
 import 'package:win32/win32.dart';
 import 'package:windows_action_runtime/src/windows_command_line_quoter.dart';
 import 'package:windows_action_runtime/src/windows_pipe_reader.dart';
+import 'package:windows_action_runtime/src/windows_pipe_writer.dart';
 
 const _inheritedHandleListAttribute = 0x00020002;
 
-/// Starts suspended with NUL stdin and optional bounded native output readers.
+/// Starts suspended with optional stdin and bounded native output readers.
 /// Pipe draining happens outside the main isolate; disabled captures use NUL.
 final class WindowsSilentActionProcess implements Process {
   WindowsSilentActionProcess._(this.pid, this._handle, this._thread) {
@@ -28,6 +29,7 @@ final class WindowsSilentActionProcess implements Process {
     bool startSuspended = false,
     int captureStdoutBytes = 0,
     int captureStderrBytes = 0,
+    bool requiresStdin = false,
   }) async {
     if (executable.isEmpty || [executable, ...arguments, ?workingDirectory].any((value) => value.contains('\u0000'))) {
       throw ProcessException(executable, const [], 'Invalid process invocation');
@@ -41,6 +43,7 @@ final class WindowsSilentActionProcess implements Process {
         includeParentEnvironment: includeParentEnvironment,
         captureStdout: captureStdoutBytes > 0,
         captureStderr: captureStderrBytes > 0,
+        requiresStdin: requiresStdin,
       ),
     );
     final process = WindowsSilentActionProcess._(
@@ -50,6 +53,9 @@ final class WindowsSilentActionProcess implements Process {
     );
     process._stdout = _output(spawned.stdoutRead, captureStdoutBytes);
     process._stderr = _output(spawned.stderrRead, captureStderrBytes);
+    if (spawned.stdinWrite != 0) {
+      process._stdinSink = IOSink(_PipeInputSink(spawned.stdinWrite));
+    }
     if (!startSuspended) {
       try {
         process.resume();
@@ -61,12 +67,13 @@ final class WindowsSilentActionProcess implements Process {
     return process;
   }
 
-  static ({int pid, int handle, int thread, int stdoutRead, int stderrRead}) _spawn(
+  static ({int pid, int handle, int thread, int stdoutRead, int stderrRead, int stdinWrite}) _spawn(
     String executable,
     List<String> arguments, {
     required bool includeParentEnvironment,
     required bool captureStdout,
     required bool captureStderr,
+    required bool requiresStdin,
     String? workingDirectory,
     Map<String, String>? environment,
   }) {
@@ -91,6 +98,8 @@ final class WindowsSilentActionProcess implements Process {
       HANDLE? outputWrite;
       HANDLE? errorRead;
       HANDLE? errorWrite;
+      HANDLE? stdinRead;
+      HANDLE? stdinWrite;
       LPPROC_THREAD_ATTRIBUTE_LIST? attributes;
       var initialized = false;
       ({HANDLE process, HANDLE thread})? launched;
@@ -105,6 +114,11 @@ final class WindowsSilentActionProcess implements Process {
           errorRead = pipe.read;
           errorWrite = pipe.write;
         }
+        if (requiresStdin) {
+          final pipe = _createPipe(security, arena);
+          stdinRead = pipe.read;
+          stdinWrite = pipe.write;
+        }
         final size = arena<IntPtr>();
         InitializeProcThreadAttributeList(null, 1, size);
         attributes = LPPROC_THREAD_ATTRIBUTE_LIST(arena<Uint8>(size.value).cast());
@@ -118,7 +132,7 @@ final class WindowsSilentActionProcess implements Process {
           );
         }
         initialized = true;
-        final inherited = [device, ?outputWrite, ?errorWrite];
+        final inherited = [device, ?outputWrite, ?errorWrite, ?stdinRead];
         final handles = arena<Pointer>(inherited.length);
         for (var index = 0; index < inherited.length; index++) {
           handles[index] = inherited[index];
@@ -139,7 +153,7 @@ final class WindowsSilentActionProcess implements Process {
         startup.ref.lpAttributeList = attributes;
         startup.ref.StartupInfo.cb = sizeOf<STARTUPINFOEX>();
         startup.ref.StartupInfo.dwFlags = STARTF_USESTDHANDLES;
-        startup.ref.StartupInfo.hStdInput = device;
+        startup.ref.StartupInfo.hStdInput = stdinRead ?? device;
         startup.ref.StartupInfo.hStdOutput = outputWrite ?? device;
         startup.ref.StartupInfo.hStdError = errorWrite ?? device;
         final info = arena<PROCESS_INFORMATION>();
@@ -180,16 +194,20 @@ final class WindowsSilentActionProcess implements Process {
           thread: info.ref.hThread.address,
           stdoutRead: outputRead?.address ?? 0,
           stderrRead: errorRead?.address ?? 0,
+          stdinWrite: stdinWrite?.address ?? 0,
         );
       } finally {
         if (initialized) DeleteProcThreadAttributeList(attributes!);
         try {
           if (outputWrite != null) _closeDevice(outputWrite, launched);
           if (errorWrite != null) _closeDevice(errorWrite, launched);
+          // The parent keeps the write end. The child inherited the read end.
+          if (stdinRead != null) _closeDevice(stdinRead, launched);
         } finally {
           if (launched == null) {
             if (outputRead != null) _closeHandle(outputRead);
             if (errorRead != null) _closeHandle(errorRead);
+            if (stdinWrite != null) _closeHandle(stdinWrite);
           }
           _closeDevice(device, launched);
         }
@@ -211,8 +229,10 @@ final class WindowsSilentActionProcess implements Process {
   @override
   Stream<List<int>> get stderr => _stderr;
   Stream<List<int>> _stderr = const Stream.empty();
+  IOSink? _stdinSink;
+
   @override
-  late final IOSink stdin = IOSink(_ClosedInput());
+  IOSink get stdin => _stdinSink ??= IOSink(_ClosedInput());
 
   Future<int> _waitAndClose() async {
     final address = _handle.address;
@@ -223,7 +243,14 @@ final class WindowsSilentActionProcess implements Process {
       try {
         _closeThread();
       } finally {
-        _closeHandle(_handle);
+        try {
+          await stdin.close();
+        } on Object {
+          // Process exit is the result the caller is waiting on. Releasing
+          // stdin is cleanup, and a secondary close failure must not replace it.
+        } finally {
+          _closeHandle(_handle);
+        }
       }
     }
   }
@@ -355,7 +382,7 @@ void _forwardOutput(int address, int maxBytes, SendPort destination) {
 
 void _drainOutput(int address, int maxBytes, SendPort destination) {
   final reader = WindowsPipeReader.takeOwnership(address);
-  try {
+  closePipeReaderAfter(reader, () {
     using((arena) {
       const chunkSize = 65536;
       final buffer = arena<Uint8>(chunkSize);
@@ -371,7 +398,112 @@ void _drainOutput(int address, int maxBytes, SendPort destination) {
         }
       }
     });
-  } finally {
-    reader.close();
+  });
+}
+
+/// Already released by the write worker after a failure. Do not close again.
+const _stdinReleased = -2;
+
+final class _PipeInputSink implements StreamConsumer<List<int>> {
+  _PipeInputSink(this._address);
+
+  final int _address;
+  int _descriptor = -1;
+  Future<void>? _pending;
+  Future<void>? _closeFuture;
+
+  @override
+  Future<void> addStream(Stream<List<int>> stream) {
+    if (_closeFuture != null) throw StateError('Silent process stdin is closed.');
+    if (_pending != null) throw StateError('Silent process stdin is already writing.');
+    return _pending = _write(stream);
+  }
+
+  Future<void> _write(Stream<List<int>> stream) async {
+    final builder = BytesBuilder(copy: false);
+    await for (final chunk in stream) {
+      if (chunk.isNotEmpty) builder.add(chunk);
+    }
+    final bytes = builder.takeBytes();
+    if (bytes.isEmpty) return;
+    try {
+      _descriptor = await _writeStdinIsolate(_address, _descriptor, bytes);
+    } on Object {
+      // The worker releases the pipe before the write error reaches this isolate.
+      _descriptor = _stdinReleased;
+      rethrow;
+    }
+  }
+
+  @override
+  Future<void> close() => _closeFuture ??= _close();
+
+  Future<void> _close() async {
+    Object? pendingError;
+    StackTrace? pendingStack;
+    try {
+      final pending = _pending;
+      if (pending != null) await pending;
+    } on Object catch (error, stack) {
+      pendingError = error;
+      pendingStack = stack;
+    }
+    if (_descriptor != _stdinReleased) {
+      final descriptor = _descriptor;
+      _descriptor = _stdinReleased;
+      try {
+        await _closeStdinIsolate(_address, descriptor);
+      } on Object {
+        // The write failure is the cause the caller can act on.
+        if (pendingError == null) rethrow;
+      }
+    }
+    if (pendingError != null) {
+      Error.throwWithStackTrace(pendingError, pendingStack!);
+    }
+  }
+}
+
+Future<int> _writeStdinIsolate(int address, int descriptor, Uint8List bytes) =>
+    Isolate.run(() => _openAndWriteStdin(address, descriptor, bytes));
+
+Future<void> _closeStdinIsolate(int address, int descriptor) => Isolate.run(() => _closeStdin(address, descriptor));
+
+int _openAndWriteStdin(int address, int descriptor, Uint8List bytes) {
+  final writer = descriptor >= 0
+      ? WindowsPipeWriter.fromDescriptor(descriptor)
+      : WindowsPipeWriter.takeOwnership(address);
+  try {
+    const chunkSize = 65536;
+    using((arena) {
+      final buffer = arena<Uint8>(chunkSize);
+      var offset = 0;
+      while (offset < bytes.length) {
+        final length = bytes.length - offset < chunkSize ? bytes.length - offset : chunkSize;
+        buffer.asTypedList(length).setRange(0, length, bytes, offset);
+        writer.write(buffer, length);
+        offset += length;
+      }
+    });
+    return writer.descriptor;
+  } on Object {
+    try {
+      writer.close();
+    } on Object {
+      // A close failure must not hide the write error that caused it.
+    }
+    rethrow;
+  }
+}
+
+void _closeStdin(int address, int descriptor) {
+  if (descriptor == _stdinReleased) return;
+  if (descriptor >= 0) {
+    WindowsPipeWriter.fromDescriptor(descriptor).close();
+    return;
+  }
+  final closed = CloseHandle(HANDLE(Pointer.fromAddress(address)));
+  if (!closed.value) {
+    throw ProcessException('', const [], 'Unable to close action input pipe', closed.error.toInt());
   }
 }

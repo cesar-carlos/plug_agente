@@ -100,18 +100,20 @@ if ($value -ceq $env:PLUG_TEST_VALUE) { exit 7 } else { exit 9 }
     expect(await errors, List.filled(limit + 1, 120));
   }, skip: !Platform.isWindows);
 
-  Future<Process> start(String command, {Map<String, String>? environment}) => WindowsSilentActionProcess.start(
-    powershell,
-    [
-      '-NoProfile',
-      '-NonInteractive',
-      '-EncodedCommand',
-      base64.encode([
-        for (final unit in command.codeUnits) ...[unit & 255, unit >> 8],
-      ]),
-    ],
-    environment: environment,
-  );
+  Future<Process> start(String command, {Map<String, String>? environment, bool requiresStdin = false}) =>
+      WindowsSilentActionProcess.start(
+        powershell,
+        [
+          '-NoProfile',
+          '-NonInteractive',
+          '-EncodedCommand',
+          base64.encode([
+            for (final unit in command.codeUnits) ...[unit & 255, unit >> 8],
+          ]),
+        ],
+        environment: environment,
+        requiresStdin: requiresStdin,
+      );
 
   test('large stdout and stderr go directly to NUL without parent pipes', () async {
     final process = await start(
@@ -123,6 +125,32 @@ if ($value -ceq $env:PLUG_TEST_VALUE) { exit 7 } else { exit 9 }
     await process.stdin.close();
     expect(await process.exitCode.timeout(const Duration(seconds: 15)), 7);
     expect(process.kill(), isFalse);
+  }, skip: !Platform.isWindows);
+
+  test('injects stdin and captures the echoed payload', () async {
+    final process = await WindowsSilentActionProcess.start(
+      '${Platform.environment['SystemRoot']}\\System32\\cmd.exe',
+      ['/d', '/c', 'set /p value=&call echo %%value%%'],
+      captureStdoutBytes: 1024,
+      requiresStdin: true,
+    );
+    addTearDown(process.kill);
+    final output = process.stdout.fold<List<int>>(<int>[], (bytes, chunk) => bytes..addAll(chunk));
+    process.stdin.add(utf8.encode('native-stdin\r\n'));
+    await process.stdin.flush();
+    await process.stdin.close();
+    expect(await process.exitCode.timeout(const Duration(seconds: 10)), 0);
+    expect(utf8.decode(await output), contains('native-stdin'));
+  }, skip: !Platform.isWindows);
+
+  test('requiresStdin delivers EOF when closed without a payload', () async {
+    final process = await start(
+      'if ([Console]::In.ReadToEnd().Length -ne 0) { exit 8 }; exit 3',
+      requiresStdin: true,
+    );
+    addTearDown(process.kill);
+    await process.stdin.close();
+    expect(await process.exitCode.timeout(const Duration(seconds: 15)), 3);
   }, skip: !Platform.isWindows);
 
   test('preserves environment values and supplies EOF on stdin', () async {
