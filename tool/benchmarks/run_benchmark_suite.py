@@ -611,7 +611,7 @@ def required_metric_keys(suite_id: str) -> set[str]:
     if suite_id == 'odbc_async':
         return {f'{scenario}.{field}' for scenario in (
             'workerCount=1', 'workerCount=4', 'workerCount=4 columnar',
-            'workerCount=4 columnarCompressed', 'native pool', 'prepared reuse')
+            'workerCount=4 columnar compressed', 'native pool', 'prepared reuse')
             for field in ('elapsed_ms', 'rows', 'queries_per_second', 'timeouts', 'fallbacks', 'failed_requests')}
     return set()
 

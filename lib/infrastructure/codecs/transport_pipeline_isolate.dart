@@ -1,6 +1,5 @@
 import 'dart:convert';
 
-import 'package:archive/archive.dart';
 import 'package:flutter/foundation.dart';
 import 'package:plug_agente/infrastructure/codecs/compression_codec.dart';
 
@@ -20,8 +19,7 @@ Uint8List jsonUtf8EncodePayloadInIsolate(Object? data) {
 }
 
 Uint8List compressGzipInIsolate(Uint8List data) {
-  final compressedBytes = const GZipEncoder().encode(data);
-  return Uint8List.fromList(compressedBytes);
+  return gzipCompressBytes(data);
 }
 
 Uint8List decompressGzipInIsolate((Uint8List, int) args) {

@@ -38,10 +38,13 @@ class QueryNormalizerService {
     SqlHandlingMode sqlHandlingMode = SqlHandlingMode.managed,
   }) async {
     if (sqlHandlingMode == SqlHandlingMode.preserve) {
-      if (totalRowCount(response) < normalizeIsolateRowThreshold) {
-        return materializeResponseCells(response);
+      if (totalRowCount(response) >= normalizeIsolateRowThreshold) {
+        if (!_needsCellMaterialization(response)) {
+          return response;
+        }
+        return Isolate.run(() => materializeQueryResponseCellsInIsolate(response));
       }
-      return Isolate.run(() => materializeQueryResponseCellsInIsolate(response));
+      return materializeResponseCells(response);
     }
     if (_shouldSkipNormalization(response, sqlHandlingMode: sqlHandlingMode)) {
       return response;
@@ -61,49 +64,9 @@ class QueryNormalizerService {
       return response;
     }
     final keyCache = <String, String>{};
-    final normalizedData = normalizeRows(
-      response.data,
-      keyCache: keyCache,
-    );
-    final normalizedResultSets = response.resultSets
-        .map(
-          (resultSet) => resultSet.copyWith(
-            rows: normalizeRows(
-              resultSet.rows,
-              keyCache: keyCache,
-            ),
-          ),
-        )
-        .toList(growable: false);
-    final resultSetByIndex = {
-      for (final resultSet in normalizedResultSets) resultSet.index: resultSet,
-    };
-    final normalizedItems = response.items
-        .map((item) {
-          if (item.resultSet == null) {
-            return item;
-          }
-          return QueryResponseItem.resultSet(
-            index: item.index,
-            resultSet: resultSetByIndex[item.resultSet!.index],
-          );
-        })
-        .toList(growable: false);
-
-    return QueryResponse(
-      id: response.id,
-      requestId: response.requestId,
-      agentId: response.agentId,
-      data: normalizedData,
-      affectedRows: response.affectedRows,
-      startedAt: response.startedAt,
-      wasTruncated: response.wasTruncated,
-      timestamp: response.timestamp,
-      error: response.error,
-      columnMetadata: response.columnMetadata,
-      pagination: response.pagination,
-      resultSets: normalizedResultSets,
-      items: normalizedItems,
+    return _replaceRows(
+      response,
+      (rows) => normalizeRows(rows, keyCache: keyCache),
     );
   }
 
@@ -113,23 +76,33 @@ class QueryNormalizerService {
     Map<String, String>? keyCache,
   }) {
     final normalizedKeyCache = keyCache ?? <String, String>{};
-    final normalizedData = <Map<String, dynamic>>[];
+    return _reuseUnchangedRows(
+      rows,
+      (row) => _normalizeRow(row, normalizedKeyCache),
+    );
+  }
 
-    for (final row in rows) {
-      final normalizedRow = <String, dynamic>{};
-
-      for (final entry in row.entries) {
-        final key = normalizedKeyCache.putIfAbsent(entry.key, () {
-          final sanitizedKey = _normalizer.sanitizeQuery(entry.key);
-          return _normalizeColumnName(sanitizedKey);
-        });
-        normalizedRow[key] = _normalizeValue(entry.value);
+  Map<String, dynamic> _normalizeRow(
+    Map<String, dynamic> row,
+    Map<String, String> keyCache,
+  ) {
+    Map<String, dynamic>? rewritten;
+    var seen = 0;
+    for (final entry in row.entries) {
+      final key = keyCache.putIfAbsent(entry.key, () {
+        final sanitizedKey = _normalizer.sanitizeQuery(entry.key);
+        return _normalizeColumnName(sanitizedKey);
+      });
+      final value = _normalizeValue(entry.value);
+      if (rewritten == null && key == entry.key && identical(value, entry.value)) {
+        seen++;
+        continue;
       }
-
-      normalizedData.add(normalizedRow);
+      rewritten ??= _unchangedPrefix(row, seen);
+      rewritten[key] = value;
+      seen++;
     }
-
-    return normalizedData;
+    return rewritten ?? row;
   }
 
   bool _shouldSkipNormalization(
@@ -159,9 +132,10 @@ class QueryNormalizerService {
     if (rows.isEmpty) {
       return false;
     }
+    final safeKeys = <String>{};
     for (final row in rows) {
       for (final entry in row.entries) {
-        if (!_wireSafeColumnKey.hasMatch(entry.key)) {
+        if (safeKeys.add(entry.key) && !_wireSafeColumnKey.hasMatch(entry.key)) {
           return false;
         }
         if (!_valueLooksWireSafe(entry.value)) {
@@ -200,25 +174,89 @@ class QueryNormalizerService {
   }
 
   QueryResponse materializeResponseCells(QueryResponse response) {
-    final materializedData = _materializeRows(response.data);
-    final materializedResultSets = response.resultSets
-        .map(
-          (resultSet) => resultSet.copyWith(
-            rows: _materializeRows(resultSet.rows),
-          ),
-        )
-        .toList(growable: false);
-    final resultSetByIndex = {
-      for (final resultSet in materializedResultSets) resultSet.index: resultSet,
-    };
-    final materializedItems = response.items
+    return _replaceRows(response, _materializeRows);
+  }
+
+  bool _needsCellMaterialization(QueryResponse response) {
+    if (_rowsNeedCellMaterialization(response.data)) {
+      return true;
+    }
+    for (final resultSet in response.resultSets) {
+      if (identical(resultSet.rows, response.data)) {
+        continue;
+      }
+      if (_rowsNeedCellMaterialization(resultSet.rows)) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  bool _rowsNeedCellMaterialization(List<Map<String, dynamic>> rows) {
+    for (final row in rows) {
+      for (final value in row.values) {
+        if (odbcWireCellNeedsMaterialization(value)) {
+          return true;
+        }
+      }
+    }
+    return false;
+  }
+
+  List<Map<String, dynamic>> _materializeRows(List<Map<String, dynamic>> rows) {
+    return _reuseUnchangedRows(rows, _materializeRow);
+  }
+
+  Map<String, dynamic> _materializeRow(Map<String, dynamic> row) {
+    Map<String, dynamic>? rewritten;
+    var seen = 0;
+    for (final entry in row.entries) {
+      final value = normalizeOdbcWireCell(entry.value);
+      if (rewritten == null && identical(value, entry.value)) {
+        seen++;
+        continue;
+      }
+      rewritten ??= _unchangedPrefix(row, seen);
+      rewritten[entry.key] = value;
+      seen++;
+    }
+    return rewritten ?? row;
+  }
+
+  QueryResponse _replaceRows(
+    QueryResponse response,
+    List<Map<String, dynamic>> Function(List<Map<String, dynamic>> rows) rewriteRows,
+  ) {
+    final data = rewriteRows(response.data);
+    final resultSets = <QueryResultSet>[];
+    var resultSetsChanged = false;
+    for (final resultSet in response.resultSets) {
+      final rows = rewriteRows(resultSet.rows);
+      if (identical(rows, resultSet.rows)) {
+        resultSets.add(resultSet);
+        continue;
+      }
+      resultSetsChanged = true;
+      resultSets.add(resultSet.copyWith(rows: rows));
+    }
+    if (identical(data, response.data) && !resultSetsChanged) {
+      return response;
+    }
+
+    final resultSetByIndex = {for (final resultSet in resultSets) resultSet.index: resultSet};
+    final items = response.items
         .map((item) {
-          if (item.resultSet == null) {
+          final resultSet = item.resultSet;
+          if (resultSet == null) {
+            return item;
+          }
+          final replacement = resultSetByIndex[resultSet.index];
+          if (identical(replacement, resultSet)) {
             return item;
           }
           return QueryResponseItem.resultSet(
             index: item.index,
-            resultSet: resultSetByIndex[item.resultSet!.index],
+            resultSet: replacement,
           );
         })
         .toList(growable: false);
@@ -227,7 +265,7 @@ class QueryNormalizerService {
       id: response.id,
       requestId: response.requestId,
       agentId: response.agentId,
-      data: materializedData,
+      data: data,
       affectedRows: response.affectedRows,
       startedAt: response.startedAt,
       wasTruncated: response.wasTruncated,
@@ -235,19 +273,41 @@ class QueryNormalizerService {
       error: response.error,
       columnMetadata: response.columnMetadata,
       pagination: response.pagination,
-      resultSets: materializedResultSets,
-      items: materializedItems,
+      resultSets: resultSetsChanged ? resultSets : response.resultSets,
+      items: items,
     );
   }
 
-  List<Map<String, dynamic>> _materializeRows(List<Map<String, dynamic>> rows) {
-    return rows
-        .map(
-          (row) => <String, dynamic>{
-            for (final entry in row.entries) entry.key: normalizeOdbcWireCell(entry.value),
-          },
-        )
-        .toList(growable: false);
+  List<Map<String, dynamic>> _reuseUnchangedRows(
+    List<Map<String, dynamic>> rows,
+    Map<String, dynamic> Function(Map<String, dynamic> row) rewriteRow,
+  ) {
+    List<Map<String, dynamic>>? rewritten;
+    for (var index = 0; index < rows.length; index++) {
+      final row = rows[index];
+      final next = rewriteRow(row);
+      if (rewritten == null) {
+        if (identical(next, row)) {
+          continue;
+        }
+        rewritten = List<Map<String, dynamic>>.of(rows);
+      }
+      rewritten[index] = next;
+    }
+    return rewritten ?? rows;
+  }
+
+  Map<String, dynamic> _unchangedPrefix(Map<String, dynamic> row, int count) {
+    final prefix = <String, dynamic>{};
+    var index = 0;
+    for (final entry in row.entries) {
+      if (index == count) {
+        break;
+      }
+      prefix[entry.key] = entry.value;
+      index++;
+    }
+    return prefix;
   }
 }
 

@@ -1,8 +1,19 @@
 import 'dart:convert';
+import 'dart:math';
 import 'dart:typed_data';
 
+import 'package:archive/archive.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:plug_agente/infrastructure/codecs/compression_codec.dart';
+
+final class _FixedGzipEncoder extends GZipEncoder {
+  _FixedGzipEncoder(this.encoded);
+
+  final Uint8List encoded;
+
+  @override
+  Uint8List encodeBytes(List<int> bytes, {int? level}) => encoded;
+}
 
 void main() {
   group('GzipCompressionCodec', () {
@@ -60,6 +71,40 @@ void main() {
 
     test('should have correct algorithm name', () {
       expect(codec.algorithm, equals('gzip'));
+    });
+
+    test('should keep the encoder buffer instead of copying it', () {
+      final encoded = Uint8List.fromList(const <int>[31, 139, 8, 0]);
+      final fixed = GzipCompressionCodec(encoder: _FixedGzipEncoder(encoded));
+
+      final result = fixed.compress(Uint8List.fromList(const <int>[1, 2, 3]));
+
+      expect(result.isSuccess(), isTrue);
+      expect(identical(result.getOrThrow(), encoded), isTrue);
+      expect(
+        identical(
+          gzipCompressBytes(
+            const <int>[1, 2, 3],
+            encoder: _FixedGzipEncoder(encoded),
+          ),
+          encoded,
+        ),
+        isTrue,
+      );
+    });
+
+    test('should decompress a payload that spans several input slices', () {
+      final random = Random(1);
+      final original = Uint8List.fromList(
+        List<int>.generate(8000, (_) => random.nextInt(256)),
+      );
+      final compressed = codec.compress(original).getOrThrow();
+      expect(compressed.length, greaterThan(1024));
+
+      final result = codec.decompress(compressed, maxOutputBytes: original.length);
+
+      expect(result.isSuccess(), isTrue);
+      expect(result.getOrThrow(), equals(original));
     });
   });
 

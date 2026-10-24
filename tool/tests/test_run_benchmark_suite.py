@@ -94,6 +94,32 @@ class RunBenchmarkSuiteTests(unittest.TestCase):
         payload['scenarios'][0]['samples'][0]['rows'] = 0
         self.assertFalse(valid_native_benchmark_report(json.dumps(payload), 'streaming'))
 
+    def test_async_required_keys_match_native_scenario_names(self) -> None:
+        labels = (
+            'workerCount=1',
+            'workerCount=4',
+            'workerCount=4 columnar',
+            'workerCount=4 columnar compressed',
+            'native pool',
+            'prepared reuse',
+        )
+        sample = {
+            'elapsed_ms': 1.5,
+            'rows': 8000,
+            'queries_per_second': 1000.0,
+            'timeouts': 0,
+            'fallbacks': 0,
+            'failed_requests': 0,
+        }
+        payload = {
+            'benchmark': 'native_odbc_async',
+            'scenarios': [{'scenario': label, **sample} for label in labels],
+        }
+
+        metrics = parse_odbc_benchmark_metrics(json.dumps(payload))
+
+        self.assertTrue(required_metric_keys('odbc_async').issubset(metrics))
+
     def test_async_decimal_timings_and_shell_prefix_are_preserved(self) -> None:
         output = 'Shell: workerCount=4 columnar: 42.448 ms, workers=4, encoding=columnar, timeouts=0, fallbacks=0'
         metrics = parse_odbc_benchmark_metrics(output)

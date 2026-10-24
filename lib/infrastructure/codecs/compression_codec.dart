@@ -22,7 +22,9 @@ abstract class ICompressionCodec {
 
 /// GZIP compression codec.
 class GzipCompressionCodec implements ICompressionCodec {
-  const GzipCompressionCodec();
+  const GzipCompressionCodec({GZipEncoder encoder = const GZipEncoder()}) : _encoder = encoder;
+
+  final GZipEncoder _encoder;
 
   @override
   String get algorithm => 'gzip';
@@ -30,8 +32,7 @@ class GzipCompressionCodec implements ICompressionCodec {
   @override
   Result<Uint8List> compress(Uint8List data) {
     try {
-      final compressedBytes = const GZipEncoder().encode(data);
-      return Success(Uint8List.fromList(compressedBytes));
+      return Success(gzipCompressBytes(data, encoder: _encoder));
     } on Object catch (error) {
       return Failure(
         domain.CompressionFailure.withContext(
@@ -112,7 +113,8 @@ Uint8List decompressGzipBytesBounded(Uint8List data, int maxOutputBytes) {
   const chunkSize = 1024;
   for (var offset = 0; offset < data.length; offset += chunkSize) {
     final end = (offset + chunkSize < data.length) ? offset + chunkSize : data.length;
-    input.add(data.sublist(offset, end));
+    // [data] stays alive through close, so each slice can view it.
+    input.add(Uint8List.sublistView(data, offset, end));
   }
   input.close();
   return output.takeBytes();
@@ -139,6 +141,17 @@ final class _BoundedBytesSink implements Sink<List<int>> {
   void close() {}
 
   Uint8List takeBytes() => _bytes.takeBytes();
+}
+
+/// GZIP-encodes [data] and returns the encoder buffer.
+///
+/// [GZipEncoder.encodeBytes] already returns a [Uint8List]. Copying that
+/// buffer again would duplicate every compressed payload on the send path.
+Uint8List gzipCompressBytes(
+  List<int> data, {
+  GZipEncoder encoder = const GZipEncoder(),
+}) {
+  return encoder.encodeBytes(data);
 }
 
 /// Factory for creating compression codecs.

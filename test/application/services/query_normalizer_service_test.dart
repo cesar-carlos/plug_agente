@@ -108,6 +108,95 @@ void main() {
       expect(normalized.data.first['Col Name'], ' value ');
     });
 
+    test('should keep a preserve response when every cell is already plain', () async {
+      final service = QueryNormalizerService(QueryNormalizer());
+      final response = QueryResponse(
+        id: 'r1',
+        requestId: 'req',
+        agentId: 'agent',
+        data: List<Map<String, dynamic>>.generate(
+          QueryNormalizerService.normalizeIsolateRowThreshold,
+          (index) => <String, dynamic>{'id': index, 'name': 'ana'},
+        ),
+        timestamp: DateTime.utc(2026),
+      );
+
+      final normalized = await service.normalizeAsync(
+        response,
+        sqlHandlingMode: SqlHandlingMode.preserve,
+      );
+
+      expect(identical(normalized, response), isTrue);
+    });
+
+    test('should reuse an unchanged preserve row when a sibling cell is materialized', () async {
+      final service = QueryNormalizerService(QueryNormalizer());
+      final plain = <String, dynamic>{'id': 1, 'name': 'ana'};
+      final stamped = <String, dynamic>{'when': DateTime.utc(2026, 1, 2, 3, 4, 5)};
+      final response = QueryResponse(
+        id: 'r1',
+        requestId: 'req',
+        agentId: 'agent',
+        data: <Map<String, dynamic>>[plain, stamped],
+        timestamp: DateTime.utc(2026),
+      );
+
+      final normalized = await service.normalizeAsync(
+        response,
+        sqlHandlingMode: SqlHandlingMode.preserve,
+      );
+
+      expect(identical(normalized.data[0], plain), isTrue);
+      expect(normalized.data[1]['when'], '2026-01-02T03:04:05.000Z');
+      expect(identical(normalized.data[1], stamped), isFalse);
+    });
+
+    test('should materialize a wide preserve result that contains a timestamp', () async {
+      final service = QueryNormalizerService(QueryNormalizer());
+      final rows = List<Map<String, dynamic>>.generate(
+        QueryNormalizerService.normalizeIsolateRowThreshold,
+        (index) => <String, dynamic>{'id': index},
+      );
+      rows[0] = <String, dynamic>{'when': DateTime.utc(2026, 1, 2)};
+      final response = QueryResponse(
+        id: 'r1',
+        requestId: 'req',
+        agentId: 'agent',
+        data: rows,
+        timestamp: DateTime.utc(2026),
+      );
+
+      final normalized = await service.normalizeAsync(
+        response,
+        sqlHandlingMode: SqlHandlingMode.preserve,
+      );
+
+      expect(normalized.data.first['when'], '2026-01-02T00:00:00.000Z');
+    });
+
+    test('should reuse a wire-safe row when a later managed row still needs rewrite', () async {
+      final service = QueryNormalizerService(QueryNormalizer());
+      final rows = List<Map<String, dynamic>>.generate(
+        QueryNormalizerService.skipRowRewriteRowThreshold,
+        (index) => <String, dynamic>{'col_a': 'ana$index'},
+      );
+      final clean = rows.first;
+      rows[rows.length - 1] = <String, dynamic>{'col_b': ' value '};
+      final response = QueryResponse(
+        id: 'r1',
+        requestId: 'req',
+        agentId: 'agent',
+        data: rows,
+        timestamp: DateTime.utc(2026),
+      );
+
+      final normalized = await service.normalizeAsync(response);
+
+      expect(identical(normalized.data.first, clean), isTrue);
+      expect(normalized.data.last['col_b'], 'value');
+      expect(identical(normalized.data.last, rows.last), isFalse);
+    });
+
     test('should skip full rewrite when row keys are already wire-safe', () async {
       final service = QueryNormalizerService(QueryNormalizer());
       final rows = List<Map<String, dynamic>>.generate(
@@ -125,6 +214,53 @@ void main() {
       final normalized = await service.normalizeAsync(response);
 
       expect(identical(normalized, response), isTrue);
+    });
+
+    test('should rewrite a later row when a repeated safe key still needs trim', () async {
+      final service = QueryNormalizerService(QueryNormalizer());
+      final rows = List<Map<String, dynamic>>.generate(
+        QueryNormalizerService.skipRowRewriteRowThreshold,
+        (index) => <String, dynamic>{'col_a': 'ana'},
+      );
+      final clean = rows.first;
+      rows[rows.length - 1] = <String, dynamic>{'col_a': ' ana '};
+      final response = QueryResponse(
+        id: 'r1',
+        requestId: 'req',
+        agentId: 'agent',
+        data: rows,
+        timestamp: DateTime.utc(2026),
+      );
+
+      final normalized = await service.normalizeAsync(response);
+
+      expect(identical(normalized, response), isFalse);
+      expect(identical(normalized.data.first, clean), isTrue);
+      expect(normalized.data.last['col_a'], 'ana');
+    });
+
+    test('should rewrite a later row when it introduces an unsafe key', () async {
+      final service = QueryNormalizerService(QueryNormalizer());
+      final rows = List<Map<String, dynamic>>.generate(
+        QueryNormalizerService.skipRowRewriteRowThreshold,
+        (index) => <String, dynamic>{'col_a': 'ana'},
+      );
+      final clean = rows.first;
+      rows[rows.length - 1] = <String, dynamic>{'Col A': 'ana'};
+      final response = QueryResponse(
+        id: 'r1',
+        requestId: 'req',
+        agentId: 'agent',
+        data: rows,
+        timestamp: DateTime.utc(2026),
+      );
+
+      final normalized = await service.normalizeAsync(response);
+
+      expect(identical(normalized, response), isFalse);
+      expect(identical(normalized.data.first, clean), isTrue);
+      expect(normalized.data.last.keys, ['col_a']);
+      expect(normalized.data.last['col_a'], 'ana');
     });
 
     test('should map multi-result items by result set index', () async {
