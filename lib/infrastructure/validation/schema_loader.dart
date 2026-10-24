@@ -127,7 +127,8 @@ class TransportSchemaLoader {
 
   /// Loads every schema in [TransportSchemaIds.all]. Idempotent: subsequent
   /// calls reuse the same future. Failures for individual schemas are logged
-  /// and the schema is skipped (other validations continue to work).
+  /// and leave that schema unavailable. Runtime validation refuses payloads
+  /// requiring an unavailable schema; unrelated schemas remain usable.
   Future<void> loadAll() {
     return _loadAllFuture ??= _loadAllInternal();
   }

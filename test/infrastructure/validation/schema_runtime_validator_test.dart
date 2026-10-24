@@ -1,5 +1,10 @@
+import 'dart:io';
+
 import 'package:flutter_test/flutter_test.dart';
+import 'package:plug_agente/domain/errors/failures.dart' as domain;
 import 'package:plug_agente/domain/repositories/i_schema_validation_metrics_collector.dart';
+import 'package:plug_agente/infrastructure/external_services/transport/payload_log_summarizer.dart';
+import 'package:plug_agente/infrastructure/external_services/transport/rpc_inbound_schema_validation_pipeline.dart';
 import 'package:plug_agente/infrastructure/validation/json_schema_validator.dart';
 import 'package:plug_agente/infrastructure/validation/rpc_method_schema_catalog.dart';
 import 'package:plug_agente/infrastructure/validation/schema_loader.dart';
@@ -58,10 +63,7 @@ void main() {
   group('JsonSchemaContractValidator', () {
     test('validates a well-formed PayloadFrame envelope', () async {
       final ctx = await _buildValidator();
-      if (!ctx.validator.isLoaded(TransportSchemaIds.payloadFrame)) {
-        // Skip silently if the schema didn't load in this test environment.
-        return;
-      }
+      expect(ctx.validator.isLoaded(TransportSchemaIds.payloadFrame), isTrue);
       final frame = <String, dynamic>{
         'schemaVersion': '1.0',
         'enc': 'json',
@@ -82,9 +84,7 @@ void main() {
 
     test('rejects a PayloadFrame with unsupported encoding', () async {
       final ctx = await _buildValidator();
-      if (!ctx.validator.isLoaded(TransportSchemaIds.payloadFrame)) {
-        return;
-      }
+      expect(ctx.validator.isLoaded(TransportSchemaIds.payloadFrame), isTrue);
       final frame = <String, dynamic>{
         'schemaVersion': '1.0',
         'enc': 'msgpack', // not in enum ["json"]
@@ -105,9 +105,7 @@ void main() {
 
     test('accepts sql.execute offset pagination options', () async {
       final ctx = await _buildValidator();
-      if (!ctx.validator.isLoaded(TransportSchemaIds.paramsSqlExecute)) {
-        return;
-      }
+      expect(ctx.validator.isLoaded(TransportSchemaIds.paramsSqlExecute), isTrue);
 
       final result = ctx.validator.validate(
         schemaId: TransportSchemaIds.paramsSqlExecute,
@@ -125,9 +123,7 @@ void main() {
 
     test('rejects sql.execute preserve mode combined with pagination options', () async {
       final ctx = await _buildValidator();
-      if (!ctx.validator.isLoaded(TransportSchemaIds.paramsSqlExecute)) {
-        return;
-      }
+      expect(ctx.validator.isLoaded(TransportSchemaIds.paramsSqlExecute), isTrue);
 
       final result = ctx.validator.validate(
         schemaId: TransportSchemaIds.paramsSqlExecute,
@@ -144,7 +140,7 @@ void main() {
       expect(result.isError(), isTrue);
     });
 
-    test('returns success when the schema is not loaded (fallback path)', () async {
+    test('fails closed when the schema is not loaded', () async {
       final loader = TransportSchemaLoader(
         assetLoader: (_) async => throw StateError('asset missing'),
         fileLoader: (_) async => throw StateError('disk missing'),
@@ -157,7 +153,69 @@ void main() {
         payload: <String, dynamic>{},
       );
 
-      expect(result.isSuccess(), isTrue);
+      expect(result.isError(), isTrue);
+      final failure = result.exceptionOrNull()! as domain.ConfigurationFailure;
+      expect(failure.code, 'SCHEMA_UNAVAILABLE');
+      expect(failure.context['schema_id'], TransportSchemaIds.payloadFrame);
+    });
+
+    for (final brokenContent in <String?>[null, '{invalid json', '{"type": "not-a-json-type"}']) {
+      test('refuses a missing or invalid required schema: $brokenContent', () async {
+        final loader = TransportSchemaLoader(
+          assetLoader: (key) async {
+            if (key.endsWith(TransportSchemaIds.paramsSourceSchema)) {
+              if (brokenContent == null) throw StateError('missing asset');
+              return brokenContent;
+            }
+            return File(key).readAsString();
+          },
+          fileLoader: (_) async => throw StateError('missing disk fallback'),
+        );
+        await loader.loadAll();
+        final metrics = _FakeSchemaValidationMetrics();
+        final validator = JsonSchemaContractValidator(loader: loader, metrics: metrics);
+        final pipeline = RpcInboundSchemaValidationPipeline(
+          jsonSchemaValidator: validator,
+          logSummarizer: PayloadLogSummarizer(thresholdBytes: 8192),
+        );
+        final request = <String, dynamic>{
+          'jsonrpc': '2.0',
+          'id': 'request',
+          'method': 'sql.describeSchema',
+          'params': <String, dynamic>{},
+        };
+        expect(pipeline.validateRequestEnvelope(request), isNull);
+        final failure = pipeline.validateRequestParams(request);
+        expect(failure, isA<domain.ConfigurationFailure>());
+        expect(failure!.code, 'SCHEMA_UNAVAILABLE');
+        expect(metrics.validations.last.success, isFalse);
+        expect(pipeline.validateCriticalFieldsWhenSkipping(request), isA<domain.ConfigurationFailure>());
+      });
+    }
+
+    test('missing referenced error schema prevents response validation', () async {
+      final loader = TransportSchemaLoader(
+        assetLoader: (key) async {
+          if (key.endsWith(TransportSchemaIds.rpcError)) throw StateError('missing');
+          return File(key).readAsString();
+        },
+        fileLoader: (_) async => throw StateError('missing'),
+      );
+      await loader.loadAll();
+      final validator = JsonSchemaContractValidator(loader: loader);
+      expect(
+        validator
+            .validate(
+              schemaId: TransportSchemaIds.rpcResponse,
+              payload: {
+                'jsonrpc': '2.0',
+                'id': 'request',
+                'error': {'code': -32000, 'message': 'refused'},
+              },
+            )
+            .isError(),
+        isTrue,
+      );
     });
 
     test('records validation metrics with direction and outcome', () async {

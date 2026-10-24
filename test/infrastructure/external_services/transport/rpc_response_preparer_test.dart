@@ -1,6 +1,9 @@
+import 'dart:io';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
 import 'package:plug_agente/core/config/feature_flags.dart';
+import 'package:plug_agente/core/constants/connection_constants.dart';
 import 'package:plug_agente/core/utils/rpc_wire_map.dart';
 import 'package:plug_agente/domain/protocol/protocol.dart';
 import 'package:plug_agente/infrastructure/external_services/transport/payload_log_summarizer.dart';
@@ -237,6 +240,41 @@ void main() {
       expect(result.containsKey('affected_rows'), isFalse);
     });
   });
+
+  for (final large in [false, true]) {
+    test('missing result schema never emits a ${large ? 'large' : 'small'} success payload', () async {
+      final loader = TransportSchemaLoader(
+        assetLoader: (key) async {
+          if (key.endsWith(TransportSchemaIds.resultSourceDiscovery)) throw StateError('missing');
+          return File(key).readAsString();
+        },
+        fileLoader: (_) async => throw StateError('missing'),
+      );
+      await loader.loadAll();
+      final guarded = RpcResponsePreparer(
+        featureFlags: featureFlags,
+        logSummarizer: summarizer,
+        contractValidator: const RpcContractValidator(),
+        protocolProvider: () => const ProtocolConfig(protocol: 'jsonrpc-v2', encoding: 'json', compression: 'none'),
+        usesBinaryTransport: () => true,
+        agentIdProvider: () => 'agent',
+        jsonSchemaValidator: JsonSchemaContractValidator(loader: loader),
+      );
+      final payload = guarded.prepareForSend(
+        RpcResponse.success(
+          id: 'request',
+          result: {
+            'data': large ? 'x' * (ConnectionConstants.socketOutgoingContractValidationMaxBytes + 1) : 'data',
+          },
+        ),
+      );
+      final result =
+          guarded.validateOutgoing(payload, methodsById: {'request': 'sql.describeSource'}).getOrThrow()
+              as Map<String, dynamic>;
+      expect(result.containsKey('result'), isFalse);
+      expect((result['error'] as Map)['code'], RpcErrorCode.internalError);
+    });
+  }
 
   group('RpcResponsePreparer.verifyIncomingSignature', () {
     test('returns true when signing is disabled', () {

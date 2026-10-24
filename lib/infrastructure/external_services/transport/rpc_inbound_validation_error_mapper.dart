@@ -1,9 +1,9 @@
 import 'package:plug_agente/domain/errors/failures.dart' as domain;
 import 'package:plug_agente/domain/protocol/protocol.dart';
 
-int rpcInboundValidationFailureCode(domain.Failure failure) {
+int rpcInboundValidationFailureCode(domain.Failure failure, {int fallback = RpcErrorCode.invalidRequest}) {
   final code = failure.context['rpc_error_code'];
-  return code is int ? code : RpcErrorCode.invalidRequest;
+  return code is int ? code : fallback;
 }
 
 ({int code, String? reason}) mapRpcInboundTransportDecodeFailure(domain.Failure failure) {

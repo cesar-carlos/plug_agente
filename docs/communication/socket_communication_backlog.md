@@ -12,40 +12,15 @@ Plug JSON-RPC.
 
 ## Contract review findings (2026-10-24)
 
-The documentation review at `eb1888b4` found the following implementation/schema
-boundaries. Updating prose does not resolve runtime defects or authorize release.
+The local implementation/schema discrepancies from the review at `eb1888b4`
+are resolved: structured errors, explicit metadata pagination, current dialect
+schemas and fail-closed schema availability. The delivered changes and byte-limit
+regressions are recorded in the [roadmap](socket_communication_roadmap.md).
 
-### Resolved: compact errors losing correlation
-
-The review reproduced compact source/operation errors being replaced by
-`-32603`, `id: null` under outgoing schema validation. The three handlers now use
-`RpcErrorCode.buildErrorData`, preserving the RPC ID, safe `failure_code` and
-`retryable: false`. The schema and outgoing validation remain unchanged.
-
-Regression coverage exercises all five methods with string/numeric IDs, mixed
-batches with a successful sibling, invalid operation parameters, domain failures
-and unexpected exceptions through the real loaded schemas and response preparer.
-Request metadata and safe correlation survive; exception details remain private.
-Unknown SQL-operation outcomes still require reconciliation rather than replay.
-
-### Published shapes and procedural validation differ
-
-- `sql.describeSchema`: schema requires `offset` and `pageSize`; the domain reader
-  supplies defaults. Clients must send both until a deliberate contract change.
-  The reader additionally rejects duplicate resources, offsets outside the scope,
-  unsafe database names and unsupported dialects, which schema validation alone
-  cannot establish.
-- Source/operation schemas retain `firebird` in some enums, but the current
-  `ExpectedSource` parser only accepts `postgres`, `mssql`, `sybase`. Preserve
-  the historical wire enums pending coordinated compatibility decisions; never
-  advertise runtime Firebird support from schema acceptance alone.
-- JSON Schema `maxLength` counts characters, while operation SQL/plan readers
-  apply UTF-8 byte caps and additional bounds, binding and statement rules.
-  Schema acceptance alone is not execution admission.
-- A failed schema load currently skips that schema in
-  `JsonSchemaContractValidator`; procedural checks continue. Review fail-closed
-  behavior and add coverage for missing/failed contract assets before claiming
-  complete runtime schema enforcement.
+Remaining work concerns coordinated acceptance, not replacing procedural SQL
+admission with JSON Schema. Offset-versus-scope checks, UTF-8 byte limits,
+statement safety, row bounds, prior-step bindings and live authorization remain
+mandatory runtime checks documented in OpenRPC and the schemas.
 
 ### Acceptance scope
 
@@ -55,8 +30,9 @@ incomplete documentation response examples (now corrected). A second selection
 covering documentation, runtime validators, health and source metadata passed
 236 tests, including the focused checks; the selections overlap. These are local
 checks, not real hub/driver/installation homologation. Required next coverage
-includes live extension denial through outgoing framing, schema-vs-reader boundary
-cases and the current three-engine coordinated release matrix.
+includes live hub/agent extension denial and the current three-engine coordinated
+release matrix. Local tests cover framed schema-unavailable refusals, outbound
+success suppression, schema-vs-reader boundaries and UTF-8 limits.
 
 ## Politica futura: execution_mode em sql.executeBatch
 

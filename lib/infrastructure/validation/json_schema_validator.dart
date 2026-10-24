@@ -1,4 +1,5 @@
 import 'package:plug_agente/domain/errors/failures.dart' as domain;
+import 'package:plug_agente/domain/protocol/rpc_error_code.dart';
 import 'package:plug_agente/domain/repositories/i_schema_validation_metrics_collector.dart';
 import 'package:plug_agente/infrastructure/validation/schema_loader.dart';
 import 'package:result_dart/result_dart.dart';
@@ -26,26 +27,17 @@ class JsonSchemaContractValidator {
   final ISchemaValidationMetricsCollector? _metrics;
 
   /// Validates [payload] against the schema with [schemaId]. Returns
-  /// `Success(unit)` when the schema is missing (so the caller may fall back
-  /// to procedural validation) or when validation passes; otherwise returns
-  /// a `ValidationFailure` carrying the JSON pointer paths of failing nodes.
+  /// `Success(unit)` when validation passes; otherwise returns
+  /// a `ValidationFailure` with failing JSON pointer paths or a
+  /// `ConfigurationFailure` when the required schema is unavailable.
   Result<void> validate({
     required String schemaId,
     required Object? payload,
     String direction = 'unknown',
   }) {
-    final schema = _loader.get(schemaId);
-    if (schema == null) {
-      // Schema not loaded: skip JSON Schema validation and fall through to
-      // procedural validation. Log at fine level so production traces can
-      // show when schema coverage is incomplete.
-      assert(() {
-        // ignore: avoid_print
-        print('[JsonSchemaContractValidator] schema "$schemaId" not loaded — skipping');
-        return true;
-      }(), 'schema "$schemaId" not loaded');
-      return const Success(unit);
-    }
+    final availability = requireSchema(schemaId, direction: direction);
+    if (availability.isError()) return availability;
+    final schema = _loader.get(schemaId)!;
     final stopwatch = Stopwatch()..start();
     final result = schema.validate(payload);
     if (result.isValid) {
@@ -80,8 +72,24 @@ class JsonSchemaContractValidator {
     );
   }
 
-  /// Whether the schema with [schemaId] is loaded and usable. Lets callers
-  /// decide upfront whether to skip JSON Schema validation entirely.
+  Result<void> requireSchema(String schemaId, {String direction = 'unknown'}) {
+    if (isLoaded(schemaId)) return const Success(unit);
+    _metrics?.recordSchemaValidation(
+      direction: direction,
+      schemaId: schemaId,
+      success: false,
+      elapsed: Duration.zero,
+    );
+    return Failure(
+      domain.ConfigurationFailure.withContext(
+        code: 'SCHEMA_UNAVAILABLE',
+        message: 'Required protocol schema is unavailable.',
+        context: {'schema_id': schemaId, 'rpc_error_code': RpcErrorCode.internalError, 'retryable': false},
+      ),
+    );
+  }
+
+  /// Whether the schema with [schemaId] is loaded and usable.
   bool isLoaded(String schemaId) => _loader.get(schemaId) != null;
 
   void recordSkippedLargePayload({required String direction}) {

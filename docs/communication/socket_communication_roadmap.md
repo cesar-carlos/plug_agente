@@ -13,6 +13,25 @@ itens.
 
 ## Itens concluidos
 
+Contract parity corrections (2026-10-24, profile **2.11.2**):
+
+- `sql.describeSchema` requires explicit integer `offset` and `pageSize` in both
+  schema and reader. Its schema rejects duplicate resources, unsafe database
+  names and null schema names; the reader additionally checks offset against scope.
+- Active source/operation schemas only advertise `postgres`, `mssql` and `sybase`,
+  matching current runtime support. Historical Firebird evidence remains historical.
+- Missing, unreadable or invalid required schemas now fail closed with
+  `SCHEMA_UNAVAILABLE`. Inbound refusals use `-32603` and preserve the request ID;
+  outbound successes requiring unavailable schemas become safe error responses.
+  Availability checks run even above the payload validation size threshold.
+- OpenRPC and schema descriptions distinguish character limits from runtime
+  UTF-8 byte caps. Regression tests cover exact and overflowing SQL/plan limits,
+  malformed pagination, engine scope, broken schema assets/references and framed
+  requests. Runtime semantics, SQL admission and negotiated limits remain required.
+
+The earlier compact-error correction and these parity fixes do not authorize
+production activation or replace the live three-engine acceptance matrix.
+
 Source/operation error correction (2026-10-24, profile **2.11.2**): the three
 handlers now build schema-conformant structured errors, preserving request IDs,
 safe failure codes and non-retryable semantics through unary and batch outgoing

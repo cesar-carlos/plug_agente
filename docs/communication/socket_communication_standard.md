@@ -1105,15 +1105,14 @@ extracts it from params and the handlers require it; clients must supply it.
 | `sql.describeSource` | `sourceDiscovery: 1` | `contractVersion: 1`, `database`, `client_token`; returns database, dialect, identity hash/kind, engine version and verification time. |
 | `sql.describeSchema` | `sourceSchema: 1`, `sourceIdentity: 1` | `contractVersion: 1`, `database`, `client_token`, `expectedSource`, `resources`, `offset`, `pageSize`; returns identity, resource observations and `metadataPage`. |
 
-Send explicit `offset` (starting at 0) and `pageSize` (1..4), although the domain
-reader has defaults: the published schema requires both. Resource scope is
+Send explicit integer `offset` (starting at 0) and `pageSize` (1..4): both the
+published schema and domain reader require them without defaults. Resource scope is
 1..16 unique entries with explicit schema/name/type; offset must be inside that
 scope. Metadata pagination is independent of SQL row pagination. Missing metadata
 is not proof that a resource or constraint does not exist.
 
-Current dialects are `postgres`, `mssql` and `sybase`. Some v1 schemas retain
-`firebird` for historical compatibility, but `ExpectedSource` and the runtime
-reject it. SQL Anywhere source identity requires a DBA-provisioned marker;
+Current dialects are `postgres`, `mssql` and `sybase` in the published schemas
+and runtime. `firebird` is rejected; earlier evidence is historical only. SQL Anywhere source identity requires a DBA-provisioned marker;
 queries never create or repair it. SQL Anywhere **16** can report constraint
 status from scoped public-catalog evidence; unsupported or incomplete evidence
 remains `unknown`. See [source discovery](source_discovery.md) and
@@ -1157,8 +1156,9 @@ requires `sourceIdentity: 1` when supplied; the verified MCP flow requires it.
 `execute` additionally requires `steps`, `maxAffectedRows` and `timeoutMs`.
 The effective negotiated ceilings are 32 steps, 100000 directly affected rows
 and 300000 ms. The strict reader also caps the plan at 2 MiB UTF-8 and each SQL
-statement at 1 MiB; internal metadata/count queries consume the native statement
-budget. Plans require at least one write, explicit row bounds and typed values
+statement at 1 MiB. The plan cap measures `jsonEncode(params)`, including credential
+aliases, in UTF-8 bytes; schema `maxLength` counts characters and cannot replace
+this check. Internal metadata/count queries consume the native statement budget. Plans require at least one write, explicit row bounds and typed values
 or references to outputs of preceding steps. These semantic checks go beyond
 JSON Schema. Use the [operation guide](sql_operations.md) for the supported SQL
 subset, authorization, journal lifecycle and uncertain-result reconciliation.
@@ -2420,9 +2420,12 @@ uses `enableSocketSchemaValidation`. For large requests, full JSON Schema
 validation is skipped above an estimated 128 KiB by default, configurable with
 positive `INBOUND_SCHEMA_VALIDATION_SKIP_ABOVE_BYTES`; critical-field checks,
 frame limits, request validation and handler gates still apply. Clients must
-always adhere to the full published schemas. If a schema fails to load,
-`JsonSchemaContractValidator` skips it and relies on remaining procedural checks;
-passing a runtime call therefore does not prove complete schema conformance.
+always adhere to the full published schemas. Required schema availability is
+checked even when payload-size thresholds skip full validation. Missing, unreadable
+or invalid schemas produce `SCHEMA_UNAVAILABLE`; inbound requests are refused
+with `-32603` and their original ID before dispatch. Outbound successes requiring
+an unavailable schema are replaced by a safe internal-error fallback. This does
+not disable configured size thresholds, handler validation or SQL admission.
 - Validacao de contrato na **saida** (`rpc:response`, respostas batch e eventos
 de streaming) requires both `enableSocketSchemaValidation` and
 `enableSocketOutgoingContractValidation` (both default **true**);

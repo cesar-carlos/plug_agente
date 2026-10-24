@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
@@ -1181,6 +1182,47 @@ void main() {
       hasReceivedCapabilities: () => true,
       jsonSchemaValidator: validator,
     );
+  }
+
+  for (final large in [false, true]) {
+    test('missing method schema blocks ${large ? 'large' : 'small'} framed requests before dispatch', () async {
+      when(() => featureFlags.enableSocketSchemaValidation).thenReturn(true);
+      final loader = TransportSchemaLoader(
+        assetLoader: (key) async {
+          if (key.endsWith(TransportSchemaIds.paramsSqlExecute)) throw StateError('missing');
+          return File(key).readAsString();
+        },
+        fileLoader: (_) async => throw StateError('missing fallback'),
+      );
+      await loader.loadAll();
+      final h = buildHandlerWithValidator(JsonSchemaContractValidator(loader: loader));
+      final request = {
+        'jsonrpc': '2.0',
+        'id': 'unavailable',
+        'method': 'sql.execute',
+        'params': {'sql': large ? 'x' * (ConnectionConstants.schemaValidationSkipAboveBytes + 1024) : 'SELECT 1'},
+      };
+      final codec = PayloadFrameCodec(
+        pipelineCache: TransportPipelineCache(
+          protocolProvider: () => protocol,
+          hasReceivedCapabilities: () => true,
+          featureFlags: featureFlags,
+        ),
+        protocolProvider: () => protocol,
+        localCapabilitiesProvider: ProtocolCapabilities.defaultCapabilities,
+        hasReceivedCapabilities: () => true,
+        localShouldSignOutgoing: () => false,
+        localRequiresIncomingSignature: () => false,
+      );
+      final wire = (await codec.prepareOutgoing(event: 'rpc:request', logicalPayload: request)).getOrThrow();
+      await h.handleRequest(wire);
+      expect(emittedResponses, hasLength(1));
+      final response = emittedResponses.single as RpcResponse;
+      expect(response.id, 'unavailable');
+      expect(response.error!.code, RpcErrorCode.internalError);
+      expect((response.error!.data as Map)['technical_message'], 'Required protocol schema is unavailable.');
+      verifyZeroInteractions(dispatcher);
+    });
   }
 
   group('batch validation error id (M5)', () {

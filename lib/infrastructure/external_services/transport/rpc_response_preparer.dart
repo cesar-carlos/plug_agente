@@ -124,6 +124,9 @@ class RpcResponsePreparer {
       return Success(payload as Object);
     }
 
+    final unavailable = _validateSchemaAvailability(payload, methodsById);
+    if (unavailable != null) return _fallbackForInvalidOutgoingPayload(unavailable);
+
     const softCap = ConnectionConstants.socketOutgoingContractValidationMaxBytes;
     if (softCap > 0 && _logSummarizer.exceedsByteBudget(payload, softCap)) {
       _jsonSchemaValidator?.recordSkippedLargePayload(direction: 'outbound');
@@ -149,6 +152,29 @@ class RpcResponsePreparer {
 
     final failure = validation.exceptionOrNull()! as domain.Failure;
     return _fallbackForInvalidOutgoingPayload(failure);
+  }
+
+  domain.Failure? _validateSchemaAvailability(dynamic payload, Map<Object?, String> methodsById) {
+    final validator = _jsonSchemaValidator;
+    if (validator == null) return null;
+    final ids = <String>{
+      if (payload is List) TransportSchemaIds.rpcBatchResponse else TransportSchemaIds.rpcResponse,
+    };
+    final responses = payload is List ? payload : [payload];
+    for (final response in responses.whereType<Map<String, dynamic>>()) {
+      if (response['error'] != null) {
+        ids.add(TransportSchemaIds.rpcError);
+      } else if (response.containsKey('result')) {
+        final method = methodsById[response['id']];
+        final resultSchema = method == null ? null : _schemaCatalog.resultSchemaFor(method);
+        if (resultSchema != null) ids.add(resultSchema);
+      }
+    }
+    for (final id in ids) {
+      final available = validator.requireSchema(id, direction: 'outbound');
+      if (available.isError()) return available.exceptionOrNull()! as domain.Failure;
+    }
+    return null;
   }
 
   domain.Failure? _validateOutgoingWithJsonSchemas(

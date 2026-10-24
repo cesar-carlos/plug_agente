@@ -1,4 +1,5 @@
 {
+  "description": "SQL-operation plan for PostgreSQL, SQL Server or SQL Anywhere. Runtime additionally limits jsonEncode(params) to 2097152 UTF-8 bytes (including credential aliases) and each SQL statement to 1048576 UTF-8 bytes. JSON Schema maxLength counts characters, not bytes. Runtime also verifies bindings to prior step outputs, at least one write, row bounds, statement safety, live authorization and negotiated limits; schema validity alone does not admit execution.",
   "additionalProperties": false,
   "properties": {
     "auth": {
@@ -266,6 +267,7 @@
             "type": "object"
           },
           "sql": {
+            "description": "Non-empty SQL with an additional runtime cap of 1048576 UTF-8 bytes; maxLength is a character cap only.",
             "maxLength": 1048576,
             "minLength": 1,
             "type": "string"
@@ -294,7 +296,7 @@
         },
         "dialect": {
           "type": "string",
-          "enum": ["postgres", "mssql", "sybase", "firebird"]
+          "enum": ["postgres", "mssql", "sybase"]
         },
         "identityHash": {
           "type": "string",

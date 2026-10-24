@@ -67,7 +67,7 @@ class RpcInboundSchemaValidationPipeline {
     }
 
     final method = requestMap['method'];
-    if (method is! String || !requestMap.containsKey('params')) {
+    if (method is! String) {
       return null;
     }
 
@@ -76,9 +76,9 @@ class RpcInboundSchemaValidationPipeline {
       return null;
     }
 
-    if (!jsonSchemaValidator.isLoaded(schemaId)) {
-      return null;
-    }
+    final available = jsonSchemaValidator.requireSchema(schemaId, direction: 'inbound');
+    if (available.isError()) return available.exceptionOrNull()! as domain.Failure;
+    if (!requestMap.containsKey('params')) return null;
 
     final validation = jsonSchemaValidator.validate(
       schemaId: schemaId,
@@ -92,6 +92,15 @@ class RpcInboundSchemaValidationPipeline {
   }
 
   domain.Failure? validateCriticalFieldsWhenSkipping(Map<String, dynamic> requestMap) {
+    final validator = _jsonSchemaValidator;
+    if (validator != null) {
+      final method = requestMap['method'];
+      final paramsSchema = method is String ? _schemaCatalog.paramsSchemaFor(method) : null;
+      for (final id in [TransportSchemaIds.rpcRequest, ?paramsSchema]) {
+        final available = validator.requireSchema(id, direction: 'inbound');
+        if (available.isError()) return available.exceptionOrNull()! as domain.Failure;
+      }
+    }
     final jsonrpc = requestMap['jsonrpc'];
     if (jsonrpc != '2.0') {
       return domain.ValidationFailure('jsonrpc must be "2.0"');

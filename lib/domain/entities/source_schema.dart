@@ -41,6 +41,8 @@ class SourceSchemaRequest {
         ) ||
         raw['contractVersion'] != 1 ||
         raw['database'] is! String ||
+        raw['offset'] is! int ||
+        raw['pageSize'] is! int ||
         raw['resources'] is! List) {
       throw ValidationFailure('Invalid source schema request.');
     }
@@ -50,8 +52,8 @@ class SourceSchemaRequest {
     }
     expected = ExpectedSource.fromJson(raw['expectedSource']);
     resources = (raw['resources'] as List).map(SchemaResource.fromJson).toList();
-    offset = raw['offset'] as int? ?? 0;
-    pageSize = raw['pageSize'] as int? ?? 4;
+    offset = raw['offset'] as int;
+    pageSize = raw['pageSize'] as int;
     if (resources.isEmpty ||
         resources.length > 16 ||
         offset < 0 ||
@@ -59,7 +61,7 @@ class SourceSchemaRequest {
         pageSize < 1 ||
         pageSize > 4 ||
         resources.map((r) => '${r.qualified}:${r.type}').toSet().length != resources.length ||
-        resources.any((r) => expected.dialect == 'firebird' ? r.schema != null : r.schema == null)) {
+        resources.any((r) => r.schema == null)) {
       throw ValidationFailure('Specify exact schemas and a bounded unique resource scope.');
     }
   }

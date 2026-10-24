@@ -152,9 +152,9 @@ Isso complementa os testes nativos; não elimina as pendências de instalação
 completa e cenários em trânsito descritas acima. Procedimento e limites:
 plug_mcp/docs/persona-v2/homologation-chain.md.
 
-O transporte v1 preserva seu enum histórico por compatibilidade; isso não
-concede suporte ao motor. O runtime recusa Firebird antes de metadados ou SQL
-de negócio. A matriz atual exige PostgreSQL, SQL Server e SQL Anywhere.
+Active v1 schemas and the runtime accept only PostgreSQL, SQL Server and
+SQL Anywhere. Firebird is rejected before metadata or business SQL; historical
+evidence does not extend the current contract.
 
 
 ## Structural inspection (sourceSchema v1)
@@ -169,7 +169,9 @@ Extensão aditiva, em desenvolvimento e sem liberação de deploy. `sql.describe
 exige `sourceSchema`/`sourceIdentity` v1, ID correlacionável, token vigente,
 ClientAgentAccess upstream e banco obrigatório da policy. Inspeciona somente recursos
 explicitamente autorizados; recebe até 16 recursos únicos e pagina até quatro.
-Schemas são explícitos; Firebird usa schema nulo. SQL, DSN ou conexão do consumidor
+Schema names are explicit and non-null. Both schema and reader require integer
+`offset` and `pageSize`; duplicate resources and unsafe database names are refused.
+The reader additionally requires `offset < resources.length`. SQL, DSN ou conexão do consumidor
 não entram nesse contrato. As consultas aos catálogos são fixas e os nomes são valores
 parametrizados. O agente usa a mesma conexão para identidade antes/depois e metadados.
 

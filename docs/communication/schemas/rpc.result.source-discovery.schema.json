@@ -15,8 +15,7 @@
       "enum": [
         "postgres",
         "mssql",
-        "sybase",
-        "firebird"
+        "sybase"
       ]
     },
     "identityHash": {

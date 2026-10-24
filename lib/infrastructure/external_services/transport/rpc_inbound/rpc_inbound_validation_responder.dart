@@ -2,6 +2,7 @@ import 'package:plug_agente/domain/protocol/protocol.dart';
 import 'package:plug_agente/infrastructure/external_services/transport/rpc_inbound/rpc_inbound_request_context.dart';
 import 'package:plug_agente/infrastructure/external_services/transport/rpc_inbound/rpc_inbound_response_emitter.dart';
 import 'package:plug_agente/infrastructure/external_services/transport/rpc_inbound_schema_validation_pipeline.dart';
+import 'package:plug_agente/infrastructure/external_services/transport/rpc_inbound_validation_error_mapper.dart';
 import 'package:plug_agente/infrastructure/external_services/transport/rpc_response_preparer.dart';
 
 /// Maps schema validation failures to inbound error responses.
@@ -46,7 +47,7 @@ class RpcInboundValidationResponder {
       final firstId = data.whereType<Map<String, dynamic>>().firstOrNull?['id'];
       await sendSchemaValidationError(
         firstId,
-        RpcErrorCode.invalidRequest,
+        rpcInboundValidationFailureCode(batchFailure),
         batchFailure.message,
         method: data.whereType<Map<String, dynamic>>().firstOrNull?['method'],
       );
@@ -68,7 +69,7 @@ class RpcInboundValidationResponder {
       if (criticalFailure != null) {
         await sendSchemaValidationError(
           requestMap['id'],
-          RpcErrorCode.invalidParams,
+          rpcInboundValidationFailureCode(criticalFailure, fallback: RpcErrorCode.invalidParams),
           criticalFailure.message,
           method: requestMap['method'],
         );
@@ -81,7 +82,7 @@ class RpcInboundValidationResponder {
     if (envelopeFailure != null) {
       await sendSchemaValidationError(
         requestMap['id'],
-        RpcErrorCode.invalidRequest,
+        rpcInboundValidationFailureCode(envelopeFailure),
         envelopeFailure.message,
         method: requestMap['method'],
       );
@@ -92,7 +93,7 @@ class RpcInboundValidationResponder {
     if (paramsFailure != null) {
       await sendSchemaValidationError(
         requestMap['id'],
-        RpcErrorCode.invalidParams,
+        rpcInboundValidationFailureCode(paramsFailure, fallback: RpcErrorCode.invalidParams),
         paramsFailure.message,
         method: requestMap['method'],
       );
