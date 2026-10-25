@@ -17,6 +17,9 @@ final class OdbcColumnarStreamChunkEmitter {
     bool wireOnly = false,
     bool Function()? isCancelRequested,
   }) async {
+    if (isCancelRequested?.call() ?? false) {
+      return;
+    }
     if (onWireChunk != null && includeColumnarWire) {
       await onWireChunk(
         StreamingWireChunk(

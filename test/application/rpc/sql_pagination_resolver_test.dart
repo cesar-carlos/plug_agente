@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:plug_agente/application/rpc/sql_pagination_resolver.dart';
 import 'package:plug_agente/domain/entities/query_pagination.dart';
@@ -6,6 +8,78 @@ void main() {
   const negotiatedExtensions = <String, dynamic>{};
 
   group('resolvePagination', () {
+    for (final options in <Object>[
+      [],
+      {'page': 0, 'page_size': 0},
+      {'page': -1},
+      {'cursor': 42},
+      {'page': 9223372036854775807, 'page_size': 10},
+      {'cursor': const QueryPaginationCursor(page: 9223372036854775807, pageSize: 10).toToken()},
+    ]) {
+      test('rejects invalid pagination options $options before SQL dispatch', () {
+        final result = resolvePagination(
+          {'options': options},
+          'SELECT id FROM users ORDER BY id',
+          100,
+          {
+            'paginationModes': ['page-offset', 'cursor-keyset'],
+          },
+        );
+        expect(result.hasError, isTrue);
+        expect(result.pagination, isNull);
+      });
+    }
+    test('accepts the largest safe computed offset and rejects the next page', () {
+      const maxInteger = 0x7fffffffffffffff;
+      const size = 10;
+      const page = (maxInteger - size - 1) ~/ size + 1;
+      expect(QueryPaginationRequest.hasValidBounds(page, size), isTrue);
+      expect(QueryPaginationRequest.hasValidBounds(page + 1, size), isFalse);
+      const request = QueryPaginationRequest(page: page, pageSize: size);
+      expect(request.offset, greaterThanOrEqualTo(0));
+      expect(request.offset + request.fetchSizeWithLookAhead, lessThanOrEqualTo(maxInteger));
+      expect(QueryPaginationRequest.hasValidBounds(1, size, offset: maxInteger), isFalse);
+    });
+    test('retains legacy offset and complete stable cursor decoding', () {
+      for (final cursor in [
+        const QueryPaginationCursor(page: 2, pageSize: 10, offset: 10),
+        const QueryPaginationCursor(
+          page: 2,
+          pageSize: 10,
+          queryHash: 'fingerprint',
+          orderBy: [QueryPaginationOrderTerm(expression: 'id', lookupKey: 'id')],
+          lastRowValues: [10],
+        ),
+      ]) {
+        final decoded = QueryPaginationCursor.fromToken(cursor.toToken());
+        expect(decoded.toToken(), cursor.toToken());
+      }
+    });
+    for (final payload in <Object>[
+      [],
+      {'page': '1', 'page_size': 10},
+      {'page': 0, 'page_size': 10},
+      {'page': 1, 'page_size': 0},
+      {'page': 1, 'page_size': 10, 'offset': -1},
+      {'v': 3, 'page': 1, 'page_size': 10},
+      {'v': 2, 'page': 1, 'page_size': 10, 'query_hash': 'other-query'},
+    ]) {
+      test('rejects malformed cursor $payload without throwing', () {
+        final token = base64Url.encode(utf8.encode(jsonEncode(payload)));
+        final resolution = resolvePagination(
+          {
+            'options': {'cursor': token},
+          },
+          'SELECT id FROM users ORDER BY id',
+          100,
+          {
+            'paginationModes': ['cursor-keyset'],
+          },
+        );
+        expect(resolution.hasError, isTrue);
+        expect(resolution.pagination, isNull);
+      });
+    }
     test('returns empty resolution when pagination options are absent', () {
       final resolution = resolvePagination(
         const {},

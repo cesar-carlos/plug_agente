@@ -7,6 +7,11 @@ import 'dart:async';
 class CancellationToken {
   bool _isCancelled = false;
   final List<Completer<void>> _cancelWaiters = <Completer<void>>[];
+  StreamController<void>? _cancellationEvents;
+
+  /// Future cancellation notifications with detachable subscriptions.
+  /// Check [isCancelled] before subscribing; past cancellations are not replayed.
+  Stream<void> get cancellations => (_cancellationEvents ??= StreamController<void>.broadcast()).stream;
 
   /// Indica se a operação foi cancelada.
   bool get isCancelled => _isCancelled;
@@ -27,6 +32,7 @@ class CancellationToken {
       return;
     }
     _isCancelled = true;
+    _cancellationEvents?.add(null);
     final waiters = List<Completer<void>>.of(_cancelWaiters);
     _cancelWaiters.clear();
     for (final waiter in waiters) {

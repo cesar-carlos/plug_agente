@@ -29,7 +29,15 @@ class OdbcSqlOperationTransactionFactory implements ISqlOperationTransactionFact
     String? connectionId;
     var lateConnectOwnsLease = false;
     Future<Object?>? pending;
-    Future<T> tracked<T>(Future<T> action, Duration budget) async {
+    Duration remaining() {
+      final result = timeout - watch.elapsed;
+      if (result <= Duration.zero) throw TimeoutException('Operation connection budget exhausted');
+      return result;
+    }
+
+    Future<T> tracked<T>(Future<T> Function() start) async {
+      remaining();
+      final action = start();
       var settled = false;
       pending = action.then<Object?>(
         (_) {
@@ -42,16 +50,10 @@ class OdbcSqlOperationTransactionFactory implements ISqlOperationTransactionFact
         },
       );
       try {
-        return await action.timeout(budget);
+        return await action.timeout(remaining());
       } finally {
         if (settled) pending = null;
       }
-    }
-
-    Duration remaining() {
-      final result = timeout - watch.elapsed;
-      if (result <= Duration.zero) throw TimeoutException('Operation connection budget exhausted');
-      return result;
     }
 
     try {
@@ -92,7 +94,7 @@ class OdbcSqlOperationTransactionFactory implements ISqlOperationTransactionFact
         );
         rethrow;
       }
-      final info = (await tracked(_service.getConnectionDbmsInfo(connectionId), remaining())).getOrThrow();
+      final info = (await tracked(() => _service.getConnectionDbmsInfo(connectionId!))).getOrThrow();
       final engine = switch (info.engineId) {
         'postgres' => 'postgres',
         'sqlserver' => 'mssql',
@@ -116,8 +118,7 @@ class OdbcSqlOperationTransactionFactory implements ISqlOperationTransactionFact
       }
       if (target.expectedSource != null) {
         final proof = await tracked(
-          OdbcSourceDiscovery.inspectConnection(_service, connectionId, target.config, target.database),
-          remaining(),
+          () => OdbcSourceDiscovery.inspectConnection(_service, connectionId!, target.config, target.database),
         );
         target.expectedSource!.verify(proof);
       } else {
@@ -129,8 +130,7 @@ class OdbcSqlOperationTransactionFactory implements ISqlOperationTransactionFact
           _ => 'SELECT DB_NAME() AS operation_database',
         };
         final proof = (await tracked(
-          _service.executeQueryNamed(connectionId, metadataSql, const {}),
-          remaining(),
+          () => _service.executeQueryNamed(connectionId!, metadataSql, const {}),
         )).getOrThrow();
         if (proof.columns.length != 1 ||
             proof.rows.length != 1 ||
@@ -154,21 +154,18 @@ class OdbcSqlOperationTransactionFactory implements ISqlOperationTransactionFact
       if (plan?.expectedStructure case final structure?) {
         final discovery = OdbcSourceDiscovery(_service, _connections, _limiter);
         await tracked(
-          OdbcSourceSchema(discovery).verifyColumns(connectionId, structure, engine, remaining),
-          remaining(),
+          () => OdbcSourceSchema(discovery).verifyColumns(connectionId!, structure, engine, remaining),
         );
         // The structure proof and the identity bracketing it use this same connection.
         final proof = await tracked(
-          OdbcSourceDiscovery.inspectConnection(_service, connectionId, target.config, target.database),
-          remaining(),
+          () => OdbcSourceDiscovery.inspectConnection(_service, connectionId!, target.config, target.database),
         );
         target.expectedSource!.verify(proof);
         remaining();
       }
       // Do not retry begin with weaker options when the driver refuses them.
       final transactionId = (await tracked(
-        _service.beginTransaction(connectionId, accessMode: odbc.TransactionAccessMode.readWrite),
-        remaining(),
+        () => _service.beginTransaction(connectionId!, accessMode: odbc.TransactionAccessMode.readWrite),
       )).getOrThrow();
       return Success(_OdbcSqlOperationTransaction(_service, connectionId, transactionId, engine, lease));
     } on Object catch (error) {
@@ -198,10 +195,18 @@ class _OdbcSqlOperationTransaction implements ISqlOperationTransaction {
   final String _engine;
   final DirectOdbcConnectionLease _lease;
   bool _closed = false;
+  bool _completionStarted = false;
   Future<Object?>? _pendingNative;
   Future<T> _call<T>(Future<T> Function() start, Duration timeout) async {
-    if (_closed || _pendingNative != null) {
+    if (_closed || _completionStarted || _pendingNative != null) {
       throw _failure('SQL_OPERATION_NATIVE_BUSY', 'Native session is not reusable.');
+    }
+    if (timeout <= Duration.zero) {
+      throw SqlOperationFailure(
+        code: 'SQL_OPERATION_NATIVE_FAILED',
+        message: 'Native SQL operation deadline expired before dispatch.',
+        context: const {'execution_not_started': true, 'outcome_unknown': false, 'retryable': false},
+      );
     }
     final action = start();
     var settled = false;
@@ -320,7 +325,10 @@ class _OdbcSqlOperationTransaction implements ISqlOperationTransaction {
       _complete(() => _service.rollbackTransaction(_connectionId, _transactionId), timeout, 'rollback');
   Future<Result<void>> _complete(Future<Result<void>> Function() action, Duration timeout, String stage) async {
     try {
-      (await _call(action, timeout)).getOrThrow();
+      (await _call(() {
+        _completionStarted = true;
+        return action();
+      }, timeout)).getOrThrow();
       return const Success(unit);
     } on Object catch (error) {
       return Failure(_nativeFailure(error, stage));

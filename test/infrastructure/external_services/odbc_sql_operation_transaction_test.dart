@@ -102,6 +102,85 @@ void main() {
     outputs: const {},
     affectedRows: const SqlRowBounds(0, 1),
   );
+  test('metadata deadline expiry retains the lease until the native response settles', () async {
+    final pending = Completer<Result<odbc.DbmsInfo>>();
+    when(() => native.getConnectionDbmsInfo('dedicated')).thenAnswer((_) {
+      // Consume the remaining real Stopwatch budget inside native dispatch.
+      final elapsed = Stopwatch()..start();
+      while (elapsed.elapsed < const Duration(milliseconds: 40)) {}
+      return pending.future;
+    });
+    final result = await factory.open(target, const Duration(milliseconds: 20));
+    expect(result.isError(), isTrue);
+    expect(limiter.activeCount, 1);
+    verifyNever(() => native.disconnect('dedicated'));
+    pending.complete(Success(info('postgres')));
+    await Future<void>.delayed(Duration.zero);
+    verify(() => native.disconnect('dedicated')).called(1);
+    verifyNever(() => native.beginTransaction(any(), accessMode: any(named: 'accessMode')));
+    expect(limiter.activeCount, 0);
+  });
+  for (final stage in ['execute', 'commit', 'rollback']) {
+    test('expired $stage budget never dispatches native work', () async {
+      final session = await open();
+      final result = switch (stage) {
+        'execute' => await session.execute(first, const {}, Duration.zero),
+        'commit' => await session.commit(Duration.zero),
+        _ => await session.rollback(Duration.zero),
+      };
+      expect(result.isError(), isTrue);
+      final failure = result.exceptionOrNull()! as SqlOperationFailure;
+      expect(failure.context['execution_not_started'], isTrue);
+      expect(failure.context['outcome_unknown'], isFalse);
+      verifyNever(() => native.executeQueryNamed('dedicated', first.sql, any()));
+      verifyNever(() => native.commitTransaction('dedicated', 7));
+      verifyNever(() => native.rollbackTransaction('dedicated', 7));
+      expect((await session.rollback(const Duration(seconds: 1))).isSuccess(), isTrue);
+      await session.close();
+    });
+  }
+  for (final stage in ['commit', 'rollback']) {
+    for (final failed in [false, true]) {
+      test('$stage completion cannot be repeated after success or failure ($failed)', () async {
+        final session = await open();
+        final Result<void> completion = failed ? Failure(Exception('Confirmation lost')) : const Success(unit);
+        when(() => native.commitTransaction('dedicated', 7)).thenAnswer((_) async => completion);
+        when(() => native.rollbackTransaction('dedicated', 7)).thenAnswer((_) async => completion);
+        final result = stage == 'commit'
+            ? await session.commit(const Duration(seconds: 1))
+            : await session.rollback(const Duration(seconds: 1));
+        expect(result.isError(), failed);
+        expect((await session.commit(const Duration(seconds: 1))).isError(), isTrue);
+        expect((await session.rollback(const Duration(seconds: 1))).isError(), isTrue);
+        expect((await session.execute(first, const {}, const Duration(seconds: 1))).isError(), isTrue);
+        verifyNever(() => native.executeQueryNamed('dedicated', first.sql, any()));
+        if (stage == 'commit') {
+          verify(() => native.commitTransaction('dedicated', 7)).called(1);
+          verifyNever(() => native.rollbackTransaction('dedicated', 7));
+        } else {
+          verify(() => native.rollbackTransaction('dedicated', 7)).called(1);
+          verifyNever(() => native.commitTransaction('dedicated', 7));
+        }
+        await session.close();
+        expect(limiter.activeCount, 0);
+      });
+    }
+  }
+  test('late commit confirmation remains quarantined and is never repeated', () async {
+    final pending = Completer<Result<void>>();
+    when(() => native.commitTransaction('dedicated', 7)).thenAnswer((_) => pending.future);
+    final session = await open();
+    expect((await session.commit(const Duration(milliseconds: 5))).isError(), isTrue);
+    pending.complete(const Success(unit));
+    await Future<void>.delayed(Duration.zero);
+    expect((await session.commit(const Duration(seconds: 1))).isError(), isTrue);
+    expect((await session.rollback(const Duration(seconds: 1))).isError(), isTrue);
+    await session.close();
+    await Future<void>.delayed(Duration.zero);
+    verify(() => native.commitTransaction('dedicated', 7)).called(1);
+    verifyNever(() => native.rollbackTransaction('dedicated', 7));
+    expect(limiter.activeCount, 0);
+  });
   test('dedicated connection disables replay/reconnect and is used for begin, bindings and commit', () async {
     final session = await open();
     final options =

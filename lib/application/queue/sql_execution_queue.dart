@@ -10,6 +10,7 @@ import 'package:plug_agente/application/queue/sql_execution/sql_execution_queue_
 import 'package:plug_agente/application/queue/sql_execution/sql_execution_queued_request.dart';
 import 'package:plug_agente/application/queue/sql_execution_kind.dart';
 import 'package:plug_agente/core/constants/connection_constants.dart';
+import 'package:plug_agente/core/constants/odbc_context_constants.dart';
 import 'package:plug_agente/core/constants/sql_pipeline_context_constants.dart';
 import 'package:plug_agente/domain/entities/cancellation_token.dart';
 import 'package:plug_agente/domain/errors/failures.dart' as domain;
@@ -315,15 +316,32 @@ class SqlExecutionQueue {
     required Duration? enqueueTimeout,
     required String? requestId,
   }) async {
+    if (request.slotWeight < 1 ||
+        (request.kind == SqlExecutionKind.batch && request.slotWeight > _laneCapacity.maxConcurrentBatchWorkers)) {
+      return Failure(
+        domain.ValidationFailure.withContext(
+          message: 'SQL queue slot weight must fit the configured lane capacity',
+          context: const {'reason': 'invalid_slot_weight', 'execution_not_started': true, 'retryable': false},
+        ),
+      );
+    }
+    if (request.cooperativeCancellationToken?.isCancelled ?? false) {
+      return Failure(_cancelledBeforeStart());
+    }
     _laneRegistry.enqueue(request);
     _metricsCollector?.recordQueueAdded(_laneRegistry.queuedCount);
     _recordQueueSaturationIfNeeded();
 
+    var cancellationSubscription = request.cooperativeCancellationToken?.cancellations.listen(
+      (_) => _cancelWaitingRequest(request),
+    );
     unawaited(_processQueue());
 
     final timeout = enqueueTimeout ?? _defaultEnqueueTimeout;
     try {
       await request.startedCompleter.future.timeout(timeout);
+      await cancellationSubscription?.cancel();
+      cancellationSubscription = null;
 
       final result = await request.completer.future;
       final waitTime = (request.startedAt ?? DateTime.now()).difference(
@@ -344,7 +362,20 @@ class SqlExecutionQueue {
           removeQueuedRequest: _laneRegistry.remove,
         ),
       );
+    } finally {
+      await cancellationSubscription?.cancel();
     }
+  }
+
+  void _cancelWaitingRequest(SqlExecutionQueuedRequest<Object> request) {
+    if (request.hasStarted || request.completer.isCompleted || !_laneRegistry.remove(request)) return;
+    request.isCancelled = true;
+    if (!request.startedCompleter.isCompleted) request.startedCompleter.complete();
+    request.completeFailure(_cancelledBeforeStart());
+    _metricsCollector?.recordQueueSizeChanged(_laneRegistry.queuedCount);
+    _recordQueueSaturationIfNeeded();
+    _completeDrainedIfIdle();
+    unawaited(_processQueue());
   }
 
   Future<void> _processQueue() async {
@@ -370,25 +401,15 @@ class SqlExecutionQueue {
   }
 
   Future<void> _executeTask<T extends Object>(SqlExecutionQueuedRequest<T> request) async {
-    if (request.isCancelled) {
-      if (!request.startedCompleter.isCompleted) {
-        request.startedCompleter.complete();
-      }
-      return;
-    }
-
-    request.hasStarted = true;
-    if (!request.startedCompleter.isCompleted) {
-      request.startedCompleter.complete();
-    }
-
-    // Re-check after signalling start: timeout handlers scheduled in the same
-    // event turn may have cancelled between the checks above and task invoke.
-    if (request.isCancelled) {
-      return;
-    }
-
     try {
+      if (request.isCancelled || (request.cooperativeCancellationToken?.isCancelled ?? false)) {
+        if (!request.startedCompleter.isCompleted) request.startedCompleter.complete();
+        request.completeFailure(_cancelledBeforeStart());
+        return;
+      }
+      request.hasStarted = true;
+      if (!request.startedCompleter.isCompleted) request.startedCompleter.complete();
+
       final Future<Result<T>> resultFuture;
       if (request.releasableTask != null) {
         resultFuture = request.releasableTask!(
@@ -424,6 +445,17 @@ class SqlExecutionQueue {
       _releaseWorkerSlot(request);
     }
   }
+
+  domain.QueryExecutionFailure _cancelledBeforeStart() => domain.QueryExecutionFailure.withContext(
+    message: 'SQL execution cancelled before dispatch',
+    context: const {
+      'reason': OdbcContextConstants.executionCancelledReason,
+      'cancelled': true,
+      'execution_not_started': true,
+      'retryable': false,
+      'worker_started': false,
+    },
+  );
 
   void _releaseWorkerSlot(SqlExecutionQueuedRequest<Object> request) {
     if (request.workerSlotReleased) {

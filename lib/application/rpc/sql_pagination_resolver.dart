@@ -24,10 +24,23 @@ ResolvedPagination resolvePagination(
   int negotiatedMaxRows,
   Map<String, dynamic> negotiatedExtensions,
 ) {
-  final options = params['options'] as Map<String, dynamic>?;
+  final Object? rawOptions = params['options'];
+  if (rawOptions != null && rawOptions is! Map<String, dynamic>) {
+    return const ResolvedPagination(errorMessage: 'options must be an object');
+  }
+
+  final options = rawOptions as Map<String, dynamic>?;
   final page = jsonPositiveInt(options?['page']);
   final pageSize = jsonPositiveInt(options?['page_size']);
-  final cursor = options?['cursor'] as String?;
+  final rawCursor = options?['cursor'];
+  if (rawCursor != null && rawCursor is! String) {
+    return const ResolvedPagination(errorMessage: 'cursor must be a string');
+  }
+  final cursor = rawCursor as String?;
+  if ((options?.containsKey('page') == true && page == null) ||
+      (options?.containsKey('page_size') == true && pageSize == null)) {
+    return const ResolvedPagination(errorMessage: 'page and page_size must be positive integers');
+  }
   if (page == null && pageSize == null && cursor == null) {
     return const ResolvedPagination();
   }
@@ -120,6 +133,9 @@ ResolvedPagination resolvePagination(
     return const ResolvedPagination(
       errorMessage: 'page and page_size must be provided together and be >= 1',
     );
+  }
+  if (!QueryPaginationRequest.hasValidBounds(page, pageSize)) {
+    return const ResolvedPagination(errorMessage: 'Pagination bounds exceed the supported integer range');
   }
   if (!supportsPageOffsetPagination(negotiatedExtensions)) {
     return const ResolvedPagination(

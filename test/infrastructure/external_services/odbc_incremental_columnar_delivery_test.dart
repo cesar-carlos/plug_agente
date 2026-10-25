@@ -84,6 +84,22 @@ void main() {
     expect(values.visited, {0, 1});
   });
 
+  for (final wire in [false, true]) {
+    test('pre-cancelled ${wire ? 'wire' : 'row'} delivery reads and emits nothing', () async {
+      var deliveries = 0;
+      await OdbcColumnarStreamChunkEmitter.emit(
+        result: result,
+        fetchSize: 2,
+        includeColumnarWire: wire,
+        isCancelRequested: () => true,
+        onChunk: (_) async => deliveries++,
+        onWireChunk: (_) async => deliveries++,
+      );
+      expect(deliveries, 0);
+      expect(values.visited, isEmpty);
+    });
+  }
+
   test('consumer failure propagates without mapping the remaining batches', () async {
     final error = StateError('consumer failed');
     await expectLater(

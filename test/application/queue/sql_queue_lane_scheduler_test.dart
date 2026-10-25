@@ -24,6 +24,28 @@ void main() {
       };
     });
 
+    test('continuously replenished lanes get one turn per round without starvation', () {
+      for (final kind in SqlExecutionKind.values) {
+        queues[kind]!.add(_QueuedItem(0, kind));
+      }
+      final counts = {for (final kind in SqlExecutionKind.values) kind: 0};
+      for (var round = 0; round < 200; round++) {
+        final served = <SqlExecutionKind>{};
+        for (var i = 0; i < SqlExecutionKind.values.length; i++) {
+          final item = scheduler.takeNextEligibleRequest(
+            queues: queues,
+            roundRobinState: state,
+            canStartRequest: (_) => true,
+          )!;
+          expect(item.sequence, round);
+          served.add(item.kind);
+          counts[item.kind] = counts[item.kind]! + 1;
+          queues[item.kind]!.add(_QueuedItem(round + 1, item.kind));
+        }
+        expect(served, SqlExecutionKind.values.toSet());
+      }
+      expect(counts.values, everyElement(200));
+    });
     test('round-robins across lanes while preserving lane FIFO', () {
       queues[SqlExecutionKind.batch]!.add(_QueuedItem(1, SqlExecutionKind.batch));
       queues[SqlExecutionKind.query]!.add(_QueuedItem(2, SqlExecutionKind.query));

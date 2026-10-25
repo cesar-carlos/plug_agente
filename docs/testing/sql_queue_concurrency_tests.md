@@ -33,6 +33,26 @@ Location: `test/application/queue/sql_execution_queue_test.dart`
 **queue-wait** time via `enqueueTimeout`. After a worker slot is acquired, the
 caller waits for task completion without a queue-level deadline.
 
+`sql_execution_queue_cancellation_test.dart` checks ordinary and releasable
+workers with cancellation before submission, while queued, and after start.
+Already-cancelled tokens are rejected before enqueueing. A cancellation event
+removes a waiting request without waiting for a worker or queue timeout, freeing
+admission capacity. The token is also checked again before task invocation.
+Subscriptions are detached at worker start and on every terminal waiting path
+(cancellation, timeout or disposal); no listener stays attached to running tasks.
+No task is dispatched in either pre-start case. Once a
+task starts, cancellation alone never frees its worker or overwrites its result;
+completion or the explicit streaming release callback remains authoritative.
+Every exit after worker reservation releases that reservation through `finally`.
+Tests hold the only worker busy and verify a cancelled waiter frees the only
+queue slot for a replacement. Additional tests cover cancellation/disposal races,
+subscription cleanup, repeated cancellation and token reset.
+
+`sql_execution_queue_weight_test.dart` verifies that invalid weights consume no
+capacity and an oversized batch cannot block a valid batch in the same lane.
+Transaction manager tests also verify expired begin/commit budgets cause zero
+native dispatches; an undispatched commit still permits cleanup rollback.
+
 When a queue-wait timeout races with worker start, the caller receives a
 queue-timeout failure but ODBC work may already be running — a **ghost query**.
 
@@ -226,3 +246,42 @@ move to `sql.bulkInsert` instead of increasing queue concurrency.
 - E2E setup: `docs/testing/e2e_setup.md`
 - Operational validation runbook: `docs/architecture/odbc_operational_validation_runbook.md`
 - Project specifics: `.cursor/rules/project_specifics.mdc`
+
+## Related safety review — 2026-10-25
+
+The local regression set now covers malformed pagination options and native
+integer overflow, expired execution/commit/rollback budgets, single-dispatch
+transaction completion, and metadata timeout quarantine. Fourteen new cases
+failed against the preceding implementation and pass with the fixes. A late
+native response never authorizes replay or concurrent disconnect.
+
+Additional contract tests exercise 500 reverse-order queued cancellations while
+a worker remains occupied, graceful shutdown with that worker still active,
+and 200 round-robin rounds with every lane continuously replenished. Cancelled
+waiters do not increment timeout/worker-completion metrics. Existing streaming
+tests verify that a slow consumer prevents conversion of subsequent batches
+and that consumer failure stops delivery. These are deterministic behavior and
+bounded-load checks, not throughput or heap benchmarks on real databases.
+
+Focused validation: `flutter test --no-pub test/application/queue
+ test/application/rpc/sql_pagination_resolver_test.dart test/application/gateway
+ test/infrastructure/external_services/odbc_sql_operation_transaction_test.dart
+ test/infrastructure/external_services/odbc_batch_transaction_manager_test.dart
+ test/infrastructure/external_services/odbc_streaming_chunk_mapper_test.dart
+ test/infrastructure/external_services/odbc_incremental_columnar_delivery_test.dart
+ test/infrastructure/external_services/odbc_streaming_gateway_test.dart
+ test/infrastructure/codecs/rpc_stream_columnar_chunk_codec_test.dart
+ test/domain/entities/cancellation_token_test.dart` (one command, 209 tests).
+The CI non-live command `flutter test --no-pub --exclude-tags "live || slow || perf"`
+passed 5,596 tests with 6 skipped. The final focused run also includes the added
+maximum-safe-offset boundary test. `flutter analyze --no-pub` completed without
+issues; analysis of the changed files is also clean.
+Local evidence is retained under `build/related_safety_*.log` and
+`build/related_metadata_before.log`; these generated files are not release proof.
+
+Unique ordering remains required for reliable keyset continuation; independent
+page requests do not create a database snapshot. Driver latency, concurrent data
+changes, cancellation throughput and native memory/handle retention still require
+explicit private-fixture runs. No operational DSN was used. Production gates and
+SQL-operation opt-in remain disabled. No running debug app was available for
+hot reload during this review.

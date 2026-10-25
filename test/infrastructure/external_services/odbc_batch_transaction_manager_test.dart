@@ -67,6 +67,24 @@ void main() {
   });
 
   group('beginIfNeeded', () {
+    test('expired deadline refuses begin before native dispatch', () async {
+      final result = await manager.beginIfNeeded(
+        connectionId: 'c1',
+        transactionEnabled: true,
+        lockTimeout: null,
+        accessMode: TransactionAccessMode.readWrite,
+        deadline: DateTime.now().subtract(const Duration(seconds: 1)),
+      );
+      expect((result.exceptionOrNull()! as domain.Failure).context['execution_not_started'], isTrue);
+      verifyNever(
+        () => service.beginTransaction(
+          any(),
+          savepointDialect: any(named: 'savepointDialect'),
+          accessMode: any(named: 'accessMode'),
+          lockTimeout: any(named: 'lockTimeout'),
+        ),
+      );
+    });
     test('returns a null-id start when transactions are disabled', () async {
       final result = await manager.beginIfNeeded(
         connectionId: 'c1',
@@ -206,6 +224,52 @@ void main() {
   });
 
   group('commit', () {
+    test('expired deadline prevents commit and leaves rollback available', () async {
+      final guard = BatchTransactionGuard(9);
+      final result = await manager.commit(
+        connectionId: 'c1',
+        guard: guard,
+        deadline: DateTime.now().subtract(const Duration(seconds: 1)),
+      );
+      expect((result.exceptionOrNull()! as domain.Failure).context['execution_not_started'], isTrue);
+      verifyNever(() => service.commitTransaction(any(), any()));
+      var rollbacks = 0;
+      await guard.rollback((_) async {
+        rollbacks++;
+        return const Success(unit);
+      });
+      expect(rollbacks, 1);
+      expect(guard.rollbackConfirmed, isTrue);
+    });
+    test('concurrent finalization dispatches commit once and never rolls back', () async {
+      final completion = Completer<Result<void>>();
+      when(() => service.commitTransaction('c1', 9)).thenAnswer((_) => completion.future);
+      final guard = BatchTransactionGuard(9);
+      final first = manager.commit(connectionId: 'c1', guard: guard);
+      final second = await manager.commit(connectionId: 'c1', guard: guard);
+      var rollbackCalls = 0;
+      await guard.rollback((_) async {
+        rollbackCalls++;
+        return const Success(unit);
+      });
+      expect(second.isError(), isTrue);
+      expect(rollbackCalls, 0);
+      completion.complete(const Success(unit));
+      expect((await first).isSuccess(), isTrue);
+      verify(() => service.commitTransaction('c1', 9)).called(1);
+      expect(guard.state, BatchTransactionState.committed);
+    });
+
+    test('unknown commit cannot be dispatched again or followed by rollback', () async {
+      when(() => service.commitTransaction('c1', 9)).thenAnswer((_) async => Failure(Exception('lost response')));
+      final guard = BatchTransactionGuard(9);
+      expect((await manager.commit(connectionId: 'c1', guard: guard)).isError(), isTrue);
+      expect((await manager.commit(connectionId: 'c1', guard: guard)).isError(), isTrue);
+      await guard.rollback((_) async => fail('Rollback after unknown commit'));
+      verify(() => service.commitTransaction('c1', 9)).called(1);
+      expect(guard.state, BatchTransactionState.unconfirmed);
+    });
+
     test('is a no-op for a non-transactional guard', () async {
       final result = await manager.commit(
         connectionId: 'c1',

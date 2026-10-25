@@ -108,9 +108,9 @@ List<Map<String, dynamic>> mapTypedColumnarToRowMaps(TypedColumnarResult result)
 
 /// Column metadata for the first streaming chunk when native metadata is present.
 List<Map<String, dynamic>>? buildStreamingColumnMetadata(TypedColumnarResult result) {
-  final names = result.columns.map((column) => column.name).toList(growable: false);
-  if (names.isEmpty) {
+  final columns = result.columns;
+  if (columns.isEmpty) {
     return null;
   }
-  return names.map((name) => <String, dynamic>{'name': name}).toList(growable: false);
+  return columns.map((column) => <String, dynamic>{'name': column.name}).toList(growable: false);
 }

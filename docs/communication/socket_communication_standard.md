@@ -376,7 +376,12 @@ returns a unary result with `rows: []`, without creating a stream.
 
 When `ODBC_STREAM_COLUMNAR_WIRE` is enabled, a chunk can carry `rows: []` and
 `columnar: { row_count, columns: [{ name, type, values }] }`. Supported column
-types are `int32`, `int64`, `float64`, and `object`. Use `columnar.row_count`
+types are `int32`, `int64`, `float64`, and `object`. Preserve SQL nulls as
+literal `null` entries in each `values` vector,
+including numeric columns; numeric zero is a distinct value. The agent applies
+the native null bitmap before JSON encoding and reuses numeric vectors only
+when no in-range null bit is set. No bitmap field is added to the wire format.
+Use `columnar.row_count`
 and the column arrays to reconstruct rows; an empty `rows` array alone does
 not mean an empty chunk. `ODBC_STREAM_WIRE_ONLY` overrides the negotiated
 `columnarWireOnly` preference when explicitly configured. Columnar emission
@@ -759,6 +764,16 @@ streaming direto do banco mesmo quando `enableSocketStreamingFromDb` estiver ati
 `result.pagination.next_cursor`. Quando presente, nao deve ser combinado com
 `page` ou `page_size`, e carrega fingerprint da query + chave(s) do
 `ORDER BY` para continuacao keyset.
+
+Cursor decoding accepts legacy v1 offset tokens and complete v2 keyset tokens.
+Malformed field types, unsupported versions, nonpositive page sizes/pages,
+negative offsets and incomplete v2 ordering/key values are rejected before SQL
+preparation; malformed v2 tokens never fall back to offset pagination.
+Invalid explicit page options are rejected rather than treated as absent.
+Pagination bounds must leave room for look-ahead and end-offset arithmetic in
+native signed 64-bit integers; overflowing offsets are rejected before SQL.
+Independent page requests do not provide snapshot isolation from concurrent
+writes; callers must use a unique ordering for reliable keyset continuation.
 
 Exemplo de continuacao por cursor:
 

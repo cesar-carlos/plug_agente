@@ -41,23 +41,65 @@ class QueryPaginationCursor {
   factory QueryPaginationCursor.fromToken(String token) {
     final normalized = base64.normalize(token);
     final decoded = utf8.decode(base64Url.decode(normalized));
-    final json = jsonDecode(decoded) as Map<String, dynamic>;
-    final version = json['v'] as int? ?? 1;
+    final json = jsonDecode(decoded);
+    if (json is! Map<String, dynamic>) throw const FormatException('Invalid cursor object');
+    final version = json['v'] ?? 1;
+    final page = json['page'];
+    final pageSize = json['page_size'];
+    final offset = json['offset'];
+    final queryHash = json['query_hash'];
+    if (version is! int || (version != 1 && version != 2)) {
+      throw const FormatException('Unsupported cursor version');
+    }
+    if (page is! int ||
+        pageSize is! int ||
+        (offset != null && offset is! int) ||
+        (queryHash != null && queryHash is! String)) {
+      throw const FormatException('Invalid cursor field types');
+    }
+    if (!QueryPaginationRequest.hasValidBounds(page, pageSize, offset: offset as int?)) {
+      throw const FormatException('Invalid cursor pagination bounds');
+    }
+    final orderBy = <QueryPaginationOrderTerm>[];
+    final lastRowValues = <dynamic>[];
+    if (version == 2) {
+      final terms = json['order_by'];
+      final values = json['last_row_values'];
+      if (queryHash is! String ||
+          queryHash.isEmpty ||
+          terms is! List ||
+          terms.isEmpty ||
+          values is! List ||
+          values.length != terms.length) {
+        throw const FormatException('Invalid stable cursor');
+      }
+      for (final term in terms) {
+        if (term is! Map<String, dynamic> ||
+            term['expression'] is! String ||
+            term['lookup_key'] is! String ||
+            (term['descending'] != null && term['descending'] is! bool)) {
+          throw const FormatException('Invalid cursor ordering');
+        }
+        final order = QueryPaginationOrderTerm.fromJson(term);
+        if (order.expression.isEmpty || order.lookupKey.isEmpty) {
+          throw const FormatException('Invalid cursor ordering');
+        }
+        orderBy.add(order);
+      }
+      for (final value in values) {
+        if (!(value is String || value is bool || (value is num && value.isFinite))) {
+          throw const FormatException('Invalid cursor key value');
+        }
+        lastRowValues.add(value);
+      }
+    }
     return QueryPaginationCursor(
-      page: json['page'] as int,
-      pageSize: json['page_size'] as int,
-      offset: json['offset'] as int?,
-      queryHash: json['query_hash'] as String?,
-      orderBy: version >= 2
-          ? (json['order_by'] as List<dynamic>? ?? const [])
-                .map(
-                  (term) => QueryPaginationOrderTerm.fromJson(
-                    term as Map<String, dynamic>,
-                  ),
-                )
-                .toList()
-          : const [],
-      lastRowValues: version >= 2 ? (json['last_row_values'] as List<dynamic>? ?? const []).toList() : const [],
+      page: page,
+      pageSize: pageSize,
+      offset: offset,
+      queryHash: queryHash as String?,
+      orderBy: orderBy,
+      lastRowValues: lastRowValues,
     );
   }
 
@@ -97,6 +139,16 @@ class QueryPaginationRequest {
   }) : assert(page >= 1, 'page must be >= 1'),
        assert(pageSize >= 1, 'pageSize must be >= 1'),
        _offset = offset;
+
+  // Leave room for look-ahead, end offsets and the next page on native Dart.
+  static const int _maxNativeInteger = 0x7fffffffffffffff;
+
+  static bool hasValidBounds(int page, int pageSize, {int? offset}) {
+    if (page < 1 || page >= _maxNativeInteger || pageSize < 1 || pageSize >= _maxNativeInteger) return false;
+    final maxOffset = _maxNativeInteger - pageSize - 1;
+    if (offset != null) return offset >= 0 && offset <= maxOffset;
+    return page - 1 <= maxOffset ~/ pageSize;
+  }
 
   final int page;
   final int pageSize;
