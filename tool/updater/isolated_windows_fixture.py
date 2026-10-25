@@ -78,7 +78,8 @@ def require_fixture_artifact(root: Path, path: Path) -> Path:
 
 def rewrite_native(source: str, identity: str) -> str:
     require_identity(identity)
-    return (source.replace("PlugAgenteUpdateHelper", identity + "UpdateHelper")
+    return (source.replace("PlugAgente.Install.v1", identity + ".Install.v1")
+            .replace("PlugAgenteUpdateHelper", identity + "UpdateHelper")
             .replace("PlugAgenteUpdater", identity + "Updater")
             .replace('L"PlugAgente"', f'L"{identity}"')
             .replace("Plug Agente Updater", "Plug Agente Homologacao " + identity[-12:] + " Updater")
@@ -107,10 +108,11 @@ def rewrite_installer(source: str, identity: str, app_id: str, payload: Path) ->
 
 def assert_isolated_sources(root: Path, identity: str) -> None:
     require_identity(identity)
-    forbidden = ("PlugAgenteUpdateHelper", "CloseApplications=yes", "PlugAgenteUpdater", 'L"PlugAgente"', "Classes\\plugdb", "Global\\PlugAgenteSetup",
+    forbidden = ("PlugAgente.Install.v1", "PlugAgenteUpdateHelper", "CloseApplications=yes", "PlugAgenteUpdater", 'L"PlugAgente"', "Classes\\plugdb", "Global\\PlugAgenteSetup",
                  "{commonappdata}\\PlugAgente\\", "{A1B2C3D4-E5F6-4A5B-8C9D-0E1F2A3B4C5E}")
     for directory, extensions in ((root / "installer", {".iss"}), (root / "windows/updater", {".cpp", ".h"}),
-                                  (root / "windows/update_helper", {".cpp", ".h"})):
+                                  (root / "windows/update_helper", {".cpp", ".h"}),
+                                  (root / "windows/install_channel", {".cpp", ".h"})):
         for path in directory.rglob("*"):
             if path.suffix not in extensions or "third_party" in path.parts:
                 continue
@@ -205,7 +207,7 @@ def build_fixture(output: Path, legacy_revision: str, application_build: Path | 
     if not (payload / "data/app.so").is_file():
         raise RuntimeError("An existing complete Release bundle is required")
     sources = {}
-    for name in ("updater", "update_helper"):
+    for name in ("updater", "update_helper", "install_channel"):
         source = source_project / "windows" / name
         destination = output / "windows" / name
         shutil.copytree(source, destination)

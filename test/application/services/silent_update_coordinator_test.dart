@@ -1,9 +1,9 @@
 import 'dart:async';
 import 'dart:convert';
-
 import 'package:fake_async/fake_async.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:plug_agente/application/observability/i_auto_update_metrics_collector.dart';
 import 'package:plug_agente/application/observability/update_check_diagnostics.dart';
 import 'package:plug_agente/application/services/appcast_probe_service.dart';
 import 'package:plug_agente/application/services/i_pending_silent_update_store.dart';
@@ -18,7 +18,6 @@ import 'package:plug_agente/core/settings/app_settings_keys.dart';
 import 'package:plug_agente/core/settings/app_settings_store.dart';
 import 'package:plug_agente/domain/errors/failures.dart' as domain;
 import 'package:result_dart/result_dart.dart';
-
 import '../../helpers/auto_update_test_fakes.dart';
 
 SilentUpdateCoordinator _makeCoordinator({
@@ -31,6 +30,7 @@ SilentUpdateCoordinator _makeCoordinator({
   DateTime Function()? clock,
   Duration helperWaitDuration = const Duration(minutes: 30),
   bool autoApplyEnabled = true,
+  IAutoUpdateMetricsCollector? metricsCollector,
 }) {
   final settings =
       store ??
@@ -62,6 +62,7 @@ SilentUpdateCoordinator _makeCoordinator({
     launcherStatusReader: launcherStatusReader,
     clock: clock,
     helperWaitDuration: helperWaitDuration,
+    metricsCollector: metricsCollector,
   );
 }
 
@@ -148,7 +149,22 @@ class _StubUacDetector implements IUacDetector {
   }
 }
 
+class _ThrowingMetrics implements IAutoUpdateMetricsCollector {
+  @override
+  dynamic noSuchMethod(Invocation invocation) => throw StateError('metrics unavailable');
+}
+
 void main() {
+  test('metrics cannot change successful automatic apply into failure', () async {
+    final installer = FakeSilentUpdateInstaller();
+    final coordinator = _makeCoordinator(installer: installer, metricsCollector: _ThrowingMetrics());
+    final result = await coordinator.checkSilently();
+    expect(result.isSuccess(), isTrue);
+    expect(installer.launchHelperCount, 1);
+    expect(coordinator.lastAutomaticDiagnostics?.completionSource, UpdateCheckCompletionSource.automaticInstallStarted);
+    coordinator.stop();
+  });
+
   setUpAll(() {
     dotenv.clean();
     dotenv.loadFromString(
@@ -508,11 +524,7 @@ void main() {
       });
 
       test('records probe error and increments failure count', () async {
-        final probe = FakeAppcastProbeService()
-          ..result = const AppcastProbeResult(
-            requestUrl: 'https://example.com/appcast.xml',
-            errorMessage: 'HTTP 503',
-          );
+        final probe = FakeAppcastProbeService()..probeFailure = domain.NetworkFailure('HTTP 503');
         final coordinator = _makeCoordinator(probe: probe);
 
         final result = await coordinator.checkSilently();
@@ -526,11 +538,7 @@ void main() {
       });
 
       test('pauses after reaching failure cooldown threshold', () async {
-        final probe = FakeAppcastProbeService()
-          ..result = const AppcastProbeResult(
-            requestUrl: 'https://example.com/appcast.xml',
-            errorMessage: 'network error',
-          );
+        final probe = FakeAppcastProbeService()..probeFailure = domain.NetworkFailure('network error');
         final store = InMemoryAppSettingsStore();
         final coordinator = SilentUpdateCoordinator(
           RuntimeCapabilities.full(),
@@ -558,11 +566,7 @@ void main() {
       });
 
       test('userInitiated bypasses automatic failure cooldown', () async {
-        final probe = FakeAppcastProbeService()
-          ..result = const AppcastProbeResult(
-            requestUrl: 'https://example.com/appcast.xml',
-            errorMessage: 'network error',
-          );
+        final probe = FakeAppcastProbeService()..probeFailure = domain.NetworkFailure('network error');
         final store = InMemoryAppSettingsStore();
         final coordinator = SilentUpdateCoordinator(
           RuntimeCapabilities.full(),
@@ -1127,7 +1131,7 @@ void main() {
         expect(store.getString('auto_update.pending_silent_update'), isNotNull);
         expect(
           coordinator.lastAutomaticDiagnostics?.completionSource,
-          UpdateCheckCompletionSource.automaticInstallStarted,
+          UpdateCheckCompletionSource.automaticRecoveryRequired,
         );
         expect(store.getInt('auto_update.automatic_failure_count'), isNull);
       });
@@ -1532,8 +1536,9 @@ class _CapturingProbe implements IAppcastProbeService {
   }
 
   @override
-  Future<AppcastProbeResult> probeLatest({
+  Future<Result<AppcastProbeResult>> probeLatest({
     required String feedUrl,
+    bool Function()? cancelRequested,
     Duration timeout = const Duration(seconds: 10),
   }) async {
     final coord = _getCoordinator?.call();

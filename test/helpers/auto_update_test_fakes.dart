@@ -1,5 +1,4 @@
 import 'dart:async';
-
 import 'package:auto_updater/auto_updater.dart';
 import 'package:plug_agente/application/services/appcast_probe_service.dart';
 import 'package:plug_agente/application/services/auto_updater_gateway.dart';
@@ -77,10 +76,12 @@ class FakeAppcastProbeService implements IAppcastProbeService {
   String? lastProbeUrl;
   int callCount = 0;
   Exception? probeError;
+  Exception? probeFailure;
 
   @override
-  Future<AppcastProbeResult> probeLatest({
+  Future<Result<AppcastProbeResult>> probeLatest({
     required String feedUrl,
+    bool Function()? cancelRequested,
     Duration timeout = const Duration(seconds: 10),
   }) async {
     callCount++;
@@ -89,24 +90,26 @@ class FakeAppcastProbeService implements IAppcastProbeService {
     if (error != null) {
       throw error;
     }
-    return AppcastProbeResult(
-      requestUrl: feedUrl,
-      latestVersion: result.latestVersion,
-      assetUrl: result.assetUrl,
-      assetSize: result.assetSize,
-      assetName: result.assetName,
-      sha256: result.sha256,
-      os: result.os,
-      channel: result.channel,
-      rolloutPercentage: result.rolloutPercentage,
-      itemCount: result.itemCount,
-      errorMessage: result.errorMessage,
-      edSignature: result.edSignature,
-      manifestUrl: result.manifestUrl,
-      manifestSha256: result.manifestSha256,
-      manifestSignature: result.manifestSignature,
-      releaseNotes: result.releaseNotes,
-      releaseNotesUrl: result.releaseNotesUrl,
+    if (probeFailure != null) return Failure(probeFailure!);
+    return Success(
+      AppcastProbeResult(
+        requestUrl: feedUrl,
+        latestVersion: result.latestVersion,
+        assetUrl: result.assetUrl,
+        assetSize: result.assetSize,
+        assetName: result.assetName,
+        sha256: result.sha256,
+        os: result.os,
+        channel: result.channel,
+        rolloutPercentage: result.rolloutPercentage,
+        itemCount: result.itemCount,
+        edSignature: result.edSignature,
+        manifestUrl: result.manifestUrl,
+        manifestSha256: result.manifestSha256,
+        manifestSignature: result.manifestSignature,
+        releaseNotes: result.releaseNotes,
+        releaseNotesUrl: result.releaseNotesUrl,
+      ),
     );
   }
 }
@@ -184,18 +187,20 @@ class FakePendingSilentUpdateStore implements IPendingSilentUpdateStore {
   int clearCount = 0;
 
   @override
-  Future<void> clear() async {
+  Future<Result<void>> remove() async {
     clearCount++;
     pending = null;
+    return const Success(unit);
   }
 
   @override
-  Future<PendingSilentUpdate?> read() async => pending;
+  Future<Result<PendingSilentUpdateSnapshot>> load() async => Success(PendingSilentUpdateSnapshot(pending));
 
   @override
-  Future<void> write(PendingSilentUpdate pending) async {
+  Future<Result<void>> save(PendingSilentUpdate pending) async {
     writeCount++;
     this.pending = pending;
+    return const Success(unit);
   }
 }
 

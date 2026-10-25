@@ -1,5 +1,4 @@
 import 'dart:async';
-
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:plug_agente/application/observability/update_check_diagnostics.dart';
@@ -54,8 +53,10 @@ class _FakeOrchestrator implements IAutoUpdateOrchestrator {
   @override
   Stream<void> get changes => _changesController.stream;
 
+  Future<bool> Function()? readiness;
   @override
-  Future<bool> get hasPendingDownloadedUpdate async => hasPendingDownloadedUpdateValue;
+  Future<bool> get hasPendingDownloadedUpdate async =>
+      readiness == null ? hasPendingDownloadedUpdateValue : await readiness!();
 
   void emitChange() {
     _changesController.add(null);
@@ -115,6 +116,23 @@ class _FakeOrchestrator implements IAutoUpdateOrchestrator {
 }
 
 void main() {
+  test('late readiness and failure cannot leave an enabled stale banner', () async {
+    final orchestrator = _FakeOrchestrator();
+    final provider = UpdatesSettingsProvider(orchestrator);
+    await Future<void>.delayed(Duration.zero);
+    final stale = Completer<bool>();
+    orchestrator.readiness = () => stale.future;
+    orchestrator.emitChange();
+    await Future<void>.delayed(Duration.zero);
+    orchestrator.readiness = () async => throw StateError('unreadable');
+    orchestrator.emitChange();
+    await Future<void>.delayed(Duration.zero);
+    stale.complete(true);
+    await Future<void>.delayed(Duration.zero);
+    expect(provider.hasPendingDownloadedUpdate, isFalse);
+    provider.dispose();
+  });
+
   late AppLocalizations l10n;
 
   setUpAll(() async {

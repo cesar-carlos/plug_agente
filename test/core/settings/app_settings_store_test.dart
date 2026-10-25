@@ -1,7 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
-
 import 'package:flutter_test/flutter_test.dart';
 import 'package:path/path.dart' as p;
 import 'package:plug_agente/core/settings/app_settings_keys.dart';
@@ -25,40 +24,17 @@ void main() {
       }
     });
 
-    test('should quarantine corrupted settings file and continue', () async {
-      final corruptedFile = File(settingsPath);
-      await corruptedFile.writeAsString('{invalid-json');
-
-      final store = GlobalAppSettingsStore(filePath: settingsPath);
-      await store.initialize();
-
-      expect(store.getKeys(), isEmpty);
-      expect(File(settingsPath).existsSync(), isFalse);
-
-      final quarantinedFiles = tempDir
-          .listSync()
-          .whereType<File>()
-          .where(
-            (file) => p.basename(file.path).startsWith('settings.json.corrupt.'),
-          )
-          .toList();
-      expect(quarantinedFiles, isNotEmpty);
-
-      await store.setBool(AppSettingsKeys.startWithWindows, true);
-      expect(File(settingsPath).existsSync(), isTrue);
-      expect(store.getBool(AppSettingsKeys.startWithWindows), isTrue);
-    });
-
-    test('should quarantine invalid root type and continue', () async {
-      final invalidRootFile = File(settingsPath);
-      await invalidRootFile.writeAsString('[]');
-
-      final store = GlobalAppSettingsStore(filePath: settingsPath);
-      await store.initialize();
-
-      expect(store.getKeys(), isEmpty);
-      expect(File(settingsPath).existsSync(), isFalse);
-    });
+    for (final content in ['{invalid-json', '[]', '']) {
+      test('preserves invalid settings and blocks overwrites: $content', () async {
+        await File(settingsPath).writeAsString(content);
+        final store = GlobalAppSettingsStore(filePath: settingsPath);
+        await store.initialize();
+        expect(store.readIntegrityError, isA<FormatException>());
+        await expectLater(store.setBool(AppSettingsKeys.startWithWindows, true), throwsFormatException);
+        await expectLater(store.flushPendingPersistence(), throwsFormatException);
+        expect(await File(settingsPath).readAsString(), content);
+      });
+    }
 
     test('flushPendingPersistence waits for concurrent queued writes', () async {
       final store = GlobalAppSettingsStore(filePath: settingsPath);

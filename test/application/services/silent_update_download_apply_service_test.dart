@@ -1,19 +1,22 @@
 import 'dart:async';
-
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:plug_agente/application/observability/i_auto_update_metrics_collector.dart';
 import 'package:plug_agente/application/observability/update_check_diagnostics.dart';
 import 'package:plug_agente/application/repositories/i_circuit_breaker_persistence.dart';
 import 'package:plug_agente/application/services/appcast_probe_service.dart';
 import 'package:plug_agente/application/services/i_pending_silent_update_store.dart';
 import 'package:plug_agente/application/services/pending_silent_update.dart';
 import 'package:plug_agente/application/services/persistent_circuit_breaker.dart';
+import 'package:plug_agente/application/services/service_update_pending_coordinator.dart';
+import 'package:plug_agente/application/services/silent_update/silent_update_cancellation_handler.dart';
 import 'package:plug_agente/application/services/silent_update_download_apply_service.dart';
 import 'package:plug_agente/application/services/silent_update_failure.dart';
 import 'package:plug_agente/application/services/silent_update_installer.dart';
+import 'package:plug_agente/application/services/silent_update_outcome.dart';
 import 'package:plug_agente/domain/errors/failures.dart' as domain;
+import 'package:plug_agente/infrastructure/services/windows_privileged_updater.dart';
 import 'package:result_dart/result_dart.dart';
-
 import '../../helpers/auto_update_test_fakes.dart';
 
 class FakeLauncherStatusReader implements ISilentUpdateLauncherStatusReader {
@@ -36,9 +39,11 @@ SilentUpdateDownloadApplyService _makeService({
   PersistentCircuitBreaker? automaticFailureBreaker,
   CloseApplicationForSilentUpdate? closeApplicationForSilentUpdate,
   DateTime Function()? clock,
+  IAutoUpdateMetricsCollector? metricsCollector,
   CurrentProcessIdResolver? currentProcessIdResolver,
 }) {
   return SilentUpdateDownloadApplyService(
+    metricsCollector: metricsCollector,
     installer: installer,
     pendingStore: pendingStore ?? FakePendingSilentUpdateStore(),
     automaticFailureBreaker:
@@ -91,7 +96,296 @@ PendingSilentUpdateDownloaded _downloadedPending({
   );
 }
 
+class ThrowingStatusReader extends FakeLauncherStatusReader {
+  bool fail = true;
+  @override
+  Future<SilentUpdateLauncherStatus?> read(String? statusPath) async {
+    if (fail) throw StateError('status read failed');
+    return null;
+  }
+}
+
+class FailingHelperEvidenceStore extends FakePendingSilentUpdateStore {
+  bool failNext = true;
+  @override
+  Future<Result<void>> save(PendingSilentUpdate pending) async {
+    await super.save(pending);
+    if (pending is PendingSilentUpdateDownloaded && pending.launchedAt != null && failNext) {
+      failNext = false;
+      return Failure(domain.ConfigurationFailure('Unable to persist helper evidence'));
+    }
+    return const Success(unit);
+  }
+}
+
+class ThrowingMetrics implements IAutoUpdateMetricsCollector {
+  @override
+  void recordAutoUpdateDownloadDuration(Duration duration) => throw StateError('metrics unavailable');
+  @override
+  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
+}
+
 void main() {
+  test('download metrics and diagnostic failures cannot hide staging results', () async {
+    final store = FakePendingSilentUpdateStore();
+    final installer = FakeSilentUpdateInstaller();
+    final service = _makeService(installer: installer, pendingStore: store, metricsCollector: ThrowingMetrics());
+    final request = SilentUpdateDownloadStageRequest(
+      probeResult: _probeResult(),
+      remoteVersion: '99.0.0+1',
+      cancelRequested: () => false,
+      automaticSilentUpdatesEnabled: () => true,
+      getDiagnostics: () => null,
+      onDiagnosticsUpdated: (_) => throw StateError('diagnostics unavailable'),
+      persistDiagnostics: () async {},
+      notifyDiagnosticsChanged: () {},
+    );
+    expect(await service.downloadAndStage(request), isA<SilentUpdateDownloadStageReady>());
+    expect(store.pending, isA<PendingSilentUpdateDownloaded>());
+    final original = domain.NetworkFailure('download unavailable');
+    installer.result = Failure(original);
+    final failed = await service.downloadAndStage(request) as SilentUpdateDownloadStageFailure;
+    expect(failed.error, same(original));
+  });
+
+  test('legacy cancellation preserves status evidence without a launch timestamp', () async {
+    final record = _downloadedPending();
+    final store = FakePendingSilentUpdateStore()..pending = record;
+    final handler = SilentUpdateCancellationHandler(
+      pendingStore: store,
+      launcherStatusReader: _TerminalLauncherStatusReader(
+        pending: record,
+        state: 'started',
+        lastUpdatedAt: DateTime.now(),
+      ),
+      automaticFailureBreaker: PersistentCircuitBreaker(
+        persistence: InMemoryCircuitBreakerPersistence(),
+        threshold: 3,
+        cooldown: const Duration(minutes: 5),
+        logName: 'test',
+      ),
+      clock: DateTime.now,
+    );
+    final result = await handler.completeAutomaticCancellation(
+      feedUrl: 'https://example.com/appcast.xml',
+      checkId: null,
+      existingDiagnostics: null,
+      onDiagnosticsUpdated: (_) {},
+      persistDiagnostics: () async {},
+    );
+    expect(result.getOrThrow(), SilentUpdateOutcome.pendingInProgress);
+    expect(store.clearCount, 0);
+  });
+
+  test('legacy cancellation cannot erase an in-flight helper launch', () async {
+    final store = FakePendingSilentUpdateStore()..pending = _downloadedPending();
+    final entered = Completer<void>();
+    final release = Completer<void>();
+    final installer = FakeSilentUpdateInstaller()
+      ..onBeforeLaunchReturn = () async {
+        entered.complete();
+        await release.future;
+      };
+    final service = _makeService(installer: installer, pendingStore: store);
+    final apply = service.applyPendingDownloadedUpdate(
+      getDiagnostics: () => null,
+      onDiagnosticsUpdated: (_) {},
+      persistDiagnostics: () async {},
+      notifyDiagnosticsChanged: () {},
+      triggerAppClose: false,
+    );
+    await entered.future;
+    final handler = SilentUpdateCancellationHandler(
+      pendingStore: store,
+      automaticFailureBreaker: PersistentCircuitBreaker(
+        persistence: InMemoryCircuitBreakerPersistence(),
+        threshold: 3,
+        cooldown: const Duration(minutes: 5),
+        logName: 'test',
+      ),
+      clock: DateTime.now,
+    );
+    final cancellation = handler.completeAutomaticCancellation(
+      feedUrl: 'https://example.com/appcast.xml',
+      checkId: null,
+      existingDiagnostics: null,
+      onDiagnosticsUpdated: (_) {},
+      persistDiagnostics: () async {},
+    );
+    await Future<void>.delayed(Duration.zero);
+    final clearsBeforeRelease = store.clearCount;
+    release.complete();
+    await apply;
+    final result = await cancellation;
+    expect(clearsBeforeRelease, 0);
+    expect(result.getOrThrow(), SilentUpdateOutcome.pendingInProgress);
+    expect((store.pending! as PendingSilentUpdateDownloaded).launchedAt, isNotNull);
+  });
+
+  test('lost preparation reply during cancellation reconciles without failure count', () async {
+    final store = FakePendingSilentUpdateStore();
+    final breaker = PersistentCircuitBreaker(
+      persistence: InMemoryCircuitBreakerPersistence(),
+      threshold: 3,
+      cooldown: const Duration(minutes: 5),
+      logName: 'test',
+    );
+    var cancelled = 0;
+    final pending = ServiceUpdatePendingCoordinator(
+      updater: WindowsPrivilegedUpdater(
+        requestTransport: (request) async {
+          final cancel = request['command'] == 'cancel';
+          if (cancel) cancelled++;
+          return Success({
+            'status': {
+              'protocol': 1,
+              'state': cancel ? 'deferred' : 'preparing',
+              'operationId': 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+              'version': '99.0.0+1',
+              'ownedByCaller': true,
+              if (cancel) 'reason': 'cancelled_before_installation',
+            },
+          });
+        },
+      ),
+      store: store,
+      flush: () async {},
+      clock: DateTime.now,
+      stagedTtl: const Duration(days: 7),
+    );
+    final service = SilentUpdateDownloadApplyService(
+      installer: FakeSilentUpdateInstaller()..result = Failure(domain.NetworkFailure('Lost prepare reply')),
+      pendingStore: store,
+      automaticFailureBreaker: breaker,
+      launcherStatusReader: FakeLauncherStatusReader(),
+      servicePending: pending,
+    );
+    final result = await service.downloadAndStage(
+      SilentUpdateDownloadStageRequest(
+        probeResult: _probeResult(),
+        remoteVersion: '99.0.0+1',
+        cancelRequested: () => true,
+        automaticSilentUpdatesEnabled: () => true,
+        getDiagnostics: () => null,
+        onDiagnosticsUpdated: (_) {},
+        persistDiagnostics: () async {},
+        notifyDiagnosticsChanged: () {},
+      ),
+    );
+    expect(result, isA<SilentUpdateDownloadStageCancelled>());
+    expect(cancelled, 1);
+    expect(breaker.failureCount, 0);
+  });
+
+  test('stale helper evidence resolves to recovery rather than active', () async {
+    final store = FakePendingSilentUpdateStore()
+      ..pending = _downloadedPending().copyWith(launchedAt: DateTime.utc(2026, 6));
+    final service = _makeService(pendingStore: store);
+    expect(await service.resolvePersistedDownloadedPending(), isA<PendingDownloadedAttention>());
+    expect(store.clearCount, 0);
+  });
+
+  test('close failure remains observed when diagnostic callback throws', () async {
+    final store = FakePendingSilentUpdateStore()..pending = _downloadedPending();
+    final close = Completer<void>();
+    final service = _makeService(
+      installer: FakeSilentUpdateInstaller(),
+      pendingStore: store,
+      closeApplicationForSilentUpdate: ({noticeTitle, noticeBody}) => close.future,
+    );
+    var calls = 0;
+    final result = await service.applyPendingDownloadedUpdate(
+      getDiagnostics: () => null,
+      onDiagnosticsUpdated: (_) {
+        if (++calls > 1) throw StateError('diagnostic callback');
+      },
+      persistDiagnostics: () async {},
+      notifyDiagnosticsChanged: () {},
+    );
+    close.completeError(StateError('close failed'));
+    await Future<void>.delayed(Duration.zero);
+    expect(result.isSuccess(), isTrue);
+    expect((store.pending! as PendingSilentUpdateDownloaded).launchedAt, isNotNull);
+  });
+
+  test('failed helper evidence write restores readiness without launching', () async {
+    final pending = FailingHelperEvidenceStore()..pending = _downloadedPending();
+    final installer = FakeSilentUpdateInstaller();
+    final service = _makeService(installer: installer, pendingStore: pending);
+    final result = await service.applyPendingDownloadedUpdate(
+      getDiagnostics: () => null,
+      onDiagnosticsUpdated: (_) {},
+      persistDiagnostics: () async {},
+      notifyDiagnosticsChanged: () {},
+      triggerAppClose: false,
+    );
+    expect(result.isError(), isTrue);
+    expect(installer.launchHelperCount, 0);
+    expect((pending.pending! as PendingSilentUpdateDownloaded).launchedAt, isNull);
+  });
+
+  test('concurrent apply cannot close the app before the helper launch is confirmed', () async {
+    final pending = FakePendingSilentUpdateStore()..pending = _downloadedPending();
+    final gate = Completer<void>();
+    final installer = FakeSilentUpdateInstaller()..onBeforeLaunchReturn = () => gate.future;
+    var closes = 0;
+    final service = _makeService(
+      installer: installer,
+      pendingStore: pending,
+      closeApplicationForSilentUpdate: ({noticeTitle, noticeBody}) async {
+        closes++;
+      },
+    );
+    Future<Result<void>> apply(bool close) => service.applyPendingDownloadedUpdate(
+      getDiagnostics: () => null,
+      onDiagnosticsUpdated: (_) {},
+      persistDiagnostics: () async {},
+      notifyDiagnosticsChanged: () {},
+      triggerAppClose: close,
+    );
+    final first = apply(false);
+    await Future<void>.delayed(Duration.zero);
+    final second = await apply(true);
+    gate.complete();
+    await first;
+    expect(closes, 0);
+    expect(second.isError(), isTrue);
+  });
+
+  test('status failure releases the apply guard and permits a safe retry', () async {
+    final store = FakePendingSilentUpdateStore()..pending = _downloadedPending();
+    final installer = FakeSilentUpdateInstaller();
+    final reader = ThrowingStatusReader();
+    final service = _makeService(installer: installer, pendingStore: store, launcherStatusReader: reader);
+    Future<Result<void>> apply() => service.applyPendingDownloadedUpdate(
+      getDiagnostics: () => null,
+      onDiagnosticsUpdated: (_) {},
+      persistDiagnostics: () async {},
+      notifyDiagnosticsChanged: () {},
+      triggerAppClose: false,
+    );
+    expect((await apply()).isError(), isTrue);
+    reader.fail = false;
+    expect((await apply()).isSuccess(), isTrue);
+    expect(installer.launchHelperCount, 1);
+  });
+
+  test('diagnostic failure after helper dispatch preserves success and evidence', () async {
+    final store = FakePendingSilentUpdateStore()..pending = _downloadedPending();
+    final installer = FakeSilentUpdateInstaller();
+    final service = _makeService(installer: installer, pendingStore: store);
+    final result = await service.applyPendingDownloadedUpdate(
+      getDiagnostics: () => null,
+      onDiagnosticsUpdated: (_) {},
+      persistDiagnostics: () async => throw StateError('diagnostic'),
+      notifyDiagnosticsChanged: () {},
+      triggerAppClose: false,
+    );
+    expect(result.isSuccess(), isTrue);
+    expect(installer.launchHelperCount, 1);
+    expect((store.pending! as PendingSilentUpdateDownloaded).launchedAt, isNotNull);
+  });
+
   setUpAll(() {
     dotenv.clean();
     dotenv.loadFromString(
@@ -479,7 +773,7 @@ void main() {
 
         final resolution = await service.resolvePersistedDownloadedPending();
 
-        expect(resolution, isA<PendingDownloadedInFlight>());
+        expect(resolution, isA<PendingDownloadedAttention>());
         expect(pendingStore.clearCount, 0);
         expect(pendingStore.pending, isNotNull);
         expect(breaker.failureCount, 0);
@@ -730,8 +1024,7 @@ void main() {
         DateTime? launchedAtSeenDuringSpawn;
         installer.onBeforeLaunchReturn = () async {
           final current = pendingStore.pending;
-          launchedAtSeenDuringSpawn =
-              current is PendingSilentUpdateDownloaded ? current.launchedAt : null;
+          launchedAtSeenDuringSpawn = current is PendingSilentUpdateDownloaded ? current.launchedAt : null;
         };
 
         final result = await apply(triggerAppClose: false);
@@ -893,7 +1186,7 @@ void main() {
         final results = await Future.wait([firstFuture, secondFuture]);
 
         expect(results[0].isSuccess(), isTrue);
-        expect(results[1].isSuccess(), isTrue);
+        expect(results[1].isError(), isTrue);
         expect(installer.launchHelperCount, 1);
       });
 
@@ -920,7 +1213,7 @@ void main() {
 
         expect(result.isSuccess(), isTrue, reason: 'launching the helper already succeeded');
         expect(latestDiagnostics?.completionSource, UpdateCheckCompletionSource.automaticInstallFailure);
-        expect(latestDiagnostics?.errorMessage, contains('window manager refused to close'));
+        expect(latestDiagnostics?.errorMessage, 'Não foi possível fechar o aplicativo para concluir a atualização.');
         expect(notifyCount, greaterThanOrEqualTo(2));
         expect(
           pendingStore.pending,

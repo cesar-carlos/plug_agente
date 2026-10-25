@@ -1,7 +1,7 @@
-import 'package:plug_agente/application/repositories/i_circuit_breaker_persistence.dart';
-import 'package:plug_agente/application/repositories/update_preferences_repository.dart'
-    show UpdatePreferencesRepository;
 import 'package:plug_agente/core/settings/app_settings_store.dart';
+import 'package:plug_agente/domain/repositories/i_circuit_breaker_persistence.dart';
+import 'package:plug_agente/infrastructure/repositories/update_preferences_repository.dart'
+    show UpdatePreferencesRepository;
 
 /// Settings-backed circuit breaker state owned by [UpdatePreferencesRepository].
 class UpdatePreferencesCircuitBreakerPersistence implements ICircuitBreakerPersistence {

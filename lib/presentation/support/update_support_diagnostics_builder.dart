@@ -432,6 +432,8 @@ class UpdateSupportDiagnosticsBuilder {
       UpdateCheckCompletionSource.automaticCooldown => l10n.configUpdateCompletionSourceAutomaticCooldown,
       UpdateCheckCompletionSource.automaticRolloutSkipped => l10n.configUpdateCompletionSourceAutomaticRolloutSkipped,
       UpdateCheckCompletionSource.automaticCancelled => l10n.configUpdateCompletionSourceAutomaticCancelled,
+      UpdateCheckCompletionSource.automaticRecoveryRequired =>
+        l10n.configUpdateCompletionSourceAutomaticRecoveryRequired,
       UpdateCheckCompletionSource.automaticQuietHours => l10n.configUpdateCompletionSourceAutomaticQuietHours,
       null => '-',
     };

@@ -1,5 +1,4 @@
 import 'dart:async';
-
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -7,7 +6,6 @@ import 'package:go_router/go_router.dart';
 import 'package:plug_agente/application/observability/update_check_diagnostics.dart';
 import 'package:plug_agente/application/repositories/app_preferences_repository.dart';
 import 'package:plug_agente/application/repositories/i_app_preferences_repository.dart';
-import 'package:plug_agente/application/repositories/update_preferences_repository.dart';
 import 'package:plug_agente/application/services/manual_check_outcome.dart';
 import 'package:plug_agente/application/services/silent_update_outcome.dart';
 import 'package:plug_agente/core/di/service_locator.dart';
@@ -17,6 +15,7 @@ import 'package:plug_agente/core/services/i_auto_update_orchestrator.dart';
 import 'package:plug_agente/core/services/i_window_manager_service.dart';
 import 'package:plug_agente/core/settings/app_settings_store.dart';
 import 'package:plug_agente/infrastructure/repositories/startup_preferences_repository.dart';
+import 'package:plug_agente/infrastructure/repositories/update_preferences_repository.dart';
 import 'package:plug_agente/presentation/app/app.dart';
 import 'package:plug_agente/presentation/providers/theme_provider.dart';
 import 'package:plug_agente/presentation/providers/updates_settings_provider.dart';

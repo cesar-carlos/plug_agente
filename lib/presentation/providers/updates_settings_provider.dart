@@ -1,5 +1,5 @@
 import 'dart:async';
-
+import 'dart:developer' as developer;
 import 'package:fluent_ui/fluent_ui.dart';
 import 'package:plug_agente/core/constants/app_constants.dart';
 import 'package:plug_agente/core/runtime/runtime_capabilities.dart';
@@ -44,6 +44,7 @@ class UpdatesSettingsProvider extends ChangeNotifier {
   String _lastManualCheckDisplayLabel = '';
   bool _isCheckingUpdates = false;
   bool _hasPendingDownloadedUpdate = false;
+  int _refreshGeneration = 0;
   UpdateCheckInlineNotice? _updateCheckInlineNotice;
 
   IAutoUpdateOrchestrator get orchestrator => _orchestrator;
@@ -207,10 +208,14 @@ class UpdatesSettingsProvider extends ChangeNotifier {
   }
 
   Future<void> _onOrchestratorChanged() async {
-    final hasPending = await _orchestrator.hasPendingDownloadedUpdate;
-    if (_isDisposed) {
-      return;
+    final generation = ++_refreshGeneration;
+    var hasPending = false;
+    try {
+      hasPending = await _orchestrator.hasPendingDownloadedUpdate;
+    } on Object catch (error, stackTrace) {
+      developer.log('Update readiness unavailable', error: error, stackTrace: stackTrace);
     }
+    if (_isDisposed || generation != _refreshGeneration) return;
     _hasPendingDownloadedUpdate = hasPending;
     _notifyIfActive();
   }

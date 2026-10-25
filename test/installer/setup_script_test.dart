@@ -110,7 +110,7 @@ void main() {
       final setupScript = File('installer/setup.iss').readAsStringSync();
 
       expect(setupScript, contains(r'SetupMutex=Global\PlugAgenteSetup'));
-      expect(setupScript, contains('CloseApplications=yes'));
+      expect(setupScript, contains('CloseApplications=no'));
       expect(setupScript, contains('CloseApplicationsFilter=plug_agente.exe'));
       expect(setupScript, contains('RestartApplications=no'));
     });

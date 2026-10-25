@@ -9745,6 +9745,48 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Unavailable'**
   String get agentActionsCpuUnavailable;
+
+  /// No description provided for @configUpdateCompletionSourceAutomaticRecoveryRequired.
+  ///
+  /// In en, this message translates to:
+  /// **'Update requires recovery'**
+  String get configUpdateCompletionSourceAutomaticRecoveryRequired;
+
+  /// No description provided for @installationPreparationTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Preparing installation'**
+  String get installationPreparationTitle;
+
+  /// No description provided for @installationPreparationWaiting.
+  ///
+  /// In en, this message translates to:
+  /// **'Waiting for active operations to finish.'**
+  String get installationPreparationWaiting;
+
+  /// No description provided for @installationPreparationClosing.
+  ///
+  /// In en, this message translates to:
+  /// **'Closing safely for installation.'**
+  String get installationPreparationClosing;
+
+  /// No description provided for @installationPreparationBlocked.
+  ///
+  /// In en, this message translates to:
+  /// **'Installation is blocked by active operations.'**
+  String get installationPreparationBlocked;
+
+  /// No description provided for @installationPreparationCancelled.
+  ///
+  /// In en, this message translates to:
+  /// **'Installation preparation was cancelled.'**
+  String get installationPreparationCancelled;
+
+  /// No description provided for @installationPreparationRecovery.
+  ///
+  /// In en, this message translates to:
+  /// **'Safe shutdown is unconfirmed. Review recovery with support.'**
+  String get installationPreparationRecovery;
 }
 
 class _AppLocalizationsDelegate extends LocalizationsDelegate<AppLocalizations> {

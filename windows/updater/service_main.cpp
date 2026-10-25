@@ -198,6 +198,11 @@ Json handle_request(HANDLE pipe, const Json& request) {
   const DWORD client_pid = authorize_client(pipe, policy);
   const auto sid = utf8(client_sid(pipe));
   const auto command = request.at("command").get<std::string>();
+  if (command == "prepare" || command == "start" || command == "recoverApplication") {
+    const auto migration = updater_root() / L"manifest-migration.json";
+    if (fs::exists(migration) && parse_json(read_file(migration)).value("state", "") != "completed")
+      throw std::runtime_error("manifest_migration_requires_recovery");
+  }
   auto current = journal();
   worker_active = process_alive(current);
   if (command == "status") {

@@ -11,10 +11,37 @@ from installer import build_installer
 
 
 class InstallerContractTests(unittest.TestCase):
+    def test_default_build_requires_manifest_keys_without_certificate(self):
+        args = SimpleNamespace(manifest_only=False, prepare_signpath=False, sync_version=False)
+        with patch.dict(os.environ, {}, clear=True), patch.object(build_installer, "parse_args", return_value=args), \
+                patch.object(build_installer, "signing_cert_path", return_value=None), \
+                patch.object(build_installer, "read_env_value", return_value=None), \
+                patch.object(build_installer, "configure_native_feed_keys", return_value=None), \
+                patch.object(build_installer, "run") as run:
+            with self.assertRaisesRegex(SystemExit, "Ed25519"):
+                build_installer.main()
+            run.assert_not_called()
+
+    def test_official_build_rejects_conflicting_or_invalid_trust_options(self):
+        args = SimpleNamespace(manifest_only=False, prepare_signpath=False, sync_version=False)
+        for values in ({"SIGNING_PROVIDER": "pfx"}, {"SIGNING_PROVIDER": "signpath"},
+                       {"AUTO_UPDATE_REQUIRE_VALID_SIGNATURE": "true"},
+                       {"AUTO_UPDATE_REQUIRE_FEED_SIGNATURE": "false"},
+                       {"WINDOWS_CODE_SIGNING_REQUIRED": "invalid"}):
+            with self.subTest(values=values), patch.dict(os.environ, values, clear=True), \
+                    patch.object(build_installer, "parse_args", return_value=args), \
+                    patch.object(build_installer, "signing_cert_path", return_value=None), \
+                    patch.object(build_installer, "read_env_value", return_value=None), \
+                    patch.object(build_installer, "run") as run:
+                with self.assertRaises(SystemExit):
+                    build_installer.main()
+                run.assert_not_called()
+
     def test_manifest_only_requires_keys_before_build(self):
         args = SimpleNamespace(manifest_only=True, prepare_signpath=False, sync_version=False)
         with patch.dict(os.environ, {}, clear=True), patch.object(build_installer, "parse_args", return_value=args), \
                 patch.object(build_installer, "signing_cert_path", return_value=None), \
+                patch.object(build_installer, "read_env_value", return_value=None), \
                 patch.object(build_installer, "configure_native_feed_keys", return_value=None), \
                 patch.object(build_installer, "run") as run:
             with self.assertRaisesRegex(SystemExit, "Ed25519"):

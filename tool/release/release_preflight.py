@@ -350,7 +350,7 @@ def list_github_actions_secrets(repo: str) -> set[str]:
     return {line.split()[0] for line in result.stdout.splitlines() if line.strip()}
 
 
-def collect_publish_secret_warnings(repo: str, signing_provider: str = "pfx") -> list[str]:
+def collect_publish_secret_warnings(repo: str, signing_provider: str = "manifest") -> list[str]:
     secrets = list_github_actions_secrets(repo)
     warnings: list[str] = []
     required_signing_secret = "SIGNPATH_API_TOKEN" if signing_provider == "signpath" else "WINDOWS_CODE_SIGNING_CERT_BASE64"
@@ -375,7 +375,7 @@ def print_publish_workflow_hints(
     build_number: str,
     repo: str,
     skip_authenticode: bool,
-    signing_provider: str = "pfx",
+    signing_provider: str = "manifest",
 ) -> None:
     secrets = list_github_actions_secrets(repo)
     signing_secret = "SIGNPATH_API_TOKEN" if signing_provider == "signpath" else "WINDOWS_CODE_SIGNING_CERT_BASE64"
@@ -391,8 +391,7 @@ def print_publish_workflow_hints(
     print(
         f"     gh workflow run \"Publish Windows Release\" --ref main "
         f"-f version={version_short} -f build_number={build_number} "
-        f"-f run_tests=true -f require_signing={signing_flag} -f require_valid_update_signature={signing_flag} -f dry_run=false "
-        f"-f skip_authenticode_check={skip_flag} -f signing_provider={signing_provider}"
+        f"-f run_tests=true -f dry_run=false -f signing_provider=manifest"
     )
     if signed and not has_signing:
         print(
@@ -416,7 +415,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--check-installer", action="store_true", help="Require installer/dist asset for this version.")
     parser.add_argument("--check-pages", action="store_true", help="Require GitHub Pages to be enabled for Actions deploy.")
     parser.add_argument("--repo", default="cesar-carlos/plug_agente", help="GitHub repository used by --check-pages.")
-    parser.add_argument("--signing-provider", choices=("manifest", "pfx", "signpath"), default="manifest")
+    parser.add_argument("--signing-provider", choices=("manifest",), default="manifest")
     parser.add_argument("--analyze", action="store_true", help="Run flutter analyze.")
     parser.add_argument("--tests", action="store_true", help="Run flutter test.")
     parser.add_argument(

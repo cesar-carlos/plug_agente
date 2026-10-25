@@ -1,11 +1,9 @@
 import 'dart:async';
 import 'dart:developer' as developer;
 import 'dart:io' show pid;
-
 import 'package:plug_agente/application/observability/i_auto_update_metrics_collector.dart';
 import 'package:plug_agente/application/observability/update_check_diagnostics.dart';
 import 'package:plug_agente/application/repositories/i_update_preferences_repository.dart';
-import 'package:plug_agente/application/services/appcast_probe_service.dart';
 import 'package:plug_agente/application/services/auto_update_defaults.dart';
 import 'package:plug_agente/application/services/auto_update_failure_messages.dart';
 import 'package:plug_agente/application/services/i_pending_silent_update_store.dart';
@@ -13,6 +11,7 @@ import 'package:plug_agente/application/services/pending_silent_update.dart';
 import 'package:plug_agente/application/services/persistent_circuit_breaker.dart';
 import 'package:plug_agente/application/services/service_update_pending_coordinator.dart';
 import 'package:plug_agente/application/services/silent_update/silent_update_helper_launch_state.dart';
+import 'package:plug_agente/application/services/silent_update/update_transition_gate.dart';
 import 'package:plug_agente/application/services/silent_update_failure.dart';
 import 'package:plug_agente/application/services/silent_update_installer.dart';
 import 'package:plug_agente/core/config/app_environment.dart';
@@ -20,6 +19,7 @@ import 'package:plug_agente/core/config/auto_update_feed_config.dart';
 import 'package:plug_agente/core/constants/app_constants.dart';
 import 'package:plug_agente/core/versioning/app_version_comparator.dart';
 import 'package:plug_agente/domain/errors/failures.dart' as domain;
+import 'package:plug_agente/domain/services/i_appcast_probe_service.dart';
 import 'package:result_dart/result_dart.dart';
 
 typedef CloseApplicationForSilentUpdate = Future<void> Function({String? noticeTitle, String? noticeBody});
@@ -47,6 +47,11 @@ final class PendingDownloadedInFlight extends PendingDownloadedResolution {
 final class PendingDownloadedReady extends PendingDownloadedResolution {
   const PendingDownloadedReady(this.pending);
 
+  final PendingSilentUpdate pending;
+}
+
+final class PendingDownloadedAttention extends PendingDownloadedResolution {
+  const PendingDownloadedAttention(this.pending);
   final PendingSilentUpdate pending;
 }
 
@@ -183,7 +188,11 @@ class SilentUpdateDownloadApplyService {
         stageForService: installer is IServiceSilentUpdateInstaller,
       ),
     );
-    _metricsCollector?.recordAutoUpdateDownloadDuration(_clock().difference(downloadStart));
+    try {
+      _metricsCollector?.recordAutoUpdateDownloadDuration(_clock().difference(downloadStart));
+    } on Object catch (error, stack) {
+      developer.log('Download metrics unavailable', error: error, stackTrace: stack);
+    }
 
     SilentUpdateInstallResult? installSuccess;
     Exception? installError;
@@ -194,6 +203,20 @@ class SilentUpdateDownloadApplyService {
 
     final now = _clock();
     if (installError != null) {
+      if (request.cancelRequested() && servicePending != null) {
+        final reconciled = await servicePending!.reconcile(cancel: true);
+        if (reconciled.isError()) return SilentUpdateDownloadStageFailure(reconciled.exceptionOrNull()!);
+        final decision = reconciled.getOrThrow().decision;
+        if (decision == ServicePendingDecision.active || decision == ServicePendingDecision.attention) {
+          return SilentUpdateDownloadStageFailure(
+            domain.ConfigurationFailure.withContext(
+              message: 'O cancelamento ainda não foi confirmado. Verifique a recuperação.',
+              context: const {'reason': 'cancellation_unconfirmed', 'outcome_unknown': true},
+            ),
+          );
+        }
+        return const SilentUpdateDownloadStageCancelled();
+      }
       if (_isCancellationFailure(installError!)) {
         return const SilentUpdateDownloadStageCancelled();
       }
@@ -209,17 +232,19 @@ class SilentUpdateDownloadApplyService {
               cooldownUntil: _automaticFailureBreaker.cooldownUntil,
             )
           : await _automaticFailureBreaker.recordFailure();
-      request.onDiagnosticsUpdated(
-        request.getDiagnostics()?.copyWith(
-          triggerCompletedAt: now,
-          completedAt: now,
-          completionSource: completionSource,
-          automaticFailureCount: failureState.failureCount,
-          automaticCooldownUntil: failureState.cooldownUntil,
-          errorMessage: extractAutoUpdateFailureMessage(installError!),
-        ),
-      );
-      await request.persistDiagnostics();
+      await _observeDiagnostics(() async {
+        request.onDiagnosticsUpdated(
+          request.getDiagnostics()?.copyWith(
+            triggerCompletedAt: now,
+            completedAt: now,
+            completionSource: completionSource,
+            automaticFailureCount: failureState.failureCount,
+            automaticCooldownUntil: failureState.cooldownUntil,
+            errorMessage: extractAutoUpdateFailureMessage(installError!),
+          ),
+        );
+        await request.persistDiagnostics();
+      });
       return SilentUpdateDownloadStageFailure(installError!);
     }
 
@@ -252,29 +277,30 @@ class SilentUpdateDownloadApplyService {
             ),
     );
     await _automaticFailureBreaker.reset();
-    request.onDiagnosticsUpdated(
-      request.getDiagnostics()?.copyWith(
-        triggerCompletedAt: now,
-        completedAt: now,
-        completionSource: UpdateCheckCompletionSource.automaticInstallReady,
-        installerPath: success.installerPath,
-        installerLogPath: success.logPath,
-        installDirectory: success.installDirectory,
-        silentUpdateStrategy: success.strategy.name,
-        launcherPath: success.launcherPath,
-        launcherStatusPath: success.launcherStatusPath,
-        appPid: success.appPid,
-        updateDirectorySecurityStatus: success.updateDirectorySecurityStatus,
-        installDirectoryWritable: success.installDirectoryWritable,
-        helperSha256: success.helperSha256,
-        helperSignatureStatus: success.helperSignatureStatus,
-        signatureRequired: resolveAutoUpdateRequireValidSignature(
-          environment: AppEnvironment.snapshot(),
+    await _observeDiagnostics(() async {
+      request.onDiagnosticsUpdated(
+        request.getDiagnostics()?.copyWith(
+          triggerCompletedAt: now,
+          completedAt: now,
+          completionSource: UpdateCheckCompletionSource.automaticInstallReady,
+          installerPath: success.installerPath,
+          installerLogPath: success.logPath,
+          installDirectory: success.installDirectory,
+          silentUpdateStrategy: success.strategy.name,
+          launcherPath: success.launcherPath,
+          launcherStatusPath: success.launcherStatusPath,
+          appPid: success.appPid,
+          updateDirectorySecurityStatus: success.updateDirectorySecurityStatus,
+          installDirectoryWritable: success.installDirectoryWritable,
+          helperSha256: success.helperSha256,
+          helperSignatureStatus: success.helperSignatureStatus,
+          signatureRequired: resolveAutoUpdateRequireValidSignature(
+            environment: AppEnvironment.snapshot(),
+          ),
         ),
-      ),
-    );
-    await request.persistDiagnostics();
-    await _preferences?.flushPendingPersistence();
+      );
+      await request.persistDiagnostics();
+    });
 
     if (request.cancelRequested()) {
       return const SilentUpdateDownloadStageCancelled();
@@ -283,7 +309,7 @@ class SilentUpdateDownloadApplyService {
     // Preference turned off mid-flight after a successful stage: keep staged
     // Ready for manual banner/shutdown apply. Do not wipe useful artifacts.
     if (!request.automaticSilentUpdatesEnabled()) {
-      request.notifyDiagnosticsChanged();
+      await _observeDiagnostics(request.notifyDiagnosticsChanged);
     }
 
     return const SilentUpdateDownloadStageReady();
@@ -322,7 +348,10 @@ class SilentUpdateDownloadApplyService {
     return true;
   }
 
-  Future<PendingDownloadedResolution> resolvePersistedDownloadedPending() async {
+  Future<PendingDownloadedResolution> resolvePersistedDownloadedPending() =>
+      UpdateTransitionGate.forStore(_pendingStore).run(_resolvePersistedDownloadedPending);
+
+  Future<PendingDownloadedResolution> _resolvePersistedDownloadedPending() async {
     if (servicePending != null) {
       final result = await servicePending!.reconcile();
       if (result.isError()) throw result.exceptionOrNull()!;
@@ -331,8 +360,9 @@ class SilentUpdateDownloadApplyService {
         case ServicePendingDecision.ready:
           return PendingDownloadedReady(resolved.pending!);
         case ServicePendingDecision.active:
-        case ServicePendingDecision.attention:
           return PendingDownloadedInFlight(resolved.pending!);
+        case ServicePendingDecision.attention:
+          return PendingDownloadedAttention(resolved.pending!);
         case ServicePendingDecision.finished:
           return const PendingDownloadedStaleCleared();
         case ServicePendingDecision.none:
@@ -347,6 +377,14 @@ class SilentUpdateDownloadApplyService {
     final now = _clock();
     final launcherStatus = await _launcherStatusReader.read(pending.launcherStatusPath);
     if (_isHelperInstallInFlight(pending, launcherStatus)) {
+      if (SilentUpdateHelperLaunchState.requiresRecovery(
+        launchedAt: pending.launchedAt,
+        launcherStatus: launcherStatus,
+        now: now,
+        helperWaitDuration: _helperWaitDuration,
+      )) {
+        return PendingDownloadedAttention(pending);
+      }
       return PendingDownloadedInFlight(pending);
     }
 
@@ -457,20 +495,12 @@ class SilentUpdateDownloadApplyService {
     bool triggerAppClose = true,
   }) async {
     if (_applyInProgress) {
-      if (servicePending != null) {
-        return Failure(domain.ConfigurationFailure('A atualização ainda está sendo reconciliada. Aguarde.'));
-      }
-      if (triggerAppClose) {
-        _closeApplicationOrReportFailure(
-          noticeTitle: noticeTitle,
-          noticeBody: noticeBody,
-          getDiagnostics: getDiagnostics,
-          onDiagnosticsUpdated: onDiagnosticsUpdated,
-          persistDiagnostics: persistDiagnostics,
-          notifyDiagnosticsChanged: notifyDiagnosticsChanged,
-        );
-      }
-      return const Success(unit);
+      return Failure(
+        domain.ConfigurationFailure.withContext(
+          message: 'A atualização ainda está sendo preparada. Aguarde.',
+          context: const {'reason': 'application_in_progress'},
+        ),
+      );
     }
 
     // Claim the guard synchronously, before the first `await` below. `await`
@@ -482,109 +512,286 @@ class SilentUpdateDownloadApplyService {
     // genuine failure (no pending record, no installer, launch error, ...)
     // can still be retried.
     _applyInProgress = true;
-    PendingSilentUpdate? pending;
-    try {
-      pending = await _pendingStore.read();
-    } on Object catch (error) {
-      _applyInProgress = false;
-      return Failure(
-        domain.ConfigurationFailure.withContext(
-          message: 'Não foi possível consultar a operação de atualização. Tente novamente.',
-          cause: error,
-          context: const {'reason': 'pending_read_unconfirmed', 'outcome_unknown': true},
-        ),
-      );
-    }
-    if (pending == null) {
-      _applyInProgress = false;
-      return Failure(
-        domain.ConfigurationFailure.withContext(
-          message: 'No prepared silent update is available to apply',
-          context: <String, dynamic>{
-            'operation': 'applyPendingDownloadedUpdate',
-            'reason': 'no_pending_update',
-          },
-        ),
-      );
-    }
-    final installer = _installer;
-    if (installer == null) {
-      _applyInProgress = false;
-      return Failure(
-        domain.ConfigurationFailure.withContext(
-          message: 'Silent update installer is not configured',
-          context: <String, dynamic>{
-            'operation': 'applyPendingDownloadedUpdate',
-            'reason': 'installer_not_configured',
-          },
-        ),
-      );
-    }
-    if (pending is PendingSilentUpdateService) {
+    return UpdateTransitionGate.forStore(_pendingStore).run(() async {
       try {
-        if (installer is! IServiceSilentUpdateInstaller || servicePending == null) {
-          return Failure(domain.ConfigurationFailure('O serviço de atualização exige nova preparação.'));
-        }
-        final resolved = await servicePending!.reconcile();
-        if (pending.dispatchAttemptedAt == null && resolved.isError()) return Failure(resolved.exceptionOrNull()!);
-        if (pending.dispatchAttemptedAt == null && resolved.getOrThrow().decision != ServicePendingDecision.ready) {
-          return Failure(
-            domain.ConfigurationFailure('A operação de atualização precisa ser reconciliada antes de aplicar.'),
-          );
-        }
-        await _pendingStore.write(pending.copyWith(dispatchAttemptedAt: _clock()));
-        await _preferences?.flushPendingPersistence();
-        if (_preferences?.lastPersistError != null) {
+        PendingSilentUpdate? pending;
+        try {
+          pending = await _pendingStore.read();
+        } on Object catch (error) {
+          _applyInProgress = false;
           return Failure(
             domain.ConfigurationFailure.withContext(
-              message: 'Não foi possível salvar a operação. A manutenção não foi iniciada.',
-              context: const {'reason': 'pending_persistence_unconfirmed', 'resources_closed': false},
+              message: 'Não foi possível consultar a operação de atualização. Tente novamente.',
+              cause: error,
+              context: const {'reason': 'pending_read_unconfirmed', 'outcome_unknown': true},
             ),
           );
         }
-        final dispatched = await installer.launchServiceOperation(
-          version: pending.version,
-          operationId: pending.operationId,
-          appPid: _currentProcessIdResolver(),
-        );
-        if (dispatched.isError()) {
-          final error = dispatched.exceptionOrNull()!;
-          if (error is domain.Failure &&
-              (error.context['reason'] == 'maintenance_deferred' ||
-                  (error.context['resources_closed'] == false && error.context['outcome_unknown'] != true))) {
-            await _pendingStore.write(pending.copyWith(clearDispatchAttempt: true));
-            await _preferences?.flushPendingPersistence();
-          }
-          onDiagnosticsUpdated(
-            getDiagnostics()?.copyWith(
-              completedAt: _clock(),
-              errorMessage: extractAutoUpdateFailureMessage(dispatched.exceptionOrNull()!),
+        if (pending == null) {
+          _applyInProgress = false;
+          return Failure(
+            domain.ConfigurationFailure.withContext(
+              message: 'No prepared silent update is available to apply',
+              context: <String, dynamic>{
+                'operation': 'applyPendingDownloadedUpdate',
+                'reason': 'no_pending_update',
+              },
             ),
           );
+        }
+        final installer = _installer;
+        if (installer == null) {
+          _applyInProgress = false;
+          return Failure(
+            domain.ConfigurationFailure.withContext(
+              message: 'Silent update installer is not configured',
+              context: <String, dynamic>{
+                'operation': 'applyPendingDownloadedUpdate',
+                'reason': 'installer_not_configured',
+              },
+            ),
+          );
+        }
+        if (pending is PendingSilentUpdateService) {
           try {
-            await persistDiagnostics();
-            notifyDiagnosticsChanged();
-          } on Object catch (diagnosticError, stack) {
-            developer.log(
-              'Dispatch failure retained; diagnostic persistence failed',
-              error: diagnosticError,
-              stackTrace: stack,
+            if (installer is! IServiceSilentUpdateInstaller || servicePending == null) {
+              return Failure(domain.ConfigurationFailure('O serviço de atualização exige nova preparação.'));
+            }
+            return await servicePending!.dispatch((resolved) async {
+              final latest = await _pendingStore.read();
+              if (latest is! PendingSilentUpdateService ||
+                  latest.operationId != (pending! as PendingSilentUpdateService).operationId) {
+                return Failure(domain.ConfigurationFailure('A operação de atualização mudou. Reconcilie novamente.'));
+              }
+              final serviceRecord = latest;
+              if (serviceRecord.dispatchAttemptedAt == null && resolved.isError()) {
+                return Failure(resolved.exceptionOrNull()!);
+              }
+              if (serviceRecord.dispatchAttemptedAt == null &&
+                  resolved.getOrThrow().decision != ServicePendingDecision.ready) {
+                return Failure(
+                  domain.ConfigurationFailure('A operação de atualização precisa ser reconciliada antes de aplicar.'),
+                );
+              }
+              final persisted = await _persistLaunchEvidence(
+                serviceRecord,
+                serviceRecord.copyWith(dispatchAttemptedAt: serviceRecord.dispatchAttemptedAt ?? _clock()),
+              );
+              if (persisted.isError()) return Failure(persisted.exceptionOrNull()!);
+              final dispatched = await installer.launchServiceOperation(
+                version: serviceRecord.version,
+                operationId: serviceRecord.operationId,
+                reconcileOnly: serviceRecord.dispatchAttemptedAt != null,
+                appPid: _currentProcessIdResolver(),
+              );
+              if (dispatched.isError()) {
+                final error = dispatched.exceptionOrNull()!;
+                if (error is domain.Failure &&
+                    (error.context['reason'] == 'maintenance_deferred' ||
+                        (error.context['resources_closed'] == false && error.context['outcome_unknown'] != true))) {
+                  await _pendingStore.write(serviceRecord.copyWith(clearDispatchAttempt: true));
+                  await _preferences?.flushPendingPersistence();
+                }
+                try {
+                  onDiagnosticsUpdated(
+                    getDiagnostics()?.copyWith(
+                      completedAt: _clock(),
+                      errorMessage: extractAutoUpdateFailureMessage(dispatched.exceptionOrNull()!),
+                    ),
+                  );
+                  await persistDiagnostics();
+                  notifyDiagnosticsChanged();
+                } on Object catch (diagnosticError, stack) {
+                  developer.log(
+                    'Dispatch failure retained; diagnostic persistence failed',
+                    error: diagnosticError,
+                    stackTrace: stack,
+                  );
+                }
+                return Failure(dispatched.exceptionOrNull()!);
+              }
+              try {
+                onDiagnosticsUpdated(
+                  getDiagnostics()?.copyWith(
+                    completedAt: _clock(),
+                    completionSource: UpdateCheckCompletionSource.automaticInstallStarted,
+                  ),
+                );
+                await persistDiagnostics();
+                notifyDiagnosticsChanged();
+              } on Object catch (error, stack) {
+                developer.log('Dispatch confirmed; diagnostic persistence failed', error: error, stackTrace: stack);
+              }
+              if (triggerAppClose) {
+                _closeApplicationOrReportFailure(
+                  noticeTitle: noticeTitle,
+                  noticeBody: noticeBody,
+                  getDiagnostics: getDiagnostics,
+                  onDiagnosticsUpdated: onDiagnosticsUpdated,
+                  persistDiagnostics: persistDiagnostics,
+                  notifyDiagnosticsChanged: notifyDiagnosticsChanged,
+                );
+              }
+              return const Success(unit);
+            });
+          } on Object catch (error) {
+            return Failure(
+              domain.ConfigurationFailure.withContext(
+                message: 'A operação de atualização exige reconciliação. Tente novamente.',
+                cause: error,
+                context: const {'reason': 'service_application_unconfirmed', 'outcome_unknown': true},
+              ),
+            );
+          } finally {
+            _applyInProgress = false;
+          }
+        }
+        if (pending is! PendingSilentUpdateDownloaded || !pending.hasFullApplyMetadata) {
+          _applyInProgress = false;
+          return Failure(
+            domain.ConfigurationFailure.withContext(
+              message: 'Pending silent update is missing helper launch metadata',
+              context: <String, dynamic>{
+                'operation': 'applyPendingDownloadedUpdate',
+                'reason': 'incomplete_pending_record',
+                'version': pending.version,
+              },
+            ),
+          );
+        }
+
+        final launcherStatus = await _launcherStatusReader.read(pending.launcherStatusPath);
+        if (SilentUpdateHelperLaunchState.requiresRecovery(
+          launchedAt: pending.launchedAt,
+          launcherStatus: launcherStatus,
+          now: _clock(),
+          helperWaitDuration: _helperWaitDuration,
+        )) {
+          _applyInProgress = false;
+          return Failure(
+            domain.ConfigurationFailure.withContext(
+              message:
+                  'O encerramento do instalador não foi confirmado. Verifique a recuperação antes de tentar novamente.',
+              context: const {'operation': 'applyPendingDownloadedUpdate', 'reason': 'recovery_required'},
+            ),
+          );
+        }
+        if (_isHelperInstallInFlight(pending, launcherStatus)) {
+          // Idempotent Success across process restarts: recent launchedAt / helper
+          // status means a helper is already running — do not spawn a second one.
+          _applyInProgress = false;
+          if (triggerAppClose) {
+            _closeApplicationOrReportFailure(
+              noticeTitle: noticeTitle,
+              noticeBody: noticeBody,
+              getDiagnostics: getDiagnostics,
+              onDiagnosticsUpdated: onDiagnosticsUpdated,
+              persistDiagnostics: persistDiagnostics,
+              notifyDiagnosticsChanged: notifyDiagnosticsChanged,
             );
           }
-          return Failure(dispatched.exceptionOrNull()!);
+          return const Success(unit);
         }
-        onDiagnosticsUpdated(
-          getDiagnostics()?.copyWith(
-            completedAt: _clock(),
-            completionSource: UpdateCheckCompletionSource.automaticInstallStarted,
+
+        // Same gate as resolve: concluded/timed-out launch must never re-spawn.
+        if (SilentUpdateHelperLaunchState.isLaunchConcludedOrTimedOut(
+          launchedAt: pending.launchedAt,
+          launcherStatus: launcherStatus,
+          now: _clock(),
+          helperWaitDuration: _helperWaitDuration,
+        )) {
+          final treatAsSuccess = SilentUpdateHelperLaunchState.shouldResetBreakerForConcludedLaunch(
+            versionCompleted: _isVersionCompleted(pending.version),
+            launcherStatus: launcherStatus,
+          );
+          developer.log(
+            'Refusing apply after launch concluded/timed out: version=${pending.version}',
+            name: 'silent_update_download_apply',
+            level: 800,
+          );
+          await _finalizeConcludedOrTimedOutPending(
+            pending: pending,
+            launcherStatus: launcherStatus,
+          );
+          _applyInProgress = false;
+          if (treatAsSuccess) {
+            if (triggerAppClose) {
+              _closeApplicationOrReportFailure(
+                noticeTitle: noticeTitle,
+                noticeBody: noticeBody,
+                getDiagnostics: getDiagnostics,
+                onDiagnosticsUpdated: onDiagnosticsUpdated,
+                persistDiagnostics: persistDiagnostics,
+                notifyDiagnosticsChanged: notifyDiagnosticsChanged,
+              );
+            }
+            return const Success(unit);
+          }
+          return Failure(
+            domain.ConfigurationFailure.withContext(
+              message: 'Pending silent update launch already concluded or timed out',
+              context: <String, dynamic>{
+                'operation': 'applyPendingDownloadedUpdate',
+                'reason': 'launch_concluded_or_timed_out',
+                'version': pending.version,
+              },
+            ),
+          );
+        }
+
+        // Persist launch evidence before spawn so a kill between Process.start and
+        // the old post-spawn write cannot leave Ready with no launchedAt (reconcile
+        // would re-apply). Flush so the stamp survives an immediate process death.
+        final now = _clock();
+        final pendingWithLaunch = pending.copyWith(launchedAt: now);
+        final persisted = await _persistLaunchEvidence(pending, pendingWithLaunch);
+        if (persisted.isError()) return Failure(persisted.exceptionOrNull()!);
+
+        final launchResult = await installer.launchPreparedHelper(
+          SilentUpdateLaunchRequest(
+            version: pending.version,
+            installerPath: pending.installerPath,
+            logPath: pending.logPath,
+            launcherPath: pending.launcherPath,
+            launcherStatusPath: pending.launcherStatusPath,
+            installDirectory: pending.installDirectory,
+            assetSize: pending.assetSize!,
+            sha256: pending.sha256!,
+            installDirectoryWritable: pending.installDirectoryWritable!,
+            requireValidSignature: pending.requireValidSignature!,
+            appPid: _currentProcessIdResolver(),
+            serviceOperationId: pending.serviceOperationId,
           ),
         );
+        Exception? launchError;
+        launchResult.fold(
+          (_) {},
+          (error) => launchError = error,
+        );
+        if (launchError != null) {
+          // Roll back launch stamp so a failed spawn does not look in-flight for
+          // the full helper wait window.
+          if (launchError is! domain.Failure || (launchError! as domain.Failure).context['outcome_unknown'] != true) {
+            await _pendingStore.write(pending.copyWith(clearLaunchedAt: true));
+            await _preferences?.flushPendingPersistence();
+          }
+          _applyInProgress = false;
+          return Failure(launchError!);
+        }
+
         try {
+          onDiagnosticsUpdated(
+            getDiagnostics()?.copyWith(
+              completedAt: now,
+              completionSource: UpdateCheckCompletionSource.automaticInstallStarted,
+            ),
+          );
           await persistDiagnostics();
           notifyDiagnosticsChanged();
-        } on Object catch (error, stack) {
-          developer.log('Dispatch confirmed; diagnostic persistence failed', error: error, stackTrace: stack);
+        } on Object catch (error, stackTrace) {
+          developer.log('Helper dispatch confirmed; diagnostics failed', error: error, stackTrace: stackTrace);
         }
+
         if (triggerAppClose) {
           _closeApplicationOrReportFailure(
             noticeTitle: noticeTitle,
@@ -599,165 +806,61 @@ class SilentUpdateDownloadApplyService {
       } on Object catch (error) {
         return Failure(
           domain.ConfigurationFailure.withContext(
-            message: 'A operação de atualização exige reconciliação. Tente novamente.',
+            message: 'Não foi possível confirmar a atualização. Verifique a recuperação.',
             cause: error,
-            context: const {'reason': 'service_application_unconfirmed', 'outcome_unknown': true},
+            context: const {'reason': 'application_unconfirmed', 'outcome_unknown': true},
           ),
         );
       } finally {
         _applyInProgress = false;
       }
-    }
-    if (pending is! PendingSilentUpdateDownloaded || !pending.hasFullApplyMetadata) {
-      _applyInProgress = false;
-      return Failure(
-        domain.ConfigurationFailure.withContext(
-          message: 'Pending silent update is missing helper launch metadata',
-          context: <String, dynamic>{
-            'operation': 'applyPendingDownloadedUpdate',
-            'reason': 'incomplete_pending_record',
-            'version': pending.version,
-          },
-        ),
-      );
-    }
+    });
+  }
 
-    final launcherStatus = await _launcherStatusReader.read(pending.launcherStatusPath);
-    final activityAt = launcherStatus?.lastUpdatedAt ?? pending.launchedAt;
-    if (_isHelperInstallInFlight(pending, launcherStatus) &&
-        (launcherStatus?.state == 'recoveryRequired' ||
-            activityAt == null ||
-            _clock().difference(activityAt) > _helperWaitDuration)) {
-      _applyInProgress = false;
-      return Failure(
-        domain.ConfigurationFailure.withContext(
-          message:
-              'O encerramento do instalador não foi confirmado. Verifique a recuperação antes de tentar novamente.',
-          context: const {'operation': 'applyPendingDownloadedUpdate', 'reason': 'recovery_required'},
-        ),
-      );
+  Future<void> _observeDiagnostics(FutureOr<void> Function() action) async {
+    try {
+      await action();
+    } on Object catch (error, stack) {
+      developer.log('Update diagnostics unavailable', error: error, stackTrace: stack);
     }
-    if (_isHelperInstallInFlight(pending, launcherStatus)) {
-      // Idempotent Success across process restarts: recent launchedAt / helper
-      // status means a helper is already running — do not spawn a second one.
-      _applyInProgress = false;
-      if (triggerAppClose) {
-        _closeApplicationOrReportFailure(
-          noticeTitle: noticeTitle,
-          noticeBody: noticeBody,
-          getDiagnostics: getDiagnostics,
-          onDiagnosticsUpdated: onDiagnosticsUpdated,
-          persistDiagnostics: persistDiagnostics,
-          notifyDiagnosticsChanged: notifyDiagnosticsChanged,
+  }
+
+  Future<Result<void>> _persistLaunchEvidence(
+    PendingSilentUpdate previous,
+    PendingSilentUpdate next,
+  ) async {
+    try {
+      (await _pendingStore.save(next)).getOrThrow();
+      await _preferences?.flushPendingPersistence();
+      if (_preferences?.lastPersistError case final error?) {
+        throw domain.ConfigurationFailure.withContext(
+          message: 'Não foi possível salvar a atualização.',
+          cause: error,
         );
       }
       return const Success(unit);
-    }
-
-    // Same gate as resolve: concluded/timed-out launch must never re-spawn.
-    if (SilentUpdateHelperLaunchState.isLaunchConcludedOrTimedOut(
-      launchedAt: pending.launchedAt,
-      launcherStatus: launcherStatus,
-      now: _clock(),
-      helperWaitDuration: _helperWaitDuration,
-    )) {
-      final treatAsSuccess = SilentUpdateHelperLaunchState.shouldResetBreakerForConcludedLaunch(
-        versionCompleted: _isVersionCompleted(pending.version),
-        launcherStatus: launcherStatus,
-      );
-      developer.log(
-        'Refusing apply after launch concluded/timed out: version=${pending.version}',
-        name: 'silent_update_download_apply',
-        level: 800,
-      );
-      await _finalizeConcludedOrTimedOutPending(
-        pending: pending,
-        launcherStatus: launcherStatus,
-      );
-      _applyInProgress = false;
-      if (treatAsSuccess) {
-        if (triggerAppClose) {
-          _closeApplicationOrReportFailure(
-            noticeTitle: noticeTitle,
-            noticeBody: noticeBody,
-            getDiagnostics: getDiagnostics,
-            onDiagnosticsUpdated: onDiagnosticsUpdated,
-            persistDiagnostics: persistDiagnostics,
-            notifyDiagnosticsChanged: notifyDiagnosticsChanged,
-          );
-        }
-        return const Success(unit);
+    } on Object catch (error) {
+      // Nothing was dispatched. Restore readiness without erasing older evidence.
+      Object? restoreError;
+      try {
+        (await _pendingStore.save(previous)).getOrThrow();
+      } on Object catch (failure) {
+        restoreError = failure;
       }
       return Failure(
         domain.ConfigurationFailure.withContext(
-          message: 'Pending silent update launch already concluded or timed out',
-          context: <String, dynamic>{
-            'operation': 'applyPendingDownloadedUpdate',
-            'reason': 'launch_concluded_or_timed_out',
-            'version': pending.version,
+          message: restoreError == null
+              ? 'Não foi possível salvar a operação. Tente novamente.'
+              : 'Não foi possível restaurar o estado da atualização. Verifique o armazenamento.',
+          cause: restoreError ?? error,
+          context: {
+            'reason': 'pending_persistence_unconfirmed',
+            'resources_closed': false,
+            'state_restored': restoreError == null,
           },
         ),
       );
     }
-
-    // Persist launch evidence before spawn so a kill between Process.start and
-    // the old post-spawn write cannot leave Ready with no launchedAt (reconcile
-    // would re-apply). Flush so the stamp survives an immediate process death.
-    final now = _clock();
-    final pendingWithLaunch = pending.copyWith(launchedAt: now);
-    await _pendingStore.write(pendingWithLaunch);
-    await _preferences?.flushPendingPersistence();
-
-    final launchResult = await installer.launchPreparedHelper(
-      SilentUpdateLaunchRequest(
-        version: pending.version,
-        installerPath: pending.installerPath,
-        logPath: pending.logPath,
-        launcherPath: pending.launcherPath,
-        launcherStatusPath: pending.launcherStatusPath,
-        installDirectory: pending.installDirectory,
-        assetSize: pending.assetSize!,
-        sha256: pending.sha256!,
-        installDirectoryWritable: pending.installDirectoryWritable!,
-        requireValidSignature: pending.requireValidSignature!,
-        appPid: _currentProcessIdResolver(),
-        serviceOperationId: pending.serviceOperationId,
-      ),
-    );
-    Exception? launchError;
-    launchResult.fold(
-      (_) {},
-      (error) => launchError = error,
-    );
-    if (launchError != null) {
-      // Roll back launch stamp so a failed spawn does not look in-flight for
-      // the full helper wait window.
-      await _pendingStore.write(pending.copyWith(clearLaunchedAt: true));
-      await _preferences?.flushPendingPersistence();
-      _applyInProgress = false;
-      return Failure(launchError!);
-    }
-
-    onDiagnosticsUpdated(
-      getDiagnostics()?.copyWith(
-        completedAt: now,
-        completionSource: UpdateCheckCompletionSource.automaticInstallStarted,
-      ),
-    );
-    await persistDiagnostics();
-    notifyDiagnosticsChanged();
-
-    if (triggerAppClose) {
-      _closeApplicationOrReportFailure(
-        noticeTitle: noticeTitle,
-        noticeBody: noticeBody,
-        getDiagnostics: getDiagnostics,
-        onDiagnosticsUpdated: onDiagnosticsUpdated,
-        persistDiagnostics: persistDiagnostics,
-        notifyDiagnosticsChanged: notifyDiagnosticsChanged,
-      );
-    }
-    return const Success(unit);
   }
 
   /// Fires the app-close callback without blocking the caller, but unlike a
@@ -776,7 +879,7 @@ class SilentUpdateDownloadApplyService {
     final closeApplication = _closeApplicationForSilentUpdate;
     if (closeApplication == null) return;
     unawaited(
-      closeApplication(noticeTitle: noticeTitle, noticeBody: noticeBody).catchError((
+      Future<void>.sync(() => closeApplication(noticeTitle: noticeTitle, noticeBody: noticeBody)).catchError((
         Object error,
         StackTrace stackTrace,
       ) async {
@@ -791,15 +894,19 @@ class SilentUpdateDownloadApplyService {
           error: error,
           stackTrace: stackTrace,
         );
-        onDiagnosticsUpdated(
-          getDiagnostics()?.copyWith(
-            completedAt: _clock(),
-            completionSource: UpdateCheckCompletionSource.automaticInstallFailure,
-            errorMessage: 'Failed to close the app to finish installing the update: $error',
-          ),
-        );
-        await persistDiagnostics();
-        notifyDiagnosticsChanged();
+        try {
+          onDiagnosticsUpdated(
+            getDiagnostics()?.copyWith(
+              completedAt: _clock(),
+              completionSource: UpdateCheckCompletionSource.automaticInstallFailure,
+              errorMessage: 'Não foi possível fechar o aplicativo para concluir a atualização.',
+            ),
+          );
+          await persistDiagnostics();
+          notifyDiagnosticsChanged();
+        } on Object catch (diagnosticError, diagnosticStack) {
+          developer.log('Close failure diagnostics unavailable', error: diagnosticError, stackTrace: diagnosticStack);
+        }
       }),
     );
   }

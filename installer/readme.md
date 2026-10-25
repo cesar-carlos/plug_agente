@@ -6,7 +6,7 @@ Windows.
 ## Atualização sem certificado comercial
 
 O modo gratuito usa `signing_provider=manifest` no workflow **Publish Windows Release**
-(padrão) ou `python installer/build_installer.py --manifest-only` no build local.
+(padrão) ou `python installer/build_installer.py` no build local. `--manifest-only` permanece como alias.
 Esse modo exige chaves Ed25519 para feed e manifesto e mantém SHA-256, tamanho,
 canal, versão crescente e permissões administrativas registradas. A primeira
 instalação global requer administrador para registrar o serviço e proteger os
@@ -21,6 +21,9 @@ a completed automatic updater; production distribution remains subject to the
 coordinated release gate. Consulte o [estado detalhado](../docs/implemente/plano_auto_update_evolution.md).
 
 ## SignPath opcional
+
+Referência histórica: desativado nos fluxos oficiais. O build recusa
+`--prepare-signpath`, PFX e flags de confiança conflitantes.
 
 A SignPath Foundation recusou a candidatura em 2026-10-06 por visibilidade pública
 insuficiente. A integração fica disponível para uma eventual contratação ou

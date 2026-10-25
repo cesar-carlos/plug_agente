@@ -35,6 +35,7 @@ enum UpdateCheckCompletionSource {
   /// instead of letting the installer run to completion.
   automaticCancelled,
   automaticQuietHours,
+  automaticRecoveryRequired,
 }
 
 class UpdateCheckDiagnostics {

@@ -1,28 +1,27 @@
 import 'package:plug_agente/domain/entities/pending_silent_update.dart';
+import 'package:result_dart/result_dart.dart';
 
-/// Persistence boundary for the silent update pending record and the
-/// helper status file. Hides `dart:io` and the raw settings key from the
-/// coordinator so the application layer stays free of infrastructure
-/// concerns and the orchestrator becomes testable with simple fakes.
-///
-/// Implementations MUST be tolerant to:
-/// - missing files / first run (return `null`);
-/// - corrupted JSON (log and return `null`);
-/// - concurrent reads (no locking guarantees — readers should assume the
-///   latest persisted snapshot).
+class PendingSilentUpdateSnapshot {
+  const PendingSilentUpdateSnapshot(this.pending);
+  final PendingSilentUpdate? pending;
+}
+
 abstract interface class IPendingSilentUpdateStore {
-  /// Returns the most recent pending record, or `null` when no silent
-  /// update is in flight.
-  Future<PendingSilentUpdate?> read();
+  Future<Result<PendingSilentUpdateSnapshot>> load();
+  Future<Result<void>> save(PendingSilentUpdate pending);
+  Future<Result<void>> remove();
+}
 
-  /// Persists [pending] as the active in-flight record. Overwrites any
-  /// previous entry. Implementations should fsync best-effort: callers
-  /// may follow up with `IAppSettingsStore.flushPendingPersistence` when
-  /// they need durability before the next step.
-  Future<void> write(PendingSilentUpdate pending);
+/// Compatibility for callers whose enclosing operation already maps typed failures.
+extension PendingSilentUpdateStoreAccess on IPendingSilentUpdateStore {
+  Future<PendingSilentUpdate?> read() async => (await load()).getOrThrow().pending;
+  Future<void> write(PendingSilentUpdate pending) async {
+    (await save(pending)).getOrThrow();
+  }
 
-  /// Clears the active record so the next `read` returns `null`.
-  Future<void> clear();
+  Future<void> clear() async {
+    (await remove()).getOrThrow();
+  }
 }
 
 /// Reads the launcher status JSON written on disk by the external helper

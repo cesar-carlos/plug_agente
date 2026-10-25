@@ -1,7 +1,7 @@
+import 'dart:async';
 import 'dart:typed_data';
-
 import 'package:dio/dio.dart';
-import 'package:plug_agente/domain/errors/failures.dart' show NetworkFailure;
+import 'package:plug_agente/domain/errors/failures.dart' show ConfigurationFailure, NetworkFailure, ValidationFailure;
 import 'package:plug_agente/domain/services/i_update_manifest_downloader.dart';
 import 'package:result_dart/result_dart.dart';
 
@@ -24,15 +24,40 @@ class HttpUpdateManifestDownloader implements IUpdateManifestDownloader {
     final cancellation = CancelToken();
     try {
       return Success(await _download(url, cancellation).timeout(const Duration(seconds: 30)));
-    } on Object {
-      cancellation.cancel();
-      // Remote responses and redirect URLs never enter user diagnostics.
+    } on FormatException catch (error) {
+      return Failure(
+        ValidationFailure.withContext(
+          message: 'O manifesto da atualização é inválido.',
+          cause: error,
+          context: const {'reason': 'manifest_invalid'},
+        ),
+      );
+    } on DioException catch (error) {
       return Failure(
         NetworkFailure.withContext(
           message: 'Não foi possível obter o manifesto da atualização.',
+          cause: error,
           context: const {'reason': 'manifest_download_failed'},
         ),
       );
+    } on TimeoutException catch (error) {
+      return Failure(
+        NetworkFailure.withContext(
+          message: 'O tempo para obter o manifesto esgotou.',
+          cause: error,
+          context: const {'reason': 'manifest_timeout'},
+        ),
+      );
+    } on Object catch (error) {
+      return Failure(
+        ConfigurationFailure.withContext(
+          message: 'Não foi possível preparar a leitura do manifesto.',
+          cause: error,
+          context: const {'reason': 'manifest_unavailable'},
+        ),
+      );
+    } finally {
+      cancellation.cancel();
     }
   }
 

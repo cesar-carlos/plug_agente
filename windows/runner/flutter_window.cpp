@@ -57,6 +57,21 @@ bool FlutterWindow::OnCreate() {
         result->NotImplemented();
       });
 
+  installation_channel_ = std::make_unique<flutter::MethodChannel<flutter::EncodableValue>>(
+      flutter_controller_->engine()->messenger(), "plug_agente/installation", &flutter::StandardMethodCodec::GetInstance());
+  installation_channel_->SetMethodCallHandler([this](const auto& call, auto result) {
+    try {
+      if (call.method_name() == "enable") { result->Success(flutter::EncodableValue(installation_.start())); return; }
+      if (call.method_name() == "poll") { result->Success(flutter::EncodableValue(installation_.poll())); return; }
+      if (call.method_name() == "cancelled") { result->Success(flutter::EncodableValue(installation_.cancelled())); return; }
+      if (call.method_name() == "report") {
+        if (!call.arguments() || !std::holds_alternative<std::string>(*call.arguments())) throw std::runtime_error("invalid_report");
+        installation_.report(std::get<std::string>(*call.arguments())); result->Success(); return;
+      }
+      result->NotImplemented();
+    } catch (const std::exception&) { result->Error("installation_coordination_failed", "Installation coordination failed"); }
+  });
+
   flutter_controller_->engine()->SetNextFrameCallback([&]() {
     if (show_on_first_frame_) {
       this->Show();
@@ -72,6 +87,7 @@ bool FlutterWindow::OnCreate() {
 }
 
 void FlutterWindow::OnDestroy() {
+  installation_channel_.reset();
   runtime_channel_.reset();
   if (flutter_controller_) {
     flutter_controller_ = nullptr;

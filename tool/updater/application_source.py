@@ -126,7 +126,7 @@ def export_archive(archive: bytes, root: Path, files: dict[str, str]) -> None:
 
 def requires_native_derivation(name: str) -> bool:
     return (name in {ENTRYPOINT, "windows/runner/main.cpp", "windows/runner/win32_window.cpp"}
-            or (name.startswith(("windows/updater/", "windows/update_helper/"))
+            or (name.startswith(("windows/updater/", "windows/update_helper/", "windows/install_channel/"))
                 and "/third_party/" not in name and PurePosixPath(name).suffix in {".cpp", ".h"}))
 
 
@@ -167,7 +167,7 @@ def derived_bytes(name: str, content: bytes, identity: str) -> bytes:
         if text.count("FLUTTER_RUNNER_WIN32_WINDOW") != 1:
             raise RuntimeError("Unsupported native window class")
         return text.replace("FLUTTER_RUNNER_WIN32_WINDOW", identity + "_WINDOW").encode("utf-8")
-    if (name.startswith(("windows/updater/", "windows/update_helper/"))
+    if (name.startswith(("windows/updater/", "windows/update_helper/", "windows/install_channel/"))
             and "/third_party/" not in name and PurePosixPath(name).suffix in {".cpp", ".h"}):
         return rewrite_native(content.decode("utf-8-sig"), identity).encode("utf-8")
     return content

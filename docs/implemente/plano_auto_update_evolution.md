@@ -1,5 +1,189 @@
 # Plano de Evolucao do Auto-Update
 
+## Manifest oficial e encerramento cooperativo — 2026-10-25
+
+Implementado nesta rodada: build local e workflows oficiais somente manifest;
+`--manifest-only` é alias, configurações conflitantes são recusadas, PFX/SignPath
+permanecem históricos. Ed25519, hash, tamanho, versão, canal e identidade continuam
+obrigatórios. Políticas antigas sem `requireAuthenticode` não são reinterpretadas.
+
+A migração manual elevada exige consentimento, valida caminhos/hashes/chaves e
+journal, grava `manifest-migration.json` antes dos efeitos, para o supervisor e
+reconfere pendências. A política é substituída atomicamente preservando DACL e
+herança, com flush e leitura de confirmação. Estado incompleto impede enrollment
+e novos comandos de execução; não há repetição automática nem ativação dos gates.
+
+O canal local versionado de instalação usa caminho/PID e identidade de processo,
+DACL restrita e rejeição remota. Administrador elevado distinto é admitido; cliente
+não elevado precisa corresponder à conta/caminho da instalação. Preparação é
+entregue uma vez, com consultas sem efeitos. Reutiliza manutenção de 60 segundos,
+saída segura de SQLite/ODBC e shutdown; cancelamento só restaura admissão quando
+seguro. Mensagens ARB/Inno distinguem espera, bloqueio, cancelamento e recuperação.
+
+Setup exige saída real de todas as instâncias do caminho alvo antes da cópia,
+bloqueia novos inícios com guarda local e desativa fechamento pelo Restart Manager.
+Versão antiga sem canal exige fechamento manual. Repetir consulta novamente;
+modo silencioso falha com log, sem diálogo ou fechamento forçado. Relançamento
+conserva o fluxo de usuário original. O helper continua sem fallback para matar
+processos. Comentários históricos incorretos foram corrigidos.
+
+### Evidências locais desta rodada
+
+- Regressão do padrão manifest falhou antes da correção: `build/manifest-default-red.log`.
+- Suíte não-live do CI: 5.540 testes aprovados, seis skips, `build/manifest-suite-final.log`.
+- Foco instalação/monitor/Inno: 28 aprovados, `build/installation-focused-final.log`.
+- Análise `lib test`: sem diagnósticos, `build/manifest-analysis-clean.log`.
+- Tooling updater: 133 testes; release/preflight/publicação simulada: 54 testes,
+  `build/manifest-python-updater-final.log` e `build/manifest-python-release.log`.
+- Cinco contratos CTest, incluindo processo/pipe reais privados e falhas de escrita/
+  substituição da política: `build/manifest-native-final.log`. A regressão de DACL
+  detectou perda de metadado de herança e passou após usar substituição preservadora.
+- Compilação Inno sem instalar: `build/manifest-inno-final.log`; build Windows Debug:
+  `build/manifest-windows-final.log`. Warnings nativos de código inacessível devido
+  ao gate de produção desativado não representam autorização para removê-lo.
+- Actionlint 1.7.12 não reconhece o `queue: max` preexistente, suportado pela
+  [documentação oficial do GitHub](https://docs.github.com/en/actions/how-tos/write-workflows/choose-when-workflows-run/control-workflow-concurrency).
+  Os quatro workflows passaram filtrando somente esse diagnóstico conhecido:
+  `build/manifest-workflows-compatible.log`; relatório integral preservado.
+- DTD conectado ao Cursor sem aplicativo em execução: hot reload/restart indisponível.
+
+A fixture nova será gerada da revisão local autorizada após este registro, com
+revalidação de inventários e provas. Não se usará pacote histórico como evidência
+do código atual. A revisão da fixture fica registrada em complemento abaixo.
+
+### Homologação instalada continua pendente
+
+A preparação do pacote não executa instalação. A fase administrativa exige
+autorização específica e somente fixtures privadas previstas nas rules. Falta
+comprovar Windows 10/11/Server, conta padrão e administrador distinto, UAC cancelado,
+versões antigas abertas, duas instalações/sessões, PID reutilizado e clientes
+remotos/não autorizados no ambiente instalado; exercitar interrupções, falta de
+espaço, reboot, logout/RDP, fechamento de SQLite/ODBC e resultados desconhecidos.
+
+Ainda são necessários apply/probation/rollback reais e restauração exata de
+binários, SQLite/WAL/schema e segredos na conta original, além de **20 ciclos
+completos de atualização**, medindo processos, handles, locks e snapshots.
+Prepare/cancel não substitui esses ciclos. A aceitação de 2026-10-23 permanece
+histórica e limitada ao seu pacote. `applicationSourceVerified` não equivale a
+`buildSourceVerified` nem a homologação instalada.
+
+`kApplicationContractImplemented=false`, `applicationContractValidated=false`,
+gates coordenados e envio de diagnósticos ao hub desativado permanecem preservados.
+Não houve publicação, rollout, instalação administrativa ou ativação automática.
+Rules canônicas: [índice](../../.cursor/rules/rules_index.mdc) e
+[contratos locais](../../.cursor/rules/project_specifics.mdc).
+
+
+## Fechamento das cinco lacunas — 2026-10-25
+
+A revisao final encontrou cinco lacunas depois da primeira validacao local. Este
+registro complementa as evidencias anteriores; nao transforma testes locais em
+homologacao instalada.
+
+- Corrupcao do arquivo global, raiz/valor invalido e tipo incorreto do pending
+  bloqueiam o updater. O arquivo invalido e preservado e nao pode ser sobrescrito
+  por preferencias/diagnosticos; a condicao continua detectavel apos reinicio.
+- Aplicar, cancelar e reconciliar o helper compartilham uma fila por repositorio.
+  Cancelamento preserva evidencias de lancamento, inclusive status legado sem
+  timestamp. Consultas de prontidao continuam sem mutacoes.
+- Cancelamento com resposta perdida na preparacao consulta/cancela pelo servico
+  antes de concluir. Estado incerto preserva a pendencia e nao incrementa o
+  contador de falhas nem autoriza novo despacho.
+- Falhas de metricas e callbacks de diagnostico sao observadas sem substituir o
+  resultado do download/apply/cancelamento. Falhas sincronas e assincronas do
+  fechamento mantem as evidencias e nao geram outro lancamento.
+- Boot e consulta interativa distinguem recuperacao de instalacao ativa, usando
+  o mesmo criterio para status desconhecido/vencido do helper e os rotulos ARB
+  ja existentes para recuperacao.
+
+As seis regressoes iniciais falharam pelos defeitos antes das correcoes:
+`build/update-five-gaps-red.log`. Foram acrescentados cenarios de armazenamento
+com tipo nao suportado, status legado e falhas de metricas na aplicacao automatica.
+Validacao focada: 151 testes aprovados em `build/update-five-gaps-green.log`.
+Suite nao-live final do CI: 5.532 testes aprovados, seis skips e nenhuma falha
+em `build/update-five-gaps-suite-final.log`. Os skips nao aprovam cenarios externos.
+Analise final `dart analyze lib test` sem erros, warnings ou infos em
+`build/update-five-gaps-analysis-final.log`. Build Windows Debug em
+`build/update-five-gaps-windows.log`. Nao havia processo DTD/app conectado para
+hot reload/restart. Suites Python/CTest e validacao Inno nao foram repetidas nesta
+rodada: seus contratos/fontes nao mudaram; as evidencias anteriores permanecem
+historicas, sem substituir a homologacao do novo aplicativo instalado.
+
+### O que continua pendente para homologacao instalada
+
+1. Gerar nova fixture privada vinculada ao codigo final, com prova de origem,
+   inventario completo e hashes conferidos nas entradas/saidas de cada fase.
+   Fixtures historicas nao certificam este build; `applicationSourceVerified`
+   nao equivale a `buildSourceVerified` nem a recuperacao instalada aprovada.
+2. Homologar apply real pelo servico, probation/saude, rollback e recuperacao
+   apos interrupcoes, incluindo resposta perdida, reboot, logout/RDP, sessao
+   ausente, trabalhos ativos, falta de espaco e falhas de snapshot/boot/rollback.
+3. Conferir restauracao exata de binarios, SQLite/WAL/schema e segredos DPAPI
+   na conta original. Executar 20 ciclos completos de atualizacao e medir
+   processos, handles, locks e retencao. Prepare/cancel nao substitui esses ciclos.
+4. Completar Windows 10/11/Server suportado, usuario padrao e administrador
+   distinto, upgrades entre builds e ativacao real por logon/protocolo/notificacao.
+5. Consolidar evidencias e aceite antes de qualquer transicao assinada ou rollout.
+   `kApplicationContractImplemented=false` e `applicationContractValidated=false`
+   permanecem; publicacao de instalador/appcast e gates coordenados de producao
+   continuam bloqueados. Diagnosticos ao hub continuam no-op.
+
+Usar exclusivamente as fixtures privadas previstas nas rules canonicas
+[project_specifics.mdc](../../.cursor/rules/project_specifics.mdc) e no procedimento
+historico abaixo. Nenhuma instalacao, alteracao de perfil operacional ou elevacao
+para instalar servicos fez parte desta correcao.
+
+## Correcoes integradas da revisao — 2026-10-25
+
+A secao de planejamento adicionada durante a revisao foi removida, preservando o
+historico abaixo. A implementacao desta revisao inclui:
+
+- Timer inicial cancelavel, invalidacao de agendamentos obsoletos e observacao
+  de erros assincronos; cancelamento tipado depois do download e no probe.
+- Pending com load/save/remove tipados, escrita duravel, corrupcao distinta de
+  ausencia e bloqueio de prontidao apos falha de persistencia. Falha anterior ao
+  envio restaura o registro anterior; evidencia de envio anterior so reconcilia.
+- Serializacao compartilhada entre despacho, cancelamento e reconciliacao.
+  O helper legado tambem rejeita aplicacao concorrente antes da confirmacao,
+  sem fechar o app antecipadamente. Falhas de diagnostico nao repetem despacho.
+- HTTP/XML e adapters de preferencias/pending em infrastructure; contratos em
+  domain, selecao de release pura e defaults de composicao em core/di. Os campos
+  persistidos permanecem compativeis; nao houve migracao de armazenamento.
+- Appcast limitado a 1 MiB durante recepcao, cinco redirects validados, prazo
+  total e cancelamento do transporte. Falhas de manifesto tem causa e tipo.
+- Snapshot limitado ao prazo da manutencao, mantendo admissao bloqueada quando
+  o resultado e desconhecido. A interface distingue recuperacao e ignora respostas
+  de prontidao obsoletas; as mensagens novas tem rotulos pt/en gerados de ARB.
+
+Os tres achados iniciais tiveram regressao vermelha antes da correcao. Uma quarta
+regressao confirmou fechamento prematuro em apply concorrente do helper legado.
+Uma quinta confirmou evidencia falsa de lancamento apos falha de escrita no helper;
+a restauracao usa agora a mesma fronteira do despacho para o servico.
+Evidencias individuais: `build/update-regression-red.log`,
+`build/update-cancel-red.log`, `build/update-persistence-red.log`,
+`build/update-concurrent-red.log` e `build/update-helper-persistence-red.log`.
+O primeiro log inclui uma falha inicial de import
+no teste de cancelamento, corrigida antes de sua reproducao isolada.
+
+Validacoes ja concluidas nesta revisao: 50 testes Python de appcast/assinatura/
+publicacao em `build/update-python-final.log`; quatro cenarios executaveis nativos
+(contrato, vetor de manifesto, pipe e interrupcoes de finalizacao); build Windows
+Debug final em `build/update-windows-final.log`. Analise estatica de `lib` e `test`
+via Dart MCP sem erros; 78 testes finais de apply/persistencia/reconciliacao
+aprovados em `build/update-last-focused.log`. Nenhum instalador ou servico foi instalado.
+A suite nao-live final do CI passou com 5.520 testes e seis skips em
+`build/update-suite-final.log`. Uma rodada anterior apresentou falha intermitente
+na verificacao de identidade de processo Windows; os oito testes desse arquivo
+passaram isoladamente e a repeticao completa final passou sem falhas.
+
+A conexao DTD do Cursor nao tinha aplicativo conectado, portanto hot reload/restart
+nao estava disponivel. A validacao de runtime instalada continua pendente.
+
+Os formatos canonicos de assinatura, gates de producao e transporte de diagnosticos
+ao hub (no-op) foram preservados. Cenarios locais, build Debug e testes nativos nao
+homologam SCM, probation, rollback instalado ou publicacao de instalador/appcast.
+
+
 ## Estado atual — 2026-10-15
 
 A implementação das cinco etapas de correção está integrada. A homologação do

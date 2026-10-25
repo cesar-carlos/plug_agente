@@ -1,3 +1,4 @@
+import 'package:fake_async/fake_async.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:plug_agente/application/observability/update_check_diagnostics.dart';
@@ -17,6 +18,62 @@ void main() {
             'AUTO_UPDATE_QUIET_HOURS_START=22:00\n'
             'AUTO_UPDATE_QUIET_HOURS_END=06:00',
       );
+    });
+
+    for (final restart in [false, true]) {
+      test('cancels obsolete boot jitter when restart=$restart', () {
+        fakeAsync((async) {
+          var calls = 0;
+          final scheduler = SilentUpdateScheduler(
+            automaticFailureBreaker: PersistentCircuitBreaker(
+              persistence: InMemoryCircuitBreakerPersistence(),
+              threshold: 3,
+              cooldown: const Duration(minutes: 5),
+              logName: 'test',
+            ),
+            bootJitterProvider: () => const Duration(seconds: 10),
+          );
+          scheduler.scheduleAndStart(
+            runImmediately: true,
+            onCheck: () async {
+              calls++;
+            },
+          );
+          async.elapse(const Duration(seconds: 5));
+          scheduler.stop();
+          if (restart) {
+            scheduler.scheduleAndStart(
+              runImmediately: true,
+              onCheck: () async {
+                calls++;
+              },
+            );
+          }
+          async.elapse(const Duration(seconds: 5));
+          expect(calls, 0);
+          async.elapse(const Duration(seconds: 5));
+          expect(calls, restart ? 1 : 0);
+          scheduler.stop();
+        });
+      });
+    }
+
+    test('observes synchronous and asynchronous callback failures', () {
+      fakeAsync((async) {
+        final scheduler = SilentUpdateScheduler(
+          automaticFailureBreaker: PersistentCircuitBreaker(
+            persistence: InMemoryCircuitBreakerPersistence(),
+            threshold: 3,
+            cooldown: const Duration(minutes: 5),
+            logName: 'test',
+          ),
+        );
+        scheduler.scheduleAndStart(runImmediately: true, onCheck: () => throw StateError('sync'));
+        async.flushMicrotasks();
+        scheduler.scheduleAndStart(runImmediately: true, onCheck: () async => throw StateError('async'));
+        async.flushMicrotasks();
+        scheduler.stop();
+      });
     });
 
     test('isWithinQuietHours returns true inside configured overnight window', () {

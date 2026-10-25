@@ -27,6 +27,7 @@ class BootstrapUpdateMaintenance {
   Future<Result<void>> Function()? _beforeClose;
   bool prepared = false;
   bool _resourcesClosureStarted = false;
+  void cancel() => _coordinator?.cancel();
   UpdateMaintenanceAdmission get admission => _services<UpdateMaintenanceAdmission>();
 
   void markRecoveryRequired(bool unknown) {

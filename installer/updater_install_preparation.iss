@@ -4,6 +4,11 @@ begin
   Result := HostPresent and PolicyPresent;
 end;
 
+function CanMigrateManifestPolicy(const Administrator, Silent, Attempted: Boolean): Boolean;
+begin
+  Result := Administrator and not Silent and not Attempted;
+end;
+
 function ValidateUpdaterOperationBeforeInstall(const UpdaterPresent, Automatic: Boolean;
   const EmbeddedClient: String; var Details: String): Boolean;
 var

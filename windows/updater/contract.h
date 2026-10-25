@@ -58,6 +58,17 @@ inline bool requires_authenticode(const Json& policy) {
   // Policies created before the manifest-only provider retain their requirement.
   return policy.value("requireAuthenticode", true);
 }
+inline Json migrated_manifest_policy(Json policy, const Json& journal, const std::string& keys) {
+  const auto state = journal.value("state", "idle");
+  if ((state != "idle" && !terminal_operation(state)) || journal.value("finalizationPending", false))
+    throw std::runtime_error("migration_pending_operation");
+  if (keys.empty()) throw std::runtime_error("feed_keys_unavailable");
+  policy["requireAuthenticode"] = false;
+  policy["publicKeys"] = keys;
+  policy["enabled"] = false;
+  policy["applicationContractValidated"] = false;
+  return policy;
+}
 inline void require_binary_hash(const Json& policy, const std::string& name, const std::string& digest) {
   const auto expected = policy.at("binaryHashes").at(name).get<std::string>();
   if (!is_hex(expected, 64) || expected != digest) throw std::runtime_error("registered_binary_changed");

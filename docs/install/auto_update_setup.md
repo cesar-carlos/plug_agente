@@ -1,7 +1,65 @@
 # Auto-Update
 
+## Modo oficial manifest e suporte — 2026-10-25
+
+O build local e os workflows oficiais usam somente `manifest`, sem Authenticode.
+`--manifest-only` permanece como alias compatível. Configure
+`AUTO_UPDATE_REQUIRE_VALID_SIGNATURE=false`, `WINDOWS_CODE_SIGNING_REQUIRED=false`
+e `AUTO_UPDATE_REQUIRE_FEED_SIGNATURE=true`, com chave pública Ed25519 válida.
+Configurações conflitantes falham antes do build. Não é necessário certificado,
+PFX, SignPath ou secrets de certificado. Assinaturas Ed25519, hash, tamanho,
+versão, canal e vínculo feed/manifesto continuam obrigatórios.
+
+Uma política antiga sem `requireAuthenticode` continua exigindo Authenticode.
+A simples leitura ou atualização silenciosa não altera essa confiança. O
+instalador manual elevado oferece consentimento específico para migrar; o cliente
+valida identidade, caminhos protegidos, hashes e chave, suspende o supervisor,
+reconfere o journal e persiste a política atomicamente, preservando sua DACL,
+canal e capabilities. A migração não habilita aplicação automática nem produção.
+
+O suporte deve distinguir: espera por operações, fechamento iniciado, versão
+antiga sem canal, bloqueio e recuperação necessária. O canal usa uma operação
+única por processo; consultas não repetem efeitos. Um solicitante elevado pode
+usar outra conta administradora. Um cliente não elevado precisa ser o cliente da
+mesma instalação/conta; um instalador por usuário sem esse cliente exige fechamento
+manual. Se a operação ficou incerta, preserve `manifest-migration.json`, journal,
+pending, logs e snapshots. Não reabra SQLite/pool no processo parcialmente fechado.
+
+A conclusão da preparação não substitui a confirmação de saída dos processos.
+O aplicativo tem prazo total de 60 segundos para manutenção; timeout de um efeito
+não confirma cancelamento. Após efeitos irreversíveis, encerrar o instalador não
+restaura a admissão nem autoriza nova instalação. Hub diagnostics permanece no-op.
+
+## Estados e suporte — revisao de 2026-10-25
+
+- **Pronta:** instalador preparado e estado confirmado; a interface pode oferecer aplicacao.
+- **Cancelada:** solicitacao do operador; nao e contabilizada como falha de instalacao.
+- **Adiada:** restricao temporaria de horario, cooldown ou manutencao, conforme diagnostico.
+- **Em andamento:** operacao ativa confirmada pelo servico/helper.
+- **Exige recuperacao:** registro inconsistente, resultado desconhecido ou pendencia
+  que exige reconciliacao; nao tratar como autorizacao para instalar novamente.
+
+Se a gravacao falhar antes do envio, a operacao so volta a pronta apos restauracao
+confirmada. Verifique o armazenamento quando a mensagem informar falha de
+persistencia. Nao apague pending/journal nem altere flags para forcar nova tentativa
+quando o resultado for desconhecido. A mensagem tecnica para suporte permanece
+separada do texto seguro apresentado na tela.
+
+Arquivo de configuracoes corrompido agora permanece no local e bloqueia gravacoes,
+inclusive de preferencias e diagnosticos, para nao perder evidencia do updater.
+Preserve uma copia para suporte e recupere o armazenamento fora do processo, com
+backup validado e reconciliacao do journal/servico antes de liberar nova operacao.
+Nao apague o arquivo para restaurar defaults. Reiniciar sozinho nao corrige a
+corrupcao. Status legado sem timestamp e resposta perdida no cancelamento tambem
+exigem confirmacao antes de descartar pendencias.
+
+Desativar/reagendar verificacoes cancela tambem o atraso inicial. Os novos estados
+nao habilitam aplicacao automatica em producao; permanecem os requisitos de
+homologacao e autorizacao descritos neste guia.
+
+
 > Revisão de 2026-10-06: `signing_provider=manifest` (padrão no publish) e
-> `build_installer.py --manifest-only` exigem Ed25519 do feed/manifesto e SHA-256,
+> `build_installer.py` (ou o alias `--manifest-only`) exigem Ed25519 do feed/manifesto e SHA-256,
 > sem certificado Authenticode. Exigências de certificado neste guia se aplicam
 > aos provedores opcionais `pfx`/`signpath`. As chaves do feed continuam obrigatórias.
 > O novo adaptador Windows usa o serviço sem fallback com UAC, mas a aplicação
@@ -141,7 +199,8 @@ AUTO_UPDATE_REQUIRE_VALID_SIGNATURE=true
 | `AUTO_UPDATE_REQUIRE_FEED_SIGNATURE` | `false` | quando `true`, items sem `plug:edSignature` valido sao rejeitados. |
 
 O default seguro em `resolveAutoUpdateRequireValidSignature` e `true` e essa
-e a configuracao do `.env.example`. Quando ligado, o gate atua em dois pontos:
+era a configuracao histórica. O `.env.example` e os builds oficiais agora
+fixam `false`. Quando explicitamente ligado em ferramentas históricas, o gate atua em dois pontos:
 
 - Lado Dart (`DioSilentUpdateInstaller`): bloqueia antes de spawnar o helper
   se `plug_update_helper.exe` nao retornar Authenticode `valid` no
@@ -155,7 +214,7 @@ download e novamente no helper antes de elevar privilegios.
 
 `signing_provider=manifest` compiles with Authenticode enforcement disabled,
 while requiring Ed25519 feed/manifest signatures. The `pfx` and `signpath`
-providers require Authenticode validation in production. See the
+providers are historical tools, disabled in official workflows. See the
 [release guide](release_guide.md) for provider inputs and secrets.
 The legacy helper checks above describe that component, not a service fallback.
 

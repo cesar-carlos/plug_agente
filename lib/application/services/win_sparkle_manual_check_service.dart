@@ -1,13 +1,11 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:developer' as developer;
-
 import 'package:plug_agente/application/observability/i_auto_update_diagnostics_gateway.dart';
 import 'package:plug_agente/application/observability/i_auto_update_metrics_collector.dart';
 import 'package:plug_agente/application/observability/update_check_diagnostics.dart';
 import 'package:plug_agente/application/observability/update_check_id_recorder.dart';
 import 'package:plug_agente/application/repositories/i_update_preferences_repository.dart';
-import 'package:plug_agente/application/services/appcast_probe_service.dart';
 import 'package:plug_agente/application/services/auto_update_failure_messages.dart';
 import 'package:plug_agente/application/services/auto_update_orchestrator_options.dart';
 import 'package:plug_agente/application/services/auto_updater_gateway.dart';
@@ -16,6 +14,7 @@ import 'package:plug_agente/application/services/persistent_circuit_breaker.dart
 import 'package:plug_agente/core/constants/app_constants.dart';
 import 'package:plug_agente/core/runtime/runtime_capabilities.dart';
 import 'package:plug_agente/domain/errors/failures.dart' as domain;
+import 'package:plug_agente/domain/services/i_appcast_probe_service.dart';
 import 'package:result_dart/result_dart.dart';
 
 /// WinSparkle manual update check flow with timeout circuit breaker.
@@ -319,16 +318,17 @@ class WinSparkleManualCheckService {
     );
     try {
       _logManualCheck('Manual update check triggered', checkId: _activeCheckId);
-      final probeResult = await _appcastProbeService.probeLatest(feedUrl: manualFeedUrl);
+      final probeResponse = await _appcastProbeService.probeLatest(feedUrl: manualFeedUrl);
+      final probeResult = probeResponse.getOrNull();
       _activeManualDiagnostics = _activeManualDiagnostics?.copyWith(
-        probeRequestUrl: probeResult.requestUrl,
-        probeSucceeded: probeResult.errorMessage == null,
-        appcastProbeVersion: probeResult.latestVersion,
-        appcastProbeOs: probeResult.os,
-        appcastProbeItemCount: probeResult.itemCount,
-        probeErrorMessage: probeResult.errorMessage,
-        releaseNotes: probeResult.releaseNotes,
-        releaseNotesUrl: probeResult.releaseNotesUrl,
+        probeRequestUrl: probeResult?.requestUrl,
+        probeSucceeded: probeResponse.isSuccess(),
+        appcastProbeVersion: probeResult?.latestVersion,
+        appcastProbeOs: probeResult?.os,
+        appcastProbeItemCount: probeResult?.itemCount,
+        probeErrorMessage: (probeResponse.exceptionOrNull() as domain.Failure?)?.message,
+        releaseNotes: probeResult?.releaseNotes,
+        releaseNotesUrl: probeResult?.releaseNotesUrl,
       );
       final triggerStartedAt = _clock();
       _activeManualDiagnostics = _activeManualDiagnostics?.copyWith(

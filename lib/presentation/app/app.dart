@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:fluent_ui/fluent_ui.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
@@ -11,6 +12,7 @@ import 'package:plug_agente/core/runtime/runtime_capabilities.dart';
 import 'package:plug_agente/core/services/i_auto_update_orchestrator.dart';
 import 'package:plug_agente/core/services/i_window_manager_service.dart';
 import 'package:plug_agente/core/theme/theme.dart';
+import 'package:plug_agente/domain/services/i_installation_preparation_monitor.dart';
 import 'package:plug_agente/l10n/app_localizations.dart';
 import 'package:plug_agente/presentation/providers/presentation_provider_read.dart';
 import 'package:plug_agente/presentation/providers/theme_provider.dart';
@@ -51,11 +53,14 @@ class _PlugAgentAppState extends State<PlugAgentApp> {
           initialLocation: widget.initialRoute,
         );
     _runtimeChannel.setMethodCallHandler(_handleRuntimeMethodCall);
+    final monitor = readOptionalGetItService<IInstallationPreparationMonitor>();
+    if (monitor != null) unawaited(monitor.start());
   }
 
   @override
   void dispose() {
     _runtimeChannel.setMethodCallHandler(null);
+    readOptionalGetItService<IInstallationPreparationMonitor>()?.stop();
     super.dispose();
   }
 
@@ -114,12 +119,16 @@ class _PlugAgentAppState extends State<PlugAgentApp> {
         );
         final admission = readOptionalGetItService<UpdateMaintenanceAdmission>();
         if (admission == null) return content;
-        return UpdateMaintenanceSurface(admission: admission, child: content, reconcile: () async {
-          final orchestrator = readOptionalGetItService<IAutoUpdateOrchestrator>();
-          if (orchestrator == null) throw StateError('Updater is unavailable');
-          final result = await orchestrator.applyPendingSilentUpdate();
-          if (result.isError()) throw result.exceptionOrNull()!;
-        });
+        return UpdateMaintenanceSurface(
+          admission: admission,
+          child: content,
+          reconcile: () async {
+            final orchestrator = readOptionalGetItService<IAutoUpdateOrchestrator>();
+            if (orchestrator == null) throw StateError('Updater is unavailable');
+            final result = await orchestrator.applyPendingSilentUpdate();
+            if (result.isError()) throw result.exceptionOrNull()!;
+          },
+        );
       },
       localizationsDelegates: const [
         AppLocalizations.delegate,

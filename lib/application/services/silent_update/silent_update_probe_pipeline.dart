@@ -1,9 +1,8 @@
 import 'dart:convert';
-
+import 'dart:developer' as developer;
 import 'package:crypto/crypto.dart';
 import 'package:plug_agente/application/observability/i_auto_update_metrics_collector.dart';
 import 'package:plug_agente/application/observability/update_check_diagnostics.dart';
-import 'package:plug_agente/application/services/appcast_probe_service.dart';
 import 'package:plug_agente/application/services/i_pending_silent_update_store.dart';
 import 'package:plug_agente/application/services/pending_silent_update.dart';
 import 'package:plug_agente/application/services/persistent_circuit_breaker.dart';
@@ -15,6 +14,7 @@ import 'package:plug_agente/core/security/appcast_signature_verifier.dart';
 import 'package:plug_agente/core/security/update_manifest_verifier.dart';
 import 'package:plug_agente/core/versioning/app_version_comparator.dart';
 import 'package:plug_agente/domain/errors/failures.dart' as domain;
+import 'package:plug_agente/domain/services/i_appcast_probe_service.dart';
 import 'package:plug_agente/domain/services/i_update_manifest_downloader.dart';
 import 'package:result_dart/result_dart.dart';
 
@@ -107,17 +107,48 @@ class SilentUpdateProbePipeline {
 
     Future<void> publish(UpdateCheckDiagnostics next) async {
       diagnostics = next;
-      request.onDiagnosticsUpdated(next);
-      await request.persistDiagnostics();
+      try {
+        request.onDiagnosticsUpdated(next);
+        await request.persistDiagnostics();
+      } on Object catch (error, stack) {
+        developer.log('Probe diagnostics unavailable', error: error, stackTrace: stack);
+      }
     }
 
     final probeStart = _clock();
-    final probeResult = await _appcastProbeService.probeLatest(feedUrl: request.feedUrl);
-    _metricsCollector?.recordAutoUpdateProbeDuration(_clock().difference(probeStart));
+    final probeResponse = await _appcastProbeService.probeLatest(
+      feedUrl: request.feedUrl,
+      cancelRequested: request.cancelRequested,
+    );
+    try {
+      _metricsCollector?.recordAutoUpdateProbeDuration(_clock().difference(probeStart));
+    } on Object catch (error, stack) {
+      developer.log('Probe metrics unavailable', error: error, stackTrace: stack);
+    }
+    if (request.cancelRequested()) return SilentUpdateProbeCancelled(diagnostics: diagnostics);
+    if (probeResponse.isError()) {
+      final now = _clock();
+      final failureState = await _automaticFailureBreaker.recordFailure();
+      await publish(
+        diagnostics.copyWith(
+          completedAt: now,
+          completionSource: UpdateCheckCompletionSource.automaticDownloadFailure,
+          automaticFailureCount: failureState.failureCount,
+          automaticCooldownUntil: failureState.cooldownUntil,
+          errorMessage: (probeResponse.exceptionOrNull()! as domain.Failure).message,
+        ),
+      );
+      return SilentUpdateProbeTerminal(
+        diagnostics: diagnostics,
+        outcome: Failure<SilentUpdateOutcome, Exception>(probeResponse.exceptionOrNull()!),
+      );
+    }
+
+    final probeResult = probeResponse.getOrThrow();
     await publish(
       diagnostics.copyWith(
         probeRequestUrl: probeResult.requestUrl,
-        probeSucceeded: probeResult.errorMessage == null,
+        probeSucceeded: true,
         appcastProbeVersion: probeResult.latestVersion,
         appcastProbeOs: probeResult.os,
         appcastProbeItemCount: probeResult.itemCount,
@@ -132,36 +163,8 @@ class SilentUpdateProbePipeline {
         rolloutChannel: probeResult.channel ?? defaultAutoUpdateChannel,
         rolloutPercentage: probeResult.rolloutPercentage ?? 100,
         rolloutBucket: request.rolloutBucket,
-        probeErrorMessage: probeResult.errorMessage,
       ),
     );
-
-    if (probeResult.errorMessage != null) {
-      final now = _clock();
-      final failureState = await _automaticFailureBreaker.recordFailure();
-      await publish(
-        diagnostics.copyWith(
-          completedAt: now,
-          completionSource: UpdateCheckCompletionSource.automaticDownloadFailure,
-          automaticFailureCount: failureState.failureCount,
-          automaticCooldownUntil: failureState.cooldownUntil,
-          errorMessage: probeResult.errorMessage,
-        ),
-      );
-      return SilentUpdateProbeTerminal(
-        diagnostics: diagnostics,
-        outcome: Failure<SilentUpdateOutcome, Exception>(
-          domain.NetworkFailure.withContext(
-            message: 'Silent update appcast probe failed',
-            context: <String, dynamic>{
-              'operation': 'checkSilently',
-              'feed_url': request.feedUrl,
-              'probe_error': probeResult.errorMessage,
-            },
-          ),
-        ),
-      );
-    }
 
     final validationError = _validateSilentProbeResult(probeResult);
     if (validationError != null) {

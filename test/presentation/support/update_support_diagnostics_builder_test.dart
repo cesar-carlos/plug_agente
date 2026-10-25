@@ -24,6 +24,18 @@ void main() {
     );
   }
 
+  test('recovery status is localized and differs from an active installation', () {
+    final label = UpdateSupportDiagnosticsBuilder.buildAutomaticUpdateStatusLabel(
+      l10n: l10n,
+      diagnostics: diagnostics(completionSource: UpdateCheckCompletionSource.automaticRecoveryRequired),
+      updateNotificationsEnabled: true,
+      automaticSilentUpdatesEnabled: true,
+      formatCheckedAt: (_) => 'now',
+    );
+    expect(label, contains(l10n.configUpdateCompletionSourceAutomaticRecoveryRequired));
+    expect(label, isNot(contains(l10n.configUpdateCompletionSourceAutomaticInstallStarted)));
+  });
+
   group('buildAutomaticUpdateStatusLabel', () {
     test('includes completion suffix when notifications are enabled', () {
       final label = UpdateSupportDiagnosticsBuilder.buildAutomaticUpdateStatusLabel(

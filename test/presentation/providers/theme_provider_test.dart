@@ -1,13 +1,12 @@
 import 'dart:io';
-
 import 'package:fluent_ui/fluent_ui.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:plug_agente/application/repositories/app_preferences_repository.dart';
 import 'package:plug_agente/application/repositories/i_app_preferences_repository.dart';
-import 'package:plug_agente/application/repositories/update_preferences_repository.dart';
 import 'package:plug_agente/core/settings/app_settings_keys.dart';
 import 'package:plug_agente/core/settings/app_settings_store.dart';
 import 'package:plug_agente/infrastructure/repositories/startup_preferences_repository.dart';
+import 'package:plug_agente/infrastructure/repositories/update_preferences_repository.dart';
 import 'package:plug_agente/presentation/providers/system_settings_error.dart';
 import 'package:plug_agente/presentation/providers/theme_provider.dart';
 

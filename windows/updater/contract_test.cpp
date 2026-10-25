@@ -15,6 +15,17 @@ int main(int argc, char** argv) {
       std::cout << "Cross-language signature checks passed\n"; return 0;
     }
     bool rejected = false;
+    const Json old_policy{{"enabled",true},{"applicationContractValidated",true},{"channel","beta"},
+      {"installDirectory","C:\\private-fixture"},{"capabilities",{"app.files"}}};
+    const auto migrated = migrated_manifest_policy(old_policy, Json::object(), "fixture-key");
+    if (requires_authenticode(migrated) || migrated.at("enabled") != false || migrated.at("applicationContractValidated") != false ||
+        migrated.at("channel") != old_policy.at("channel") || migrated.at("installDirectory") != old_policy.at("installDirectory") ||
+        migrated.at("capabilities") != old_policy.at("capabilities")) throw std::runtime_error("migration_changed_identity_or_authorization");
+    for (const auto& state : {"preparing", "installing", "recoveryRequired", "unknown"}) {
+      rejected = false;
+      try { migrated_manifest_policy(old_policy, Json{{"state",state}}, "fixture-key"); } catch (...) { rejected = true; }
+      if (!rejected) throw std::runtime_error("migration_discarded_pending_operation");
+    }
     if (!requires_authenticode(Json::object()) || requires_authenticode(Json{{"requireAuthenticode", false}}))
       throw std::runtime_error("authenticode_policy_default_changed");
     const Json hashes{{"binaryHashes", {{"app", std::string(64, 'a')}}}};

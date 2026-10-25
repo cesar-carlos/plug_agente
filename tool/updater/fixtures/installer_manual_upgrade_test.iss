@@ -145,6 +145,14 @@ end;
 
 #include ProductionInstallerDir + "\updater_recovery.iss"
 #include ProductionInstallerDir + "\updater_install_preparation.iss"
+function PrepareRunningInstallation(var Details: String): Boolean;
+begin
+  Result := True;
+end;
+function PrepareManifestPolicy(var Details: String): Boolean;
+begin
+  Result := True;
+end;
 #include TestProductionFile
 
 function InitializeSetup(): Boolean;

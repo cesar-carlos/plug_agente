@@ -19,11 +19,6 @@ on:
         description: Upgrade installer SHA-256
         required: true
         type: string
-      require_authenticode:
-        description: Require Authenticode in addition to mandatory signed manifest
-        required: true
-        type: boolean
-        default: false
 
 permissions:
   contents: read
@@ -56,7 +51,7 @@ jobs:
           INITIAL_SHA256: ${{ inputs.installer_sha256 }}
           UPGRADE_URL: ${{ inputs.upgrade_url }}
           UPGRADE_SHA256: ${{ inputs.upgrade_sha256 }}
-          REQUIRE_AUTHENTICODE: ${{ inputs.require_authenticode }}
+          REQUIRE_AUTHENTICODE: 'false'
         run: |
           $ErrorActionPreference = 'Stop'
           $assets = @(

@@ -1,5 +1,64 @@
 # Auto-Update Threat Model
 
+## Instalação sem Authenticode e canal local — 2026-10-25
+
+O modelo oficial remove confiança em certificado do fornecedor, preservando
+Ed25519, SHA-256, tamanho e vínculos de versão/canal/identidade. Ferramentas PFX e
+SignPath são históricas e não são caminhos oficiais de publicação. Isso não remove
+a verificação Microsoft dos redistribuíveis usados nas fixtures privadas.
+
+O pipe `PlugAgente.Install.v1` é separado do serviço privilegiado, limitado a
+4 KiB, local (`PIPE_REJECT_REMOTE_CLIENTS`) e identificado por hash do caminho
+canônico e PID. O cliente confere o PID do servidor e mantém o handle/tempo de
+criação do processo. O servidor confere o processo, caminho e token do cliente:
+administrador elevado é autoridade administrativa explícita; sem elevação, exige
+a mesma conta e o cliente no diretório dessa instalação. Não se usa Authenticode
+como identidade. Administrador local comprometido está fora dessa fronteira.
+
+Uma operação é entregue ao Dart uma vez. Consulta, resposta perdida e cancelamento
+não geram outra execução de shutdown. A instalação exige saída física de todas as
+instâncias do caminho alvo. Falha de autenticação, canal ausente, recuperação e
+processo inacessível bloqueiam a cópia. A guarda local impede relançamento durante
+a instalação de versões que conhecem esse contrato; versões antigas exigem saída
+manual e continuam sujeitas às proteções de arquivo do Windows.
+
+A transição administrativa grava evidência antes de parar o supervisor e trocar
+a política. Estados incompletos bloqueiam enrollment e novos comandos de execução;
+status/cancelamento permanecem separados. A troca preserva DACL e sua proteção,
+com flush e substituição atômica; erro de escrita/replace mantém a política anterior
+ou a evidência para reconciliação. Nenhuma transição habilita gates de produção.
+Os testes locais não certificam UAC com outra conta, RDP ou recuperação instalada.
+
+## Revisao de transporte e estado — 2026-10-25
+
+O probe recebe o appcast como stream, limita o corpo a 1 MiB e valida cada
+redirect (no maximo cinco) pela politica de URL existente. O prazo solicitado
+limita a transferencia inteira e cancela a requisicao; cancelamento do operador
+tambem interrompe o transporte. XML/HTTP ficam na infraestrutura e falhas tipadas
+preservam a causa sem expor o corpo remoto na mensagem de interface. O formato
+canonico das assinaturas permanece inalterado.
+
+A persistencia de pending distingue ausencia, corrupcao e falha de armazenamento.
+Uma escrita nao confirmada impede prontidao baseada apenas no cache. Falha anterior
+ao despacho permite restaurar o registro anterior, somente com confirmacao; uma
+tentativa persistida passa exclusivamente por reconciliacao. Aplicar e cancelar
+compartilham a serializacao da reconciliacao. Timeout de snapshot mantem a admissao
+bloqueada, pois nao cancela o trabalho subjacente. Falha de diagnostico posterior
+a despacho confirmado nao autoriza novo envio.
+
+A revisao final estende essa fronteira ao arquivo global: corrupcao nao vira
+registro ausente, o arquivo nao e removido e gravacoes ficam bloqueadas ate
+recuperacao explicita. A fila local inclui os consumidores do helper legado;
+status sem timestamp tambem impede apagar evidencia. Resposta perdida durante
+preparacao cancelada exige reconciliacao do servico, sem contabilizar cancelamento
+como erro. Metricas e callbacks de diagnostico nao alteram o resultado da operacao.
+A serializacao e por repositorio no processo; nao constitui autorizacao nativa
+nem substitui identidade, journal, ACLs e verificacoes do servico instalado.
+
+Essas garantias locais nao certificam SCM, probation ou rollback instalados. Os
+bloqueios de aplicacao automatica e publicacao de producao continuam vigentes.
+
+
 ## Provedor manifest (revisão 2026-10-06)
 
 O provedor `manifest` dispensa Authenticode, mas exige assinatura Ed25519 do feed

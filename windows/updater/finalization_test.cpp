@@ -3,9 +3,53 @@
 #include "user_session.h"
 #include <fstream>
 #include <iostream>
+#include <sddl.h>
 
 using namespace plug::updater;
 namespace {
+std::vector<uint8_t> permissions(const fs::path& path) {
+  DWORD size = 0;
+  GetFileSecurityW(path.c_str(), DACL_SECURITY_INFORMATION, nullptr, 0, &size);
+  std::vector<uint8_t> value(size);
+  if (!size || !GetFileSecurityW(path.c_str(), DACL_SECURITY_INFORMATION, value.data(), size, &size))
+    throw std::runtime_error("fixture_permissions_unavailable");
+  return value;
+}
+void policy_persistence(const fs::path& root) {
+  if (!fs::create_directory(root)) throw std::runtime_error("fixture_already_exists");
+  const auto policy = root / L"policy.json";
+  const auto temporary = root / L"policy.json.tmp";
+  write_atomic(policy, "old");
+  const auto original = permissions(policy);
+  write_atomic(policy, "manifest", true);
+  const auto actual = permissions(policy);
+  const auto access = [](const std::vector<uint8_t>& value) {
+    LPWSTR text = nullptr;
+    if (!ConvertSecurityDescriptorToStringSecurityDescriptorW(const_cast<uint8_t*>(value.data()), SDDL_REVISION_1,
+        DACL_SECURITY_INFORMATION, &text, nullptr)) throw std::runtime_error("fixture_acl_unavailable");
+    std::wstring result(text); LocalFree(text); return result;
+  };
+  if (read_file(policy) != "manifest" || access(actual) != access(original)) {
+    std::wcerr << L"Original: " << access(original) << L"; actual: " << access(actual) << L'\n';
+    throw std::runtime_error("policy_permissions_changed");
+  }
+  {
+    Handle locked(CreateFileW(temporary.c_str(), GENERIC_WRITE, 0, nullptr, CREATE_NEW, FILE_ATTRIBUTE_NORMAL, nullptr));
+    if (!locked.valid()) throw std::runtime_error("fixture_lock_failed");
+    bool rejected = false;
+    try { write_atomic(policy, "lost", true); } catch (...) { rejected = true; }
+    if (!rejected || read_file(policy) != "manifest") throw std::runtime_error("failed_policy_write_lost_original");
+  }
+  fs::remove(temporary);
+  {
+    PinnedPath locked(policy);
+    bool rejected = false;
+    try { write_atomic(policy, "unknown", true); } catch (...) { rejected = true; }
+    if (!rejected || read_file(policy) != "manifest" || read_file(temporary) != "unknown")
+      throw std::runtime_error("failed_policy_replace_lost_evidence");
+  }
+  fs::remove(temporary); fs::remove(policy); fs::remove(root);
+}
 void interrupted_finalization(const fs::path& root, int interrupt_after) {
   fs::create_directory(root);
   const auto journal = root / L"journal.json";
@@ -66,6 +110,7 @@ int wmain(int argc, wchar_t** argv) {
       Sleep(1000); return 0;
     }
     const auto root = fs::temp_directory_path() / (L"plug_finalization_" + std::to_wstring(GetCurrentProcessId()));
+    policy_persistence(fs::path(root.native() + L"_policy"));
     for (int step = 1; step <= 7; ++step) interrupted_finalization(fs::path(root.native() + std::to_wstring(step)), step);
     for (const auto& state : {"completed", "rolledBack", "deferred"}) {
       Json job{{"state", state}};

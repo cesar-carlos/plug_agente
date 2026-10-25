@@ -1,8 +1,8 @@
 import 'dart:async';
 import 'dart:convert';
-
 import 'package:crypto/crypto.dart';
 import 'package:plug_agente/domain/errors/failures.dart' as domain;
+import 'package:plug_agente/domain/errors/silent_install_failure.dart';
 import 'package:plug_agente/domain/services/i_privileged_updater.dart';
 import 'package:plug_agente/domain/services/i_update_manifest_downloader.dart';
 import 'package:plug_agente/domain/services/i_update_secrets_snapshot.dart';
@@ -63,7 +63,9 @@ class PrivilegedSilentUpdateInstaller implements IServiceSilentUpdateInstaller {
       final download = await downloader.install(request);
       if (download.isError()) return Failure(download.exceptionOrNull()!);
       final staged = download.getOrThrow();
-      if (request.cancelRequested?.call() ?? false) return Failure(_unavailable('update_cancelled'));
+      if (request.cancelRequested?.call() ?? false) {
+        return Failure(SilentInstallCancellationFailure(message: 'Atualização cancelada.'));
+      }
       final prepared = await updater.prepare(manifest: manifest, installerPath: staged.installerPath);
       if (prepared.isError()) return Failure(prepared.exceptionOrNull()!);
       final status = prepared.getOrThrow();
@@ -109,9 +111,10 @@ class PrivilegedSilentUpdateInstaller implements IServiceSilentUpdateInstaller {
     required String version,
     required String operationId,
     required int appPid,
+    bool reconcileOnly = false,
   }) async {
     final operation = operationId;
-    if (_closedOperations.contains(operation)) {
+    if (reconcileOnly || _closedOperations.contains(operation)) {
       return await _reconcileDispatch(operation, version, appPid);
     }
     try {

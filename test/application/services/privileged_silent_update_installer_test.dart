@@ -1,7 +1,6 @@
 import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
-
 import 'package:crypto/crypto.dart';
 import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -15,6 +14,7 @@ import 'package:plug_agente/application/services/update_maintenance_admission.da
 import 'package:plug_agente/application/services/update_maintenance_coordinator.dart';
 import 'package:plug_agente/domain/entities/pending_silent_update.dart';
 import 'package:plug_agente/domain/errors/failures.dart' as domain;
+import 'package:plug_agente/domain/errors/silent_install_failure.dart';
 import 'package:plug_agente/domain/services/i_privileged_updater.dart';
 import 'package:plug_agente/domain/services/i_update_manifest_downloader.dart';
 import 'package:plug_agente/domain/services/i_update_secrets_snapshot.dart';
@@ -73,6 +73,19 @@ class Secrets extends Fake implements IUpdateSecretsSnapshot {
   }
 }
 
+class FailingDispatchStore extends InMemoryPendingSilentUpdateStore {
+  bool failNextDispatch = true;
+  @override
+  Future<Result<void>> save(PendingSilentUpdate pending) async {
+    await super.save(pending);
+    if (pending is PendingSilentUpdateService && pending.dispatchAttemptedAt != null && failNextDispatch) {
+      failNextDispatch = false;
+      return Failure(domain.ConfigurationFailure('Disk unavailable'));
+    }
+    return const Success(unit);
+  }
+}
+
 void main() {
   late Downloader downloader;
   late ManifestDownloader manifests;
@@ -94,7 +107,8 @@ void main() {
   var now = DateTime(2026);
   final recoveryPhases = <bool>[];
 
-  SilentUpdateInstallRequest request({String? digest}) => SilentUpdateInstallRequest(
+  SilentUpdateInstallRequest request({String? digest, bool Function()? cancelRequested}) => SilentUpdateInstallRequest(
+    cancelRequested: cancelRequested,
     version: version,
     assetUrl: 'https://example.test/setup.exe',
     assetSize: 123,
@@ -214,6 +228,13 @@ void main() {
 
   tearDown(() => expect(downloader.launches, 0));
 
+  test('cancellation after download uses the typed cancellation contract', () async {
+    final result = await installer.install(request(cancelRequested: () => downloader.downloads > 0));
+    expect(result.exceptionOrNull(), isA<SilentInstallCancellationFailure>());
+    expect(commands, isNot(contains('prepare')));
+    expect(maintenanceCalls, 0);
+  });
+
   test('real pending maintenance SQLite and IPC recover after rejection without premature shutdown', () async {
     rejectStart = true;
     final directory = await Directory.systemTemp.createTemp('closed_update_recovery_');
@@ -303,6 +324,54 @@ void main() {
     expect((await pending.read() as PendingSilentUpdateService?)?.dispatchAttemptedAt, isNotNull);
     await admission.dispose();
     await directory.delete(recursive: true);
+  });
+
+  test('failed pre-dispatch persistence restores ready without entering maintenance', () async {
+    final store = FailingDispatchStore();
+    await store.write(PendingSilentUpdateService(version: version, startedAt: DateTime.now(), operationId: operation));
+    final pending = ServiceUpdatePendingCoordinator(
+      updater: installer.updater,
+      store: store,
+      flush: () async {},
+      clock: DateTime.now,
+      stagedTtl: const Duration(days: 7),
+    );
+    final apply = SilentUpdateDownloadApplyService(
+      installer: installer,
+      pendingStore: store,
+      servicePending: pending,
+      launcherStatusReader: const NoopSilentUpdateLauncherStatusReader(),
+      automaticFailureBreaker: PersistentCircuitBreaker(
+        persistence: InMemoryCircuitBreakerPersistence(),
+        threshold: 3,
+        cooldown: const Duration(minutes: 15),
+        logName: 'test',
+      ),
+    );
+    final result = await apply.applyPendingDownloadedUpdate(
+      getDiagnostics: () => null,
+      onDiagnosticsUpdated: (_) {},
+      persistDiagnostics: () async {},
+      notifyDiagnosticsChanged: () {},
+    );
+    expect(result.isError(), isTrue);
+    expect(maintenanceCalls, 0);
+    expect(commands, isNot(contains('start')));
+    expect((await pending.reconcile()).getOrThrow().decision, ServicePendingDecision.ready);
+  });
+
+  test('persisted dispatch evidence only reconciles after process restart', () async {
+    nativeState = 'waitingForExit';
+    final result = await installer.launchServiceOperation(
+      version: version,
+      operationId: operation,
+      appPid: 123,
+      reconcileOnly: true,
+    );
+    expect(result.isSuccess(), isTrue);
+    expect(maintenanceCalls, 0);
+    expect(commands, isNot(contains('start')));
+    expect(secrets.calls, 0);
   });
 
   test('legacy supervisor blocks before maintenance', () async {

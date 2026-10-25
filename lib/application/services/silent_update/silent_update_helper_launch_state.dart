@@ -68,6 +68,26 @@ abstract final class SilentUpdateHelperLaunchState {
         !isUserCancelledElevation(launcherStatus);
   }
 
+  static bool requiresRecovery({
+    required DateTime? launchedAt,
+    required SilentUpdateLauncherStatus? launcherStatus,
+    required DateTime now,
+    required Duration helperWaitDuration,
+  }) {
+    if (!isInFlight(
+      launchedAt: launchedAt,
+      launcherStatus: launcherStatus,
+      now: now,
+      helperWaitDuration: helperWaitDuration,
+    )) {
+      return false;
+    }
+    final activity = launcherStatus?.lastUpdatedAt ?? launchedAt;
+    return launcherStatus?.state == 'recoveryRequired' ||
+        activity == null ||
+        now.difference(activity) > helperWaitDuration;
+  }
+
   /// True when the helper reported that the operator cancelled the UAC
   /// elevation prompt. Artifacts stay valid for a later apply.
   static bool isUserCancelledElevation(SilentUpdateLauncherStatus? launcherStatus) {

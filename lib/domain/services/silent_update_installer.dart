@@ -165,5 +165,6 @@ abstract interface class IServiceSilentUpdateInstaller implements ISilentUpdateI
     required String version,
     required String operationId,
     required int appPid,
+    bool reconcileOnly = false,
   });
 }

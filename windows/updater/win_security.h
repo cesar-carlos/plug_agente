@@ -32,7 +32,7 @@ fs::path updater_root();
 fs::path control_root();
 fs::path registered_worker(const Json& policy);
 std::string read_file(const fs::path& path, size_t limit = kMaxMessageBytes);
-void write_atomic(const fs::path& path, const std::string& bytes);
+void write_atomic(const fs::path& path, const std::string& bytes, bool preserve_permissions = false);
 void reject_reparse_path(const fs::path& path);
 void protect_directory(const fs::path& path, bool executable_control = false);
 void assert_protected_directory(const fs::path& path, bool executable_control = false, bool require_explicit = true);

@@ -1,7 +1,7 @@
 # Guia de Release e Versionamento
 
 > Revisão de 2026-10-06: `signing_provider=manifest` (padrão no publish) e
-> `build_installer.py --manifest-only` exigem Ed25519 do feed/manifesto e SHA-256,
+> `build_installer.py` (ou o alias `--manifest-only`) exigem Ed25519 do feed/manifesto e SHA-256,
 > sem certificado Authenticode. Exigências de certificado neste guia se aplicam
 > aos provedores opcionais `pfx`/`signpath`. As chaves do feed continuam obrigatórias.
 > O novo adaptador Windows usa o serviço sem fallback com UAC, mas a aplicação
@@ -47,7 +47,7 @@ python tool/release/release_preflight.py --version 1.8.4 --gate --check-secrets 
 
 O gate executa `flutter analyze`, `flutter test --exclude-tags "live || slow || perf"`,
 `test/architecture/layer_boundaries_test.dart` e os testes Python de appcast.
-Também imprime avisos sobre certificado Authenticode e chaves de assinatura do feed
+Também imprime avisos sobre as chaves obrigatórias de assinatura do feed
 e os comandos `gh workflow run` sugeridos.
 
 Hook git opcional (pre-push em `main` quando `pubspec.yaml`, `lib/` ou `test/` mudam):
@@ -76,8 +76,7 @@ Ordem sugerida:
    - `version`: versao curta, exemplo `1.6.6`;
    - `build_number`: sufixo do `pubspec.yaml`, exemplo `1`;
    - `run_tests`: mantenha ativo para release estavel;
-   - `signing_provider`: `manifest` (default), `pfx` or `signpath`;
-   - `require_signing` / `require_valid_update_signature`: required for certificate providers; `manifest` uses Ed25519 without Authenticode;
+   - `signing_provider`: somente `manifest`;
    - `prerelease`: use apenas para versoes de validacao;
    - `dry_run`: gera e valida o instalador sem criar commit, tag ou release.
 5. Apos a publicacao, confirme que o workflow **Update Appcast on Release**
@@ -87,19 +86,12 @@ Use `dry_run=true` para validar uma versao antes de publica-la. O workflow
 continua atualizando a versao no workspace temporario do runner, rodando
 preflight e gerando o instalador, mas encerra antes dos passos destrutivos.
 
-Signing requirements:
-
-| Provider | Required trust material |
-| --- | --- |
-| All providers | `APPCAST_SIGNING_PRIVATE_KEY` and `AUTO_UPDATE_FEED_PUBLIC_KEY` for the signed feed/manifest |
-| `manifest` (default) | Ed25519; no Authenticode certificate. Windows executables have no verified Authenticode publisher. |
-| `pfx` | `WINDOWS_CODE_SIGNING_CERT_BASE64` and `WINDOWS_CODE_SIGNING_CERT_PASSWORD`, plus Authenticode validation |
-| `signpath` | Approved SignPath project/policy and settings in the [installer guide](../../installer/readme.md#signpath-opcional), plus Authenticode validation |
-
-The workflow requires tests and provider-specific trust checks for production.
-For `pfx`/`signpath`, disabling Authenticode checks is limited to a dry run.
-`manifest` disables Authenticode only; feed and manifest signing remain required.
-These settings do not bypass the persona-v2 release gate.
+O único modo oficial é `manifest`, com `APPCAST_SIGNING_PRIVATE_KEY` e
+`AUTO_UPDATE_FEED_PUBLIC_KEY`. Não há certificado Authenticode. PFX/SignPath ficam
+preservados como ferramentas históricas, desativadas nos workflows oficiais.
+Configurações conflitantes são recusadas antes do build. Os testes obrigatórios
+e os gates coordenados de produção continuam exigidos; este documento não
+autoriza publicar o candidato sem homologação instalada e aceite explícitos.
 
 O token padrão `github.token` publica a release; `update-appcast.yml` é chamado
 como workflow reutilizável e não depende de `RELEASE_PUBLISH_TOKEN`.
@@ -133,7 +125,7 @@ version: 1.2.7+2
 ```bash
 python installer/update_version.py
 python tool/release/release_preflight.py --version 1.2.7 --allow-dirty --require-iscc --check-pages
-python installer/build_installer.py --manifest-only
+python installer/build_installer.py
 python tool/release/release_preflight.py --version 1.2.7 --allow-dirty --check-installer \
   --feed-public-key "$AUTO_UPDATE_FEED_PUBLIC_KEY"
 ```
@@ -148,8 +140,8 @@ hash. A origem, versao e hashes ficam em `data/odbc_native_manifest.json`.
 
 Local build stages and component packaging are maintained in the
 [installer guide](../../installer/readme.md#fluxo-recomendado).
-Use `--manifest-only` for the Ed25519 provider; configure the corresponding
-certificate/provider workflow for Authenticode builds. Do not treat an unsigned
+O build local usa manifest por padrão; `--manifest-only` é um alias compatível.
+Os fluxos oficiais recusam provedores de certificado. Do not treat an unsigned
 development build as a release artifact.
 
 A segunda chamada do preflight (`--check-installer --feed-public-key`)

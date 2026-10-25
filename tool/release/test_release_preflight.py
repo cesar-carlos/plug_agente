@@ -278,7 +278,7 @@ class ReleasePreflightTests(unittest.TestCase):
         joined = " ".join(warnings)
         self.assertNotIn("RELEASE_PUBLISH_TOKEN", joined)
         self.assertIn("APPCAST_SIGNING_PRIVATE_KEY", joined)
-        self.assertIn("WINDOWS_CODE_SIGNING_CERT_BASE64", joined)
+        self.assertNotIn("WINDOWS_CODE_SIGNING_CERT_BASE64", joined)
 
     def test_list_github_actions_secrets_parses_names(self) -> None:
         result = subprocess.CompletedProcess(

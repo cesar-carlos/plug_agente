@@ -60,6 +60,7 @@
         "automaticRolloutSkipped",
         "automaticCancelled",
         "automaticQuietHours",
+        "automaticRecoveryRequired",
         null
       ]
     },

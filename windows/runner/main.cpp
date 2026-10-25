@@ -273,6 +273,12 @@ int APIENTRY wWinMain(_In_ HINSTANCE instance, _In_opt_ HINSTANCE prev,
       std::find(launch_arguments.begin(), launch_arguments.end(), "--update-validation") != launch_arguments.end();
   const bool is_installation_check =
       std::find(launch_arguments.begin(), launch_arguments.end(), "--installation-check") != launch_arguments.end();
+  wchar_t own_image[32768];
+  const auto own_length = GetModuleFileNameW(nullptr, own_image, 32768);
+  if (!own_length || own_length >= 32768) return EXIT_FAILURE;
+  const auto setup_guard = std::filesystem::path(own_image).parent_path() / L".installation-lock";
+  if (!is_installation_check && !is_update_validation &&
+      GetFileAttributesW(setup_guard.c_str()) != INVALID_FILE_ATTRIBUTES) return EXIT_FAILURE;
   PWSTR program_files = nullptr;
   if (SUCCEEDED(SHGetKnownFolderPath(FOLDERID_ProgramFiles, 0, nullptr, &program_files))) {
     const auto blocked = std::filesystem::path(program_files) / L"PlugAgenteUpdater" / L"boot-blocked";

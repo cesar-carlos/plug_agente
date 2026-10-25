@@ -17,20 +17,13 @@ on:
         required: true
         type: boolean
         default: true
-      require_signing:
-        description: "Require Authenticode for pfx/signpath (manifest provider uses Ed25519)"
-        required: true
-        type: boolean
-        default: true
       signing_provider:
-        description: "Trust provider: manifest = Ed25519 without certificate; pfx/signpath = Authenticode"
+        description: "Official trust provider: Ed25519 manifests without Authenticode"
         required: true
         type: choice
         default: manifest
         options:
           - manifest
-          - pfx
-          - signpath
       prerelease:
         description: "Publish as a prerelease"
         required: true
@@ -41,16 +34,6 @@ on:
         required: true
         type: boolean
         default: false
-      skip_authenticode_check:
-        description: "Skip Authenticode in dry runs; automatically enabled for manifest provider"
-        required: false
-        type: boolean
-        default: false
-      require_valid_update_signature:
-        description: "Build with AUTO_UPDATE_REQUIRE_VALID_SIGNATURE=true (enforce Authenticode of installer+helper at runtime)"
-        required: true
-        type: boolean
-        default: true
 
 permissions:
   contents: write
@@ -113,7 +96,6 @@ jobs:
           FEED_PUBLIC_KEY: ${{ secrets.AUTO_UPDATE_FEED_PUBLIC_KEY }}
         run: |
           if ('${{ inputs.run_tests }}' -ne 'true') { throw 'Production requires tests.' }
-          if ('${{ inputs.signing_provider }}' -ne 'manifest' -and ('${{ inputs.require_signing }}' -ne 'true' -or '${{ inputs.require_valid_update_signature }}' -ne 'true' -or '${{ inputs.skip_authenticode_check }}' -eq 'true')) { throw 'Certificate providers require Authenticode verification.' }
           if (!$env:FEED_KEY -or !$env:FEED_PUBLIC_KEY) { throw "Production requires feed signing keys." }
 
       - name: Setup Flutter
@@ -168,89 +150,16 @@ jobs:
       - name: Test installer recovery and warning reports
         run: python -m unittest tool.updater.test_installer tool.updater.test_installer_recovery tool.updater.test_windows_installation_validation tool.release.test_signpath_staging -v
 
-      - name: Prepare signing certificate
-        if: inputs.signing_provider == 'pfx'
-        id: signing
-        shell: pwsh
-        env:
-          CERT_BASE64: ${{ secrets.WINDOWS_CODE_SIGNING_CERT_BASE64 }}
-        run: |
-          if ([string]::IsNullOrWhiteSpace($env:CERT_BASE64)) {
-            "cert_path=" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
-            exit 0
-          }
-          $certPath = Join-Path $env:RUNNER_TEMP "plug-agente-code-signing.pfx"
-          [IO.File]::WriteAllBytes($certPath, [Convert]::FromBase64String($env:CERT_BASE64))
-          "cert_path=$certPath" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
-
-      - name: Resolve Authenticode verification
-        id: authenticode
-        shell: pwsh
-        env:
-          CERT_PATH: ${{ steps.signing.outputs.cert_path }}
-          REQUIRE_SIGNING: ${{ inputs.require_signing }}
-          SKIP_INPUT: ${{ inputs.skip_authenticode_check }}
-          SIGNING_PROVIDER: ${{ inputs.signing_provider }}
-        run: |
-          if ($env:SIGNING_PROVIDER -eq 'manifest') {
-            'skip=true' | Out-File -FilePath $env:GITHUB_OUTPUT -Append
-            exit 0
-          }
-          if ($env:SIGNING_PROVIDER -eq 'signpath') {
-            if ($env:SKIP_INPUT -eq 'true') { throw 'SignPath artifacts always require Authenticode verification' }
-            'skip=false' | Out-File -FilePath $env:GITHUB_OUTPUT -Append
-            exit 0
-          }
-          $hasCert = -not [string]::IsNullOrWhiteSpace($env:CERT_PATH)
-          $requireSigning = $env:REQUIRE_SIGNING -eq 'true'
-          $skipInput = $env:SKIP_INPUT -eq 'true'
-          if ($requireSigning -and -not $hasCert) {
-            throw "require_signing=true but WINDOWS_CODE_SIGNING_CERT_BASE64 is not configured."
-          }
-          $skip = $skipInput -or -not $hasCert
-          if (-not $hasCert -and -not $skipInput) {
-            Write-Host "::warning::No code signing certificate configured; skipping Authenticode verification (unsigned build)."
-          }
-          "skip=$($skip.ToString().ToLower())" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
-
-      - name: Build installer
-        if: inputs.signing_provider != 'signpath'
+      - name: Build installer without certificate
         env:
           AUTO_UPDATE_FEED_URL: ${{ env.OFFICIAL_FEED_URL }}
           AUTO_UPDATE_CHANNEL: ${{ env.RELEASE_CHANNEL }}
-          # Production keeps the runtime signature gate enabled.
-          # Flip the workflow input to true once helper+installer are signed
-          # end-to-end and at least two release builds passed in the field.
-          AUTO_UPDATE_REQUIRE_VALID_SIGNATURE: ${{ inputs.signing_provider != 'manifest' && inputs.require_valid_update_signature }}
-          AUTO_UPDATE_FEED_PUBLIC_KEY: ${{ secrets.AUTO_UPDATE_FEED_PUBLIC_KEY }}
-          AUTO_UPDATE_REQUIRE_FEED_SIGNATURE: ${{ !inputs.dry_run || vars.AUTO_UPDATE_REQUIRE_FEED_SIGNATURE == 'true' }}
-          WINDOWS_CODE_SIGNING_CERT_PATH: ${{ steps.signing.outputs.cert_path }}
-          WINDOWS_CODE_SIGNING_CERT_PASSWORD: ${{ secrets.WINDOWS_CODE_SIGNING_CERT_PASSWORD }}
-          WINDOWS_CODE_SIGNING_REQUIRED: ${{ inputs.signing_provider != 'manifest' && (inputs.require_signing || inputs.require_valid_update_signature) }}
-          SIGNING_PROVIDER: ${{ inputs.signing_provider }}
-        shell: pwsh
-        run: |
-          if ($env:SIGNING_PROVIDER -eq 'manifest') { python installer/build_installer.py --manifest-only }
-          else { python installer/build_installer.py }
-          if ($LASTEXITCODE -ne 0) { throw 'Installer build failed' }
-
-      - name: Build and sign with SignPath
-        if: inputs.signing_provider == 'signpath'
-        uses: ./.github/actions/signpath-installer
-        env:
-          AUTO_UPDATE_FEED_URL: ${{ env.OFFICIAL_FEED_URL }}
-          AUTO_UPDATE_CHANNEL: ${{ env.RELEASE_CHANNEL }}
-          AUTO_UPDATE_REQUIRE_VALID_SIGNATURE: 'true'
+          AUTO_UPDATE_REQUIRE_VALID_SIGNATURE: 'false'
           AUTO_UPDATE_FEED_PUBLIC_KEY: ${{ secrets.AUTO_UPDATE_FEED_PUBLIC_KEY }}
           AUTO_UPDATE_REQUIRE_FEED_SIGNATURE: 'true'
-          WINDOWS_CODE_SIGNING_REQUIRED: 'true'
-        with:
-          api-token: ${{ secrets.SIGNPATH_API_TOKEN }}
-          organization-id: ${{ vars.SIGNPATH_ORGANIZATION_ID }}
-          project-slug: ${{ vars.SIGNPATH_PROJECT_SLUG }}
-          signing-policy-slug: ${{ vars.SIGNPATH_SIGNING_POLICY_SLUG }}
-          components-configuration: ${{ vars.SIGNPATH_COMPONENTS_CONFIGURATION }}
-          installer-configuration: ${{ vars.SIGNPATH_INSTALLER_CONFIGURATION }}
+          WINDOWS_CODE_SIGNING_REQUIRED: 'false'
+          SIGNING_PROVIDER: manifest
+        run: python installer/build_installer.py
 
       - name: Verify installed bundle startup and data access probes
         env:
@@ -263,60 +172,6 @@ jobs:
         run: |
           python tool/release/release_preflight.py --version "${{ env.VERSION_SHORT }}" --allow-dirty --check-installer --allow-existing-tag --feed-public-key "$AUTO_UPDATE_FEED_PUBLIC_KEY"
         shell: bash
-
-      - name: Verify Authenticode signatures
-        if: steps.authenticode.outputs.skip != 'true'
-        shell: pwsh
-        env:
-          INSTALLER_PATH: installer/dist/PlugAgente-Setup-${{ env.VERSION_SHORT }}.exe
-        run: |
-          $ErrorActionPreference = 'Stop'
-          $installerPath = $env:INSTALLER_PATH
-          if (-not (Test-Path $installerPath)) {
-            throw "Installer not found at $installerPath"
-          }
-
-          # signtool ships with the Windows 10/11 SDK; the runner image has it
-          # in the standard location. Resolve the most recent x64 build.
-          $signtoolCandidates = @(
-            "${env:ProgramFiles(x86)}\Windows Kits\10\bin\*\x64\signtool.exe",
-            "${env:ProgramFiles}\Windows Kits\10\bin\*\x64\signtool.exe"
-          )
-          $signtool = $null
-          foreach ($pattern in $signtoolCandidates) {
-            $candidate = Get-ChildItem -Path $pattern -ErrorAction SilentlyContinue |
-              Sort-Object FullName -Descending |
-              Select-Object -First 1
-            if ($candidate) { $signtool = $candidate.FullName; break }
-          }
-          if (-not $signtool) {
-            throw "signtool.exe not found in Windows Kits."
-          }
-          Write-Host "Using signtool: $signtool"
-
-          $helper = Join-Path $PWD "build\windows\x64\runner\Release\plug_update_helper.exe"
-          if (-not (Test-Path $helper)) {
-            throw "plug_update_helper.exe not found at $helper"
-          }
-
-          $exitInstaller = & $signtool verify /pa /v $installerPath
-          if ($LASTEXITCODE -ne 0) {
-            Write-Output $exitInstaller
-            throw "signtool verify failed for installer ($installerPath)"
-          }
-          $exitHelper = & $signtool verify /pa /v $helper
-          if ($LASTEXITCODE -ne 0) {
-            Write-Output $exitHelper
-            throw "signtool verify failed for plug_update_helper.exe ($helper)"
-          }
-          $artifacts = @('plug_agente.exe', 'plug_install_check.exe', 'plug_agente_elevated_runner.exe', 'updater/plug_update_service.exe', 'updater/plug_update_client.exe', 'updater/plug_update_worker.exe')
-          foreach ($artifact in $artifacts) {
-            $path = Join-Path 'build/windows/x64/runner/Release' $artifact
-            if (!(Test-Path -LiteralPath $path)) { throw "Missing signed component: $artifact" }
-            & $signtool verify /pa /v $path
-            if ($LASTEXITCODE -ne 0) { throw "Invalid Authenticode: $artifact" }
-          }
-          Write-Host 'Authenticode verification passed for all privileged components and app.'
 
       - name: Test native updater contracts
         shell: pwsh
@@ -387,7 +242,6 @@ jobs:
       rollout_percentage: "5"
       preserve_existing_rollout: true
       channel: ${{ inputs.prerelease && 'beta' || 'stable' }}
-      require_authenticode: ${{ inputs.signing_provider != 'manifest' }}
     secrets: inherit
     permissions:
       contents: write

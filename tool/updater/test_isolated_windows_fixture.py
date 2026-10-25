@@ -47,6 +47,12 @@ class IsolatedWindowsFixtureTests(unittest.TestCase):
             with self.assertRaisesRegex(RuntimeError, "activation gate"):
                 assert_isolated_sources(root, self.identity)
 
+    def test_installation_channel_uses_private_fixture_namespace(self):
+        source = (PROJECT / "windows/install_channel/installation_channel.cpp").read_text(encoding="utf-8")
+        rewritten = rewrite_native(source, self.identity)
+        self.assertNotIn("PlugAgente.Install.v1", rewritten)
+        self.assertIn(self.identity + ".Install.v1", rewritten)
+
     def test_residual_operational_identity_prevents_execution(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)

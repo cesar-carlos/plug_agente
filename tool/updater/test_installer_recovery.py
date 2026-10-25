@@ -58,6 +58,9 @@ class InstallerRecoveryTests(unittest.TestCase):
     def test_only_explicit_administrative_installs_can_transition_the_supervisor(self):
         self.run_case("administrative_host_upgrade")
 
+    def test_manifest_migration_requires_interactive_administrator_and_no_previous_attempt(self):
+        self.run_case("manifest_migration_authorization")
+
     def test_optional_preparation_failure_continues_without_privileged_updater_copying(self):
         report = self.run_case("initial_preparation_failure")
         contents = report.read_text(encoding="utf-8-sig")

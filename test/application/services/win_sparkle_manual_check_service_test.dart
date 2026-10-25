@@ -1,13 +1,12 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:plug_agente/application/observability/update_check_diagnostics.dart';
-import 'package:plug_agente/application/repositories/update_preferences_repository.dart';
 import 'package:plug_agente/application/services/auto_update_orchestrator_options.dart';
 import 'package:plug_agente/application/services/manual_check_outcome.dart';
 import 'package:plug_agente/application/services/win_sparkle_manual_check_service.dart';
 import 'package:plug_agente/core/runtime/runtime_capabilities.dart';
 import 'package:plug_agente/core/settings/app_settings_store.dart';
 import 'package:plug_agente/domain/errors/failures.dart' as domain;
-
+import 'package:plug_agente/infrastructure/repositories/update_preferences_repository.dart';
 import '../../helpers/auto_update_test_fakes.dart';
 
 void main() {

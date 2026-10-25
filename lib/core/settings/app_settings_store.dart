@@ -3,7 +3,6 @@ import 'dart:collection';
 import 'dart:convert';
 import 'dart:developer' as developer;
 import 'dart:io';
-
 import 'package:plug_agente/core/storage/global_storage_path_resolver.dart';
 
 abstract interface class IAppSettingsStore {
@@ -32,8 +31,16 @@ abstract interface class IAppSettingsStore {
   Object? get lastPersistError;
 }
 
-class GlobalAppSettingsStore implements IAppSettingsStore {
+/// Critical consumers must distinguish unavailable/corrupt storage from missing keys.
+abstract interface class IAppSettingsReadIntegrity {
+  Exception? get readIntegrityError;
+}
+
+class GlobalAppSettingsStore implements IAppSettingsStore, IAppSettingsReadIntegrity {
   GlobalAppSettingsStore({String? filePath}) : _filePath = filePath;
+
+  @override
+  Exception? readIntegrityError;
 
   String? _filePath;
   void Function(String key)? writeAdmission;
@@ -62,6 +69,7 @@ class GlobalAppSettingsStore implements IAppSettingsStore {
 
     final raw = await file.readAsString();
     if (raw.trim().isEmpty) {
+      readIntegrityError = const FormatException('Empty settings file');
       return;
     }
 
@@ -70,28 +78,31 @@ class GlobalAppSettingsStore implements IAppSettingsStore {
       decoded = jsonDecode(raw);
     } on FormatException catch (error, stackTrace) {
       developer.log(
-        'Settings file is corrupted. Quarantining and continuing with defaults.',
+        'Settings file is corrupted. Preserving evidence and blocking persistence.',
         name: 'app_settings_store',
         level: 900,
         error: error,
         stackTrace: stackTrace,
       );
-      await _quarantineCorruptedSettingsFile(file);
+      readIntegrityError = error;
       _cache.clear();
       return;
     }
 
     if (decoded is! Map<String, dynamic>) {
       developer.log(
-        'Settings file has invalid root type. Quarantining and continuing with defaults.',
+        'Settings file has invalid root type. Preserving evidence and blocking persistence.',
         name: 'app_settings_store',
         level: 900,
       );
-      await _quarantineCorruptedSettingsFile(file);
+      readIntegrityError = const FormatException('Invalid settings root');
       _cache.clear();
       return;
     }
 
+    if (decoded.values.any((dynamic value) => !_isSupportedValue(value))) {
+      readIntegrityError = const FormatException('Unsupported settings value');
+    }
     _cache
       ..clear()
       ..addEntries(
@@ -238,26 +249,6 @@ class GlobalAppSettingsStore implements IAppSettingsStore {
     return migratedCount;
   }
 
-  Future<void> _quarantineCorruptedSettingsFile(File sourceFile) async {
-    final timestamp = DateTime.now().toUtc().millisecondsSinceEpoch;
-    final corruptedFile = File('${sourceFile.path}.corrupt.$timestamp');
-
-    try {
-      await sourceFile.rename(corruptedFile.path);
-    } on FileSystemException catch (error, stackTrace) {
-      developer.log(
-        'Failed to quarantine corrupted settings file. Attempting delete.',
-        name: 'app_settings_store',
-        level: 900,
-        error: error,
-        stackTrace: stackTrace,
-      );
-      if (sourceFile.existsSync()) {
-        await sourceFile.delete();
-      }
-    }
-  }
-
   @override
   Future<void> flushPendingPersistence() async {
     await _writeQueue;
@@ -292,6 +283,7 @@ class GlobalAppSettingsStore implements IAppSettingsStore {
   }
 
   Future<void> _writeSnapshot() async {
+    if (readIntegrityError case final error?) throw error;
     final filePath = _requireFilePath();
     final file = File(filePath);
     final parentDir = file.parent;

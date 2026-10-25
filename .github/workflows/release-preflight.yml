@@ -17,16 +17,6 @@ on:
         required: true
         type: boolean
         default: true
-      require_signing:
-        description: "Fail if code signing certificate secrets are unavailable"
-        required: true
-        type: boolean
-        default: false
-      require_valid_update_signature:
-        description: "Build with AUTO_UPDATE_REQUIRE_VALID_SIGNATURE=true for staging validation"
-        required: true
-        type: boolean
-        default: false
       auto_update_channel:
         description: "Auto-update channel compiled into the preflight build"
         required: true
@@ -57,7 +47,7 @@ jobs:
       FULL_VERSION: ${{ inputs.version }}+${{ inputs.build_number }}
       OFFICIAL_FEED_URL: https://cesar-carlos.github.io/plug_agente/appcast.xml
       AUTO_UPDATE_CHANNEL: ${{ inputs.auto_update_channel }}
-      AUTO_UPDATE_REQUIRE_VALID_SIGNATURE: ${{ inputs.require_valid_update_signature }}
+      AUTO_UPDATE_REQUIRE_VALID_SIGNATURE: 'false'
       ROLLOUT_PERCENTAGE: ${{ inputs.rollout_percentage }}
     steps:
       - name: Checkout main
@@ -147,28 +137,12 @@ jobs:
       - name: Test installer recovery and warning reports
         run: python -m unittest tool.updater.test_installer_recovery tool.updater.test_windows_installation_validation -v
 
-      - name: Prepare signing certificate
-        id: signing
-        shell: pwsh
-        env:
-          CERT_BASE64: ${{ secrets.WINDOWS_CODE_SIGNING_CERT_BASE64 }}
-        run: |
-          if ([string]::IsNullOrWhiteSpace($env:CERT_BASE64)) {
-            "cert_path=" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
-            exit 0
-          }
-          $certPath = Join-Path $env:RUNNER_TEMP "plug-agente-code-signing.pfx"
-          [IO.File]::WriteAllBytes($certPath, [Convert]::FromBase64String($env:CERT_BASE64))
-          "cert_path=$certPath" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
-
       - name: Build installer
         env:
           AUTO_UPDATE_FEED_URL: ${{ env.OFFICIAL_FEED_URL }}
           AUTO_UPDATE_FEED_PUBLIC_KEY: ${{ secrets.AUTO_UPDATE_FEED_PUBLIC_KEY }}
-          AUTO_UPDATE_REQUIRE_FEED_SIGNATURE: ${{ vars.AUTO_UPDATE_REQUIRE_FEED_SIGNATURE || 'false' }}
-          WINDOWS_CODE_SIGNING_CERT_PATH: ${{ steps.signing.outputs.cert_path }}
-          WINDOWS_CODE_SIGNING_CERT_PASSWORD: ${{ secrets.WINDOWS_CODE_SIGNING_CERT_PASSWORD }}
-          WINDOWS_CODE_SIGNING_REQUIRED: ${{ inputs.require_signing || inputs.require_valid_update_signature }}
+          AUTO_UPDATE_REQUIRE_FEED_SIGNATURE: 'true'
+          WINDOWS_CODE_SIGNING_REQUIRED: 'false'
         run: python installer/build_installer.py
 
       - name: Verify installed bundle startup and data access probes

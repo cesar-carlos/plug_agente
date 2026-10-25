@@ -1,5 +1,4 @@
 import 'dart:async';
-
 import 'package:plug_agente/domain/errors/failures.dart' as domain;
 import 'package:result_dart/result_dart.dart';
 
@@ -131,7 +130,7 @@ class UpdateMaintenanceCoordinator {
         _restore();
         return const Success(MaintenanceDecision.deferred);
       }
-      final snapshot = await beforeClose?.call();
+      final snapshot = await beforeClose?.call().timeout(deadline.difference(_clock()));
       if (snapshot?.isError() ?? false) {
         final error = snapshot!.exceptionOrNull()!;
         if (error is domain.Failure && error.context['outcome_unknown'] == true) {
@@ -163,7 +162,7 @@ class UpdateMaintenanceCoordinator {
         domain.ConfigurationFailure.withContext(
           message: 'Não foi possível preparar a manutenção com segurança.',
           cause: error,
-          context: const {'reason': 'maintenance_unconfirmed'},
+          context: {'reason': 'maintenance_unconfirmed', if (_sealed) 'outcome_unknown': true},
         ),
       );
     }

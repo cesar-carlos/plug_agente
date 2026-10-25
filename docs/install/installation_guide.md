@@ -1,5 +1,37 @@
 # Guia de Instalação - Plug Agente
 
+## Instalação com encerramento cooperativo — 2026-10-25
+
+O instalador oficial não usa certificado Authenticode. Instalação global mantém
+`PrivilegesRequired=admin`; o Windows solicita elevação, inclusive com outra conta
+administradora. Cancelar o UAC impede a instalação. Instalação por usuário continua
+sem permissão para registrar o serviço global. O relançamento conserva o usuário
+original; não deve herdar a elevação do Setup.
+
+Antes de substituir arquivos, Setup consulta as instâncias pelo caminho canônico
+e identidade do processo. O canal local v1 solicita manutenção uma única vez,
+aguarda operações e exige a saída real de todas as instâncias da instalação.
+O aplicativo deixa de fechar para a bandeja nesse fluxo. Restart Manager não
+fecha aplicações (`CloseApplications=no`); o helper mantém `/NOCLOSEAPPLICATIONS`.
+Outra instalação não recebe solicitação de encerramento.
+
+Se a versão antiga não possui o canal, feche-a manualmente. Após espera ou falha,
+Repetir significa **verificar novamente**, sem reenviar a preparação. Cancelar
+solicita cancelamento cooperativo; isso não confirma reversão de efeitos iniciados.
+Falhas de fechamento de SQLite/ODBC e resultados incertos bloqueiam a cópia.
+No modo silencioso, o Setup retorna falha pelo caminho de preparação do Inno
+(código 7), com motivo no log e sem diálogo. A guarda `.installation-lock` impede
+novos inícios enquanto o instalador controla a pasta e é removida pelo fechamento
+do handle; um arquivo residual exige diagnóstico, não remoção automática.
+
+A migração de política antiga é oferecida apenas no instalador manual elevado.
+`/MIGRATEMANIFEST=1` expressa o mesmo consentimento explícito; não funciona em
+modo silencioso. Hashes, instalação, chave Ed25519 e ausência de operação pendente
+são conferidos antes da transição. Falha deixa `manifest-migration.json` para
+recuperação; não apague esse registro nem repita a migração desconhecida.
+Consulte [suporte do updater](auto_update_setup.md) e o
+[estado da homologação](../implemente/plano_auto_update_evolution.md).
+
 Este guia passo a passo ajuda a instalar o **Plug Agente** no Windows.
 
 ---

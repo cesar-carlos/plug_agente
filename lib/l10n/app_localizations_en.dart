@@ -5230,4 +5230,25 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get agentActionsCpuUnavailable => 'Unavailable';
+
+  @override
+  String get configUpdateCompletionSourceAutomaticRecoveryRequired => 'Update requires recovery';
+
+  @override
+  String get installationPreparationTitle => 'Preparing installation';
+
+  @override
+  String get installationPreparationWaiting => 'Waiting for active operations to finish.';
+
+  @override
+  String get installationPreparationClosing => 'Closing safely for installation.';
+
+  @override
+  String get installationPreparationBlocked => 'Installation is blocked by active operations.';
+
+  @override
+  String get installationPreparationCancelled => 'Installation preparation was cancelled.';
+
+  @override
+  String get installationPreparationRecovery => 'Safe shutdown is unconfirmed. Review recovery with support.';
 }

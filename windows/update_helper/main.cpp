@@ -946,11 +946,7 @@ int APIENTRY wWinMain(HINSTANCE instance, HINSTANCE previous_instance, PWSTR com
   status.waitForAppExitDurationMs = wait_result.durationMs;
   status.appExitTimedOut = wait_result.timedOut;
   if (wait_result.timedOut) {
-    // The app did not exit within the wait window. Proceeding anyway relies
-    // on Inno Setup's /CLOSEAPPLICATIONS to force it closed; record this on
-    // disk so a subsequent failure can be explained instead of looking like
-    // an unrelated installer error, and so operators can tell a normal
-    // "already exited" run apart from a "had to be force-closed" one.
+    // A timeout is not a safe exit. Preserve evidence and never launch Setup.
     status.state = kStateLauncherFailed;
     status.errorMessage = L"App did not exit safely; installation deferred.";
     write_status_file(status);

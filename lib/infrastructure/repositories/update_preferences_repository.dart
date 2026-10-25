@@ -1,9 +1,10 @@
-import 'package:plug_agente/application/repositories/i_circuit_breaker_persistence.dart';
-import 'package:plug_agente/application/repositories/i_update_preferences_repository.dart';
-import 'package:plug_agente/application/repositories/update_circuit_breaker_persistence.dart';
 import 'package:plug_agente/core/settings/app_settings_keys.dart';
 import 'package:plug_agente/core/settings/app_settings_store.dart';
 import 'package:plug_agente/core/settings/auto_update_settings_keys.dart';
+import 'package:plug_agente/domain/errors/failures.dart' as domain;
+import 'package:plug_agente/domain/repositories/i_circuit_breaker_persistence.dart';
+import 'package:plug_agente/domain/repositories/i_update_preferences_repository.dart';
+import 'package:plug_agente/infrastructure/repositories/update_circuit_breaker_persistence.dart';
 
 class UpdatePreferencesRepository implements IUpdatePreferencesRepository {
   UpdatePreferencesRepository({required IAppSettingsStore settingsStore})
@@ -74,7 +75,25 @@ class UpdatePreferencesRepository implements IUpdatePreferencesRepository {
       _settingsStore.remove(AutoUpdateSettingsKeys.lastAutomaticDiagnostics);
 
   @override
-  String? readPendingSilentUpdateJson() => _settingsStore.getString(AutoUpdateSettingsKeys.pendingSilentUpdate);
+  String? readPendingSilentUpdateJson() {
+    final store = _settingsStore;
+    final integrity = store is IAppSettingsReadIntegrity ? store as IAppSettingsReadIntegrity : null;
+    if (integrity?.readIntegrityError != null) {
+      throw domain.ValidationFailure.withContext(
+        message: 'O armazenamento da atualização exige recuperação.',
+        cause: integrity!.readIntegrityError,
+        context: const {'reason': 'settings_corrupted', 'outcome_unknown': true},
+      );
+    }
+    final value = store.getValue(AutoUpdateSettingsKeys.pendingSilentUpdate);
+    if (value != null && value is! String) {
+      throw domain.ValidationFailure.withContext(
+        message: 'O registro da atualização está inválido. Verifique a recuperação.',
+        context: const {'reason': 'pending_corrupted', 'outcome_unknown': true},
+      );
+    }
+    return value as String?;
+  }
 
   @override
   Future<void> writePendingSilentUpdateJson(String json) =>

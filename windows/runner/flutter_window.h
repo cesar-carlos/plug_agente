@@ -10,6 +10,7 @@
 #include <string>
 
 #include "win32_window.h"
+#include "../install_channel/installation_channel.h"
 
 // A window that does nothing but host a Flutter view.
 class FlutterWindow : public Win32Window {
@@ -27,6 +28,8 @@ class FlutterWindow : public Win32Window {
                          LPARAM const lparam) noexcept override;
 
  private:
+  plug::installation::Channel installation_;
+  std::unique_ptr<flutter::MethodChannel<flutter::EncodableValue>> installation_channel_;
   void DeliverDeepLink(const std::string& deep_link);
 
   // The project to run.

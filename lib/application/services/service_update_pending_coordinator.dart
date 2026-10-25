@@ -1,5 +1,4 @@
 import 'dart:async';
-
 import 'package:plug_agente/application/services/i_pending_silent_update_store.dart';
 import 'package:plug_agente/application/services/pending_silent_update.dart';
 import 'package:plug_agente/domain/errors/failures.dart' as domain;
@@ -50,27 +49,42 @@ class ServiceUpdatePendingCoordinator {
         !status.finalizationPending;
   }
 
-  Future<Result<ServicePendingResolution>> reconcile({bool cancel = false}) {
+  Future<T> _serialized<T>(Future<T> Function() action) {
     final previous = _tail;
     final done = Completer<void>();
     _tail = done.future;
     return (() async {
       await previous;
       try {
-        return await _reconcile(cancel: cancel);
-      } on Object catch (error) {
-        return Failure<ServicePendingResolution, Exception>(
-          domain.ConfigurationFailure.withContext(
-            message: 'Não foi possível reconciliar a atualização. Tente novamente.',
-            cause: error,
-            context: const {'reason': 'service_reconciliation_unknown', 'outcome_unknown': true},
-          ),
-        );
+        return await action();
       } finally {
         done.complete();
       }
     })();
   }
+
+  Future<Result<ServicePendingResolution>> _safeReconcile({bool cancel = false}) async {
+    try {
+      return await _reconcile(cancel: cancel);
+    } on Object catch (error) {
+      return Failure(
+        error is domain.Failure
+            ? error
+            : domain.ConfigurationFailure.withContext(
+                message: 'Não foi possível reconciliar a atualização. Tente novamente.',
+                cause: error,
+                context: const {'reason': 'service_reconciliation_unknown', 'outcome_unknown': true},
+              ),
+      );
+    }
+  }
+
+  Future<Result<ServicePendingResolution>> reconcile({bool cancel = false}) =>
+      _serialized(() => _safeReconcile(cancel: cancel));
+
+  Future<Result<void>> dispatch(
+    Future<Result<void>> Function(Result<ServicePendingResolution> resolution) action,
+  ) => _serialized(() async => action(await _safeReconcile()));
 
   Future<Result<ServicePendingResolution>> _reconcile({required bool cancel}) async {
     final local = await store.read();

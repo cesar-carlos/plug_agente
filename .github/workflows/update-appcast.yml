@@ -3,9 +3,6 @@ name: Update Appcast on Release
 on:
   workflow_call:
     inputs:
-      require_authenticode:
-        type: boolean
-        default: true
       release_tag:
         required: true
         type: string
@@ -25,10 +22,6 @@ on:
         required: true
   workflow_dispatch:
     inputs:
-      require_authenticode:
-        description: "Require Authenticode in addition to the mandatory Ed25519 manifest"
-        type: boolean
-        default: false
       release_tag:
         description: "Git tag (e.g. v1.4.0). Release must exist with PlugAgente-Setup-*.exe asset."
         required: false
@@ -293,20 +286,6 @@ jobs:
             echo "name=$ASSET_NAME"
             echo "sha256=$ASSET_SHA256"
           } >> "$GITHUB_OUTPUT"
-
-      - name: Verify installer Authenticode
-        if: inputs.require_authenticode
-        shell: pwsh
-        env:
-          INSTALLER_PATH: ${{ steps.asset.outputs.path }}
-        run: |
-          $ErrorActionPreference = 'Stop'
-          $signature = Get-AuthenticodeSignature -LiteralPath $env:INSTALLER_PATH
-          if ($signature.Status -ne 'Valid') { throw 'Installer Authenticode validation failed' }
-          $chain = [Security.Cryptography.X509Certificates.X509Chain]::new()
-          $chain.ChainPolicy.RevocationMode = 'Online'
-          $chain.ChainPolicy.RevocationFlag = 'ExcludeRoot'
-          if (!$chain.Build($signature.SignerCertificate)) { throw 'Installer certificate trust is inconclusive or revoked' }
 
       - name: Verify signed release manifest
         id: manifest

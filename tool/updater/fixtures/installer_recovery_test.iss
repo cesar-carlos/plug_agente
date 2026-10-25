@@ -175,6 +175,13 @@ begin
   else if TestCase = 'data_access_warning' then
     RecordInstallationIssue(ifDataAccess, 'odbc_driver_missing', 'ODBC x64',
       'database connections unavailable', 'install database driver', 'SQL_NO_DATA')
+  else if TestCase = 'manifest_migration_authorization' then
+  begin
+    AssertTrue(CanMigrateManifestPolicy(True, False, False), 'Interactive administrator may explicitly migrate');
+    AssertTrue(not CanMigrateManifestPolicy(True, True, False), 'Silent migration must be refused');
+    AssertTrue(not CanMigrateManifestPolicy(False, False, False), 'Non-administrative migration must be refused');
+    AssertTrue(not CanMigrateManifestPolicy(True, False, True), 'Unknown migration cannot be repeated');
+  end
   else if TestCase = 'clean_installation' then
   begin
     AssertTrue(not HasInstallationWarnings(), 'Clean installation must have no warnings');

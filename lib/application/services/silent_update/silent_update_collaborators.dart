@@ -1,18 +1,15 @@
 import 'dart:ui' show VoidCallback;
-
 import 'package:plug_agente/application/observability/i_auto_update_diagnostics_gateway.dart';
 import 'package:plug_agente/application/observability/i_auto_update_metrics_collector.dart';
 import 'package:plug_agente/application/observability/update_check_id_recorder.dart';
 import 'package:plug_agente/application/repositories/degraded_update_preferences_repository.dart';
 import 'package:plug_agente/application/repositories/i_update_preferences_repository.dart';
-import 'package:plug_agente/application/repositories/update_preferences_repository.dart';
-import 'package:plug_agente/application/services/appcast_probe_service.dart';
 import 'package:plug_agente/application/services/auto_update_defaults.dart';
 import 'package:plug_agente/application/services/i_pending_silent_update_store.dart';
+import 'package:plug_agente/application/services/in_memory_pending_silent_update_store.dart';
 import 'package:plug_agente/application/services/pending_silent_update_reconciler.dart';
 import 'package:plug_agente/application/services/persistent_circuit_breaker.dart';
 import 'package:plug_agente/application/services/service_update_pending_coordinator.dart';
-import 'package:plug_agente/application/services/settings_backed_pending_silent_update_store.dart';
 import 'package:plug_agente/application/services/silent_update/silent_update_automatic_circuit_breaker.dart';
 import 'package:plug_agente/application/services/silent_update/silent_update_cancellation_handler.dart';
 import 'package:plug_agente/application/services/silent_update/silent_update_diagnostics_notifier.dart';
@@ -23,10 +20,12 @@ import 'package:plug_agente/application/services/silent_update/silent_update_rol
 import 'package:plug_agente/application/services/silent_update/silent_update_scheduler.dart';
 import 'package:plug_agente/application/services/silent_update/silent_update_uac_guard.dart';
 import 'package:plug_agente/application/services/silent_update_installer.dart';
+import 'package:plug_agente/core/di/auto_update_factories.dart';
 import 'package:plug_agente/core/runtime/i_uac_detector.dart';
 import 'package:plug_agente/core/runtime/runtime_capabilities.dart';
 import 'package:plug_agente/core/security/appcast_signature_verifier.dart';
 import 'package:plug_agente/core/settings/app_settings_store.dart';
+import 'package:plug_agente/domain/services/i_appcast_probe_service.dart';
 import 'package:plug_agente/domain/services/i_privileged_updater.dart';
 import 'package:plug_agente/domain/services/i_update_manifest_downloader.dart';
 
@@ -80,10 +79,10 @@ class SilentUpdateCollaborators {
     DateTime Function()? clock,
   }) {
     final resolvedClock = clock ?? DateTime.now;
-    final appcastProbe = appcastProbeService ?? AppcastProbeService();
+    final appcastProbe = appcastProbeService ?? createAppcastProbeService();
     final preferences =
         updatePreferencesRepository ??
-        (settingsStore != null ? UpdatePreferencesRepository(settingsStore: settingsStore) : null);
+        (settingsStore != null ? createUpdatePreferencesRepository(settingsStore) : null);
     final wiredPreferences = preferences ?? DegradedUpdatePreferencesRepository();
     final automaticFailureBreaker = createSilentUpdateAutomaticFailureBreaker(
       preferences: wiredPreferences,
@@ -93,9 +92,7 @@ class SilentUpdateCollaborators {
     );
     final resolvedPendingStore =
         pendingStore ??
-        (preferences != null
-            ? SettingsBackedPendingSilentUpdateStore(preferences: preferences)
-            : InMemoryPendingSilentUpdateStore());
+        (preferences != null ? createPendingSilentUpdateStore(preferences) : InMemoryPendingSilentUpdateStore());
     final resolvedDiagnosticsStore =
         diagnosticsStore ??
         SilentUpdateDiagnosticsStore(
@@ -187,6 +184,7 @@ class SilentUpdateCollaborators {
       pendingReconciler: resolvedPendingReconciler,
       rolloutBucketResolver: SilentUpdateRolloutBucketResolver(preferences: preferences),
       cancellationHandler: SilentUpdateCancellationHandler(
+        launcherStatusReader: resolvedLauncherStatusReader,
         pendingStore: resolvedPendingStore,
         servicePending: servicePending,
         automaticFailureBreaker: automaticFailureBreaker,

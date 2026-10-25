@@ -217,8 +217,8 @@ bool resolveAutoUpdateRequireFeedSignature({
 const int _defaultPreCloseDelaySeconds = 30;
 const int _maxPreCloseDelaySeconds = 120;
 
-/// Seconds the silent-update close path waits after requesting shutdown
-/// before forcing `exit(0)`. Kept in sync with
+/// Historical grace interval retained for compatibility. Shutdown is cooperative;
+/// an unconfirmed exit blocks installation. Kept in sync with
 /// [resolveAutoUpdateWaitPidTimeoutSeconds] so Inno does not start while
 /// the process is still in its pre-close delay or ODBC drain.
 const int autoUpdateSilentExitGraceSeconds = 25;

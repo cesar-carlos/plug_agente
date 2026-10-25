@@ -1,3 +1,4 @@
+#include "../install_channel/installation_channel.h"
 #include "win_security.h"
 #include "user_session.h"
 #include "trusted_keys.h"
@@ -28,7 +29,7 @@ void revoke() {
   if (!fs::exists(policy_path)) return;
   auto policy = parse_json(read_file(policy_path));
   policy["enabled"] = false;
-  write_atomic(policy_path, policy.dump());
+  write_atomic(policy_path, policy.dump(), true);
 }
 void check_install(bool automatic) {
   if (fs::exists(updater_root())) assert_protected_tree(updater_root());
@@ -96,8 +97,73 @@ void prepare_host_upgrade() {
   if (!stopped) throw std::runtime_error("host_stop_unconfirmed");
   check_install(false);
 }
+void check_manifest_policy(const fs::path& install, bool migrate) {
+  const auto path = updater_root() / L"policy.json";
+  const auto evidence = updater_root() / L"manifest-migration.json";
+  if (fs::exists(evidence)) {
+    assert_protected_tree(updater_root());
+    const auto previous = parse_json(read_file(evidence));
+    if (previous.value("state", "") != "completed") throw std::runtime_error("manifest_migration_requires_recovery");
+  }
+  if (!fs::exists(path)) return;
+  auto policy = load_policy(false);
+  if (plug::installation::canonical_executable(install / L"plug_agente.exe") !=
+      plug::installation::canonical_executable(fs::path(wide(policy.at("installDirectory").get<std::string>())) / L"plug_agente.exe"))
+    throw std::runtime_error("installation_identity_changed");
+  if (!requires_authenticode(policy)) return;
+  if (!migrate) throw std::runtime_error("manifest_migration_required");
+  if (!is_admin()) throw std::runtime_error("administrator_required");
+  check_install(false);
+  const auto journal = updater_root() / L"journal.json";
+  const auto require_idle = [&] {
+    if (fs::exists(journal)) {
+      const auto job = parse_json(read_file(journal));
+      const auto state = job.value("state", "");
+      if ((state != "idle" && !terminal_operation(state)) || job.value("finalizationPending", false))
+        throw std::runtime_error("migration_pending_operation");
+    }
+  };
+  require_idle();
+  assert_protected_tree(install, true);
+  assert_protected_tree(control_root(), true);
+  PinnedPath app(install / L"plug_agente.exe");
+  PinnedPath service(control_root() / L"plug_update_service.exe");
+  PinnedPath client(control_root() / L"plug_update_client.exe");
+  PinnedPath worker(registered_worker(policy));
+  require_binary_hash(policy, "app", sha256_file(install / L"plug_agente.exe"));
+  require_binary_hash(policy, "service", sha256_file(control_root() / L"plug_update_service.exe"));
+  require_binary_hash(policy, "client", sha256_file(control_root() / L"plug_update_client.exe"));
+  require_binary_hash(policy, "worker", sha256_file(registered_worker(policy)));
+  const std::string keys(kFeedPublicKeys);
+  if (keys.empty()) throw std::runtime_error("feed_keys_unavailable");
+  size_t begin = 0;
+  do {
+    const auto end = keys.find(',', begin);
+    if (decode_base64(keys.substr(begin, end == std::string::npos ? end : end - begin)).size() != 32)
+      throw std::runtime_error("invalid_feed_key");
+    if (end == std::string::npos) break;
+    begin = end + 1;
+  } while (true);
+  Json migration{{"state","preparing"},{"previousPolicy",policy},{"publicKeys",keys}};
+  write_atomic(evidence, migration.dump());
+  // Stop the supervisor before the final check: preparation cannot race the write.
+  prepare_host_upgrade();
+  require_idle();
+  policy = load_policy(false);
+  policy = migrated_manifest_policy(policy, fs::exists(journal) ? parse_json(read_file(journal)) : Json::object(), keys);
+  write_atomic(path, policy.dump(), true);
+  if (load_policy(false) != policy) throw std::runtime_error("migration_persistence_unconfirmed");
+  migration["state"] = "completed";
+  write_atomic(evidence, migration.dump());
+}
 void enroll(const fs::path& install, const fs::path& installer, const std::string& channel, const std::string& worker_version) {
   if (!is_admin()) throw std::runtime_error("administrator_required");
+  if (fs::exists(updater_root() / L"manifest-migration.json") &&
+      parse_json(read_file(updater_root() / L"manifest-migration.json")).value("state", "") != "completed")
+    throw std::runtime_error("manifest_migration_requires_recovery");
+  if (!kRequireAuthenticode && fs::exists(updater_root() / L"policy.json") &&
+      requires_authenticode(load_policy(false)))
+    throw std::runtime_error("manifest_migration_required");
   if (std::string(kFeedPublicKeys).empty()) throw std::runtime_error("feed_keys_unavailable");
   if (channel != "stable" && channel != "beta" && channel != "internal") throw std::runtime_error("invalid_channel");
   if (!std::regex_match(worker_version, std::regex("[0-9]+\\.[0-9]+\\.[0-9]+\\+[0-9]+")))
@@ -200,6 +266,16 @@ void remove_service() {
 }
 int wmain(int argc, wchar_t** argv) {
   try {
+    if (argc == 3 && (std::wstring(argv[1]) == L"--check-manifest-policy" || std::wstring(argv[1]) == L"--migrate-manifest")) {
+      check_manifest_policy(fs::path(argv[2]), std::wstring(argv[1]) == L"--migrate-manifest"); return 0;
+    }
+    if (argc == 5 && std::wstring(argv[1]) == L"--prepare-install") {
+      const bool request = std::wstring(argv[4]) == L"request";
+      const bool cancel = std::wstring(argv[4]) == L"cancel";
+      if (!request && !cancel && std::wstring(argv[4]) != L"status") throw std::runtime_error("invalid_client_arguments");
+      plug::installation::prepare_installation(fs::path(argv[2]), utf8(argv[3]), request, cancel);
+      std::cout << Json{{"ok", true}, {"state", "completed"}}.dump() << '\n'; return 0;
+    }
     if (argc == 2 && std::wstring(argv[1]) == L"--prepare-control") { prepare_control(); return 0; }
     if (argc == 3 && std::wstring(argv[1]) == L"--prepare-control") { prepare_control(utf8(argv[2])); return 0; }
     if (argc == 2 && std::wstring(argv[1]) == L"--revoke") { revoke(); return 0; }

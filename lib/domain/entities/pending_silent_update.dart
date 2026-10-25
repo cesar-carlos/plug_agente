@@ -299,11 +299,8 @@ class SilentUpdateLauncherStatus {
   final bool? elevatedRetryStarted;
   final int? waitForAppExitDurationMs;
 
-  /// True when the helper's wait for this process to exit hit
-  /// `waitPidTimeoutSeconds` before the process actually terminated, so the
-  /// installer ran while relying on Inno Setup's `/CLOSEAPPLICATIONS` to
-  /// force it closed instead of a confirmed clean exit. `null` on records
-  /// written by older helper builds that predate this field.
+  /// Whether the exit deadline expired. Current helpers block installation;
+  /// null identifies records predating this diagnostic field.
   final bool? appExitTimedOut;
   final int? appPid;
   final String? signatureStatus;

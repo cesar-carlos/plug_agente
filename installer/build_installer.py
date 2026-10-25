@@ -390,27 +390,31 @@ def parse_args() -> argparse.Namespace:
         help="Sincroniza a versao do pubspec.yaml antes do build (update_version.py).",
     )
     parser.add_argument("--prepare-signpath", action="store_true",
-                        help="Build trusted unsigned inputs for the staged SignPath workflow.")
+                        help=argparse.SUPPRESS)
     parser.add_argument("--manifest-only", action="store_true",
-                        help="Require Ed25519 feed/manifest authentication without an Authenticode certificate.")
+                        help="Compatibility alias: official builds always use Ed25519 manifests without Authenticode.")
     return parser.parse_args()
 
 
 def main() -> None:
     args = parse_args()
-    if args.manifest_only:
-        if args.prepare_signpath or signing_cert_path() is not None:
-            raise SystemExit("Manifest-only mode cannot use SignPath or a local signing certificate")
-        os.environ["AUTO_UPDATE_REQUIRE_VALID_SIGNATURE"] = "false"
-        os.environ["AUTO_UPDATE_REQUIRE_FEED_SIGNATURE"] = "true"
-        os.environ["WINDOWS_CODE_SIGNING_REQUIRED"] = "false"
-    if args.prepare_signpath:
-        if signing_cert_path() is not None:
-            raise SystemExit("SignPath preparation cannot use a local signing certificate")
-        os.environ["WINDOWS_CODE_SIGNING_REQUIRED"] = "true"
+    # Official packages always use Ed25519 manifests, never certificate signing.
+    if args.prepare_signpath or signing_cert_path() is not None:
+        raise SystemExit("Manifest-only mode cannot use SignPath or a local signing certificate; historical tools are not official release paths")
+    provider = os.environ.get("SIGNING_PROVIDER") or read_env_value("SIGNING_PROVIDER") or "manifest"
+    if provider != "manifest":
+        raise SystemExit("Official builds require SIGNING_PROVIDER=manifest")
+    for key, expected in (("AUTO_UPDATE_REQUIRE_VALID_SIGNATURE", False),
+                          ("WINDOWS_CODE_SIGNING_REQUIRED", False),
+                          ("AUTO_UPDATE_REQUIRE_FEED_SIGNATURE", True)):
+        value = os.environ.get(key) or read_env_value(key)
+        if value is not None and (value.lower() not in {"0", "false", "no", "nao", "1", "true", "yes", "sim"} or
+                                  (value.lower() in {"1", "true", "yes", "sim"}) != expected):
+            raise SystemExit(f"Conflicting {key}: official builds require {'true' if expected else 'false'}")
+        os.environ[key] = "true" if expected else "false"
     ensure_signing_matches_runtime()
     feed_keys = configure_native_feed_keys()
-    if args.manifest_only and not feed_keys:
+    if not feed_keys:
         raise SystemExit("Manifest-only updates require the Ed25519 feed public key")
     # CMake does not read .env. Keep the native enrollment policy and Dart in sync.
     os.environ["AUTO_UPDATE_REQUIRE_VALID_SIGNATURE"] = "true" if auto_update_requires_valid_signature() else "false"

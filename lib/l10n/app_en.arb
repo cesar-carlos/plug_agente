@@ -2206,5 +2206,12 @@
   "agentActionsCpuLimitHelp": "Local limit for each new action and its child processes. Concurrent actions have separate limits. Does not change running tasks, email or COM. A lower limit can increase task duration. Windows may refuse this control in remote sessions.",
   "agentActionsCpuUnlimited": "No additional limit",
   "agentActionsLiveCpu": "Action and child CPU (machine total)",
-  "agentActionsCpuUnavailable": "Unavailable"
+  "agentActionsCpuUnavailable": "Unavailable",
+  "configUpdateCompletionSourceAutomaticRecoveryRequired": "Update requires recovery",
+  "installationPreparationTitle": "Preparing installation",
+  "installationPreparationWaiting": "Waiting for active operations to finish.",
+  "installationPreparationClosing": "Closing safely for installation.",
+  "installationPreparationBlocked": "Installation is blocked by active operations.",
+  "installationPreparationCancelled": "Installation preparation was cancelled.",
+  "installationPreparationRecovery": "Safe shutdown is unconfirmed. Review recovery with support."
 }

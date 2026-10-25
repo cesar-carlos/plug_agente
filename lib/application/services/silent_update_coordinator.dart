@@ -1,13 +1,11 @@
 import 'dart:async';
 import 'dart:developer' as developer;
 import 'dart:ui' show VoidCallback;
-
 import 'package:plug_agente/application/observability/i_auto_update_diagnostics_gateway.dart';
 import 'package:plug_agente/application/observability/i_auto_update_metrics_collector.dart';
 import 'package:plug_agente/application/observability/update_check_diagnostics.dart';
 import 'package:plug_agente/application/observability/update_check_id_recorder.dart';
 import 'package:plug_agente/application/repositories/i_update_preferences_repository.dart';
-import 'package:plug_agente/application/services/appcast_probe_service.dart';
 import 'package:plug_agente/application/services/auto_update_defaults.dart';
 import 'package:plug_agente/application/services/auto_update_failure_messages.dart';
 import 'package:plug_agente/application/services/i_pending_silent_update_store.dart';
@@ -30,6 +28,7 @@ import 'package:plug_agente/core/runtime/runtime_capabilities.dart';
 import 'package:plug_agente/core/security/appcast_signature_verifier.dart';
 import 'package:plug_agente/core/settings/app_settings_store.dart';
 import 'package:plug_agente/domain/errors/failures.dart' as domain;
+import 'package:plug_agente/domain/services/i_appcast_probe_service.dart';
 import 'package:plug_agente/domain/services/i_update_manifest_downloader.dart';
 import 'package:result_dart/result_dart.dart';
 
@@ -230,6 +229,25 @@ class SilentUpdateCoordinator implements ISilentUpdateCoordinator {
     try {
       final pendingResolution = await _collaborators.downloadApplyService.resolvePersistedDownloadedPending();
       switch (pendingResolution) {
+        case PendingDownloadedAttention(:final pending):
+          _lastAutomaticDiagnostics = PendingSilentUpdateReconciler.diagnosticsForPending(
+            pending: pending,
+            launcherStatus: null,
+            feedUrl: feedUrl,
+            now: _collaborators.clock(),
+            checkId: _currentCheckId,
+            completionSource: UpdateCheckCompletionSource.automaticRecoveryRequired,
+            errorMessage: 'A atualização exige reconciliação. Verifique o serviço de atualização.',
+            updateAvailable: true,
+          );
+          await _persistLastAutomaticDiagnostics();
+          _collaborators.diagnosticsNotifier.notifyChanged();
+          return Failure(
+            domain.ConfigurationFailure.withContext(
+              message: 'A atualização exige reconciliação. Verifique o serviço de atualização.',
+              context: const {'reason': 'service_reconciliation_unknown', 'outcome_unknown': true},
+            ),
+          );
         case PendingDownloadedInFlight(:final pending):
           final now = _collaborators.clock();
           final launcherStatus = await _collaborators.launcherStatusReader.read(
@@ -415,8 +433,10 @@ class SilentUpdateCoordinator implements ISilentUpdateCoordinator {
     } on FormatException catch (error) {
       final now = _collaborators.clock();
       final failureState = isAutoUpdateDeferral(error)
-          ? PersistentCircuitBreakerState(failureCount: _collaborators.automaticFailureBreaker.failureCount,
-            cooldownUntil: _collaborators.automaticFailureBreaker.cooldownUntil)
+          ? PersistentCircuitBreakerState(
+              failureCount: _collaborators.automaticFailureBreaker.failureCount,
+              cooldownUntil: _collaborators.automaticFailureBreaker.cooldownUntil,
+            )
           : await _collaborators.automaticFailureBreaker.recordFailure();
       _lastAutomaticDiagnostics = _lastAutomaticDiagnostics?.copyWith(
         completedAt: now,
@@ -444,8 +464,10 @@ class SilentUpdateCoordinator implements ISilentUpdateCoordinator {
       );
       final now = _collaborators.clock();
       final failureState = isAutoUpdateDeferral(error)
-          ? PersistentCircuitBreakerState(failureCount: _collaborators.automaticFailureBreaker.failureCount,
-            cooldownUntil: _collaborators.automaticFailureBreaker.cooldownUntil)
+          ? PersistentCircuitBreakerState(
+              failureCount: _collaborators.automaticFailureBreaker.failureCount,
+              cooldownUntil: _collaborators.automaticFailureBreaker.cooldownUntil,
+            )
           : await _collaborators.automaticFailureBreaker.recordFailure();
       _lastAutomaticDiagnostics = _lastAutomaticDiagnostics?.copyWith(
         completedAt: now,
@@ -613,12 +635,20 @@ class SilentUpdateCoordinator implements ISilentUpdateCoordinator {
       (error) => applyError = error,
     );
     if (applyError == null) {
-      _collaborators.metricsCollector?.recordAutoUpdateAutomaticApplySuccess();
+      try {
+        _collaborators.metricsCollector?.recordAutoUpdateAutomaticApplySuccess();
+      } on Object catch (error, stack) {
+        developer.log('Apply metrics unavailable', error: error, stackTrace: stack);
+      }
       _collaborators.diagnosticsNotifier.pushBestEffort(AutoUpdateDiagnosticsSource.silent);
       return const Success<SilentUpdateOutcome, Exception>(SilentUpdateOutcome.installerReady);
     }
 
-    _collaborators.metricsCollector?.recordAutoUpdateAutomaticApplyFailure();
+    try {
+      _collaborators.metricsCollector?.recordAutoUpdateAutomaticApplyFailure();
+    } on Object catch (error, stack) {
+      developer.log('Apply metrics unavailable', error: error, stackTrace: stack);
+    }
     _collaborators.diagnosticsNotifier.pushBestEffort(AutoUpdateDiagnosticsSource.silent);
     final pending = await _collaborators.pendingStore.read();
     if (pending is PendingSilentUpdateDownloaded) {

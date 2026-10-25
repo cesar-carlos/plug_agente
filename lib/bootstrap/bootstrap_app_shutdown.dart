@@ -11,6 +11,10 @@ import 'package:plug_agente/core/services/i_auto_update_orchestrator.dart';
 import 'package:plug_agente/domain/repositories/i_transport_client.dart';
 import 'package:plug_agente/infrastructure/codecs/transport_work_pool.dart';
 
+bool _manualInstallationShutdown = false;
+
+void suppressUpdateForManualInstallation() => _manualInstallationShutdown = true;
+
 bool _appCloseActionsDispatched = false;
 bool _updateExitPoliciesApplied = false;
 
@@ -20,6 +24,7 @@ void confirmUpdateExitPoliciesForShutdown() {
 }
 
 void restoreShutdownAfterMaintenance() {
+  _manualInstallationShutdown = false;
   _appCloseActionsDispatched = false;
   _updateExitPoliciesApplied = false;
 }
@@ -40,6 +45,7 @@ Future<void> applyUpdateExitPoliciesOnce() async {
 /// [shutdownApp] should invoke this helper in tearDown when they need a
 /// clean dispatch gate without tearing down the DI graph.
 void resetShutdownStateForTesting() {
+  _manualInstallationShutdown = false;
   _appCloseActionsDispatched = false;
   _updateExitPoliciesApplied = false;
 }
@@ -62,7 +68,7 @@ void resetShutdownStateForTesting() {
 /// 12. Shut down ODBC worker
 /// 13. Stop reusable transport CPU workers
 Future<void> shutdownApp() async {
-  await _launchPendingSilentUpdateHelperIfReady();
+  if (!_manualInstallationShutdown) await _launchPendingSilentUpdateHelperIfReady();
 
   await AppShutdownSequence(getIt).run(
     runEarlyShutdownCoordinator: _runEarlyShutdownCoordinator,

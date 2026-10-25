@@ -1,7 +1,6 @@
 import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
-
 import 'package:crypto/crypto.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -17,7 +16,6 @@ import 'package:plug_agente/core/security/appcast_signature_verifier.dart';
 import 'package:plug_agente/domain/errors/failures.dart' as domain;
 import 'package:plug_agente/domain/services/i_update_manifest_downloader.dart';
 import 'package:result_dart/result_dart.dart';
-
 import '../../helpers/auto_update_test_fakes.dart';
 
 class FixtureManifestDownloader implements IUpdateManifestDownloader {
@@ -264,21 +262,18 @@ void main() {
       expect(pendingStore.pending, isA<PendingSilentUpdateProbed>());
     });
 
-    test('returns cancelled when cancel is requested after pending write', () async {
+    test('returns cancelled before pending write when cancellation already requested', () async {
       final result = await pipeline.run(
         request(cancelRequested: () => true),
       );
 
       expect(result, isA<SilentUpdateProbeCancelled>());
-      expect(pendingStore.writeCount, 1);
-      expect(latestDiagnostics?.updateAvailable, isTrue);
+      expect(pendingStore.writeCount, 0);
+      expect(latestDiagnostics?.updateAvailable, isNot(isTrue));
     });
 
     test('returns network failure when probe reports an error', () async {
-      probe.result = const AppcastProbeResult(
-        requestUrl: 'https://example.com/appcast.xml',
-        errorMessage: 'HTTP 503',
-      );
+      probe.probeFailure = domain.NetworkFailure('HTTP 503');
 
       final result = await pipeline.run(request());
 

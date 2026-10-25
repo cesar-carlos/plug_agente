@@ -91,8 +91,17 @@ std::string read_file(const fs::path& path, size_t limit) {
   if (!input.eof()) throw std::runtime_error("file_read_failed");
   return result;
 }
-void write_atomic(const fs::path& path, const std::string& bytes) {
+void write_atomic(const fs::path& path, const std::string& bytes, bool preserve_permissions) {
   reject_reparse_path(path);
+  std::vector<uint8_t> permissions;
+  if (preserve_permissions) {
+    DWORD length = 0;
+    GetFileSecurityW(path.c_str(), DACL_SECURITY_INFORMATION, nullptr, 0, &length);
+    if (!length) throw std::runtime_error("policy_permissions_unconfirmed");
+    permissions.resize(length);
+    if (!GetFileSecurityW(path.c_str(), DACL_SECURITY_INFORMATION, permissions.data(), length, &length))
+      throw std::runtime_error("policy_permissions_unconfirmed");
+  }
   const auto temporary = fs::path(path.native() + L".tmp");
   reject_reparse_path(temporary);
   {
@@ -101,8 +110,23 @@ void write_atomic(const fs::path& path, const std::string& bytes) {
     if (!file.valid() || !WriteFile(file.get(), bytes.data(), static_cast<DWORD>(bytes.size()), &written, nullptr) || written != bytes.size() ||
         !FlushFileBuffers(file.get())) throw std::runtime_error("journal_write_failed");
   }
-  if (!MoveFileExW(temporary.c_str(), path.c_str(), MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH))
+  if (preserve_permissions) {
+    SECURITY_DESCRIPTOR_CONTROL control{}; DWORD revision = 0;
+    if (!GetSecurityDescriptorControl(permissions.data(), &control, &revision) ||
+        !SetFileSecurityW(temporary.c_str(), DACL_SECURITY_INFORMATION |
+          ((control & SE_DACL_PROTECTED) ? PROTECTED_DACL_SECURITY_INFORMATION : UNPROTECTED_DACL_SECURITY_INFORMATION), permissions.data()))
+      throw std::runtime_error("policy_permissions_write_failed");
+  }
+  if (preserve_permissions) {
+    // ReplaceFile preserves the original DACL metadata (including inheritance).
+    // Do not ignore merge errors or fall back to a less restrictive replacement.
+    if (!ReplaceFileW(path.c_str(), temporary.c_str(), nullptr, 0, nullptr, nullptr))
+      throw std::runtime_error("policy_replace_failed");
+    Handle persisted(CreateFileW(path.c_str(), GENERIC_WRITE, FILE_SHARE_READ, nullptr, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, nullptr));
+    if (!persisted.valid() || !FlushFileBuffers(persisted.get())) throw std::runtime_error("policy_flush_unconfirmed");
+  } else if (!MoveFileExW(temporary.c_str(), path.c_str(), MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH)) {
     throw std::runtime_error("journal_replace_failed");
+  }
 }
 void protect_directory(const fs::path& path, bool executable_control) {
   reject_reparse_path(path);

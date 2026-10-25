@@ -1,6 +1,5 @@
 import 'dart:async';
 import 'dart:developer' as developer;
-
 import 'package:plug_agente/application/observability/update_check_diagnostics.dart';
 import 'package:plug_agente/application/observability/update_check_id_recorder.dart';
 import 'package:plug_agente/application/services/auto_update_defaults.dart';
@@ -9,6 +8,7 @@ import 'package:plug_agente/application/services/pending_silent_update.dart';
 import 'package:plug_agente/application/services/persistent_circuit_breaker.dart';
 import 'package:plug_agente/application/services/service_update_pending_coordinator.dart';
 import 'package:plug_agente/application/services/silent_update/silent_update_helper_launch_state.dart';
+import 'package:plug_agente/application/services/silent_update/update_transition_gate.dart';
 import 'package:plug_agente/core/config/auto_update_feed_config.dart';
 import 'package:plug_agente/core/constants/app_constants.dart';
 import 'package:plug_agente/core/versioning/app_version_comparator.dart';
@@ -62,7 +62,10 @@ class PendingSilentUpdateReconciler {
   final Duration _stagedPendingTtl;
   final DateTime Function() _clock;
 
-  Future<void> reconcile(PendingSilentUpdateReconcileRequest request) async {
+  Future<void> reconcile(PendingSilentUpdateReconcileRequest request) =>
+      UpdateTransitionGate.forStore(_pendingStore).run(() => _reconcile(request));
+
+  Future<void> _reconcile(PendingSilentUpdateReconcileRequest request) async {
     final pending = await _pendingStore.read();
     if (servicePending != null) {
       final result = await servicePending!.reconcile();
@@ -87,6 +90,8 @@ class PendingSilentUpdateReconciler {
                 ? UpdateCheckCompletionSource.automaticCancelled
                 : resolved?.decision == ServicePendingDecision.ready
                 ? UpdateCheckCompletionSource.automaticInstallReady
+                : result.isError() || resolved?.decision == ServicePendingDecision.attention
+                ? UpdateCheckCompletionSource.automaticRecoveryRequired
                 : UpdateCheckCompletionSource.automaticInstallStarted,
             updateAvailable: !finished,
             errorMessage: result.isError()
@@ -134,6 +139,12 @@ class PendingSilentUpdateReconciler {
       now: now,
       helperWaitDuration: _helperWaitDuration,
     )) {
+      final recovery = SilentUpdateHelperLaunchState.requiresRecovery(
+        launchedAt: launchedAt,
+        launcherStatus: launcherStatus,
+        now: now,
+        helperWaitDuration: _helperWaitDuration,
+      );
       request.onDiagnosticsUpdated(
         diagnosticsForPending(
           pending: pending,
@@ -141,8 +152,10 @@ class PendingSilentUpdateReconciler {
           feedUrl: feedUrl,
           now: now,
           checkId: checkId,
-          completionSource: UpdateCheckCompletionSource.automaticInstallStarted,
-          errorMessage: 'Silent update installer is still running',
+          completionSource: recovery
+              ? UpdateCheckCompletionSource.automaticRecoveryRequired
+              : UpdateCheckCompletionSource.automaticInstallStarted,
+          errorMessage: recovery ? 'A atualização exige recuperação.' : 'Silent update installer is still running',
           updateAvailable: true,
         ),
       );

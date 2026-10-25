@@ -1,11 +1,10 @@
 import 'dart:convert';
-
 import 'package:flutter_test/flutter_test.dart';
 import 'package:plug_agente/application/observability/update_check_diagnostics.dart';
-import 'package:plug_agente/application/repositories/update_preferences_repository.dart';
 import 'package:plug_agente/core/settings/app_settings_keys.dart';
 import 'package:plug_agente/core/settings/app_settings_store.dart';
 import 'package:plug_agente/core/settings/auto_update_settings_keys.dart';
+import 'package:plug_agente/infrastructure/repositories/update_preferences_repository.dart';
 
 void main() {
   group('UpdatePreferencesRepository', () {

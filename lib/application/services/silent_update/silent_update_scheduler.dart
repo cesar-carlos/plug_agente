@@ -1,6 +1,5 @@
 import 'dart:async';
 import 'dart:developer' as developer;
-
 import 'package:plug_agente/application/observability/update_check_diagnostics.dart';
 import 'package:plug_agente/application/services/persistent_circuit_breaker.dart';
 import 'package:plug_agente/application/services/silent_update_outcome.dart';
@@ -25,6 +24,8 @@ class SilentUpdateScheduler {
   final DateTime Function() _clock;
 
   Timer? _automaticCheckTimer;
+  Timer? _bootCheckTimer;
+  int _generation = 0;
 
   Future<bool> hasActiveCooldown() async => await _automaticFailureBreaker.remainingCooldown() != null;
 
@@ -77,12 +78,28 @@ class SilentUpdateScheduler {
     required Future<void> Function() onCheck,
   }) {
     stop();
+    final generation = _generation;
+    Future<void> check() async {
+      if (generation != _generation) return;
+      try {
+        await onCheck();
+      } on Object catch (error, stackTrace) {
+        developer.log(
+          'Scheduled update check failed',
+          name: 'silent_update_scheduler',
+          level: 900,
+          error: error,
+          stackTrace: stackTrace,
+        );
+      }
+    }
+
     if (runImmediately) {
       final jitter = _bootJitterProvider?.call();
       if (jitter == null || jitter <= Duration.zero) {
-        unawaited(onCheck());
+        unawaited(check());
       } else {
-        Timer(jitter, () => unawaited(onCheck()));
+        _bootCheckTimer = Timer(jitter, () => unawaited(check()));
       }
     }
     final intervalSeconds = resolveAutoUpdateCheckIntervalSeconds(
@@ -91,7 +108,7 @@ class SilentUpdateScheduler {
     if (intervalSeconds > 0) {
       _automaticCheckTimer = Timer.periodic(
         Duration(seconds: intervalSeconds),
-        (_) => unawaited(onCheck()),
+        (_) => unawaited(check()),
       );
       developer.log(
         'Silent update periodic timer scheduled (interval: ${intervalSeconds}s)',
@@ -102,6 +119,9 @@ class SilentUpdateScheduler {
   }
 
   void stop() {
+    _generation++;
+    _bootCheckTimer?.cancel();
+    _bootCheckTimer = null;
     _automaticCheckTimer?.cancel();
     _automaticCheckTimer = null;
   }

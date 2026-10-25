@@ -1,5 +1,4 @@
 import 'dart:async';
-
 import 'package:fluent_ui/fluent_ui.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
@@ -7,7 +6,6 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
 import 'package:plug_agente/application/observability/update_check_diagnostics.dart';
 import 'package:plug_agente/application/repositories/app_preferences_repository.dart';
-import 'package:plug_agente/application/repositories/update_preferences_repository.dart';
 import 'package:plug_agente/application/services/manual_check_outcome.dart';
 import 'package:plug_agente/application/services/silent_update_outcome.dart';
 import 'package:plug_agente/core/config/auto_update_feed_config.dart';
@@ -20,6 +18,7 @@ import 'package:plug_agente/core/services/i_startup_service.dart';
 import 'package:plug_agente/core/settings/app_settings_store.dart';
 import 'package:plug_agente/domain/errors/failures.dart' as domain;
 import 'package:plug_agente/infrastructure/repositories/startup_preferences_repository.dart';
+import 'package:plug_agente/infrastructure/repositories/update_preferences_repository.dart';
 import 'package:plug_agente/l10n/app_localizations.dart';
 import 'package:plug_agente/presentation/pages/config_page.dart';
 import 'package:plug_agente/presentation/providers/system_settings_provider.dart';

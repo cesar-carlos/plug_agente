@@ -1,15 +1,12 @@
 import 'dart:async';
 import 'dart:developer' as developer;
 import 'dart:math';
-
 import 'package:plug_agente/application/observability/i_auto_update_diagnostics_gateway.dart';
 import 'package:plug_agente/application/observability/i_auto_update_metrics_collector.dart';
 import 'package:plug_agente/application/observability/update_check_diagnostics.dart';
 import 'package:plug_agente/application/observability/update_check_id_recorder.dart';
 import 'package:plug_agente/application/repositories/degraded_update_preferences_repository.dart';
 import 'package:plug_agente/application/repositories/i_update_preferences_repository.dart';
-import 'package:plug_agente/application/repositories/update_preferences_repository.dart';
-import 'package:plug_agente/application/services/appcast_probe_service.dart';
 import 'package:plug_agente/application/services/auto_update_orchestrator_options.dart';
 import 'package:plug_agente/application/services/auto_updater_gateway.dart';
 import 'package:plug_agente/application/services/i_pending_silent_update_store.dart';
@@ -26,11 +23,13 @@ import 'package:plug_agente/application/services/win_sparkle_background_check_se
 import 'package:plug_agente/application/services/win_sparkle_manual_check_service.dart';
 import 'package:plug_agente/core/config/app_environment.dart';
 import 'package:plug_agente/core/config/auto_update_feed_config.dart';
+import 'package:plug_agente/core/di/auto_update_factories.dart';
 import 'package:plug_agente/core/runtime/i_uac_detector.dart';
 import 'package:plug_agente/core/runtime/runtime_capabilities.dart';
 import 'package:plug_agente/core/services/i_auto_update_orchestrator.dart';
 import 'package:plug_agente/core/settings/app_settings_store.dart';
 import 'package:plug_agente/domain/errors/failures.dart' as domain;
+import 'package:plug_agente/domain/services/i_appcast_probe_service.dart';
 import 'package:plug_agente/domain/services/i_update_manifest_downloader.dart';
 import 'package:result_dart/result_dart.dart';
 
@@ -97,10 +96,10 @@ class AutoUpdateOrchestrator implements IAutoUpdateOrchestrator {
          helperWaitDuration: helperWaitDuration,
        ),
        _updaterGateway = updaterGateway ?? AutoUpdaterGateway(),
-       _appcastProbeService = appcastProbeService ?? AppcastProbeService(),
+       _appcastProbeService = appcastProbeService ?? createAppcastProbeService(),
        _preferences =
            updatePreferencesRepository ??
-           (settingsStore != null ? UpdatePreferencesRepository(settingsStore: settingsStore) : null),
+           (settingsStore != null ? createUpdatePreferencesRepository(settingsStore) : null),
        _metricsCollector = metricsCollector,
        _allowQuitForUpdate = allowQuitForUpdate,
        _checkIdRecorder = checkIdRecorder ?? UpdateCheckIdRecorder(settingsStore: settingsStore) {

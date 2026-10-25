@@ -1,9 +1,9 @@
 import 'dart:io';
-
 import 'package:dio/dio.dart';
 import 'package:dio/io.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:plug_agente/application/services/appcast_probe_service.dart';
+import 'package:plug_agente/domain/errors/failures.dart';
+import 'package:plug_agente/infrastructure/services/appcast_probe_service.dart';
 
 Dio _localProbeDio() {
   final dio = Dio(
@@ -38,14 +38,14 @@ void main() {
       (await AppcastProbeService(
         dio: _localProbeDio(),
         channelResolver: () => 'stable',
-      ).probeLatest(feedUrl: url)).latestVersion,
+      ).probeLatest(feedUrl: url)).getOrThrow().latestVersion,
       '2.0.0+2',
     );
     expect(
       (await AppcastProbeService(
         dio: _localProbeDio(),
         channelResolver: () => 'beta',
-      ).probeLatest(feedUrl: url)).latestVersion,
+      ).probeLatest(feedUrl: url)).getOrThrow().latestVersion,
       '9.0.0+1',
     );
   });
@@ -86,11 +86,12 @@ void main() {
       });
 
       final service = _probeService();
-      final result = await service.probeLatest(
+      final response = await service.probeLatest(
         feedUrl: 'http://127.0.0.1:${server.port}/appcast.xml',
       );
 
-      expect(result.errorMessage, isNull);
+      expect(response.isSuccess(), isTrue);
+      final result = response.getOrThrow();
       expect(result.latestVersion, '1.2.3+4');
       expect(result.assetUrl, 'https://example.com/downloads/PlugAgente-Setup-1.2.3.exe');
       expect(result.assetSize, 12345);
@@ -119,12 +120,12 @@ void main() {
       });
 
       final service = _probeService();
-      final result = await service.probeLatest(
+      final response = await service.probeLatest(
         feedUrl: 'http://127.0.0.1:${server.port}/appcast.xml',
       );
 
-      expect(result.latestVersion, isNull);
-      expect(result.errorMessage, contains('HTTP 404'));
+      expect(response.isError(), isTrue);
+      expect(response.exceptionOrNull(), isA<NetworkFailure>());
     });
 
     test('selects first explicit windows item when latest item targets another os', () async {
@@ -163,11 +164,12 @@ void main() {
       });
 
       final service = _probeService();
-      final result = await service.probeLatest(
+      final response = await service.probeLatest(
         feedUrl: 'http://127.0.0.1:${server.port}/appcast.xml',
       );
 
-      expect(result.errorMessage, isNull);
+      expect(response.isSuccess(), isTrue);
+      final result = response.getOrThrow();
       expect(result.latestVersion, '2.0.0+1');
       expect(result.assetName, 'PlugAgente-Setup-2.0.0.exe');
       expect(result.os, 'windows');
@@ -197,11 +199,12 @@ void main() {
       });
 
       final service = _probeService();
-      final result = await service.probeLatest(
+      final response = await service.probeLatest(
         feedUrl: 'http://127.0.0.1:${server.port}/appcast.xml',
       );
 
-      expect(result.errorMessage, isNull);
+      expect(response.isSuccess(), isTrue);
+      final result = response.getOrThrow();
       expect(result.latestVersion, '2.0.0+9');
       expect(result.itemCount, 1);
     });
@@ -236,15 +239,14 @@ void main() {
       });
 
       final service = _probeService();
-      final result = await service.probeLatest(
+      final response = await service.probeLatest(
         feedUrl: 'http://127.0.0.1:${server.port}/appcast.xml',
       );
 
       // Should not return a macos candidate; doing so would cause a validation
       // failure that incorrectly increments the automatic failure counter.
-      expect(result.latestVersion, isNull);
-      expect(result.errorMessage, isNotNull);
-      expect(result.errorMessage, contains('Windows'));
+      expect(response.isError(), isTrue);
+      expect(response.exceptionOrNull(), isA<ValidationFailure>());
     });
 
     test('returns explicit error when latest item has no sparkle version', () async {
@@ -270,13 +272,12 @@ void main() {
       });
 
       final service = _probeService();
-      final result = await service.probeLatest(
+      final response = await service.probeLatest(
         feedUrl: 'http://127.0.0.1:${server.port}/appcast.xml',
       );
 
-      expect(result.latestVersion, isNull);
-      expect(result.itemCount, 1);
-      expect(result.errorMessage, 'Latest appcast item is missing sparkle:version');
+      expect(response.isError(), isTrue);
+      expect(response.exceptionOrNull(), isA<ValidationFailure>());
     });
   });
 }

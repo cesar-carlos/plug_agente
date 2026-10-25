@@ -5243,4 +5243,26 @@ class AppLocalizationsPt extends AppLocalizations {
 
   @override
   String get agentActionsCpuUnavailable => 'Indisponível';
+
+  @override
+  String get configUpdateCompletionSourceAutomaticRecoveryRequired => 'Atualização exige recuperação';
+
+  @override
+  String get installationPreparationTitle => 'Preparação da instalação';
+
+  @override
+  String get installationPreparationWaiting => 'Aguardando a conclusão das operações em andamento.';
+
+  @override
+  String get installationPreparationClosing => 'Encerrando com segurança para instalar.';
+
+  @override
+  String get installationPreparationBlocked => 'A instalação está bloqueada por operações em andamento.';
+
+  @override
+  String get installationPreparationCancelled => 'A preparação da instalação foi cancelada.';
+
+  @override
+  String get installationPreparationRecovery =>
+      'O encerramento seguro não foi confirmado. Revise a recuperação com o suporte.';
 }

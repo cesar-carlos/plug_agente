@@ -1,6 +1,5 @@
 import 'dart:async';
 import 'dart:convert';
-
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:plug_agente/application/observability/update_check_diagnostics.dart';
@@ -18,7 +17,6 @@ import 'package:plug_agente/core/settings/app_settings_store.dart';
 import 'package:plug_agente/domain/errors/failures.dart' as domain;
 import 'package:plug_agente/infrastructure/metrics/metrics_collector.dart';
 import 'package:result_dart/result_dart.dart';
-
 import '../../fakes/fake_silent_update_coordinator.dart';
 import '../../fakes/in_memory_update_preferences_repository.dart';
 import '../../helpers/auto_update_test_fakes.dart';
@@ -359,11 +357,7 @@ void main() {
 
       test('keeps updater trigger running even when probe fails', () async {
         final fakeGateway = FakeAutoUpdaterGateway();
-        final fakeProbe = FakeAppcastProbeService()
-          ..result = const AppcastProbeResult(
-            requestUrl: 'https://example.com/appcast.xml?cb=1',
-            errorMessage: 'HTTP 500',
-          );
+        final fakeProbe = FakeAppcastProbeService()..probeFailure = domain.NetworkFailure('HTTP 500');
         final orchestrator = AutoUpdateOrchestrator(
           RuntimeCapabilities.full(),
           updaterGateway: fakeGateway,
