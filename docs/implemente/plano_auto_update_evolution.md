@@ -47,9 +47,26 @@ processos. Comentários históricos incorretos foram corrigidos.
   `build/manifest-workflows-compatible.log`; relatório integral preservado.
 - DTD conectado ao Cursor sem aplicativo em execução: hot reload/restart indisponível.
 
-A fixture nova será gerada da revisão local autorizada após este registro, com
-revalidação de inventários e provas. Não se usará pacote histórico como evidência
-do código atual. A revisão da fixture fica registrada em complemento abaixo.
+A fixture privada foi gerada da revisão local autorizada
+`976ba77d683567f3e29ade711b5affc75fe3d006` (implementação em `5e6234a7`), sem push.
+O aplicativo Release compilou e sua prova reconferiu 2.778 arquivos de origem.
+O pacote `PlugAgenteHomologacao_61e258679068` contém 94 arquivos de payload.
+
+- Aplicativo/prova: `build/homologation/windows-lifecycle-app-manifest-final-20261025/application-build.json`.
+- Pacote/manifesto: `build/homologation/windows-lifecycle-manifest-final-20261025/fixture.json`.
+- Instalador SHA-256: `9424e69e1087ec293fafb4663aaabcccb4aa5ca2cf47468c54bf51c83e2ef094`.
+- Árvore do payload final: `35a41c04d8d6fec9f534d150c168376821df8fa6d0aff452dadb34fee6b2d046`.
+- Supervisor histórico explícito: `fdb44d86b2a36df85c0133cf72167217fc1bd16e`.
+- Inspeção somente leitura: `build/manifest-fixture-inspect.log`, `integrity:verified`,
+  `applicationSourceVerified:true`, `buildSourceVerified:false`,
+  `installationPerformed:false`, `installedState:not_checked`.
+
+A prova é do aplicativo bootstrap isolado e dos bytes do pacote; não certifica
+lifecycle instalado nem o fluxo completo de aplicação automática. A chave privada
+da fixture permanece somente no diretório protegido, fora do Git. Inventários,
+provas e hashes serão reconferidos antes e depois de cada fase instalada. Logs de
+build estão em `build/manifest-fixture-application-final.log` e
+`build/manifest-fixture-package.log`. Nenhum instalador foi executado.
 
 Uma regressão complementar confirmou que o contexto privado precisava ser
 validado antes da nova guarda de instalação. O gerador foi ajustado; 28 testes
