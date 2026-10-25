@@ -158,9 +158,12 @@ def derived_bytes(name: str, content: bytes, identity: str) -> bytes:
         text = text.replace('window.Create(L"plug_agente"', 'window.Create(L"' + identity + '"')
         text = text.replace("if (!is_installation_check && !is_update_validation) RegisterCrashRestart();",
                             "// The explicit fixture controller owns process lifetime.")
-        text = text.replace("  PWSTR program_files = nullptr;",
+        guard_marker = "  wchar_t own_image[32768];" if "  wchar_t own_image[32768];" in text else "  PWSTR program_files = nullptr;"
+        if text.count(guard_marker) != 1:
+            raise RuntimeError("Unsupported native installation guard")
+        text = text.replace(guard_marker,
                             '  if (!is_installation_check && GetEnvironmentVariableW(L"PLUG_AGENT_BOOTSTRAP_ROOT", nullptr, 0) == 0) return EXIT_FAILURE;\n\n'
-                            "  PWSTR program_files = nullptr;")
+                            + guard_marker)
         return text.encode("utf-8")
     if name == "windows/runner/win32_window.cpp":
         text = content.decode("utf-8-sig")

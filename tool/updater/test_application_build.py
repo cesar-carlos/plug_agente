@@ -72,6 +72,7 @@ class ApplicationSourceTests(unittest.TestCase):
         self.assertNotIn("if (!is_installation_check && !is_update_validation) RegisterCrashRestart();", changed)
         self.assertIn(self.identity + "_WINDOW", changed)
         self.assertLess(changed.index('GetEnvironmentVariableW(L"PLUG_AGENT_BOOTSTRAP_ROOT"'), changed.index("PWSTR program_files"))
+        self.assertLess(changed.index('GetEnvironmentVariableW(L"PLUG_AGENT_BOOTSTRAP_ROOT"'), changed.index("const auto setup_guard"))
         window = source.derived_bytes("windows/runner/win32_window.cpp", (PROJECT / "windows/runner/win32_window.cpp").read_bytes(), self.identity)
         self.assertIn((self.identity + "_WINDOW").encode(), window)
         with self.assertRaisesRegex(RuntimeError, "Unsupported native"):

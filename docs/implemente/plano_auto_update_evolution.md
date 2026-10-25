@@ -51,6 +51,12 @@ A fixture nova será gerada da revisão local autorizada após este registro, co
 revalidação de inventários e provas. Não se usará pacote histórico como evidência
 do código atual. A revisão da fixture fica registrada em complemento abaixo.
 
+Uma regressão complementar confirmou que o contexto privado precisava ser
+validado antes da nova guarda de instalação. O gerador foi ajustado; 28 testes
+focados passaram (`build/manifest-fixture-isolation-green.log`), com a falha
+anterior preservada em `build/manifest-fixture-isolation-red.log`. A primeira
+tentativa de pacote de aplicação permanece histórica e não será instalada.
+
 ### Homologação instalada continua pendente
 
 A preparação do pacote não executa instalação. A fase administrativa exige
