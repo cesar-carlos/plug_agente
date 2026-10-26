@@ -135,7 +135,7 @@ jobs:
         run: flutter test test/installer/setup_script_test.dart
 
       - name: Test installer recovery and warning reports
-        run: python -m unittest tool.updater.test_installer_recovery tool.updater.test_windows_installation_validation -v
+        run: python -m unittest tool.updater.test_installer_recovery tool.updater.test_installer_manual_upgrade tool.updater.test_installer_preparation_guard tool.updater.test_windows_installation_validation -v
 
       - name: Build installer
         env:

@@ -13,10 +13,14 @@ import 'package:plug_agente/domain/errors/failures.dart' as domain;
 import 'package:result_dart/result_dart.dart';
 import 'package:window_manager/window_manager.dart';
 
-class WindowManagerService with WindowListener implements IDesktopWindowService {
+class WindowManagerService with WindowListener implements IDesktopWindowService, IWindowRenderActivity {
   WindowManagerService();
 
   final Logger _logger = Logger();
+  final ValueNotifier<bool> _renderingEnabled = ValueNotifier(true);
+
+  @override
+  ValueListenable<bool> get renderingEnabled => _renderingEnabled;
   bool _isInitialized = false;
   bool _minimizeToTray = false;
   bool _closeToTray = false;
@@ -58,6 +62,7 @@ class WindowManagerService with WindowListener implements IDesktopWindowService 
         await _ensureWindowHiddenAtStartup();
       } else {
         await windowManager.show();
+        _renderingEnabled.value = true;
         await windowManager.focus();
       }
     });
@@ -86,6 +91,7 @@ class WindowManagerService with WindowListener implements IDesktopWindowService 
       final isVisible = await windowManager.isVisible();
 
       if (!isVisible) {
+        _renderingEnabled.value = false;
         _logger.i('Application started minimized - window hidden');
         return;
       }
@@ -191,6 +197,7 @@ class WindowManagerService with WindowListener implements IDesktopWindowService 
       }
 
       await windowManager.show();
+      _renderingEnabled.value = true;
       await windowManager.focus();
     } on Exception catch (error, stackTrace) {
       _logger.e('Failed to show window', error: error, stackTrace: stackTrace);
@@ -198,6 +205,7 @@ class WindowManagerService with WindowListener implements IDesktopWindowService 
         await windowManager.restore();
         await Future<void>.delayed(WindowTimings.showRestoreDelay);
         await windowManager.show();
+        _renderingEnabled.value = true;
         await windowManager.focus();
       } on Exception catch (retryError) {
         _logger.e('Critical error showing window', error: retryError);
@@ -214,6 +222,7 @@ class WindowManagerService with WindowListener implements IDesktopWindowService 
 
   Future<void> hide() async {
     await windowManager.hide();
+    _renderingEnabled.value = false;
   }
 
   Future<void> minimize() async {
@@ -280,6 +289,7 @@ class WindowManagerService with WindowListener implements IDesktopWindowService 
   // WindowListener callbacks
   @override
   void onWindowMinimize() {
+    _renderingEnabled.value = false;
     if (_minimizeToTray) {
       unawaited(
         _hideToTray().catchError((Object e) {
@@ -357,7 +367,9 @@ class WindowManagerService with WindowListener implements IDesktopWindowService 
   void onWindowUnmaximize() {}
 
   @override
-  void onWindowRestore() {}
+  void onWindowRestore() {
+    _renderingEnabled.value = true;
+  }
 
   @override
   void onWindowResize() {}
@@ -376,5 +388,6 @@ class WindowManagerService with WindowListener implements IDesktopWindowService 
 
   void dispose() {
     windowManager.removeListener(this);
+    _renderingEnabled.dispose();
   }
 }

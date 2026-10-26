@@ -5,7 +5,7 @@
 
 #include "constants.iss"
 #define MyAppName "Plug Agente"
-#define MyAppVersion "1.8.8"
+#define MyAppVersion "1.8.9"
 #ifndef MyAppWorkerVersion
   #if defined(SIGN_INSTALLER) || defined(ExternalSignedUninstallerDir)
     #error Signed installers require the exact MyAppWorkerVersion including build number
@@ -82,20 +82,28 @@ Name: "brazilianportuguese"; MessagesFile: "compiler:Languages\BrazilianPortugue
 Name: "english"; MessagesFile: "compiler:Default.isl"
 
 [CustomMessages]
+english.InstallationCheckTitle=Check application shutdown
+brazilianportuguese.InstallationCheckTitle=Verificar encerramento do aplicativo
+english.InstallationCheckAgain=Check again
+brazilianportuguese.InstallationCheckAgain=Verificar novamente
+english.InstallationCheckFailed=The installer could not verify application shutdown. This does not mean the application is still running. Cancel and provide the installer log to support. No files have been replaced.
+brazilianportuguese.InstallationCheckFailed=O instalador não conseguiu verificar o encerramento. Isso não significa que o aplicativo ainda esteja aberto. Cancele e envie o log da instalação ao suporte. Nenhum arquivo foi substituído.
 english.InstallationChannelMismatch=The application and installer could not confirm a compatible preparation protocol. Cancel, close the application manually and use the installer intended for this installation.
 brazilianportuguese.InstallationChannelMismatch=O aplicativo e o instalador não confirmaram um protocolo de preparação compatível. Cancele, feche o aplicativo manualmente e use o instalador destinado a esta instalação.
 english.InstallationPermissionRequired=The identity of a running process could not be verified. Close the target application manually or run the global installer as administrator. No process will be terminated.
 brazilianportuguese.InstallationPermissionRequired=Não foi possível verificar a identidade de um processo ativo. Feche o aplicativo alvo manualmente ou execute o instalador global como administrador. Nenhum processo será terminado.
 english.InstallationCancelled=Preparation was cancelled. Cancel this installer session. A new verification will not repeat shutdown actions; close the application manually if necessary.
 brazilianportuguese.InstallationCancelled=A preparação foi cancelada. Cancele esta sessão do instalador. Uma nova verificação não repetirá ações de encerramento; feche o aplicativo manualmente se necessário.
-english.InstallationLegacyClose=This version cannot coordinate shutdown. Close this installation manually, then check again. Files will only be replaced after all its processes exit.
-brazilianportuguese.InstallationLegacyClose=Esta versão não oferece encerramento coordenado. Feche esta instalação manualmente e verifique novamente. Os arquivos só serão substituídos após a saída de todos os seus processos.
-english.InstallationBusy=Operations are still active. Wait for their completion and check again, or cancel installation. No process will be forcibly closed.
-brazilianportuguese.InstallationBusy=Existem operações em andamento. Aguarde a conclusão e verifique novamente ou cancele a instalação. Nenhum processo será fechado à força.
+english.InstallationLegacyClose=The shutdown channel is unavailable. Use Exit in the application's tray menu, then check again. Closing the window may only hide it. Files will only be replaced after all processes of this installation exit.
+brazilianportuguese.InstallationLegacyClose=O canal de encerramento está indisponível. Use Sair no menu do aplicativo na bandeja e verifique novamente. Fechar a janela pode apenas ocultá-la. Os arquivos só serão substituídos após a saída de todos os processos desta instalação.
+english.InstallationBusy=Preparation was blocked by active operations. Wait for their completion and use Exit in the application's tray menu, then check again, or cancel installation. Checking again does not repeat preparation. No process will be forcibly closed.
+brazilianportuguese.InstallationBusy=A preparação foi bloqueada por operações ativas. Aguarde a conclusão e use Sair no menu do aplicativo na bandeja; depois verifique novamente ou cancele a instalação. A verificação não repete a preparação. Nenhum processo será fechado à força.
+english.InstallationChannelBusy=The shutdown channel is busy. Close this installation using Exit in the application's tray menu, then check again, or cancel installation. No shutdown request will be repeated.
+brazilianportuguese.InstallationChannelBusy=O canal de encerramento está ocupado. Feche esta instalação usando Sair no menu do aplicativo na bandeja; depois verifique novamente ou cancele a instalação. Nenhuma solicitação de encerramento será repetida.
 english.InstallationRecovery=Safe shutdown could not be confirmed. Cancel installation and review the log with support. Preserve recovery records; checking again does not repeat shutdown actions.
 brazilianportuguese.InstallationRecovery=Não foi possível confirmar o encerramento seguro. Cancele a instalação e revise o log com o suporte. Preserve os registros de recuperação; verificar novamente não repete ações de encerramento.
-english.InstallationCloseRequired=The application has not confirmed a safe exit. Wait for active operations or close the previous version manually, then choose Retry to check again. Cancel to stop installation. Recovery may be required; see the installer log. No process will be forcibly closed.
-brazilianportuguese.InstallationCloseRequired=O aplicativo ainda não confirmou um encerramento seguro. Aguarde as operações ou feche a versão anterior manualmente e selecione Repetir para verificar novamente. Cancele para interromper a instalação. Pode ser necessária recuperação; consulte o log. Nenhum processo será fechado à força.
+english.InstallationCloseRequired=The application has not confirmed a safe exit. Wait for active operations or close the previous version manually, then choose Check again. Cancel to stop installation. Recovery may be required; see the installer log. No process will be forcibly closed.
+brazilianportuguese.InstallationCloseRequired=O aplicativo ainda não confirmou um encerramento seguro. Aguarde as operações ou feche a versão anterior manualmente e selecione Verificar novamente. Cancele para interromper a instalação. Pode ser necessária recuperação; consulte o log. Nenhum processo será fechado à força.
 english.ManifestMigrationConsent=This installation uses the previous certificate policy. Authorize the administrative transition to signed Ed25519 manifests without an Authenticode certificate? Automatic application and production publication remain blocked.
 brazilianportuguese.ManifestMigrationConsent=Esta instalação usa a política anterior de certificado. Autoriza a transição administrativa para manifestos assinados com Ed25519, sem certificado Authenticode? A aplicação automática e a publicação em produção permanecem bloqueadas.
 english.ManifestMigrationRequired=The trust policy needs administrative review. Run the installer interactively as administrator and explicitly authorize the transition to manifest. A failed or uncertain transition must be reviewed using the log before continuing.
@@ -639,30 +647,47 @@ begin
   NeedsRestart := False;
   CriticalInstallationError := False;
   UpdaterHostUpgradeAuthorized := False;
-  try
-    Prepared := PrepareRunningInstallation(Details);
-  except
-    Prepared := False;
-    Details := GetExceptionMessage;
-  end;
-  if not Prepared then
-  begin
-    Log('Cooperative installation preparation: ' + Details);
-    if Pos('installation_response_rejected', Details) > 0 then
-      Result := CustomMessage('InstallationChannelMismatch')
-    else if Pos('process_identity_unconfirmed', Details) > 0 then
-      Result := CustomMessage('InstallationPermissionRequired')
-    else if Pos('installation_cancelled', Details) > 0 then
-      Result := CustomMessage('InstallationCancelled')
-    else if Pos('installation_recovery_required', Details) > 0 then
-      Result := CustomMessage('InstallationRecovery')
-    else if Pos('close_previous_application_manually', Details) > 0 then
-      Result := CustomMessage('InstallationLegacyClose')
-    else if Pos('installation_operations_active', Details) > 0 then
-      Result := CustomMessage('InstallationBusy')
-    else Result := CustomMessage('InstallationCloseRequired');
-    Exit;
-  end;
+  repeat
+    try
+      Prepared := PrepareRunningInstallation(Details);
+    except
+      Prepared := False;
+      Details := GetExceptionMessage;
+    end;
+    if not Prepared then
+    begin
+      Log('Cooperative installation preparation: ' + Details);
+      if Pos('installation_response_rejected', Details) > 0 then
+        Result := CustomMessage('InstallationChannelMismatch')
+      else if Pos('process_identity_unconfirmed', Details) > 0 then
+        Result := CustomMessage('InstallationPermissionRequired')
+      else if Pos('installation_cancelled', Details) > 0 then
+        Result := CustomMessage('InstallationCancelled')
+      else if Pos('installation_recovery_required', Details) > 0 then
+        Result := CustomMessage('InstallationRecovery')
+      else if Pos('close_previous_application_manually', Details) > 0 then
+        Result := CustomMessage('InstallationLegacyClose')
+      else if Pos('installation_operations_active', Details) > 0 then
+        Result := CustomMessage('InstallationBusy')
+      else if Pos('installation_channel_busy', Details) > 0 then
+        Result := CustomMessage('InstallationChannelBusy')
+      else if Pos('installation_waiting_for_exit', Details) > 0 then
+        Result := CustomMessage('InstallationCloseRequired')
+      else
+        Result := CustomMessage('InstallationCheckFailed') + #13#10 + Details;
+      Result := Result + #13#10 + #13#10 + CustomMessage('InstallationFullLog') + ' ' + ExpandConstant('{log}');
+      if WizardSilent() or
+        ((Pos('close_previous_application_manually', Details) = 0) and
+         (Pos('installation_waiting_for_exit', Details) = 0) and
+         (Pos('installation_operations_active', Details) = 0) and
+         (Pos('installation_channel_busy', Details) = 0) and
+         (Pos('process_identity_unconfirmed', Details) = 0)) then Exit;
+      Choice := TaskDialogMsgBox(CustomMessage('InstallationCheckTitle'), Result,
+        mbError, MB_RETRYCANCEL, [CustomMessage('InstallationCheckAgain')], 0);
+      if Choice <> IDRETRY then Exit;
+      Result := '';
+    end;
+  until Prepared;
   if UpdaterWasPresent and WantsAutomaticUpdates() then
   begin
     if not PrepareManifestPolicy(Details) then

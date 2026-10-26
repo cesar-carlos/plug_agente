@@ -1,8 +1,6 @@
 import 'dart:async';
-import 'dart:ffi';
 import 'dart:io';
 
-import 'package:ffi/ffi.dart';
 import 'package:plug_agente/core/constants/agent_action_process_constants.dart';
 import 'package:plug_agente/core/logger/app_logger.dart';
 import 'package:plug_agente/domain/actions/actions.dart';
@@ -11,6 +9,7 @@ import 'package:plug_agente/domain/repositories/agent_action_execution_metrics_c
 import 'package:plug_agente/infrastructure/actions/action_command_normalizer.dart';
 import 'package:plug_agente/infrastructure/actions/action_process_output_capture.dart';
 import 'package:plug_agente/infrastructure/actions/action_process_stdin_setup.dart';
+import 'package:plug_agente/infrastructure/actions/action_resource_diagnostics.dart';
 import 'package:plug_agente/infrastructure/actions/agent_action_process_failure_cause.dart';
 import 'package:plug_agente/infrastructure/actions/agent_action_process_invocation_diagnostics.dart';
 import 'package:plug_agente/infrastructure/actions/agent_action_process_kill_guard.dart';
@@ -19,7 +18,6 @@ import 'package:plug_agente/infrastructure/actions/agent_action_process_starter.
 import 'package:plug_agente/infrastructure/actions/agent_action_process_tree_controller.dart';
 import 'package:plug_agente/infrastructure/actions/windows_silent_action_process.dart';
 import 'package:result_dart/result_dart.dart';
-import 'package:win32/win32.dart';
 
 class AgentActionProcessFailureMessages {
   const AgentActionProcessFailureMessages({
@@ -47,7 +45,9 @@ class AgentActionProcessLifecycle {
     AgentActionProcessTreeController? processTreeController,
     AgentActionExecutionMetricsCollector? metrics,
     IAgentActionProcessObserver? liveProcesses,
+    bool? Function()? renderingEnabled,
   }) : _liveProcesses = liveProcesses,
+       _renderingEnabled = renderingEnabled,
        _usesDefaultStarter = processStarter == null,
        _stdinSetup = stdinSetup,
        _processStarter = processStarter ?? Process.start,
@@ -58,6 +58,7 @@ class AgentActionProcessLifecycle {
        _metrics = metrics;
 
   final IAgentActionProcessObserver? _liveProcesses;
+  final bool? Function()? _renderingEnabled;
   final bool _usesDefaultStarter;
   final ActionProcessStdinSetup _stdinSetup;
   final AgentActionProcessStarter _processStarter;
@@ -426,32 +427,11 @@ class AgentActionProcessLifecycle {
     ]);
   }
 
-  /// Isolates whether CPU load comes from this process (render/IO isolates,
-  /// pipe draining) versus the spawned action's job, which `readCpu` already
-  /// reports separately. Returns null rather than failing diagnostics.
-  Duration? _ownProcessCpuTime() {
-    if (!Platform.isWindows) return null;
-    try {
-      return using((arena) {
-        final creation = arena<FILETIME>();
-        final exit = arena<FILETIME>();
-        final kernel = arena<FILETIME>();
-        final user = arena<FILETIME>();
-        final result = GetProcessTimes(GetCurrentProcess(), creation, exit, kernel, user);
-        if (!result.value) return null;
-        final kernelTicks = (kernel.ref.dwHighDateTime << 32) | kernel.ref.dwLowDateTime;
-        final userTicks = (user.ref.dwHighDateTime << 32) | user.ref.dwLowDateTime;
-        return Duration(microseconds: (kernelTicks + userTicks) ~/ 10);
-      });
-    } on Object {
-      return null;
-    }
-  }
-
   Future<AgentActionCapturedOutput> _awaitCapturedOutput(
     ActionProcessOutputCaptureSession capture, {
     required Duration timeout,
   }) => capture.result.timeout(timeout, onTimeout: capture.cancel);
+
   /// Logs own-process RSS and the action job's cumulative CPU while it runs,
   /// so sustained resource growth is visible without live process inspection.
   Timer _startResourceDiagnostics({
@@ -461,25 +441,27 @@ class AgentActionProcessLifecycle {
     required DateTime startedAt,
     required Result<Duration> Function() readCpu,
   }) {
+    final resources = ActionResourceDiagnostics(renderingEnabled: _renderingEnabled);
     void sample() {
       final baseContext = {
         'action_id': actionId,
         'execution_id': executionId,
         'pid': pid,
         'elapsed_ms': _now().difference(startedAt).inMilliseconds,
-        'agent_process_current_rss_bytes': ProcessInfo.currentRss,
-        'agent_process_max_rss_bytes': ProcessInfo.maxRss,
-        'agent_process_own_cpu_ms': ?_ownProcessCpuTime()?.inMilliseconds,
       };
       readCpu().fold(
         (cpu) => AppLogger.operational(
           'Agent action resource sample',
-          context: {...baseContext, 'action_job_cpu_ms': cpu.inMilliseconds},
+          context: {
+            ...baseContext,
+            ...resources.sample(jobCpu: cpu, actionPid: pid),
+          },
         ),
         (failure) => AppLogger.operational(
           'Agent action resource sample',
           context: {
             ...baseContext,
+            ...resources.sample(actionPid: pid),
             'action_job_cpu_error': failure is ActionFailure ? failure.message : '$failure',
           },
         ),

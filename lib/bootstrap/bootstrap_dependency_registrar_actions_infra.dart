@@ -9,6 +9,14 @@ void _registerActionsInfrastructure(GetIt getIt) {
         stdinSetup: getIt<ActionProcessStdinSetup>(),
         liveProcesses: getIt<AgentActionLiveProcesses>(),
         metrics: getIt<MetricsCollector>(),
+        renderingEnabled: () {
+          if (!getIt.isRegistered<IDesktopWindowService>()) return null;
+          final window = getIt<IDesktopWindowService>();
+          return switch (window) {
+            final IWindowRenderActivity activity => activity.renderingEnabled.value,
+            _ => null,
+          };
+        },
         processTreeController: WindowsJobObjectProcessTreeController(
           cpuLimitProvider: () => getIt<AgentActionCpuSettings>().limitPercent,
         ),

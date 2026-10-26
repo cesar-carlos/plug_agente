@@ -5,9 +5,11 @@ import 'package:plug_agente/application/services/hub_session_coordinator.dart';
 import 'package:plug_agente/core/constants/agent_action_runtime_state_constants.dart';
 import 'package:plug_agente/core/di/service_locator.dart';
 import 'package:plug_agente/core/runtime/runtime_capabilities.dart';
+import 'package:plug_agente/core/services/i_window_manager_service.dart';
 import 'package:plug_agente/domain/actions/actions.dart';
 import 'package:plug_agente/presentation/app/app.dart';
 import 'package:plug_agente/presentation/boot/app_root_providers.dart';
+import 'package:plug_agente/presentation/boot/desktop_render_activity.dart';
 import 'package:plug_agente/presentation/boot/startup_auto_session_initializer.dart';
 import 'package:provider/provider.dart';
 
@@ -25,12 +27,19 @@ class AppRoot extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return MultiProvider(
-      providers: buildAppRootProviders(),
-      child: _ProviderInitializer(
-        initialRoute: initialRoute,
-        capabilities: capabilities,
-        runDeferredBootstrap: runDeferredBootstrap,
+    final window = getIt.isRegistered<IDesktopWindowService>() ? getIt<IDesktopWindowService>() : null;
+    return DesktopRenderActivity(
+      activity: switch (window) {
+        final IWindowRenderActivity activity => activity,
+        _ => null,
+      },
+      child: MultiProvider(
+        providers: buildAppRootProviders(),
+        child: _ProviderInitializer(
+          initialRoute: initialRoute,
+          capabilities: capabilities,
+          runDeferredBootstrap: runDeferredBootstrap,
+        ),
       ),
     );
   }

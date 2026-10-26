@@ -21,7 +21,10 @@ int wmain(int argc, wchar_t** argv) {
     if (argc == 5 && std::wstring(argv[1]) == L"--call") {
       std::wstring op(argv[3]);
       try { prepare_installation(argv[2], std::string(op.begin(), op.end()), std::wstring(argv[4]) == L"request", std::wstring(argv[4]) == L"cancel"); }
-      catch (const std::exception& error) { return std::string(error.what()) == "installation_waiting_for_exit" ? 10 : 11; }
+      catch (const std::exception& error) {
+        std::cerr << error.what() << '\n';
+        return std::string(error.what()) == "installation_waiting_for_exit" ? 10 : 11;
+      }
       return 0;
     }
     wchar_t path[32768]; require(GetModuleFileNameW(nullptr, path, 32768) != 0, "fixture_path_failed");
@@ -31,7 +34,31 @@ int wmain(int argc, wchar_t** argv) {
     require(valid_operation(std::string(32, 'a')) && !valid_operation("bad") && !valid_operation(std::string(32, 'g')), "invalid_operation_accepted");
     require(endpoint(current_executable(), 1) != endpoint(current_executable(), 2), "pid_not_bound");
     require(endpoint(L"c:\\a.exe", 1) != endpoint(L"c:\\b.exe", 1), "path_not_bound");
-    Channel channel; channel.start();
+    std::string absent_failure;
+    try { prepare_installation(directory, std::string(32, 'a'), true); }
+    catch (const std::exception& error) { absent_failure = error.what(); }
+    require(absent_failure == "close_previous_application_manually", "absent_channel_must_require_manual_exit");
+    const auto occupied_name = endpoint(current_executable(), GetCurrentProcessId());
+    HANDLE occupied = CreateNamedPipeW(occupied_name.c_str(), PIPE_ACCESS_DUPLEX,
+      PIPE_TYPE_BYTE | PIPE_WAIT | PIPE_REJECT_REMOTE_CLIENTS, 1, 4096, 4096, 0, nullptr);
+    require(occupied != INVALID_HANDLE_VALUE, "fixture_pipe_creation_failed");
+    HANDLE connection = CreateFileW(occupied_name.c_str(), GENERIC_READ | GENERIC_WRITE,
+      0, nullptr, OPEN_EXISTING, 0, nullptr);
+    require(connection != INVALID_HANDLE_VALUE, "fixture_pipe_connection_failed");
+    std::string busy_failure;
+    try { prepare_installation(directory, std::string(32, 'a'), true); }
+    catch (const std::exception& error) { busy_failure = error.what(); }
+    CloseHandle(connection);
+    require(busy_failure == "installation_channel_busy", "busy_channel_misclassified_as_legacy");
+    {
+      Channel unavailable;
+      const bool started = unavailable.start();
+      CloseHandle(occupied);
+      require(!started, "unavailable_channel_reported_ready");
+      require(!unavailable.start(), "failed_channel_restart_reported_ready");
+    }
+    Channel channel; require(channel.start(), "channel_start_failed");
+    require(channel.start(), "enabled_channel_not_idempotent");
     // Wait for endpoint creation only; no preparation is retried.
     const auto pipe = endpoint(current_executable(), GetCurrentProcessId());
     for (unsigned i = 0; i < 100 && !WaitNamedPipeW(pipe.c_str(), 10); ++i) Sleep(10);

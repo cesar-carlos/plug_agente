@@ -27,6 +27,8 @@ var
   ContractChecks, Revocations, OperationChecks: Integer;
   DialogCalls, HostUpgrades, Enrollments, DialogChoice: Integer;
   SilentMode, StopFailure, OtherContractFailure: Boolean;
+  ClosureCase: String;
+  PreparationChecks: Integer;
 
 #include ProductionInstallerDir + "\installation_reporting.iss"
 #include ProductionInstallerDir + "\installation_repair.iss"
@@ -57,6 +59,21 @@ function FixtureTaskDialogMsgBox(const Instruction, Text: String; const Typ: TMs
 begin
   DialogCalls := DialogCalls + 1;
   AssertTrue(not SilentMode, 'Silent installs must never display a dialog');
+  if ClosureCase <> '' then
+  begin
+    AssertTrue(Buttons = MB_RETRYCANCEL, 'Closure must offer a real retry/cancel choice');
+    AssertTrue((GetArrayLength(Labels) = 1) and (Labels[0] <> ''), 'Retry needs a visible label');
+    Result := IDCANCEL;
+    if ClosureCase = 'closure_retry' then Result := IDRETRY;
+    if ClosureCase = 'closure_channel_busy' then
+    begin
+      AssertTrue(Pos(CustomMessage('InstallationChannelBusy'), Text) > 0, 'Busy channel must have a distinct diagnostic');
+      Result := IDRETRY;
+    end;
+    if ClosureCase = 'closure_operations' then
+      AssertTrue(Pos(CustomMessage('InstallationBusy'), Text) > 0, 'Blocked operations must explain manual exit');
+    Exit;
+  end;
   AssertTrue(Buttons = (MB_YESNOCANCEL or MB_DEFBUTTON1), 'First option must be the default, with cancellation available');
   AssertTrue((GetArrayLength(Labels) = 2) and (Labels[0] = CustomMessage('UpdaterHostContinueManual')) and
     (Labels[1] = CustomMessage('UpdaterHostContinueUpgrade')), 'Manual continuation must be the first choice');
@@ -147,7 +164,16 @@ end;
 #include ProductionInstallerDir + "\updater_install_preparation.iss"
 function PrepareRunningInstallation(var Details: String): Boolean;
 begin
-  Result := True;
+  PreparationChecks := PreparationChecks + 1;
+  Result := (ClosureCase = '') or (PreparationChecks > 1);
+  if not Result then
+  begin
+    Details := 'close_previous_application_manually';
+    if ClosureCase = 'closure_recovery' then Details := 'installation_recovery_required';
+    if ClosureCase = 'closure_unknown' then Details := 'Exit code: -1073741515';
+    if ClosureCase = 'closure_channel_busy' then Details := 'installation_channel_busy';
+    if ClosureCase = 'closure_operations' then Details := 'installation_operations_active';
+  end;
 end;
 function PrepareManifestPolicy(var Details: String): Boolean;
 begin
@@ -162,6 +188,28 @@ var
 begin
   Result := False;
   TestCase := ExpandConstant('{param:CASE}');
+  if Pos('closure_', TestCase) = 1 then
+  begin
+    ClosureCase := TestCase;
+    SilentMode := TestCase = 'closure_silent';
+    ErrorText := RunPreparation(NeedsRestart);
+    if (TestCase = 'closure_retry') or (TestCase = 'closure_channel_busy') then
+      AssertTrue((ErrorText = '') and (PreparationChecks = 2) and (DialogCalls = 1),
+        'Manual closure must allow a fresh verification in the same installer')
+    else
+    begin
+      AssertTrue((ErrorText <> '') and (PreparationChecks = 1), 'Blocked/cancelled preparation must not dispatch again');
+      AssertTrue((ExpandConstant('{log}') <> '') and (Pos(ExpandConstant('{log}'), ErrorText) > 0),
+        'Blocked preparation must show the actual installer log path');
+      if (TestCase = 'closure_cancel') or (TestCase = 'closure_operations') then AssertTrue(DialogCalls = 1, 'Operator must be able to cancel the retry dialog')
+      else AssertTrue(DialogCalls = 0, 'Silent, unknown and recovery states must not offer retry');
+      if TestCase = 'closure_unknown' then
+        AssertTrue(Pos('-1073741515', ErrorText) > 0, 'Unknown helper failure must expose diagnostics, not claim a running process');
+    end;
+    AssertTrue(not NeedsRestart and (OperationChecks = 0) and (HostUpgrades = 0), 'Closure failure must not mutate updater or request reboot');
+    AssertTrue(SaveStringToFile(ExpandConstant('{param:RESULT}'), 'passed', False), 'Cannot save assertions');
+    Exit;
+  end;
   UpdaterWasPresent := True;
   PolicyEnabled := True;
   Authorized := 1;

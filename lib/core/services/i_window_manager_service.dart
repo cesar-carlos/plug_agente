@@ -1,6 +1,12 @@
 import 'dart:ui' as ui;
 
+import 'package:flutter/foundation.dart';
 import 'package:result_dart/result_dart.dart';
+
+/// Native visibility, independent of Flutter's focus-based lifecycle events.
+abstract interface class IWindowRenderActivity {
+  ValueListenable<bool> get renderingEnabled;
+}
 
 abstract class IWindowManagerService {
   Future<void> show();

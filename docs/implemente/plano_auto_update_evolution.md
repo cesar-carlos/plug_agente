@@ -1,5 +1,100 @@
 # Plano de Evolucao do Auto-Update
 
+## Installation channel review — 2026-10-25
+
+Channel enable now waits for actual named-pipe creation and returns false on
+startup failure. The native collision regression failed with
+`unavailable_channel_reported_ready` before this correction. Missing pipes still
+require manual exit; busy pipes, access denial and other open errors no longer
+claim the installed version lacks shutdown support. Busy-channel verification
+retains the existing status-only behavior and never dispatches preparation again.
+Installer messages now explain tray Exit and that a blocked preparation is not
+restarted by Check again. Native tests cover absent/busy endpoints, startup
+collision and repeated enable; compiled Inno fixtures cover busy-channel retry
+and blocked-operation diagnostics. No certificate, trust or production gate was
+changed. These source changes are not included in the existing build3 artifact.
+Manual candidate built subsequently: 1.8.8+4,
+`installer/dist/PlugAgente-Setup-1.8.8-build4.exe` (21,608,647 bytes), SHA-256
+`a620b9e4f5a43da3718a85809a11a1b09eb900da5ce9bd7081e7ab6ee45a5aef`.
+Windows Release, Inno compilation and local release preflight passed. The
+default generated filename was renamed to build4 to avoid another duplicate.
+Build evidence: `build/manual-installer-build4.log`. No appcast, release, tag
+or production-gate activation was performed; installed validation remains pending.
+Local validation passed: 36 Python/compiled-Inno tests, all five native CTest
+contracts and the native Release build. The native authorization test requires
+the normal Windows token; the restricted execution environment refused its
+authorized-client path. No operational installation was used for validation.
+
+Remaining review item: the installer polling budget does not bound the blocking
+client subprocess call. A total deadline with preserved unknown outcomes needs
+separate implementation and regression coverage; timeout must never authorize
+file replacement or forced application exit. Installed cooperative shutdown,
+cross-session/admin identity and the full recovery acceptance matrix remain
+pending. Manual closure reported by the operator proves only that tested path.
+
+## Preparation Type Mismatch correction — 2026-10-25
+
+The server log for 1.8.8+2 identified a failure before client dispatch.
+`GetDateTimeString` was called with empty strings for its two Char arguments,
+raising Type Mismatch while generating the installation operation ID. Both
+arguments now use #0, as specified by the Inno support-function contract:
+https://jrsoftware.org/ishelp/topic_isxfunc_getdatetimestring.htm.
+
+The new compiled fixture includes the actual installation_preparation.iss,
+uses real CreateFile/CloseHandle on a private temporary directory, and replaces
+only extraction and external client execution. Existing/new directory cases
+failed before the fix and pass after it. It also checks repeated status without
+another request, delete-on-close cleanup, preservation of previous guard evidence
+and failed guard creation. Earlier UI fixtures stubbed preparation and did not
+cover this defect. No production installation or force-close is performed.
+Manual candidate: 1.8.8+3. Production publication and automatic apply stay blocked.
+Local validation: 36 Python/compiled-Inno tests passed. Red/green evidence is in
+`build/guard-type-mismatch-before.log` and `build/guard-fix-validation.log`.
+Release and release-preflight Windows workflows now include the real-preparation
+and manual-retry fixtures. No installed-server acceptance is inferred from them.
+
+The operator subsequently confirmed that build3 proceeds after manually exiting
+the running application. The compiled preparation fixture now also covers two
+blocked checks while the client reports a running legacy application, followed
+by successful verification after manual exit. It asserts one request, unchanged
+installation/operation identity, status-only checks and retained guard ownership.
+Client responses are simulated; this does not certify native process enumeration
+or cooperative shutdown across sessions. Local validation: both Python modules
+(`test_installer_preparation_guard`, `test_installer_manual_upgrade`) passed,
+covering 26 compiled-fixture scenarios across three test methods. Installed
+cooperative shutdown and the remaining acceptance matrix are still pending;
+automatic apply and production publication remain blocked.
+
+
+## Manual closure verification correction — 2026-10-25
+
+The 1.8.8+1 installer returned a terminal PrepareToInstall error while instructing
+the operator to retry; Inno did not provide that retry button. Interactive
+preparation now offers Check again/Cancel for confirmed waiting, legacy manual
+closure, active operations and unverifiable process identity. A new check keeps
+the same operation ID and queries status rather than dispatching shutdown again.
+Silent installs, recovery-required/cancelled states and unknown helper failures
+remain blocked without a retry dialog. Every blocked preparation displays the
+actual Inno log path (including an elevated administrator account path); logging
+was already enabled, but this early failure did not expose its location.
+Unknown helper failures now report a
+verification error with diagnostics instead of asserting that an application is
+still running. No process termination or production-gate change was introduced.
+
+Compiled Inno regressions reproduce the missing retry/cancel controls and lost
+helper diagnostics (three failing cases before the fix). They also preserve
+silent and recovery refusal. These local fixtures do not establish the cause of
+the reported server failure: the corresponding Setup Log is still required.
+Installed-server acceptance and production publication remain pending.
+
+Manual candidate: 1.8.8+2, `PlugAgente-Setup-1.8.8-build2.exe` (local only).
+Validation: 35 Python/compiled-Inno tests and 20 Dart installer contracts passed;
+Windows Release and full Inno compilation passed. Evidence:
+`build/installer-closure-before.log`, `installer-closure-log-before.log`,
+`installer-closure-validation.log`, `installer-closure-contract.log` and
+`installer-closure-package-final.log`. The preceding build is retained locally.
+
+
 ## Manifest oficial e encerramento cooperativo — 2026-10-25
 
 Implementado nesta rodada: build local e workflows oficiais somente manifest;

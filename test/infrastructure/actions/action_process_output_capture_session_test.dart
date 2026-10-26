@@ -6,6 +6,16 @@ import 'package:plug_agente/domain/actions/actions.dart';
 import 'package:plug_agente/infrastructure/actions/action_process_output_capture.dart';
 
 void main() {
+  test('owns captured bytes when a producer reuses a larger backing buffer', () async {
+    final stream = StreamController<List<int>>(sync: true);
+    final capture = _capture(stream.stream);
+    final backing = Uint8List(1024 * 1024)..fillRange(0, 16, 65);
+    stream.add(Uint8List.sublistView(backing, 0, 16));
+    backing.fillRange(0, 16, 66);
+    await stream.close();
+    expect((await capture.result).text, 'A' * 16);
+  });
+
   test('drains a large output but retains only the configured prefix', () async {
     var chunksRead = 0;
     Stream<List<int>> chunks() async* {

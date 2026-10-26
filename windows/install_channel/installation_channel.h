@@ -2,6 +2,7 @@
 #include <windows.h>
 #include <atomic>
 #include <mutex>
+#include <condition_variable>
 #include <thread>
 #include <string>
 #include <filesystem>
@@ -28,6 +29,9 @@ class Channel {
   HANDLE stop_ = nullptr;
   std::thread thread_;
   std::mutex mutex_;
+  std::condition_variable startup_;
+  bool startup_finished_ = false;
+  bool available_ = false;
   std::string operation_, state_ = "idle";
   bool delivered_ = false;
   bool cancelled_ = false;

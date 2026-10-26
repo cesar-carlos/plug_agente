@@ -10,6 +10,45 @@ import 'package:result_dart/result_dart.dart';
 class _Processes extends Mock implements AgentActionLiveProcesses {}
 
 void main() {
+  testWidgets('unchanged CPU display does not rebuild and hidden updates do not sample', (tester) async {
+    final processes = _Processes();
+    var reads = 0;
+    final process = AgentActionLiveProcess(
+      executionId: 'run',
+      actionId: 'action',
+      pid: 42,
+      executable: 'script.exe',
+      startedAt: DateTime.utc(2026),
+      cpuLimitPercent: 0,
+      readCpu: () {
+        reads++;
+        return const Success(Duration.zero);
+      },
+    );
+    when(() => processes.forAction(any())).thenReturn([process]);
+    Widget app(bool enabled, String actionId) => FluentApp(
+      localizationsDelegates: AppLocalizations.localizationsDelegates,
+      supportedLocales: AppLocalizations.supportedLocales,
+      home: TickerMode(
+        enabled: enabled,
+        child: AgentActionLiveProcessPanel(processes: processes, actionId: actionId),
+      ),
+    );
+    await tester.pumpWidget(app(true, 'action'));
+    await tester.pump(const Duration(seconds: 1));
+    final label = tester.widget(find.byType(SelectableText));
+    await tester.pump(const Duration(seconds: 1));
+    expect(tester.widget(find.byType(SelectableText)), same(label));
+    await tester.pumpWidget(app(false, 'action'));
+    final hiddenReads = reads;
+    await tester.pumpWidget(app(false, 'another'));
+    await tester.pump(const Duration(seconds: 3));
+    expect(reads, hiddenReads);
+    await tester.pumpWidget(app(true, 'another'));
+    expect(reads, greaterThan(hiddenReads));
+    await tester.pumpWidget(const SizedBox.shrink());
+  });
+
   testWidgets('shows PID before completion and stops sampling when hidden or disposed', (tester) async {
     final processes = _Processes();
     var reads = 0;

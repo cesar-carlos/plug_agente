@@ -125,7 +125,13 @@ std::wstring endpoint(const std::wstring& path, DWORD pid) {
 bool valid_operation(const std::string& value) { return value.size() == 32 && value.find_first_not_of("0123456789abcdef") == std::string::npos; }
 Channel::Channel() : stop_(CreateEventW(nullptr, TRUE, FALSE, nullptr)) {}
 Channel::~Channel() { stopping_ = true; SetEvent(stop_); if (thread_.joinable()) thread_.join(); CloseHandle(stop_); }
-bool Channel::start() { if (!thread_.joinable()) thread_ = std::thread([this] { serve(); }); return true; }
+bool Channel::start() {
+  std::unique_lock<std::mutex> lock(mutex_);
+  if (!stop_) return false;
+  if (!thread_.joinable()) thread_ = std::thread([this] { serve(); });
+  startup_.wait(lock, [this] { return startup_finished_; });
+  return available_;
+}
 std::string Channel::poll() { std::lock_guard<std::mutex> lock(mutex_); if (operation_.empty() || delivered_) return ""; delivered_ = true; return operation_; }
 bool Channel::cancelled() { std::lock_guard<std::mutex> lock(mutex_); return cancelled_; }
 void Channel::report(const std::string& text) {
@@ -145,7 +151,16 @@ void Channel::serve() {
     while (!stopping_) {
       Handle pipe(CreateNamedPipeW(name.c_str(), PIPE_ACCESS_DUPLEX | FILE_FLAG_OVERLAPPED | FILE_FLAG_FIRST_PIPE_INSTANCE,
         PIPE_TYPE_BYTE | PIPE_READMODE_BYTE | PIPE_WAIT | PIPE_REJECT_REMOTE_CLIENTS, 1, 4096, 4096, 0, &security));
-      if (!pipe.valid()) break;
+      if (!pipe.valid()) {
+        OutputDebugStringW(L"Installation channel pipe creation failed\n");
+        break;
+      }
+      {
+        std::lock_guard<std::mutex> lock(mutex_);
+        available_ = true;
+        startup_finished_ = true;
+      }
+      startup_.notify_all();
       Handle event(CreateEventW(nullptr, TRUE, FALSE, nullptr)); OVERLAPPED connect{}; connect.hEvent = event.value;
       BOOL connected = ConnectNamedPipe(pipe.value, &connect); DWORD error = connected ? ERROR_SUCCESS : GetLastError();
       if (error == ERROR_IO_PENDING) {
@@ -174,6 +189,12 @@ void Channel::serve() {
     }
     LocalFree(descriptor);
   } catch (const std::exception&) { OutputDebugStringW(L"Installation channel unavailable\n"); }
+  {
+    std::lock_guard<std::mutex> lock(mutex_);
+    available_ = false;
+    startup_finished_ = true;
+  }
+  startup_.notify_all();
 }
 void prepare_installation(const std::filesystem::path& directory, const std::string& operation, bool request, bool cancel) {
   if (!valid_operation(operation)) throw std::runtime_error("invalid_installation_operation");
@@ -196,7 +217,14 @@ void prepare_installation(const std::filesystem::path& directory, const std::str
     const auto birth = created(process.value);
     Handle pipe(CreateFileW(endpoint(expected, entry.th32ProcessID).c_str(), GENERIC_READ | GENERIC_WRITE, 0, nullptr,
                             OPEN_EXISTING, FILE_FLAG_OVERLAPPED | SECURITY_SQOS_PRESENT | SECURITY_IDENTIFICATION, nullptr));
-    if (!pipe.valid()) throw std::runtime_error("close_previous_application_manually");
+    if (!pipe.valid()) {
+      const auto error = GetLastError();
+      if (error == ERROR_FILE_NOT_FOUND || error == ERROR_PATH_NOT_FOUND)
+        throw std::runtime_error("close_previous_application_manually");
+      if (error == ERROR_ACCESS_DENIED) throw std::runtime_error("process_identity_unconfirmed");
+      if (error == ERROR_PIPE_BUSY) throw std::runtime_error("installation_channel_busy");
+      throw std::runtime_error("installation_channel_open_failed:" + std::to_string(error));
+    }
     ULONG server = 0;
     if (!GetNamedPipeServerProcessId(pipe.value, &server) || server != entry.th32ProcessID ||
         WaitForSingleObject(process.value, 0) != WAIT_TIMEOUT || created(process.value) != birth)

@@ -52,7 +52,9 @@ class ManualUpgradeTests(unittest.TestCase):
         cls.executable = cls.root / "installer-manual-upgrade-test.exe"
 
     def test_manual_upgrade_from_enabled_legacy_updater(self):
-        for case in ("manual", "missing_client", "retry_after_contract_error",
+        for case in ("closure_retry", "closure_cancel", "closure_silent", "closure_recovery", "closure_unknown",
+                     "closure_channel_busy", "closure_operations",
+                     "manual", "missing_client", "retry_after_contract_error",
                      "upgrade_flag_unchecked", "active_operation", "revocation_failure",
                      "dialog_manual", "dialog_upgrade", "dialog_cancel", "dialog_stop_failure",
                      "silent_legacy", "other_contract_failure", "dialog_active_operation"):

@@ -57,7 +57,7 @@ begin
   end;
   if InstallationOperation = '' then
     InstallationOperation := Copy(GetSHA256OfString(ExpandConstant('{srcexe}') +
-      GetDateTimeString('yyyymmddhhnnsszzz', '', '') + ExpandConstant('{tmp}')), 1, 32);
+      GetDateTimeString('yyyymmddhhnnsszzz', #0, #0) + ExpandConstant('{tmp}')), 1, 32);
   Command := 'status';
   if not InstallationRequested then Command := 'request';
   // Set before dispatch. Even a lost response never permits another request.

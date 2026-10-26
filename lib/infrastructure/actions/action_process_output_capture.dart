@@ -42,7 +42,8 @@ final class ActionProcessOutputCaptureSession {
   final AgentActionOutputEncodingMode encoding;
   final AgentActionRedactor redactor;
   final bool redactBeforePersisting;
-  final _builder = BytesBuilder(copy: false);
+  // Own the accepted prefix: stream chunks may be views of larger or reused buffers.
+  final _builder = BytesBuilder();
   final _completion = Completer<AgentActionCapturedOutput>();
   late final StreamSubscription<List<int>> _subscription;
   Future<AgentActionCapturedOutput>? _cancellation;

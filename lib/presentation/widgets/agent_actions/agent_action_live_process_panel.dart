@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:fluent_ui/fluent_ui.dart';
+import 'package:flutter/foundation.dart';
 import 'package:plug_agente/application/actions/agent_action_live_processes.dart';
 import 'package:plug_agente/domain/actions/action_failure.dart';
 import 'package:plug_agente/l10n/app_localizations.dart';
@@ -31,7 +32,9 @@ class _AgentActionLiveProcessPanelState extends State<AgentActionLiveProcessPane
     _percent.clear();
     if (TickerMode.valuesOf(context).enabled) {
       _sample();
-      _timer = Timer.periodic(const Duration(seconds: 1), (_) => setState(_sample));
+      _timer = Timer.periodic(const Duration(seconds: 1), (_) {
+        if (_sample()) setState(() {});
+      });
     }
   }
 
@@ -42,11 +45,27 @@ class _AgentActionLiveProcessPanelState extends State<AgentActionLiveProcessPane
       _previous.clear();
       _percent.clear();
       _errors.clear();
-      _sample();
+      if (TickerMode.valuesOf(context).enabled) {
+        _sample();
+      } else {
+        _processes = [];
+      }
     }
   }
 
-  void _sample() {
+  List<(String, int, String, String?, String?)> get _display => [
+    for (final process in _processes)
+      (
+        process.executionId,
+        process.pid,
+        process.executable,
+        _errors[process.executionId],
+        _percent[process.executionId]?.toStringAsFixed(1),
+      ),
+  ];
+
+  bool _sample() {
+    final previousDisplay = _display;
     _processes = widget.processes.forAction(widget.actionId);
     final ids = _processes.map((process) => process.executionId).toSet();
     _previous.removeWhere((id, _) => !ids.contains(id));
@@ -74,6 +93,7 @@ class _AgentActionLiveProcessPanelState extends State<AgentActionLiveProcessPane
         },
       );
     }
+    return !listEquals(previousDisplay, _display);
   }
 
   @override

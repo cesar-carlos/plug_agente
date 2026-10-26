@@ -93,12 +93,15 @@ class AgentActionDefinitionRowActions extends StatelessWidget {
           ),
         ),
         Tooltip(
-          message: l10n.agentActionsRunSelected,
+          message: provider.isDefinitionRunning(definition.id)
+              ? l10n.agentActionsStatusRunning
+              : l10n.agentActionsRunSelected,
           child: IconButton(
             icon: provider.isDefinitionRunning(definition.id)
-                ? const SizedBox.square(
-                    dimension: 16,
-                    child: AgentActionProgressRing(),
+                ? Icon(
+                    FluentIcons.processing,
+                    size: 16,
+                    semanticLabel: l10n.agentActionsStatusRunning,
                   )
                 : const Icon(FluentIcons.play, size: 16),
             onPressed: provider.canRunDefinition(definition)
