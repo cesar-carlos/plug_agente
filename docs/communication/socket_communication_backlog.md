@@ -22,7 +22,19 @@ admission with JSON Schema. Offset-versus-scope checks, UTF-8 byte limits,
 statement safety, row bounds, prior-step bindings and live authorization remain
 mandatory runtime checks documented in OpenRPC and the schemas.
 
-### Acceptance scope
+### Acceptance scope por extensão — atualização 2026-10-30
+
+- **I/O fiel de processos:** aceitação de desenvolvimento concluída; REST/socket/relay,
+  reconexão, bytes, erros, crash e armazenamento têm evidências em [action_io.md](action_io.md).
+  Não recolocar esses cenários como pendências genéricas. Produção continua desligada.
+- **SQL e identidade/estrutura:** consultar [sql_operations.md](sql_operations.md),
+  [source_discovery.md](source_discovery.md) e o manifesto coordenado; a conclusão
+  de I/O de processos não fecha gates de motores SQL, MCP ou instalação.
+- **Transporte transversal:** carga/staging, rotação de assinatura e implantação
+  distribuída permanecem sujeitos às evidências específicas abaixo. Testes I/O
+  locais não certificam TLS público, assinatura ou todos os limites de transporte.
+
+### Evidências históricas de aceitação — 2026-10-24
 
 See the [2026-10-24 homologation report](../testing/homologation_2026-10-24.md)
 for current native results, isolated hub recovery, live-token and reviewed-base

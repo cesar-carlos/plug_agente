@@ -19,6 +19,28 @@ use cases em `lib/application/use_cases/`. Tabela de auditoria append-only:
 Drift `agent_action_remote_audit`. Capability:
 `AgentActionsRemoteCapabilityBuilder`.
 
+## Escopo: contrato legado e I/O fiel
+
+As seções de run/validateRun/getExecution/cancel abaixo descrevem o fluxo legado
+quando não há seleção de I/O fiel. Cache RPC por sessão, TTL textual e autorização
+condicionada à flag legada não definem as garantias da extensão I/O.
+
+O modo fiel exige negociação exata de `agentActions.io` v1, opt-in local
+`enableActionIo` (default off), ação salva/aprovada e credencial local vigente.
+A autorização é obrigatória, inclusive quando a autorização legada estiver
+desabilitada: Client estável, vínculo ao agente, escopos e allowlist são revalidados.
+A idempotência usa identidade persistente e journal próprio; não depende da sessão
+socket nem permite replay automático após reinício. Output expira após 24 horas;
+metadados de deduplicação permanecem por pelo menos três dias após término.
+
+`run` e `validateRun` aceitam `io` e a mesma seleção de `trigger_id`.
+`agent.action.sendInput`, `agent.action.closeInput`,
+`agent.action.getInputStatus`, `agent.action.readIo` e
+`agent.action.findExecution` compõem a ponte opaca de bytes. Entrada fiel não
+é contexto de negócio, parâmetro de comando nem expansão de placeholders.
+Veja [I/O fiel](action_io.md) para estados, limites, segurança e recuperação, e
+[OpenRPC](openrpc.json) para os schemas canônicos de cada método.
+
 ## Execucao local de processos
 
 - Acoes de linha de comando executam uma unica linha por `cmd.exe /C`; quebras

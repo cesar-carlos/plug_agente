@@ -90,12 +90,17 @@ Cross-references:
   - `agent.action.validateRun` (feature flag `enableRemoteAgentActions`)
   - `agent.action.cancel` (feature flag `enableRemoteAgentActions`)
   - `agent.action.getExecution` (feature flag `enableRemoteAgentActions`)
+  - `agent.action.sendInput`, `agent.action.closeInput`
+  - `agent.action.getInputStatus`, `agent.action.readIo`, `agent.action.findExecution`
+    (`agentActions.io` v1; opt-in `enableActionIo` default **off**; autorização local obrigatória)
   - `client_token.getPolicy`
   - `rpc.discover`
   - `sql.describeSource` (`sourceDiscovery: 1`, live database-bound token)
   - `sql.describeSchema` (`sourceSchema: 1` and `sourceIdentity: 1`)
   - `sql.operation.execute`, `sql.operation.get`, `sql.operation.cancel`
     (`sqlOperations` v1; `enableSqlOperations` defaults **off**)
+- I/O fiel: [contrato, segurança e aceitação](action_io.md). `run`/`validateRun`
+  aceitam `io` negociado; catálogo estático não concede autorização nem ativa a extensão.
 - Catalogo padronizado de erros RPC
 - Negociacao de capacidades
 
@@ -1272,7 +1277,7 @@ com bump de versao de protocolo.
 | `-32008` | Timeout | Determine whether execution began; reconcile uncertain writes before any retry. |
 | `-32009` | payload invalido                                                                                   | validar schema e encoding antes do envio                                                            |
 | `-32010` | falha de decode                                                                                    | verificar content-type/encoding e compatibilidade                                                   |
-| `-32011` | falha de compressao                                                                                | reenviar sem compressao (fallback) e registrar erro                                                 |
+| `-32011` | falha de compressao                                                                                | Sem reenvio automático: só corrigir compressão após comprovar recusa anterior ao dispatch; caso contrário, reconciliar a execução original.                                                 |
 | `-32012` | Network error | Reconnect transport; do not automatically resend an uncertain write. |
 | `-32013` | Window, concurrent-handler or outstanding-response admission limit | Use `reason` to choose time backoff (`rate_window_exceeded`), reduced parallelism (`concurrent_handlers_exceeded`), or output draining (`outbound_response_capacity_exceeded`). |
 | `-32014` | Duplicate request/replay | Reconcile the original call; a new RPC ID is not evidence that repeating its side effects is safe. |

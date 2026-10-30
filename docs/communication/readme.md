@@ -20,6 +20,19 @@ SQL Server and SQL Anywhere. Historical Firebird evidence is not current support
 | [action_io.md](action_io.md) | Faithful remote process I/O: authorization, byte semantics, journal, limits, recovery and acceptance evidence. |
 | [schemas/](schemas/)                                                       | Schemas JSON dos params e results de cada metodo + envelopes RPC + frames de transporte.                                                                 |
 
+## Documentation update — 2026-10-30
+
+The main catalog includes faithful I/O, and the actions guide distinguishes its
+guarantees from the legacy flow. Retry guidance requires proof of no dispatch or
+reconciliation, not just a transient classification. The backlog separates process
+I/O acceptance from pending SQL and shared transport acceptance.
+
+In the hub, `tests/contract/agent_communication_docs.contract.test.ts` compares all
+published OpenRPC methods with the standard's implemented scope.
+`remote_action_io_documentation.contract.test.ts` validates capability examples
+and request/response pairs against runtime validators. Run these tests with both
+repositories available; skipping because the agent is absent is not acceptance.
+
 ## Review baseline
 
 The [standard](socket_communication_standard.md) was reviewed on 2026-10-24
