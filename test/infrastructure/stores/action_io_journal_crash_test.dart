@@ -4,6 +4,7 @@ library;
 import 'dart:io';
 
 import 'package:drift/native.dart';
+import 'package:path/path.dart' as p;
 import 'package:plug_agente/domain/actions/action_io.dart';
 import 'package:plug_agente/domain/actions/action_io_output.dart';
 import 'package:plug_agente/infrastructure/stores/action_io_journal_database.dart';
@@ -14,20 +15,24 @@ import 'package:test/test.dart';
 import '../../helpers/action_io_crash_child.dart';
 
 void main() {
-  // Run separately with `dart test`: child native-asset preparation must finish
-  // before another suite in this process loads the shared SQLite DLL.
+  // Flutter's resolved executable is flutter_tester, not the Dart CLI.
+  final executable = File(Platform.resolvedExecutable);
+  final dartExecutable = p.basenameWithoutExtension(executable.path) == 'flutter_tester'
+      ? p.join(executable.parent.parent.parent.parent.path, 'dart-sdk', 'bin', Platform.isWindows ? 'dart.exe' : 'dart')
+      : executable.path;
   const committedStages = ['claimed', 'admitted', 'starting', 'running', 'writing', 'written'];
   final stages = [...committedStages, for (final stage in committedStages) '$stage-uncommitted'];
   const outputCommits = ['stdout', 'stderr', 'completed'];
   final outputStages = [...outputCommits, for (final stage in outputCommits) '$stage-uncommitted'];
   final directories = <String, Directory>{};
   setUpAll(() async {
+    expect(File(dartExecutable).existsSync(), isTrue, reason: 'Dart CLI required for isolated crash children');
     // Finish native-asset preparation in every child before this process loads
     // SQLite: Windows keeps a loaded DLL locked even after closing the database.
     for (final stage in [...stages, ...outputStages]) {
       final directory = await Directory.systemTemp.createTemp('action-io-crash-test-');
       directories[stage] = directory;
-      final child = await Process.run(Platform.resolvedExecutable, [
+      final child = await Process.run(dartExecutable, [
         'run',
         'test/helpers/action_io_crash_child.dart',
         '${directory.path}/journal.sqlite',

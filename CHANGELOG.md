@@ -19,6 +19,11 @@ and version bump instructions remain in `docs/install/release_guide.md`.
 - Keep I/O disabled by default. Development acceptance does not override the
   coordinated persona-v2 or installer/publication gates.
 
+### Fixed — crash-test execution
+
+- Resolve the Dart CLI when crash-journal tests run under Flutter, instead of
+  launching `flutter_tester` as a CLI and leaving the release gate waiting.
+
 
 ## 1.8.7 - 2026-10-24
 
