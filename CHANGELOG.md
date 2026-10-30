@@ -3,6 +3,11 @@
 All notable technical changes to Plug Agente are tracked here. Release process
 and version bump instructions remain in `docs/install/release_guide.md`.
 
+Version headings track application versions, not RPC or schema versions.
+`tagged` means Git evidence only; `local` means untagged preparation.
+`prepared` is reserved for reviewed release notes and does not authorize release.
+Changes after a recorded snapshot stay in Unreleased.
+
 ## Unreleased
 
 ### Added — faithful remote action I/O
@@ -25,7 +30,38 @@ and version bump instructions remain in `docs/install/release_guide.md`.
   launching `flutter_tester` as a CLI and leaving the release gate waiting.
 
 
+### Changed — release history validation
+
+- Reconstruct missing version entries from Git and validate version, build,
+  chronology and release-note readiness before publication.
+
+## 1.8.9 - 2026-10-26
+
+Status: local
+Build: 1.8.9+1
+Source: 51177d52b3c573527b5e5d53b5468f466dd30bd7
+
+- Reduce action UI resource usage and prepare the manual installer.
+
+Version preparation is recorded in Git; no matching release tag exists. This
+entry does not certify packaging, publication or production acceptance.
+
+## 1.8.8 - 2026-10-25
+
+Status: local
+Build: 1.8.8+1
+Source: 46a0408c0a353ca71397e93840094e65f7318045
+
+- Harden ODBC queues, pagination and transaction lifecycle.
+
+Version preparation is recorded in Git; no matching release tag exists. This
+entry does not certify packaging, publication or production acceptance.
+
 ## 1.8.7 - 2026-10-24
+
+Status: local
+Build: 1.8.7+3
+Source: aa6647744537044566b9ba11341e2b03d3420a0a
 
 Packaged locally as `installer/dist/PlugAgente-Setup-1.8.7.exe` from
 `1.8.7+3`. Appcast publication remains pending. This build has no
@@ -532,6 +568,12 @@ Authenticode signature, and automatic application remains blocked.
 
 ## 1.8.6 - 2026-07-07
 
+Status: tagged
+Build: 1.8.6+1
+Source: 865a3d074e37fe28696d9a65e78e8151e179eb93
+
+Git tag `v1.8.6` is verified; publication status is not inferred from the tag.
+
 ### Added
 
 - Silent auto-update P0 fixes: resolve stale `PendingSilentUpdateDownloaded`
@@ -610,7 +652,58 @@ meta.requestId == hub_uuid`); the change is preventive for the future
 - Release preflight and appcast unittest paths after the `tool/` layout move.
 - CI: pin Windows jobs to `windows-2022` for VS toolchain compatibility.
 
+## 1.8.5 - 2026-06-11
+
+Status: tagged
+Build: 1.8.5+1
+Source: fafc6a64955679daefd34031931f3ffdd1377cb8
+
+Git tag `v1.8.5` is verified; publication status is not inferred from the tag.
+
+Reconstructed from the Git history since `v1.8.4`.
+
+- fix layer boundaries + lint after god-class refactors
+- Split god-class modules into focused health builders, ODBC executors, playground sessions, and agent-action save handlers to clarify layer boundaries and ease testing.
+- Migrate operational tooling to Python, split large modules, and tighten bootstrap/core boundaries.
+- Split boot, hub, and ODBC orchestration for clearer lifecycle and layer boundaries.
+- Refactor agent actions execution, presentation, and RPC boundaries.
+
+## 1.8.4 - 2026-06-04
+
+Status: tagged
+Build: 1.8.4+1
+Source: b372df8c46e4278bd558816fb28e476a5ab447a8
+
+Git tag `v1.8.4` is verified; publication status is not inferred from the tag.
+
+Reconstructed from the Git history since `v1.8.3`.
+
+- fix(release): early preflight without Flutter on CI
+- feat(auth): proactive hub JWT refresh and hardened HTTP session renewal
+- feat(release): add local publish gate and harden CI workflows
+
+## 1.8.3 - 2026-06-02
+
+Status: tagged
+Build: 1.8.3+1
+Source: 1f0c029c1b631c2086153a2fa0c35ef9cd048671
+
+Git tag `v1.8.3` is verified; publication status is not inferred from the tag.
+
+Reconstructed from the Git history since `v1.8.2`.
+
+- style: sort imports for release analyze gate
+- fix: unblock release tests for storage health and websocket UI
+- feat(storage): harden ProgramData ACL, scheduler lock, and ops visibility
+- feat(ui): improve update check feedback and message modals
+
 ## 1.8.2 - 2026-06-01
+
+Status: tagged
+Build: 1.8.2+1
+Source: 0c0553880ead0988b8f72555e92f053dc01dee26
+
+Git tag `v1.8.2` is verified; publication status is not inferred from the tag.
 
 ### Fixed
 
@@ -634,7 +727,29 @@ meta.requestId == hub_uuid`); the change is preventive for the future
 - Inno Setup startup task registers only in `HKCU` to avoid duplicate Run keys
   with the in-app auto-start service.
 
+## 1.8.1 - 2026-06-01
+
+Status: tagged
+Build: 1.8.1+1
+Source: 73a3b0c479a24d9ba1d8a8d2b979e420066a8b31
+
+Git tag `v1.8.1` is verified; publication status is not inferred from the tag.
+
+Reconstructed from the Git history since `v1.8.0`.
+
+- fix: robustecer autostart no Windows
+- Harden RPC SQL transport handling
+- fix: harden rpc sql streaming flow and add codcliente e2e
+- feat(agent-profile): sync hub catalog on save with conflict and retry UX
+- fix(config): audit settings UX and surface failed restore on backup tab
+
 ## 1.8.0 - 2026-05-28
+
+Status: tagged
+Build: 1.8.0+1
+Source: 5c763239b49d26b43e475d59608077e8cda6f6f5
+
+Git tag `v1.8.0` is verified; publication status is not inferred from the tag.
 
 ### Fixed
 
@@ -725,6 +840,12 @@ meta.requestId == hub_uuid`); the change is preventive for the future
 
 ## 1.7.2 - 2026-05-28
 
+Status: tagged
+Build: 1.7.2+1
+Source: 71929e0978a9708ba5ec51848d35ad25b8d2a402
+
+Git tag `v1.7.2` is verified; publication status is not inferred from the tag.
+
 ### Fixed
 
 - `ConnectionProvider` now wraps recovery handlers (`_handleReconnectionNeeded`
@@ -783,7 +904,13 @@ meta.requestId == hub_uuid`); the change is preventive for the future
 - `SqlExecutionQueue` throttles the queue-full rejection log the same way and
   exposes `consecutiveFullRejections` for diagnostics.
 
-## 1.7.1 - 2026-05-27
+## 1.7.1 - 2026-05-28
+
+Status: tagged
+Build: 1.7.1+1
+Source: a886aafa167b380e77b244f953122852bc71a4f2
+
+Git tag `v1.7.1` is verified; publication status is not inferred from the tag.
 
 ### Fixed
 
@@ -822,6 +949,12 @@ meta.requestId == hub_uuid`); the change is preventive for the future
   action so operators can redistribute it before navigating away.
 
 ## 1.7.0 - 2026-05-27
+
+Status: tagged
+Build: 1.7.0+1
+Source: d79870de568362ed18cf406af78f53a2e7f5e360
+
+Git tag `v1.7.0` is verified; publication status is not inferred from the tag.
 
 ### Changed
 
@@ -932,3 +1065,491 @@ meta.requestId == hub_uuid`); the change is preventive for the future
 - `flutter test`: 2931 passed, 11 skipped (live opt-in), 0 failed.
 - `flutter test --exclude-tags "live || slow || perf"`: 2916 passed, 0
   failed.
+
+## 1.6.9 - 2026-05-23
+
+Status: tagged
+Build: 1.6.9+1
+Source: a7fafce987f2f7e1d3f784bb2cae466498774f1b
+
+Git tag `v1.6.9` is verified; publication status is not inferred from the tag.
+
+Reconstructed from the Git history since `v1.6.8`.
+
+- test: isolate Data7 launch access checks
+- fix: resolve agent actions analyzer issues after editor refactor
+- refactor: integrate agent actions page, provider, and test improvements
+- refactor: split agent actions page and extract provider filter helpers
+- fix: repair UTF-8 mojibake and refine agent actions UI
+
+## 1.6.8 - 2026-05-23
+
+Status: tagged
+Build: 1.6.8+1
+Source: f53b6c5cbc6476b75f4eeb19f34e62433a8d6271
+
+Git tag `v1.6.8` is verified; publication status is not inferred from the tag.
+
+Reconstructed from the Git history since `v1.6.7`.
+
+- feat(hub,transport): resilience phases 1-3, batch RPC phase 3, async benchmark
+- feat(transport): JSON-RPC batch parallel Phase 2
+- feat(transport): optional protocol and dispatch improvements
+- Harden Plug Socket.IO transport after audit by introducing domain ports, splitting inbound RPC handling, and mapping failures with Result at the frame boundary so hub resilience and throughput improve without leaking transport details.
+- feat: align live Hub E2E validate, CI, and signing tooling
+
+## 1.6.7 - 2026-05-14
+
+Status: tagged
+Build: 1.6.7+1
+Source: d6ae9b12a970f4ca4d2a5faf1e6c44546556792f
+
+Git tag `v1.6.7` is verified; publication status is not inferred from the tag.
+
+Reconstructed from the Git history since `v1.6.6`.
+
+- docs: update sql queue concurrency tuning guidance
+- feat: tune odbc async worker pool
+- feat: add native bulk insert path
+- feat(health,odbc): extend agent-get-health contract and ODBC pool observability
+- Improve ODBC SQL performance controls
+
+## 1.6.6 - 2026-05-12
+
+Status: tagged
+Build: 1.6.6+1
+Source: e534893e038168025d5737541fde2fd0754871ea
+
+Git tag `v1.6.6` is verified; publication status is not inferred from the tag.
+
+Reconstructed from the Git history since `v1.6.5`.
+
+- Improve release automation
+- Fix startup minimized autostart handling
+
+## 1.6.5 - 2026-05-12
+
+Status: tagged
+Build: 1.6.5+1
+Source: 8d7c8f7b94762800ed2d41ba4d24e31f4d7866e7
+
+Git tag `v1.6.5` is verified; publication status is not inferred from the tag.
+
+Reconstructed from the Git history since `v1.6.4`.
+
+- Improve profile snapshot metrics caching
+- Align communication profile 2.9
+
+## 1.6.4 - 2026-05-08
+
+Status: tagged
+Build: 1.6.4+1
+Source: d0bddb753db7c0f6a3222c2ea5fee64e53e6f8d7
+
+Git tag `v1.6.4` is verified; publication status is not inferred from the tag.
+
+Reconstructed from the Git history since `v1.6.3`.
+
+- Improve socket protocol readiness handling
+
+## 1.6.3 - 2026-05-08
+
+Status: tagged
+Build: 1.6.3+1
+Source: 1ea11c130db76bda598612f192a7e048920b6b79
+
+Git tag `v1.6.3` is verified; publication status is not inferred from the tag.
+
+Reconstructed from the Git history since `v1.6.2`.
+
+- fix(auto-update): dedupe manual update UI and diagnostics
+
+## 1.6.2 - 2026-05-08
+
+Status: tagged
+Build: 1.6.2+1
+Source: baad4f558dbefda474d88d306922fd2b1cc5bdba
+
+Git tag `v1.6.2` is verified; publication status is not inferred from the tag.
+
+Reconstructed from the Git history since `v1.6.1`.
+
+- chore: bump version to 1.6.2
+
+## 1.6.1 - 2026-05-08
+
+Status: tagged
+Build: 1.6.1+1
+Source: bb3400f06318841951979e9693f233d1c4b51097
+
+Git tag `v1.6.1` is verified; publication status is not inferred from the tag.
+
+Reconstructed from the Git history since `v1.6.0`.
+
+- test: fix async fallback prepare timeout verification after pool acquire
+- Improve ODBC queue reliability and diagnostics
+- feat(auto-update): add diagnostics and feed validation workflow
+- feat(config): refine client token UX and update readiness
+- Harden client token authorization flow
+
+## 1.6.0 - 2026-05-07
+
+Status: tagged
+Build: 1.6.0+1
+Source: 5b35c211942d3c8ceca2a7b5bf1116d7a85edef0
+
+Git tag `v1.6.0` is verified; publication status is not inferred from the tag.
+
+Reconstructed from the Git history since `v1.5.3`.
+
+- fix(appcast): remove stray UTF-8 BOM from 1.5.3 release notes
+- feat(config): backup/restore hardening, hub agents timeout, query checks
+- feat(config): split settings into three tabs and add local backup/restore
+- feat: add granular global client token permissions
+
+## 1.5.3 - 2026-05-04
+
+Status: tagged
+Build: 1.5.3+1
+Source: 095a63386290d541f6f6dd4be365b7acea31b6fa
+
+Git tag `v1.5.3` is verified; publication status is not inferred from the tag.
+
+Reconstructed from the Git history since `v1.5.2`.
+
+- feat(updater): harden windows auto-update for 1.5.3
+
+## 1.5.2 - 2026-05-04
+
+Status: tagged
+Build: 1.5.2+1
+Source: 385521f15df269ed32210876869d42c777f08e05
+
+Git tag `v1.5.2` is verified; publication status is not inferred from the tag.
+
+Reconstructed from the Git history since `v1.5.1`.
+
+- chore: ship ODBC fixes and bump 1.5.2
+- feat(hub): persistent retry caps for offline probe, recovery_id, relogin cooldown, reconnect UI hints
+- feat(resilience): correlate hub recovery logs with recovery_id
+- feat: hub resilience, ODBC hardening, and failure mapping
+- chore(rules): update Cursor programming rules and AGENTS entry
+
+## 1.5.1 - 2026-05-01
+
+Status: tagged
+Build: 1.5.1+1
+Source: aa89ab097b2db90a98da9eb9fd6245b7f1b377f8
+
+Git tag `v1.5.1` is verified; publication status is not inferred from the tag.
+
+Reconstructed from the Git history since `v1.5.0`.
+
+- chore(release): 1.5.1
+
+## 1.5.0 - 2026-05-01
+
+Status: tagged
+Build: 1.5.0+1
+Source: 92213d8ab3a7c2d41afb959e9248e737ecd75c45
+
+Git tag `v1.5.0` is verified; publication status is not inferred from the tag.
+
+Reconstructed from the Git history since `v1.4.0`.
+
+- chore(release): 1.5.0
+- feat(config): client token flow updates and lint fixes
+- feat: SQL investigation feed, ODBC batch context, and E2E env tooling
+- fix(odbc): align SQL RPC contracts and harden concurrency behavior
+- feat(recovery): harden hub reconnect and session recovery
+
+## 1.4.0 - 2026-04-28
+
+Status: tagged
+Build: 1.4.0+1
+Source: f1cd3297e288dd769f6b722fc9499b71266be4d7
+
+Git tag `v1.4.0` is verified; publication status is not inferred from the tag.
+
+Reconstructed from the Git history since `v1.3.2`.
+
+- chore(release): 1.4.0
+- feat(rpc): add agent.getHealth with contract and protocol 2.9
+- fix(health): report real process uptime via AppUptime
+- feat(odbc): SQL execution queue, circuit breaker, and reliability hardening
+- chore(ci): update GitHub Actions versions
+
+## 1.3.2 - 2026-04-27
+
+Status: tagged
+Build: 1.3.2+1
+Source: 43fb4305c7b5d246a15e04a871651e91a0ba48ed
+
+Git tag `v1.3.2` is verified; publication status is not inferred from the tag.
+
+Reconstructed from the Git history since `v1.3.1`.
+
+- fix(database): make token name migration idempotent
+- ﻿fix(tests): fix 3 CI test failures introduced by reliability and feature commits
+- chore: update installer and version constants to 1.3.1
+
+## 1.3.1 - 2026-04-27
+
+Status: tagged
+Build: 1.3.1+1
+Source: 7ef1189ef504014adf2b80077762fb71dd19e7d6
+
+Git tag `v1.3.1` is verified; publication status is not inferred from the tag.
+
+Reconstructed from the Git history since `v1.3.0`.
+
+- fix(hub): reconnect token refresh during recovery burst
+- ﻿fix(client-token): fix scrollbar overlap and use token name as export filename default
+- ﻿feat(client-token): add user-defined name field for token identification
+- ﻿feat(client-token): add multi-table rule entry, file import/export and duplicate handling
+- ﻿fix: reliability and correctness improvements across transport, ODBC, application and presentation layers
+
+## 1.3.0 - 2026-04-26
+
+Status: tagged
+Build: 1.3.0+1
+Source: 877a2175e571b976605b82549ef5ccf6652786af
+
+Git tag `v1.3.0` is verified; publication status is not inferred from the tag.
+
+Reconstructed from the Git history since `v1.2.6`.
+
+- feat(e2e): hub socket, DML perf/bulk integration tests and transport updates
+- feat(odbc): harden query execution, validation, and cancellation
+- fix(hub): recover after io server disconnect; guard WebSocket config actions
+- chore: installer robustness and auto-update reliability
+- fix(ci): align SQL validation RPC test with sqlValidationFailed
+
+## 1.2.6 - 2026-04-14
+
+Status: tagged
+Build: 1.2.6+1
+Source: a38163676b9a6e0c21ee87ab80383aa3bc4029fd
+
+Git tag `v1.2.6` is verified; publication status is not inferred from the tag.
+
+Reconstructed from the Git history since `v1.2.0`.
+
+- feat(hub): reconnect resilience, lifecycle sync, and configurable persistent retry
+- docs(communication): OpenRPC 2.7.0 with client_token.getPolicy method
+- feat(rpc): client_token.getPolicy introspection, rate limits, and profile 2.8
+- feat(rpc): align DB connection errors with JSON-RPC catalog (v1.2.3)
+- feat(l10n): migrate UI from AppStrings to ARB and AppLocalizations
+
+## 1.2.0 - 2026-03-26
+
+Status: tagged
+Build: 1.2.0+19
+Source: 722f2c8637a62e701c2be32999f6b6b1ad214393
+
+Git tag `v1.2.0` is verified; publication status is not inferred from the tag.
+
+Reconstructed from the Git history since `v1.1.2`.
+
+- feat(auto-update): HTTPS appcast flow without DSA/WinSparkle
+
+## 1.1.2 - 2026-03-26
+
+Status: tagged
+Build: 1.1.2+18
+Source: e2d5e5d57d79362d30da5b886b42b7cce80a928d
+
+Git tag `v1.1.2` is verified; publication status is not inferred from the tag.
+
+Reconstructed from the Git history since `v1.1.1`.
+
+- release: bump version to 1.1.2+18
+- feat(protocol): agent.ready schema, capabilities and socket transport v2
+- feat(benchmarks): transport metrics, PayloadFrame suite, ODBC strategy doc
+- feat: Plug protocol hardening, perf/reliability, and docs parity
+
+## 1.1.1 - 2026-03-23
+
+Status: tagged
+Build: 1.1.1+17
+Source: dcdb5967b447abb40f9b67604027746d1ad57450
+
+Git tag `v1.1.1` is verified; publication status is not inferred from the tag.
+
+Reconstructed from the Git history since `v1.1.0`.
+
+- perf: RPC canonicalization, ODBC streaming/pool, validation, UI
+- perf: transport compression, RPC validation, ODBC and benchmarks
+- feat(odbc): lease pool TTL, warmup, benchmark baselines, and RPC diagnostics
+- feat(codecs): gzip via dart:io, PayloadEncodingFailure, row compressor tuning
+- test(benchmark): socket E2E baseline parity and optional micro-benchmarks
+
+## 1.1.0 - 2026-03-20
+
+Status: tagged
+Build: 1.1.0+16
+Source: 63eda21df4262c17a62d32471e89a6c0de8c1673
+
+Git tag `v1.1.0` is verified; publication status is not inferred from the tag.
+
+Reconstructed from the Git history since `v1.0.14`.
+
+- chore(release): bump version to 1.1.0+16
+- docs(communication): sync standard with transport flags and -32013 semantics
+- feat(socket): protocol alignment, outbound compression auto, perf improvements
+- feat(transport): async framing, isolate decode, full stream chunk validation
+- feat: PRR improvements, ODBC/JWKS refactors, lint and tests
+
+## 1.0.14 - 2026-03-18
+
+Status: tagged
+Build: 1.0.14+15
+Source: d94eadb629d10f93658f63cfaab05105b8fb8104
+
+Git tag `v1.0.14` is verified; publication status is not inferred from the tag.
+
+Reconstructed from the Git history since `v1.0.13`.
+
+- Improve auto-update reliability and diagnostics
+
+## 1.0.13 - 2026-03-18
+
+Status: tagged
+Build: 1.0.13+14
+Source: 5d66c2023e443d4f286a14e3eadb5d20827da77a
+
+Git tag `v1.0.13` is verified; publication status is not inferred from the tag.
+
+Reconstructed from the Git history since `v1.0.12`.
+
+- fix: resolve GetIt recursion for metrics interfaces
+- refactor: apply code quality improvements (rodadas 5-6)
+- feat: migrate global settings storage and bootstrap hardening
+- refactor: Clean Architecture, error handling, and robustness improvements
+
+## 1.0.12 - 2026-03-18
+
+Status: tagged
+Build: 1.0.12+13
+Source: 651928ece0f20693398467a028b3b0477890fe9c
+
+Git tag `v1.0.12` is verified; publication status is not inferred from the tag.
+
+Reconstructed from the Git history since `v1.0.11`.
+
+- feat: auto-update improvements and performance/reliability enhancements
+- fix(update): use full version (1.0.11+12) in appcast to fix false update prompt
+- feat(communication): add batch execution order and reliability improvements
+
+## 1.0.11 - 2026-03-18
+
+Status: tagged
+Build: 1.0.11+12
+Source: 0fde5e9caf951dc7cecf0cf94208a85723cda4b3
+
+Git tag `v1.0.11` is verified; publication status is not inferred from the tag.
+
+Reconstructed from the Git history since `v1.0.10`.
+
+- fix: correct DSA signature in appcast for 1.0.10
+
+## 1.0.10 - 2026-03-18
+
+Status: tagged
+Build: 1.0.10+11
+Source: 118a5b2bc73507fab5594f9b6fcc1b979e7d4154
+
+Git tag `v1.0.10` is verified; publication status is not inferred from the tag.
+
+Reconstructed from the Git history since `v1.0.9`.
+
+- fix(ci): replace dart sign_update with Python cryptography library
+
+## 1.0.9 - 2026-03-18
+
+Status: tagged
+Build: 1.0.9+10
+Source: 63ab567944718c3a8584ca94cc8cf20f9ce27796
+
+Git tag `v1.0.9` is verified; publication status is not inferred from the tag.
+
+Reconstructed from the Git history since `v1.0.8`.
+
+- fix(ci): run workflow on Windows for sign_update (Linux unsupported)
+
+## 1.0.8 - 2026-03-18
+
+Status: tagged
+Build: 1.0.8+9
+Source: 43c72e9dde45f565ff564c6710365f993e899ed7
+
+Git tag `v1.0.8` is verified; publication status is not inferred from the tag.
+
+Reconstructed from the Git history since `v1.0.7`.
+
+- fix(ci): use GitHub API URL for asset download with Accept header
+
+## 1.0.7 - 2026-03-18
+
+Status: tagged
+Build: 1.0.7+8
+Source: c26083ff3867925d0438d48fa3be9006d53ecb25
+
+Git tag `v1.0.7` is verified; publication status is not inferred from the tag.
+
+Reconstructed from the Git history since `v1.0.6`.
+
+- fix(ci): robust DSA signature extraction and asset download
+
+## 1.0.6 - 2026-03-18
+
+Status: tagged
+Build: 1.0.6+7
+Source: bed53ea40c9d0892b6c090804bb6329aaa38f5fb
+
+Git tag `v1.0.6` is verified; publication status is not inferred from the tag.
+
+Reconstructed from the Git history since `v1.0.5`.
+
+- fix(ci): use Flutter stable channel for Dart 3.10+
+- fix(ci): use Flutter 3.35.x for Dart 3.10+ compatibility
+
+## 1.0.5 - 2026-03-18
+
+Status: tagged
+Build: 1.0.5+6
+Source: a17304a942a1bb3121a371ab98cfa99a0866ca5b
+
+Git tag `v1.0.5` is verified; publication status is not inferred from the tag.
+
+Reconstructed from the Git history since `v1.0.4`.
+
+- chore: bump version to 1.0.5
+
+## 1.0.4 - 2026-03-18
+
+Status: tagged
+Build: 1.0.4+5
+Source: 19645c9389d5e5d6847d3c8476170295e5bbab5a
+
+Git tag `v1.0.4` is verified; publication status is not inferred from the tag.
+
+Reconstructed from the Git history since `v1.0.3`.
+
+- chore: add DSA public key for WinSparkle signature verification
+
+## 1.0.3 - 2026-03-18
+
+Status: tagged
+Build: 1.0.3+4
+Source: 4ab3377dfc72ff03239a60be3ed4c0289eb8ea9f
+
+Git tag `v1.0.3` is verified; publication status is not inferred from the tag.
+
+Reconstructed from the Git history.
+
+- chore: harden auto-update workflow and installation docs
+- chore: padronizar documentacao em lowercase e atualizacoes diversas
+- feat: atualizar ícones do app com plug_connect-blockchain
+- chore: atualiza ícones do app com nova imagem (database + plug)
+- feat(websocket): improve reconnection resilience and retry policy

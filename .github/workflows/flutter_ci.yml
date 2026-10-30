@@ -272,7 +272,9 @@ jobs:
         run: python3 -m pip install --quiet "cryptography>=42.0.0" "PyYAML>=6.0,<7"
 
       - name: Validate workflow regressions and release publication
-        run: python3 -m unittest tool.tests.test_workflow_regressions tool.release.test_publish_release -v
+        run: |
+          python3 tool/release/check_changelog.py
+          python3 -m unittest tool.tests.test_workflow_regressions tool.release.test_publish_release tool.release.test_check_changelog -v
 
       - name: Set up Node for alert tests
         uses: actions/setup-node@v7

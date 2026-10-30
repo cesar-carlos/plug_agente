@@ -124,6 +124,8 @@ def verify_uploaded_assets(release: Release, root: Path, commit: str,
 
 
 def publish(release: Release, root: Path = PROJECT_ROOT) -> None:
+    from tool.release.check_changelog import check
+    check(root, release.full_version, release=True)
     existing_source = tagged_source(release, root)
     commit = existing_source or command(["git", "rev-parse", "HEAD"], root).stdout.strip()
     artifacts = root / "installer/dist"

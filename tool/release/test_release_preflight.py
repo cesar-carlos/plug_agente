@@ -36,6 +36,7 @@ class ReleasePreflightTests(unittest.TestCase):
         self.app_version.parent.mkdir(parents=True)
         self.dist_dir.mkdir(parents=True)
         self.write_version_files()
+        (self.root / "CHANGELOG.md").write_text("## Unreleased\n\n## 1.6.6 - 2026-05-12\nStatus: local\nBuild: 1.6.6+1\n- Fixture release.\n", encoding="utf-8")
 
         patches = [
             patch.object(release_preflight, "PROJECT_ROOT", self.root),

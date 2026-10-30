@@ -14,6 +14,13 @@ from tool.updater.manifest import DEFAULT_CAPABILITIES, sign, verify
 
 
 class ReleasePublicationTests(unittest.TestCase):
+    def test_missing_changelog_refuses_before_git_or_github_mutation(self):
+        (self.root / 'CHANGELOG.md').unlink()
+        with patch.object(publication, 'command') as command:
+            with self.assertRaises(FileNotFoundError):
+                publication.publish(self.release, self.root)
+            command.assert_not_called()
+
     def setUp(self):
         temporary = tempfile.TemporaryDirectory()
         self.addCleanup(temporary.cleanup)
@@ -24,6 +31,7 @@ class ReleasePublicationTests(unittest.TestCase):
         (self.root / "pubspec.yaml").write_text("version: 1.8.6+1\n", encoding="utf-8")
         (self.root / "appcast.xml").write_text("initial feed", encoding="utf-8")
         (self.root / ".gitignore").write_text("installer/dist/\nremote-assets/\n", encoding="utf-8")
+        (self.root / "CHANGELOG.md").write_text("## Unreleased\n\n## 1.8.6 - 2026-07-07\nStatus: prepared\nBuild: 1.8.6+1\n- Fixture release.\n", encoding="utf-8")
         self.git("add", ".")
         self.git("-c", "user.name=Test", "-c", "user.email=test@example.com", "commit", "-m", "Fixture")
         self.commit = self.git("rev-parse", "HEAD").stdout.strip()

@@ -23,6 +23,22 @@ Plug Agente.
 - O CI falha se `pubspec.yaml`, `installer/setup.iss` e
   `lib/core/constants/app_version.g.dart` estiverem fora de sincronia.
 
+## Changelog gate
+
+Run `python tool/release/check_changelog.py` to check the current application
+version, exact build, dated entries, descending order and nonempty change notes.
+The normal preflight includes this check. Historical `tagged` entries prove Git
+tags only; `local` entries record untagged version preparation. Neither implies
+publication. Older missing entries were reconstructed from Git commit ranges;
+existing detailed notes were retained.
+
+Before publishing, move all pending changes from `Unreleased` into the target
+version, set its exact `Build`, date and `Status: prepared`, and review the notes.
+Keep the empty Unreleased heading. `publish_release.py` checks this before any
+Git/tag/GitHub mutation; a missing entry, wrong build or pending changes blocks it.
+This editorial status never overrides signing, installer or persona acceptance.
+Application versions are independent of RPC and schema versions.
+
 ## Bloqueio coordenado persona-v2
 
 `python tool/release/check_persona_release.py` requires all coordinated gates in

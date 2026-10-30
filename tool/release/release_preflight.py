@@ -502,6 +502,8 @@ def main(argv: list[str] | None = None) -> int:
         state = load_version_state()
         ensure_clean_worktree(allow_dirty=args.allow_dirty)
         ensure_version_sync(state, args.version)
+        from tool.release.check_changelog import check
+        check(PROJECT_ROOT, state.full_version)
         ensure_tools(require_iscc=args.require_iscc, check_pages=args.check_pages)
         if not args.allow_existing_tag:
             ensure_tag_available(f"v{state.short_version}")
