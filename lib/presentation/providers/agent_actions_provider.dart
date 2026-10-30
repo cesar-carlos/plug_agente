@@ -14,6 +14,7 @@ import 'package:plug_agente/application/use_cases/cancel_agent_action_execution.
 import 'package:plug_agente/application/use_cases/delete_agent_action_definition.dart';
 import 'package:plug_agente/application/use_cases/delete_agent_action_secret.dart';
 import 'package:plug_agente/application/use_cases/delete_agent_action_trigger.dart';
+import 'package:plug_agente/application/use_cases/export_action_io_output.dart';
 import 'package:plug_agente/application/use_cases/export_agent_actions_bundle.dart';
 import 'package:plug_agente/application/use_cases/get_agent_action_execution.dart';
 import 'package:plug_agente/application/use_cases/import_agent_actions_bundle.dart';
@@ -33,8 +34,11 @@ import 'package:plug_agente/core/constants/agent_action_rpc_constants.dart';
 import 'package:plug_agente/core/settings/agent_action_cpu_settings.dart';
 import 'package:plug_agente/core/settings/agent_action_preflight_settings.dart';
 import 'package:plug_agente/core/storage/global_storage_path_resolver.dart';
+import 'package:plug_agente/domain/actions/action_io.dart';
+import 'package:plug_agente/domain/actions/action_io_export_summary.dart';
 import 'package:plug_agente/domain/actions/actions.dart';
 import 'package:plug_agente/domain/entities/agent_action_remote_audit_record.dart';
+import 'package:plug_agente/domain/repositories/i_action_io_local_output.dart';
 import 'package:plug_agente/domain/repositories/i_com_object_invocation_diagnostics.dart';
 import 'package:plug_agente/l10n/app_localizations.dart';
 import 'package:plug_agente/presentation/providers/agent_action_remote_audit_focus_result.dart';
@@ -103,6 +107,8 @@ class AgentActionsProvider extends ChangeNotifier {
        _cancelExecution = deps.cancelExecution,
        _getExecution = deps.getExecution,
        _sliceCapturedOutput = deps.sliceCapturedOutput,
+       ioOutput = deps.ioOutput,
+       _exportIoOutput = deps.exportIoOutput,
        _listRecentRemoteAudit = deps.listRecentRemoteAudit,
        _exportBundle = deps.exportBundle,
        _importBundle = deps.importBundle,
@@ -152,6 +158,34 @@ class AgentActionsProvider extends ChangeNotifier {
           testDefinition: _testDefinition,
           previewDefinition: _previewDefinition,
           cancelExecution: _cancelExecution,
+          ownsIoExecution: deps.ioOwnership?.ownsExecution,
+          cancelIoExecution: (executionId) async {
+            try {
+              final factory = deps.createIoCancellation;
+              if (factory == null) {
+                return Failure(
+                  ActionRuntimeFailure.withContext(
+                    message: 'I/O cancellation is unavailable.',
+                    code: 'ACTION_IO_STORAGE_UNAVAILABLE',
+                  ),
+                );
+              }
+              return await factory()(
+                executionId: executionId,
+                authorize: () async => isFeatureEnabled
+                    ? const Success(unit)
+                    : Failure(ActionAuthorizationFailure('Local cancellation is unavailable.')),
+              );
+            } on Object catch (error) {
+              return Failure(
+                ActionRuntimeFailure.withContext(
+                  message: 'I/O cancellation could not be confirmed.',
+                  code: 'ACTION_IO_CANCEL_FAILED',
+                  cause: error,
+                ),
+              );
+            }
+          },
           messageFor: _messageFor,
           onStateChanged: notifyListeners,
         );
@@ -264,6 +298,33 @@ class AgentActionsProvider extends ChangeNotifier {
   final CancelAgentActionExecution _cancelExecution;
   final GetAgentActionExecution _getExecution;
   final SliceAgentActionCapturedOutput _sliceCapturedOutput;
+  final IActionIoLocalOutput? ioOutput;
+  final ExportActionIoOutput? _exportIoOutput;
+
+  bool get canExportIoOutput => _exportIoOutput != null && canTransferBundle;
+
+  Future<Result<ActionIoExportSummary>> exportIoOutput({
+    required String executionId,
+    required ActionIoStream stream,
+    required String filePath,
+  }) async {
+    Future<Result<Unit>> authorize() async {
+      if (!canExportIoOutput) {
+        return Failure(ActionAuthorizationFailure('Output export is currently unavailable.'));
+      }
+      return const Success(unit);
+    }
+
+    final allowed = await authorize();
+    if (allowed.isError()) return Failure(allowed.exceptionOrNull()!);
+    return _exportIoOutput!(
+      executionId: executionId,
+      stream: stream,
+      filePath: filePath,
+      authorize: authorize,
+    );
+  }
+
   final ListRecentAgentActionRemoteAudit _listRecentRemoteAudit;
   final ExportAgentActionsBundle _exportBundle;
   final ImportAgentActionsBundle _importBundle;

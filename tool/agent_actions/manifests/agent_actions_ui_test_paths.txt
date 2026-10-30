@@ -13,3 +13,11 @@ test/presentation/widgets/agent_actions/agent_action_remote_audit_labels_test.da
 test/presentation/pages/agent_actions/agent_action_execution_policies_section_test.dart
 test/presentation/pages/agent_actions/agent_action_editor_ux_test.dart
 test/shared/widgets/common/form/app_form_controls_test.dart
+
+# Faithful I/O presentation.
+test/presentation/pages/agent_actions/agent_action_remote_policy_section_test.dart
+test/presentation/pages/agent_actions/widgets/agent_action_io_status_panel_test.dart
+test/presentation/pages/agent_actions/widgets/agent_action_io_output_preview_test.dart
+test/presentation/pages/agent_actions/widgets/agent_action_io_download_test.dart
+test/presentation/providers/agent_actions/action_io_output_preview_controller_test.dart
+test/presentation/providers/websocket_log_provider_test.dart

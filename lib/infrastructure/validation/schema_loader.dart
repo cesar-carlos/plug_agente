@@ -55,7 +55,33 @@ class TransportSchemaIds {
   static const String streamComplete = 'rpc.stream.complete.schema.json';
   static const String streamPull = 'rpc.stream.pull.schema.json';
 
+  static const String paramsAgentActionSendInput = 'rpc.params.agent-action-send-input.schema.json';
+  static const String actionIoCapability = 'action-io.capability.schema.json';
+  static const String actionIoConfiguration = 'action-io.configuration.schema.json';
+  static const String resultAgentActionSendInput = 'rpc.result.agent-action-send-input.schema.json';
+  static const String paramsAgentActionCloseInput = 'rpc.params.agent-action-close-input.schema.json';
+  static const String resultAgentActionCloseInput = 'rpc.result.agent-action-close-input.schema.json';
+  static const String paramsAgentActionGetInputStatus = 'rpc.params.agent-action-get-input-status.schema.json';
+  static const String resultAgentActionGetInputStatus = 'rpc.result.agent-action-get-input-status.schema.json';
+  static const String paramsAgentActionReadIo = 'rpc.params.agent-action-read-io.schema.json';
+  static const String resultAgentActionReadIo = 'rpc.result.agent-action-read-io.schema.json';
+  static const String paramsAgentActionFindExecution = 'rpc.params.agent-action-find-execution.schema.json';
+  static const String resultAgentActionFindExecution = 'rpc.result.agent-action-find-execution.schema.json';
+
   static const List<String> all = [
+    actionIoCapability,
+    actionIoConfiguration,
+    paramsAgentActionSendInput,
+    resultAgentActionSendInput,
+    paramsAgentActionCloseInput,
+    resultAgentActionCloseInput,
+    paramsAgentActionGetInputStatus,
+    resultAgentActionGetInputStatus,
+    paramsAgentActionReadIo,
+    resultAgentActionReadIo,
+    paramsAgentActionFindExecution,
+    resultAgentActionFindExecution,
+
     payloadFrame,
     rpcRequest,
     rpcResponse,

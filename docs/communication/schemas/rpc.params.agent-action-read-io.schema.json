@@ -1,0 +1,55 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://plugagente.dev/schemas/rpc.params.agent-action-read-io.schema.json",
+  "title": "rpc.params.agent-action-read-io.schema.json",
+  "description": "I/O v1 contract. Requires explicit negotiation and faithful authorization. Schema presence does not enable runtime support.",
+  "type": "object",
+  "properties": {
+    "client_token": {
+      "type": "string",
+      "minLength": 1
+    },
+    "clientToken": {
+      "type": "string",
+      "minLength": 1
+    },
+    "auth": {
+      "type": "string",
+      "minLength": 1
+    },
+    "trace_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "requested_by": {
+      "type": "string",
+      "minLength": 1
+    },
+    "execution_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "after_sequence": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 9007199254740991
+    },
+    "max_bytes": {
+      "type": "integer",
+      "minimum": 65536,
+      "maximum": 262144
+    },
+    "wait_ms": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 20000
+    }
+  },
+  "required": [
+    "execution_id",
+    "after_sequence",
+    "max_bytes",
+    "wait_ms"
+  ],
+  "additionalProperties": false
+}

@@ -36,6 +36,19 @@ class ActionExecutionQueue {
 
   final Map<String, int> _runningByActionId = <String, int>{};
   final Map<String, Set<String>> _runningExecutionIdsByActionId = <String, Set<String>>{};
+  final Set<String> _unconfirmedCleanup = {};
+
+  /// Keeps ownership after a native cleanup failure. Only process restart and
+  /// durable reconciliation can resolve this uncertainty; maintenance cannot.
+  void retainUnconfirmedExecution(String executionId) {
+    if (!_runningExecutionIdsByActionId.values.any((ids) => ids.contains(executionId))) {
+      throw StateError('Only running executions can retain a queue slot.');
+    }
+    _unconfirmedCleanup.add(executionId);
+  }
+
+  bool _hasUnconfirmedCleanup(String actionId) =>
+      _runningExecutionIdsByActionId[actionId]?.any(_unconfirmedCleanup.contains) ?? false;
   final Map<String, Queue<_PendingActionTask<Object>>> _pendingByActionId =
       <String, Queue<_PendingActionTask<Object>>>{};
   final Map<String, Future<Result<Object>>> _idempotentResults = <String, Future<Result<Object>>>{};
@@ -400,6 +413,7 @@ class ActionExecutionQueue {
   }
 
   void _endRunning(String actionId, String executionId) {
+    if (_unconfirmedCleanup.contains(executionId)) return;
     final executionIds = _runningExecutionIdsByActionId[actionId];
     executionIds?.remove(executionId);
     if (executionIds != null && executionIds.isEmpty) {
@@ -418,7 +432,7 @@ class ActionExecutionQueue {
     String actionId,
     AgentActionQueuePolicy policy,
   ) {
-    return (_runningByActionId[actionId] ?? 0) < policy.maxConcurrent;
+    return !_hasUnconfirmedCleanup(actionId) && (_runningByActionId[actionId] ?? 0) < policy.maxConcurrent;
   }
 
   String? _idempotencyKeyFor({
@@ -434,6 +448,13 @@ class ActionExecutionQueue {
   }
 
   ActionQueueFailure? _disposedFailure({required String actionId}) {
+    if (_hasUnconfirmedCleanup(actionId)) {
+      return ActionQueueFailure.withContext(
+        message: 'A previous execution still has unconfirmed native cleanup.',
+        code: 'ACTION_IO_CLEANUP_UNKNOWN',
+        context: const {'retryable': false},
+      );
+    }
     if (_maintenanceOperation != null && !(_maintenanceGate?.allowsInternalWork ?? false)) {
       return ActionQueueFailure.withContext(
         message: 'O agente está em preparação para manutenção.',

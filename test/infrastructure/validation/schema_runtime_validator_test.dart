@@ -43,6 +43,38 @@ class _FakeSchemaValidationMetrics implements ISchemaValidationMetricsCollector 
 }
 
 void main() {
+  test('outgoing envelope accepts scoped lookup miss but rejects arbitrary null execution IDs', () async {
+    final built = await _buildValidator();
+    const missing = {'found': false, 'execution_id': null, 'reason': 'not_found_in_retention_window'};
+    expect(
+      built.validator
+          .validate(schemaId: TransportSchemaIds.resultAgentActionFindExecution, payload: missing)
+          .isSuccess(),
+      isTrue,
+    );
+    for (final (result, accepted) in <(Map<String, Object?>, bool)>[
+      (missing, true),
+      ({'execution_id': 'legacy-execution'}, true),
+      ({'execution_id': null}, false),
+      ({'found': true, 'execution_id': null, 'reason': 'not_found_in_retention_window'}, false),
+      ({'found': false, 'execution_id': null, 'reason': 'other'}, false),
+    ]) {
+      expect(
+        built.validator
+            .validate(
+              schemaId: TransportSchemaIds.rpcResponse,
+              payload: {
+                'jsonrpc': '2.0',
+                'id': 'lookup',
+                'result': result,
+              },
+            )
+            .isSuccess(),
+        accepted,
+        reason: '$result',
+      );
+    }
+  });
   group('TransportSchemaLoader', () {
     test('loads every schema declared in TransportSchemaIds.all', () async {
       final loader = TransportSchemaLoader();

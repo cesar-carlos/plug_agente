@@ -4557,7 +4557,7 @@ class AppLocalizationsPt extends AppLocalizations {
 
   @override
   String get ctEditUpdatesTokenHint =>
-      'Edicoes em nome, agente ou payload mantem o token. O token e rotacionado apenas quando as regras de acesso mudam.';
+      'Alterações apenas nos metadados mantêm o token. Mudanças nas regras de acesso, incluindo permissões e restrições no payload, rotacionam o token.';
 
   @override
   String get ctEditPolicyChangedHint => 'Salvar ira rotacionar o token porque as regras de acesso mudaram.';
@@ -5265,4 +5265,101 @@ class AppLocalizationsPt extends AppLocalizations {
   @override
   String get installationPreparationRecovery =>
       'O encerramento seguro não foi confirmado. Revise a recuperação com o suporte.';
+
+  @override
+  String get agentActionsFaithfulIoLabel => 'Permitir entrada e saída remota fiel';
+
+  @override
+  String get agentActionsFaithfulIoHelp =>
+      'Transfere os bytes originais pelos pipes do processo. Alterar esta opção exige nova aprovação local. A disponibilidade depende do suporte negociado pelo agente.';
+
+  @override
+  String get agentActionsFaithfulIoUnavailable =>
+      'Disponível para ações salvas de executável, script, Java e desenvolvedor, sem elevação.';
+
+  @override
+  String agentActionsIoProcessState(String state) {
+    String _temp0 = intl.Intl.selectLogic(
+      state,
+      {
+        'queued': 'Na fila',
+        'starting': 'Iniciando',
+        'running': 'Em execução',
+        'finished': 'Finalizado',
+        'other': 'Desconhecido',
+      },
+    );
+    return 'Processo: $_temp0';
+  }
+
+  @override
+  String agentActionsIoInputState(String state) {
+    String _temp0 = intl.Intl.selectLogic(
+      state,
+      {
+        'pending': 'Pendente',
+        'open': 'Aberta',
+        'closing': 'Fechando',
+        'closed': 'Fechada',
+        'failed': 'Falhou',
+        'other': 'Desconhecida',
+      },
+    );
+    return 'Entrada: $_temp0';
+  }
+
+  @override
+  String agentActionsIoCaptureState(String state) {
+    String _temp0 = intl.Intl.selectLogic(
+      state,
+      {
+        'capturing': 'Em andamento',
+        'draining': 'Drenando',
+        'complete': 'Completa',
+        'incomplete': 'Incompleta',
+        'expired': 'Expirada',
+        'other': 'Desconhecida',
+      },
+    );
+    return 'Captura: $_temp0';
+  }
+
+  @override
+  String get agentActionsIoOutputExpired => 'A saída armazenada expirou. O resultado da execução foi preservado.';
+
+  @override
+  String get agentActionsIoPreviewNotice =>
+      'Prévia UTF-8, até 64 KiB por página. Caracteres inválidos ou divididos podem aparecer como símbolos de substituição. Os bytes armazenados não são alterados.';
+
+  @override
+  String get agentActionsIoNextPage => 'Ler próxima página de saída';
+
+  @override
+  String get agentActionsIoEmptyPage => 'Nenhuma saída nesta página.';
+
+  @override
+  String get agentActionsIoPendingOutput => 'Ainda não há nova saída.';
+
+  @override
+  String get agentActionsIoSaveFile => 'Salvar arquivo';
+
+  @override
+  String agentActionsIoDownloadStream(String stream) {
+    return 'Baixar $stream';
+  }
+
+  @override
+  String get agentActionsIoDownloadFailed =>
+      'Não foi possível salvar a saída. Verifique as permissões, o destino e o espaço disponível.';
+
+  @override
+  String get agentActionsIoDownloadComplete => 'O stream capturado completo foi salvo.';
+
+  @override
+  String get agentActionsIoDownloadPartial =>
+      'Uma saída parcial foi salva. Este arquivo não representa uma captura completa.';
+
+  @override
+  String get agentActionsIoDownloadReplaceNotice =>
+      'Escolha um nome de arquivo. Salvar substitui um arquivo existente com esse nome. A saída pode ser parcial se a execução ou captura estiver incompleta.';
 }

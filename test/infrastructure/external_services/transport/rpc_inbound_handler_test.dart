@@ -13,6 +13,8 @@ import 'package:plug_agente/core/constants/agent_action_rpc_constants.dart';
 import 'package:plug_agente/core/constants/connection_constants.dart';
 import 'package:plug_agente/core/constants/rpc_inbound_constants.dart';
 import 'package:plug_agente/domain/errors/failures.dart' as domain;
+import 'package:plug_agente/domain/protocol/action_io_capability.dart';
+import 'package:plug_agente/domain/protocol/action_io_rpc_call_context.dart';
 import 'package:plug_agente/domain/protocol/protocol.dart';
 import 'package:plug_agente/domain/repositories/i_rpc_request_dispatcher.dart';
 import 'package:plug_agente/domain/repositories/i_rpc_stream_emitter.dart';
@@ -187,7 +189,236 @@ void main() {
     );
   });
 
+  group('framed read cancellation', () {
+    Map<String, dynamic> frame(Object payload) {
+      final bytes = Uint8List.fromList(utf8.encode(jsonEncode(payload)));
+      return PayloadFrame(
+        schemaVersion: '1.0',
+        enc: 'json',
+        cmp: 'none',
+        contentType: 'application/json',
+        originalSize: bytes.length,
+        compressedSize: bytes.length,
+        payload: bytes,
+      ).toJson();
+    }
+
+    for (final mode in ['active', 'early', 'unnegotiated', 'wrong-id', 'stale', 'malformed', 'oversized']) {
+      test('$mode control preserves read-only cancellation scope', () async {
+        if (mode != 'unnegotiated') {
+          protocol = const ProtocolConfig(
+            protocol: 'jsonrpc-v2',
+            encoding: 'json',
+            compression: 'none',
+            negotiatedExtensions: {
+              'agentActions': {'io': ActionIoCapability.advertisement},
+            },
+          );
+        }
+        final entered = Completer<ActionIoRpcCallContext>();
+        final finish = Completer<void>();
+        when(
+          () => dispatcher.dispatch(
+            any(),
+            any(),
+            clientToken: any(named: 'clientToken'),
+            streamEmitter: any(named: 'streamEmitter'),
+            limits: any(named: 'limits'),
+            negotiatedExtensions: any(named: 'negotiatedExtensions'),
+          ),
+        ).thenAnswer((call) async {
+          entered.complete(Zone.current[ActionIoRpcCallContext.zoneKey]! as ActionIoRpcCallContext);
+          await finish.future;
+          return RpcResponse.success(
+            id: 'read',
+            result: {
+              'execution_id': 'e',
+              'events': <Object?>[],
+              'next_sequence': 0,
+              'terminal': false,
+              'output_complete': false,
+            },
+          );
+        });
+        void cancel() {
+          final control = frame({
+            'version': 1,
+            'request_id': mode == 'wrong-id' ? 'other' : 'read',
+            if (mode == 'malformed') 'extra': true,
+          });
+          if (mode == 'oversized') control['originalSize'] = 1025;
+          runZoned(
+            () => handler.handleReadCancel(control),
+            zoneValues: {#transportRequestGeneration: mode == 'stale' ? 0 : 1},
+          );
+        }
+
+        if (mode == 'early') cancel();
+        final pending = runZoned(
+          () => handler.handleRequest(
+            frame({
+              'jsonrpc': '2.0',
+              'id': 'read',
+              'method': 'agent.action.readIo',
+              'params': {'execution_id': 'e', 'after_sequence': 0, 'max_bytes': 65536, 'wait_ms': 20000},
+            }),
+          ),
+          zoneValues: {#transportRequestGeneration: 1},
+        );
+        try {
+          final context = await entered.future.timeout(const Duration(seconds: 5));
+          if (mode != 'early') cancel();
+          expect(context.isCancelled(), mode == 'active' || mode == 'early');
+          expect(context.isBatch, isFalse);
+        } finally {
+          finish.complete();
+          await pending;
+          handler.resetAckBuffer();
+        }
+      });
+    }
+  });
+
   group('transport session generation', () {
+    test('propagates trusted connection deadline batch and cancellation state across dispatch', () async {
+      final calls = <ActionIoRpcCallContext>[];
+      when(
+        () => dispatcher.dispatch(
+          any(),
+          any(),
+          clientToken: any(named: 'clientToken'),
+          streamEmitter: any(named: 'streamEmitter'),
+          limits: any(named: 'limits'),
+          negotiatedExtensions: any(named: 'negotiatedExtensions'),
+        ),
+      ).thenAnswer((call) async {
+        calls.add(Zone.current[ActionIoRpcCallContext.zoneKey]! as ActionIoRpcCallContext);
+        return RpcResponse.success(
+          id: (call.positionalArguments[0] as RpcRequest).id,
+          result: {
+            'execution_id': 'e',
+            'events': <Object?>[],
+            'next_sequence': 0,
+            'terminal': false,
+            'output_complete': false,
+          },
+        );
+      });
+      final started = DateTime.now();
+      for (final batch in [false, true]) {
+        final request = {
+          'jsonrpc': '2.0',
+          'id': batch ? 'batch' : 'single',
+          'method': 'agent.action.readIo',
+          'params': {'execution_id': 'e', 'after_sequence': 0, 'max_bytes': 65536, 'wait_ms': 0},
+        };
+        final bytes = Uint8List.fromList(utf8.encode(jsonEncode(batch ? [request] : request)));
+        final frame = PayloadFrame(
+          schemaVersion: '1.0',
+          enc: 'json',
+          cmp: 'none',
+          contentType: 'application/json',
+          originalSize: bytes.length,
+          compressedSize: bytes.length,
+          payload: bytes,
+        ).toJson();
+        await runZoned(() => handler.handleRequest(frame), zoneValues: {#transportRequestGeneration: 1});
+      }
+      expect(calls, hasLength(2));
+      expect(calls.map((c) => c.isBatch), [false, true]);
+      expect(calls[0].connectionId, calls[1].connectionId);
+      expect(calls[0].deadline.difference(started).inSeconds, inInclusiveRange(29, 30));
+      expect(calls.every((c) => !c.isCancelled()), isTrue);
+      activeTransportSessionGeneration = 2;
+      expect(calls.every((c) => c.isCancelled()), isTrue);
+    });
+
+    test('nested trusted context preserves cancellation and never extends its deadline', () async {
+      final calls = <ActionIoRpcCallContext>[];
+      when(
+        () => dispatcher.dispatch(
+          any(),
+          any(),
+          clientToken: any(named: 'clientToken'),
+          streamEmitter: any(named: 'streamEmitter'),
+          limits: any(named: 'limits'),
+          negotiatedExtensions: any(named: 'negotiatedExtensions'),
+        ),
+      ).thenAnswer((call) async {
+        calls.add(Zone.current[ActionIoRpcCallContext.zoneKey]! as ActionIoRpcCallContext);
+        return RpcResponse.success(
+          id: (call.positionalArguments[0] as RpcRequest).id,
+          result: {
+            'execution_id': 'e',
+            'events': <Object?>[],
+            'next_sequence': 0,
+            'terminal': false,
+            'output_complete': false,
+          },
+        );
+      });
+      var cancelled = false;
+      final started = DateTime.now();
+      for (final seconds in [5, 120, 12, 13, 14]) {
+        final request = {
+          'jsonrpc': '2.0',
+          'id': seconds,
+          'method': 'agent.action.readIo',
+          if (seconds >= 12 && seconds <= 14)
+            'meta': {
+              'action_io_remaining_ms': 2000,
+              'action_io_deadline_unix_ms': started
+                  .add(
+                    Duration(
+                      seconds: seconds == 13
+                          ? -1
+                          : seconds == 14
+                          ? 60
+                          : 2,
+                    ),
+                  )
+                  .millisecondsSinceEpoch,
+            },
+          'params': {'execution_id': 'e', 'after_sequence': 0, 'max_bytes': 65536, 'wait_ms': 0},
+        };
+        final bytes = Uint8List.fromList(utf8.encode(jsonEncode(request)));
+        final frame = PayloadFrame(
+          schemaVersion: '1.0',
+          enc: 'json',
+          cmp: 'none',
+          contentType: 'application/json',
+          originalSize: bytes.length,
+          compressedSize: bytes.length,
+          payload: bytes,
+        ).toJson();
+        final parent = ActionIoRpcCallContext(
+          connectionId: 'parent',
+          receivedAt: seconds == 14 ? started.subtract(const Duration(seconds: 4)) : null,
+          deadline: started.add(Duration(seconds: seconds)),
+          isBatch: false,
+          isCancelled: () => cancelled,
+        );
+        await runZoned(
+          () => handler.handleRequest(frame),
+          zoneValues: {ActionIoRpcCallContext.zoneKey: parent, #transportRequestGeneration: 1},
+        );
+      }
+      expect(calls, hasLength(5));
+      expect(calls.first.deadline, started.add(const Duration(seconds: 5)));
+      expect(calls[1].deadline.difference(started).inSeconds, inInclusiveRange(29, 30));
+      expect(
+        calls[2].deadline.millisecondsSinceEpoch,
+        started.add(const Duration(seconds: 2)).millisecondsSinceEpoch,
+      );
+      expect(
+        calls[3].deadline.millisecondsSinceEpoch,
+        started.subtract(const Duration(seconds: 1)).millisecondsSinceEpoch,
+      );
+      expect(calls[4].deadline, started.subtract(const Duration(seconds: 2)));
+      cancelled = true;
+      expect(calls.every((call) => call.isCancelled()), isTrue);
+    });
+
     test('drops a stale request before decode, dispatch, or response emission', () async {
       await runZoned(
         () => handler.handleRequest(<String, dynamic>{'not': 'decoded'}),

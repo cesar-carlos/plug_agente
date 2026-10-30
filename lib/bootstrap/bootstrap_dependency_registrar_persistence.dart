@@ -10,6 +10,28 @@ void _registerPersistence(GetIt getIt) {
     settings.writeAdmission = getIt<UpdateMaintenanceAdmission>().checkSettingsWrite;
   }
   getIt
+    ..registerLazySingleton<ActionIoJournalRuntime>(
+      () => ActionIoJournalRuntime(
+        getIt<GlobalStorageContext>().actionIoJournalFilePath,
+        metrics: getIt<MetricsCollector>().actionIoMetrics,
+        concurrencyLimit: () => AgentActionPolicyDefaults.maxConcurrentActions,
+      ),
+      dispose: (runtime) async => (await runtime.close()).getOrThrow(),
+    )
+    ..registerFactory<ActionIoLocalCancellation>(
+      () => ActionIoLocalCancellation(
+        sessions: getIt<ActionIoJournalRuntime>().journal,
+        output: getIt<ActionIoJournalRuntime>().output,
+        requestCancel: getIt<ActionIoSessionSupervisor>().requestCancel,
+      ),
+    )
+    ..registerLazySingleton<IActionIoExecutionOwnership>(() => getIt<ActionIoJournalRuntime>())
+    ..registerLazySingleton<IActionIoLocalHistory>(() => getIt<ActionIoJournalRuntime>())
+    ..registerLazySingleton<IActionIoLocalOutput>(() => getIt<ActionIoJournalRuntime>())
+    ..registerLazySingleton<IActionIoFileExport>(() => const ActionIoFileExport())
+    ..registerLazySingleton<ExportActionIoOutput>(
+      () => ExportActionIoOutput(getIt<IActionIoLocalOutput>(), getIt<IActionIoFileExport>()),
+    )
     ..registerLazySingleton<SqlOperationJournalRuntime>(
       () => SqlOperationJournalRuntime(getIt<GlobalStorageContext>().sqlOperationJournalFilePath),
       dispose: (runtime) => runtime.close(),

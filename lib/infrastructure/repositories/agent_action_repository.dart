@@ -4,6 +4,7 @@ import 'package:plug_agente/core/constants/agent_action_runtime_state_constants.
 import 'package:plug_agente/domain/actions/actions.dart';
 import 'package:plug_agente/domain/actions/agent_action_captured_output_chunker.dart';
 import 'package:plug_agente/domain/errors/failures.dart' as domain;
+import 'package:plug_agente/domain/repositories/i_agent_action_history_page.dart';
 import 'package:plug_agente/domain/repositories/i_agent_action_repository.dart';
 import 'package:plug_agente/domain/services/i_update_maintenance_gate.dart';
 import 'package:plug_agente/infrastructure/repositories/agent_action_captured_output_chunk_store.dart';
@@ -11,7 +12,7 @@ import 'package:plug_agente/infrastructure/repositories/agent_action_drift_mappe
 import 'package:plug_agente/infrastructure/repositories/agent_config_drift_database.dart';
 import 'package:result_dart/result_dart.dart';
 
-class AgentActionRepository implements IAgentActionRepository {
+class AgentActionRepository implements IAgentActionRepository, IAgentActionHistoryPage {
   AgentActionRepository(
     this._database, {
     IUpdateMaintenanceGate? maintenanceGate,
@@ -502,6 +503,7 @@ class AgentActionRepository implements IAgentActionRepository {
     Set<AgentActionExecutionStatus>? statuses,
     DateTime? requestedAfter,
     int? limit,
+    AgentActionHistoryCursor? after,
   }) async {
     return _withAdmission(() async {
       try {
@@ -510,6 +512,13 @@ class AgentActionRepository implements IAgentActionRepository {
             (table) => OrderingTerm.desc(table.requestedAt),
             (table) => OrderingTerm.asc(table.id),
           ]);
+        if (after != null) {
+          query.where(
+            (table) =>
+                table.requestedAt.isSmallerThanValue(after.requestedAt) |
+                (table.requestedAt.equals(after.requestedAt) & table.id.isBiggerThanValue(after.executionId)),
+          );
+        }
         if (actionId != null) {
           query.where((table) => table.actionId.equals(actionId));
         }
@@ -553,6 +562,28 @@ class AgentActionRepository implements IAgentActionRepository {
         );
       }
     });
+  }
+
+  @override
+  Future<Result<List<AgentActionExecution>>> listExecutionPage({
+    required int limit,
+    AgentActionHistoryCursor? after,
+    String? actionId,
+    String? idempotencyKey,
+    Set<AgentActionExecutionStatus>? statuses,
+    DateTime? requestedAfter,
+  }) async {
+    if (limit < 1 || limit > 1000) {
+      return Failure(ActionValidationFailure('History page size must be between 1 and 1000.'));
+    }
+    return listExecutions(
+      limit: limit,
+      after: after,
+      actionId: actionId,
+      idempotencyKey: idempotencyKey,
+      statuses: statuses,
+      requestedAfter: requestedAfter,
+    );
   }
 
   @override

@@ -125,6 +125,31 @@ void main() {
       when(() => featureFlags.enableAgentActionRemoteAudit).thenReturn(false);
     });
 
+    test('I/O requests never enter legacy run or validation paths', () async {
+      final remote = MockRunAgentActionViaRemoteTrigger();
+      final local = MockRunAgentActionLocally();
+      final operations = _buildOperations(featureFlags: featureFlags, remoteRunner: remote, localRunner: local);
+      for (final method in ['agent.action.run', 'agent.action.validateRun']) {
+        final request = RpcRequest(
+          jsonrpc: '2.0',
+          id: 1,
+          method: method,
+          params: <String, dynamic>{
+            'action_id': 'saved',
+            'idempotency_key': 'key',
+            'io': <String, dynamic>{'version': 1, 'mode': 'faithful', 'close_input': true},
+          },
+        );
+        final response = method == 'agent.action.run'
+            ? await operations.handleAgentActionRun(request, 'agent', 'credential')
+            : await operations.handleAgentActionValidateRun(request, 'agent', 'credential');
+        expect(response.isSuccess, isFalse);
+        expect((response.error?.data as Map<String, dynamic>?)?['reason'], 'CAPABILITY_UNAVAILABLE');
+      }
+      verifyZeroInteractions(remote);
+      verifyZeroInteractions(local);
+    });
+
     test('handleAgentActionRun returns internal error when remote runner is not configured', () async {
       final operations = _buildOperations(featureFlags: featureFlags);
 

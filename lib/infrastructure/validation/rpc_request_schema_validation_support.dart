@@ -33,6 +33,8 @@ final class RpcRequestSchemaValidationSupport {
       'request_id',
       'agent_id',
       'timestamp',
+      'action_io_remaining_ms',
+      'action_io_deadline_unix_ms',
     };
     final extraFields = meta.keys.where((key) => !knownFields.contains(key));
     if (extraFields.isNotEmpty) {
@@ -40,6 +42,19 @@ final class RpcRequestSchemaValidationSupport {
         'Field "meta" contains unsupported properties: '
         '${extraFields.join(", ")}',
       );
+    }
+
+    if (meta.containsKey('action_io_remaining_ms') || meta.containsKey('action_io_deadline_unix_ms')) {
+      final remaining = meta['action_io_remaining_ms'];
+      final deadline = meta['action_io_deadline_unix_ms'];
+      if (remaining is! int ||
+          remaining < 0 ||
+          remaining > 30000 ||
+          deadline is! int ||
+          deadline < 0 ||
+          deadline > 8640000000000000) {
+        return invalidRequest('Action I/O transport budget must contain bounded integer remaining time and deadline');
+      }
     }
 
     for (final key in [

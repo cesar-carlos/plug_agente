@@ -5,6 +5,7 @@ import 'package:plug_agente/application/use_cases/list_agent_action_executions.d
 import 'package:plug_agente/application/use_cases/preview_agent_action_definition.dart';
 import 'package:plug_agente/application/use_cases/run_agent_action_locally.dart';
 import 'package:plug_agente/application/use_cases/test_agent_action_definition.dart';
+import 'package:plug_agente/domain/actions/action_io_execution_status.dart';
 import 'package:plug_agente/domain/actions/actions.dart';
 import 'package:plug_agente/presentation/providers/agent_actions/agent_actions_executions_controller.dart';
 import 'package:plug_agente/presentation/providers/agent_actions/agent_actions_history_controller.dart';
@@ -44,13 +45,18 @@ void main() {
   late AgentActionsExecutionsController controller;
   late AgentActionsHistoryController historyController;
 
-  AgentActionsExecutionsController buildController() {
+  AgentActionsExecutionsController buildController({
+    Future<Result<AgentActionExecution>> Function(String)? cancelIo,
+    Future<Result<bool>> Function(String)? ownsIo,
+  }) {
     return AgentActionsExecutionsController(
       listExecutions: listExecutions,
       runAction: runAction,
       testDefinition: testDefinition,
       previewDefinition: previewDefinition,
       cancelExecution: cancelExecution,
+      cancelIoExecution: cancelIo,
+      ownsIoExecution: ownsIo,
       messageFor: (failure) => failure.toString(),
       onStateChanged: () => stateChangeCount++,
     );
@@ -65,6 +71,69 @@ void main() {
     stateChangeCount = 0;
     controller = buildController();
     historyController = AgentActionsHistoryController();
+  });
+
+  test('routes faithful cancellation locally and never falls back when unavailable', () async {
+    final execution = AgentActionExecution(
+      id: 'io',
+      actionId: 'a',
+      actionType: AgentActionType.executable,
+      status: AgentActionExecutionStatus.running,
+      requestedAt: now,
+      source: AgentActionRequestSource.remoteHub,
+      ioStatus: const ActionIoExecutionStatus(
+        processState: 'running',
+        stdinState: 'open',
+        captureState: 'capturing',
+        outputExpired: false,
+      ),
+    );
+    var ioCalls = 0;
+    controller = buildController(
+      cancelIo: (id) async {
+        expect(id, 'io');
+        ioCalls++;
+        return Success(execution);
+      },
+    );
+    controller.executions = [execution];
+    expect(await controller.cancelExecution(execution), isNull);
+    expect(await controller.cancelExecutionById('io'), isNull);
+    expect(ioCalls, 2);
+    verifyZeroInteractions(cancelExecution);
+    controller = buildController();
+    expect(await controller.cancelExecution(execution), contains('ACTION_IO_CANCEL_UNAVAILABLE'));
+    verifyZeroInteractions(cancelExecution);
+  });
+
+  test('unloaded I/O IDs use journal ownership and storage failure never falls back', () async {
+    var calls = 0;
+    final stopped = AgentActionExecution(
+      id: 'unloaded',
+      actionId: 'a',
+      actionType: AgentActionType.executable,
+      status: AgentActionExecutionStatus.cancelled,
+      requestedAt: now,
+      source: AgentActionRequestSource.remoteHub,
+    );
+    controller = buildController(
+      ownsIo: (_) async => const Success(true),
+      cancelIo: (_) async {
+        calls++;
+        return Success(stopped);
+      },
+    );
+    expect(await controller.cancelExecutionById('unloaded'), isNull);
+    expect(calls, 1);
+    verifyZeroInteractions(cancelExecution);
+    controller = buildController(
+      ownsIo: (_) async => Failure(
+        ActionRuntimeFailure.withContext(message: 'Storage unavailable.', code: 'ACTION_IO_STORAGE_UNAVAILABLE'),
+      ),
+    );
+    expect(await controller.cancelExecutionById('unloaded'), contains('ACTION_IO_STORAGE_UNAVAILABLE'));
+    expect(controller.cancellingExecutionIds, isEmpty);
+    verifyZeroInteractions(cancelExecution);
   });
 
   test('running email and COM cannot be cancelled, but their queued executions can', () {

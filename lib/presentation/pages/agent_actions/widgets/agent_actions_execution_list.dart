@@ -141,6 +141,10 @@ class AgentActionExecutionRow extends StatelessWidget {
               execution: execution,
               l10n: l10n,
               onSliceCapturedOutput: provider.sliceCapturedOutput,
+              ioOutput: provider.ioOutput,
+              canExportIo: provider.canExportIoOutput,
+              onExportIo: (stream, path) =>
+                  provider.exportIoOutput(executionId: execution.id, stream: stream, filePath: path),
             ),
           ],
         ),

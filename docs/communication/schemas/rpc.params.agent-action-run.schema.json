@@ -3,7 +3,10 @@
   "$id": "https://plugagente.dev/schemas/rpc.params.agent-action-run.v1.json",
   "title": "agent.action.run params",
   "type": "object",
-  "required": ["action_id", "idempotency_key"],
+  "required": [
+    "action_id",
+    "idempotency_key"
+  ],
   "properties": {
     "action_id": {
       "type": "string",
@@ -44,6 +47,9 @@
       "type": "string",
       "minLength": 1,
       "description": "Alias for client_token"
+    },
+    "io": {
+      "$ref": "https://plugagente.dev/schemas/action-io.configuration.schema.json"
     }
   },
   "additionalProperties": false

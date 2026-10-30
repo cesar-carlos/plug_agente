@@ -14,6 +14,8 @@ class GlobalStorageContext {
   String get databaseFilePath => p.join(appDirectoryPath, 'agent_config.db');
 
   String get sqlOperationJournalFilePath => p.join(appDirectoryPath, 'sql_operations.db');
+
+  String get actionIoJournalFilePath => p.join(appDirectoryPath, 'action_io.db');
 }
 
 class GlobalStorageAccessException implements Exception {

@@ -84,6 +84,17 @@ class AgentActionExecutionOrchestrator {
   }) async {
     final definition = gatedContext.definition;
     final runner = gatedContext.runner;
+    if (request.ioSession != null) {
+      // The durable session admission path must own deduplication and dispatch;
+      // never consult the legacy action/key cache for a Client-owned session.
+      return Failure(
+        ActionRuntimeFailure.withContext(
+          message: 'Faithful I/O requires the durable session execution path.',
+          code: 'ACTION_IO_EXECUTOR_UNAVAILABLE',
+          context: const {'retryable': false, 'effects_possible': false},
+        ),
+      );
+    }
 
     final idempotencyKey = _idempotencyKeyFor(request);
     Completer<Result<AgentActionExecution>>? reservedCompleter;
@@ -394,6 +405,7 @@ class AgentActionExecutionOrchestrator {
     required AgentActionDefinition definition,
     required AgentActionExecutionRequest request,
   }) {
+    if (request.ioSession != null) return request.copyWith(clearCachedPreparedExecution: true);
     final cachedPrepared = _preparedExecutionCache.consumeIfValid(
       definition: definition,
       request: request,

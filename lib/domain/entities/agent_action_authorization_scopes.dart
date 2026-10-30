@@ -8,6 +8,7 @@ abstract final class AgentActionAuthorizationScopes {
   static const String validateRun = 'agent_actions.validate_run';
   static const String cancel = 'agent_actions.cancel';
   static const String readExecution = 'agent_actions.read_execution';
+  static const String io = 'agent_actions.io';
 
   /// Wildcard scope that grants all `agent.action.*` RPCs.
   static const String wildcard = 'agent_actions.*';

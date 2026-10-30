@@ -50,6 +50,13 @@ class AgentActionRpcExecutionOperations {
     String agentId,
     String? clientToken,
   ) async {
+    if (request.params is Map<String, dynamic> && (request.params as Map<String, dynamic>).containsKey('io')) {
+      return _infrastructure.support.invalidParams(
+        request,
+        'Faithful I/O run admission is not available on this dispatcher.',
+        rpcReason: 'CAPABILITY_UNAVAILABLE',
+      );
+    }
     final hadCredential = clientToken != null && clientToken.trim().isNotEmpty;
     final runner = _runAgentActionViaRemoteTrigger;
     var actionId = '';
@@ -194,6 +201,13 @@ class AgentActionRpcExecutionOperations {
     String agentId,
     String? clientToken,
   ) async {
+    if (request.params is Map<String, dynamic> && (request.params as Map<String, dynamic>).containsKey('io')) {
+      return _infrastructure.support.invalidParams(
+        request,
+        'Faithful I/O run admission is not available on this dispatcher.',
+        rpcReason: 'CAPABILITY_UNAVAILABLE',
+      );
+    }
     final hadCredential = clientToken != null && clientToken.trim().isNotEmpty;
     final runner = _runAgentActionLocally;
     var actionId = '';
@@ -694,6 +708,7 @@ class AgentActionRpcExecutionOperations {
 
     final triggerResult = await remoteTrigger.resolveEnabledRemoteTriggerId(
       actionId: actionId,
+      triggerId: _infrastructure.trimmedAgentActionRpcStringParam(request, 'trigger_id'),
     );
     if (triggerResult.isSuccess()) {
       return null;

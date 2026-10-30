@@ -1,0 +1,173 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://plugagente.dev/schemas/rpc.result.agent-action-read-io.schema.json",
+  "title": "rpc.result.agent-action-read-io.schema.json",
+  "description": "I/O v1 contract. Requires explicit negotiation and faithful authorization. Schema presence does not enable runtime support.",
+  "type": "object",
+  "properties": {
+    "execution_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "events": {
+      "type": "array",
+      "maxItems": 256,
+      "items": {
+        "oneOf": [
+          {
+            "type": "object",
+            "properties": {
+              "sequence": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 9007199254740991
+              },
+              "type": {
+                "const": "output"
+              },
+              "stream": {
+                "type": "string",
+                "enum": [
+                  "stdout",
+                  "stderr"
+                ]
+              },
+              "offset": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 9007199254740991
+              },
+              "data_base64": {
+                "type": "string",
+                "maxLength": 87384,
+                "pattern": "^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$"
+              }
+            },
+            "required": [
+              "sequence",
+              "type",
+              "stream",
+              "offset",
+              "data_base64"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "sequence": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 9007199254740991
+              },
+              "type": {
+                "const": "process_exited"
+              },
+              "exit_code": {
+                "type": [
+                  "integer",
+                  "null"
+                ]
+              }
+            },
+            "required": [
+              "sequence",
+              "type",
+              "exit_code"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "sequence": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 9007199254740991
+              },
+              "type": {
+                "const": "completed"
+              },
+              "output_complete": {
+                "type": "boolean"
+              },
+              "failure": {
+                "type": "object",
+                "properties": {
+                  "code": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "phase": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "origin": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "diagnostic_id": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "effects_possible": {
+                    "type": "boolean"
+                  },
+                  "retryable": {
+                    "const": false
+                  },
+                  "recovery": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "confirmed_bytes": {
+                    "type": [
+                      "integer",
+                      "null"
+                    ],
+                    "minimum": 0
+                  }
+                },
+                "required": [
+                  "code",
+                  "phase",
+                  "origin",
+                  "diagnostic_id",
+                  "effects_possible",
+                  "retryable",
+                  "recovery"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "required": [
+              "sequence",
+              "type",
+              "output_complete"
+            ],
+            "additionalProperties": false
+          }
+        ]
+      }
+    },
+    "next_sequence": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 9007199254740991
+    },
+    "terminal": {
+      "type": "boolean"
+    },
+    "output_complete": {
+      "type": "boolean"
+    }
+  },
+  "required": [
+    "execution_id",
+    "events",
+    "next_sequence",
+    "terminal",
+    "output_complete"
+  ],
+  "additionalProperties": false
+}

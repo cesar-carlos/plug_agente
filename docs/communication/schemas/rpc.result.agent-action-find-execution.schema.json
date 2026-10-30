@@ -1,0 +1,45 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://plugagente.dev/schemas/rpc.result.agent-action-find-execution.schema.json",
+  "title": "rpc.result.agent-action-find-execution.schema.json",
+  "description": "I/O v1 contract. Requires explicit negotiation and faithful authorization. Schema presence does not enable runtime support.",
+  "oneOf": [
+    {
+      "type": "object",
+      "properties": {
+        "found": {
+          "const": false
+        },
+        "reason": {
+          "const": "not_found_in_retention_window"
+        },
+        "execution_id": {
+          "type": "null"
+        }
+      },
+      "required": [
+        "found",
+        "reason",
+        "execution_id"
+      ],
+      "additionalProperties": false
+    },
+    {
+      "type": "object",
+      "properties": {
+        "found": {
+          "const": true
+        },
+        "execution_id": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": [
+        "found",
+        "execution_id"
+      ],
+      "additionalProperties": false
+    }
+  ]
+}

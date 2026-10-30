@@ -13,6 +13,9 @@ class ActionFailure extends Failure {
 
   @override
   bool get isRecoverable => true;
+
+  @override
+  Object? get diagnosticCause => code.startsWith('ACTION_IO_') ? cause?.runtimeType.toString() : super.diagnosticCause;
 }
 
 class ActionValidationFailure extends ActionFailure {

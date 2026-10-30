@@ -131,6 +131,7 @@ class AgentActionDraftMapper {
     draft.executionPolicy.allowedContextDirectories.clear();
     draft.remoteEnabled = false;
     draft.remoteAdHoc = false;
+    draft.remoteFaithfulIo = false;
     draft.remoteApprovalGranted = false;
     draft.runElevated = false;
     draft.validationMessage = null;
@@ -228,7 +229,8 @@ class AgentActionDraftMapper {
     final remote = definition.policies.remote;
     draft.remoteEnabled = remote.isEnabled;
     draft.remoteAdHoc = remote.allowAdHoc && capabilities.remoteAdHocEnabled;
-    draft.remoteApprovalGranted = remote.approvedAt != null && !remote.requiresReapproval;
+    draft.remoteFaithfulIo = remote.allowFaithfulIo;
+    draft.restoreRemoteApproval(remote.approvedAt != null && !remote.requiresReapproval);
 
     draft.runElevated = definition.policies.elevated.runElevated && capabilities.elevatedEnabled;
 

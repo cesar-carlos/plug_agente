@@ -6,6 +6,34 @@ void _registerRpc(
   required int Function(String key, int fallback) readNonNegativeIntEnv,
 }) {
   getIt
+    ..registerLazySingleton(
+      () => ActionIoRun(
+        preparer: getIt<ActionIoIntentPreparer>(),
+        admission: getIt<ActionIoAdmission>(),
+        launcher: getIt<ActionIoSessionLauncher>(),
+        supervisor: getIt<ActionIoSessionSupervisor>(),
+        sessions: getIt<ActionIoJournalRuntime>().journal,
+        authorization: getIt<ActionIoAuthorization>(),
+      ),
+    )
+    ..registerLazySingleton(
+      () => ActionIoValidateRun(
+        getIt<ActionIoIntentPreparer>(),
+        getIt<ActionIoAdmission>(),
+      ),
+    )
+    ..registerLazySingleton(() {
+      final runtime = getIt<ActionIoJournalRuntime>();
+      return ActionIoRemoteAccess(
+        installationId: getIt<AgentRuntimeIdentity>().runtimeInstanceId,
+        authorization: getIt<ActionIoAuthorization>(),
+        requestCancel: getIt<ActionIoSessionSupervisor>().requestCancel,
+        metrics: getIt<MetricsCollector>().actionIoMetrics,
+        input: runtime.journal,
+        output: runtime.output,
+        sessions: runtime.journal,
+      );
+    })
     ..registerLazySingleton<ISourceDiscoveryProbe>(
       () =>
           OdbcSourceDiscovery(getIt<odbc.OdbcService>(), getIt<ConfigService>(), getIt<DirectOdbcConnectionLimiter>()),
@@ -167,7 +195,36 @@ void _registerRpc(
         odbcConnectionSettings: getIt<IOdbcConnectionSettings>(),
         inFlightAbortPort: getIt<ISqlInFlightExecutionAbortPort>(),
         operationsFactory: getIt<DefaultRpcMethodHandlerOperationsFactory>(),
+        routeActionIoExecution: (legacy) => ActionIoExecutionRouter(
+          legacy: legacy,
+          ownsExecution: getIt<ActionIoJournalRuntime>().ownsExecution,
+          faithful: ActionIoRpcHandler(
+            legacy.method,
+            accessProvider: () => getIt<ActionIoRemoteAccess>(),
+            contract: ActionIoRpcContract(getIt<JsonSchemaContractValidator>()),
+            enabled: () => getIt<FeatureFlags>().enableActionIo && getIt<ActionIoJournalRuntime>().isReady,
+          ),
+        ),
+        actionIoRunHandler: ActionIoRpcHandler(
+          'agent.action.run',
+          contract: ActionIoRpcContract(getIt<JsonSchemaContractValidator>()),
+          enabled: () => getIt<FeatureFlags>().enableActionIo && getIt<ActionIoJournalRuntime>().isReady,
+          run: (request, context) => getIt<ActionIoRun>()(request, context),
+        ),
+        actionIoValidateHandler: ActionIoRpcHandler(
+          'agent.action.validateRun',
+          contract: ActionIoRpcContract(getIt<JsonSchemaContractValidator>()),
+          enabled: () => getIt<FeatureFlags>().enableActionIo && getIt<ActionIoJournalRuntime>().isReady,
+          validateRun: (request, context) => getIt<ActionIoValidateRun>()(request, context),
+        ),
         additionalHandlers: [
+          for (final method in ActionIoRpcHandler.methods)
+            ActionIoRpcHandler(
+              method,
+              accessProvider: () => getIt<ActionIoRemoteAccess>(),
+              contract: ActionIoRpcContract(getIt<JsonSchemaContractValidator>()),
+              enabled: () => getIt<FeatureFlags>().enableActionIo && getIt<ActionIoJournalRuntime>().isReady,
+            ),
           SourceSchemaRpcHandler(
             getIt<ActiveConfigResolver>(),
             getIt<ClientTokenValidationService>(),

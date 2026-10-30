@@ -14,6 +14,8 @@ class LogSanitizer {
   LogSanitizer._();
 
   static const _exactSensitiveKeys = {
+    'initial_input_base64',
+    'data_base64',
     'command_preview',
     'commandpreview',
     'process_command_preview',
@@ -72,6 +74,9 @@ class LogSanitizer {
       return {'_truncated': '[MAX_DEPTH]'};
     }
     final out = <String, dynamic>{};
+    // Encoded frames can contain credentials and process bytes. Diagnostics
+    // retain their envelope only, without decoding or decompressing the body.
+    final isPayloadFrame = map.containsKey('enc') && map.containsKey('cmp');
     var count = 0;
     for (final entry in map.entries) {
       if (count >= _maxMapEntries) {
@@ -81,7 +86,7 @@ class LogSanitizer {
       count++;
       final key = entry.key;
       final value = entry.value;
-      if (_isSensitiveKey(key)) {
+      if (_isSensitiveKey(key) || (isPayloadFrame && key == 'payload')) {
         out[key] = _redacted;
         continue;
       }
@@ -104,12 +109,7 @@ class LogSanitizer {
       final take = value.length > _maxListElements ? _maxListElements : value.length;
       final sanitized = <dynamic>[];
       for (var i = 0; i < take; i++) {
-        final e = value[i];
-        if (e is Map) {
-          sanitized.add(_sanitizeMapDepth(Map<String, dynamic>.from(e), depth));
-        } else {
-          sanitized.add(e);
-        }
+        sanitized.add(_sanitizeValue(value[i], depth + 1));
       }
       if (value.length > _maxListElements) {
         sanitized.add(

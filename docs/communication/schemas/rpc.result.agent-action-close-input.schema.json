@@ -1,0 +1,82 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://plugagente.dev/schemas/rpc.result.agent-action-close-input.schema.json",
+  "title": "rpc.result.agent-action-close-input.schema.json",
+  "description": "I/O v1 contract. Requires explicit negotiation and faithful authorization. Schema presence does not enable runtime support.",
+  "type": "object",
+  "properties": {
+    "execution_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "message_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "sequence": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 9007199254740991
+    },
+    "state": {
+      "type": "string",
+      "enum": [
+        "accepted",
+        "writing",
+        "written",
+        "failed",
+        "unknown"
+      ]
+    },
+    "confirmed_bytes": {
+      "type": [
+        "integer",
+        "null"
+      ],
+      "minimum": 0,
+      "maximum": 65536
+    },
+    "next_input_sequence": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 9007199254740991
+    },
+    "stdin_state": {
+      "type": "string",
+      "enum": [
+        "pending",
+        "open",
+        "closing",
+        "closed",
+        "failed"
+      ]
+    }
+  },
+  "required": [
+    "execution_id",
+    "message_id",
+    "sequence",
+    "state",
+    "confirmed_bytes",
+    "next_input_sequence",
+    "stdin_state"
+  ],
+  "additionalProperties": false,
+  "if": {
+    "properties": {
+      "state": {
+        "const": "written"
+      }
+    },
+    "required": [
+      "state"
+    ]
+  },
+  "then": {
+    "properties": {
+      "confirmed_bytes": {
+        "type": "integer"
+      }
+    }
+  }
+}

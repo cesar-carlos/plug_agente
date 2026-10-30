@@ -868,6 +868,35 @@ void main() {
       verify(() => mockRun.validateRemoteRun(any())).called(1);
     });
 
+    test('should validate the explicitly selected remote trigger', () async {
+      const summary = AgentActionValidateRunSummary(
+        actionId: 'action-1',
+        actionType: AgentActionType.executable,
+      );
+      when(() => mockRun.validateRemoteRun(any())).thenAnswer((_) async => const Success(summary));
+      final response = await dispatcher.dispatch(
+        const RpcRequest(
+          jsonrpc: '2.0',
+          method: AgentActionRpcConstants.agentActionValidateRunRpcMethodName,
+          id: 22,
+          params: <String, dynamic>{
+            'action_id': 'action-1',
+            'idempotency_key': 'idem-selected-trigger',
+            'trigger_id': 'trigger-remote-selected',
+          },
+        ),
+        'agent-1',
+      );
+      check(response.error).isNull();
+      verify(
+        () => mockRemoteRun.resolveEnabledRemoteTriggerId(
+          actionId: 'action-1',
+          triggerId: 'trigger-remote-selected',
+        ),
+      ).called(1);
+      verify(() => mockRun.validateRemoteRun(any())).called(1);
+    });
+
     test('should reject agent.action.validateRun when no enabled remote trigger exists', () async {
       when(
         () => mockRemoteRun.resolveEnabledRemoteTriggerId(

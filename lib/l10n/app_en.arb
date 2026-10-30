@@ -1900,7 +1900,7 @@
   "ctButtonSaveTokenChanges": "Save changes",
   "ctDialogEditRuleTitle": "Edit rule",
   "ctDialogSaveRule": "Save rule",
-  "ctEditUpdatesTokenHint": "Edits to name, agent or payload keep the token. The token is rotated only when access rules change.",
+  "ctEditUpdatesTokenHint": "Metadata-only changes keep the token. Changes to access rules, including permissions and restrictions in the payload, rotate the token.",
   "ctEditPolicyChangedHint": "Saving will rotate the token because the access rules changed.",
   "ctEditMetadataOnlyHint": "Access rules unchanged. The current token will be kept.",
   "ctEditNoChangesHint": "No changes to save.",
@@ -2123,8 +2123,12 @@
   "@pagedViewPosition": {
     "description": "Position of the current page in a paged surface.",
     "placeholders": {
-      "current": {"type": "int"},
-      "total": {"type": "int"}
+      "current": {
+        "type": "int"
+      },
+      "total": {
+        "type": "int"
+      }
     }
   },
   "agentActionsEditorNameHint": "E.g. Update inventory",
@@ -2213,5 +2217,50 @@
   "installationPreparationClosing": "Closing safely for installation.",
   "installationPreparationBlocked": "Installation is blocked by active operations.",
   "installationPreparationCancelled": "Installation preparation was cancelled.",
-  "installationPreparationRecovery": "Safe shutdown is unconfirmed. Review recovery with support."
+  "installationPreparationRecovery": "Safe shutdown is unconfirmed. Review recovery with support.",
+  "agentActionsFaithfulIoLabel": "Allow faithful remote input and output",
+  "agentActionsFaithfulIoHelp": "Transfers the original bytes through the process pipes. Changing this option requires local approval again. Runtime availability depends on negotiated agent support.",
+  "agentActionsFaithfulIoUnavailable": "Available for saved executable, script, Java and developer actions without elevation.",
+  "agentActionsIoProcessState": "Process: {state, select, queued{Queued} starting{Starting} running{Running} finished{Finished} other{Unknown}}",
+  "@agentActionsIoProcessState": {
+    "placeholders": {
+      "state": {
+        "type": "String"
+      }
+    }
+  },
+  "agentActionsIoInputState": "Input: {state, select, pending{Pending} open{Open} closing{Closing} closed{Closed} failed{Failed} other{Unknown}}",
+  "@agentActionsIoInputState": {
+    "placeholders": {
+      "state": {
+        "type": "String"
+      }
+    }
+  },
+  "agentActionsIoCaptureState": "Capture: {state, select, capturing{In progress} draining{Draining} complete{Complete} incomplete{Incomplete} expired{Expired} other{Unknown}}",
+  "@agentActionsIoCaptureState": {
+    "placeholders": {
+      "state": {
+        "type": "String"
+      }
+    }
+  },
+  "agentActionsIoOutputExpired": "Stored output has expired. The execution result is retained.",
+  "agentActionsIoPreviewNotice": "UTF-8 preview, up to 64 KiB per page. Invalid or split characters may appear as replacement symbols. Stored bytes are unchanged.",
+  "agentActionsIoNextPage": "Read next output page",
+  "agentActionsIoEmptyPage": "No output in this page.",
+  "agentActionsIoPendingOutput": "No new output yet.",
+  "agentActionsIoSaveFile": "Save file",
+  "agentActionsIoDownloadStream": "Download {stream}",
+  "agentActionsIoDownloadFailed": "The output could not be saved. Check permissions, the destination and available disk space.",
+  "agentActionsIoDownloadComplete": "The complete captured stream was saved.",
+  "agentActionsIoDownloadPartial": "A partial output was saved. This file does not represent a complete capture.",
+  "agentActionsIoDownloadReplaceNotice": "Choose a file name. Saving replaces an existing file with this name. Output may be partial if execution or capture is incomplete.",
+  "@agentActionsIoDownloadStream": {
+    "placeholders": {
+      "stream": {
+        "type": "String"
+      }
+    }
+  }
 }

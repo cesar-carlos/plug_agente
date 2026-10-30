@@ -7,6 +7,27 @@ void main() {
   const mapper = AgentActionDriftMapper();
   final now = DateTime.utc(2026, 6, 11, 12);
 
+  test('persists faithful I/O opt-in without enabling legacy definitions', () {
+    const legacy = AgentActionDefinition(
+      id: 'io-policy',
+      name: 'Saved action',
+      config: CommandLineActionConfig(command: 'echo test'),
+    );
+    expect(
+      mapper.definitionFromData(mapper.definitionToData(legacy, now: now)).policies.remote.allowFaithfulIo,
+      isFalse,
+    );
+    final enabled = legacy.copyWith(
+      policies: legacy.policies.copyWith(
+        remote: const AgentActionRemotePolicy(allowFaithfulIo: true),
+      ),
+    );
+    expect(
+      mapper.definitionFromData(mapper.definitionToData(enabled, now: now)).policies.remote.allowFaithfulIo,
+      isTrue,
+    );
+  });
+
   group('AgentActionDriftMapper', () {
     test('round-trips command-line definition through drift data', () {
       final original = AgentActionDefinition(

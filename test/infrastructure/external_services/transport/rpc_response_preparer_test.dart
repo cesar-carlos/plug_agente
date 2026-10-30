@@ -124,6 +124,43 @@ void main() {
   });
 
   group('RpcResponsePreparer.validateOutgoing', () {
+    test('schema refusal preserves consumer and hub correlation with metadata enabled', () {
+      when(() => featureFlags.enableSocketApiVersionMeta).thenReturn(true);
+      final wire = preparer.prepareForSend(
+        RpcResponse.success(
+          id: 'consumer-id',
+          result: {'invalid': true},
+          meta: const RpcProtocolMeta(requestId: 'hub-id'),
+        ),
+      );
+      final result =
+          preparer.validateOutgoing(wire, methodsById: {'consumer-id': 'sql.describeSchema'}).getOrThrow()
+              as Map<String, dynamic>;
+      expect(result['id'], 'consumer-id');
+      expect((result['meta'] as Map)['request_id'], 'hub-id');
+      expect((result['error'] as Map)['code'], RpcErrorCode.internalError);
+      expect(result.containsKey('result'), isFalse);
+    });
+
+    test('batch schema refusal preserves each correlation without replaying successes', () {
+      when(() => featureFlags.enableSocketApiVersionMeta).thenReturn(true);
+      final wires = [
+        for (final id in ['one', 'two'])
+          preparer.prepareForSend(RpcResponse.success(id: id, result: {'invalid': true})),
+      ];
+      final result =
+          preparer
+                  .validateOutgoing(wires, methodsById: {'one': 'sql.describeSchema', 'two': 'sql.describeSchema'})
+                  .getOrThrow()
+              as List;
+      expect(result.map((dynamic v) => (v as Map)['id']), ['one', 'two']);
+      for (final dynamic item in result) {
+        final value = item as Map;
+        expect((value['meta'] as Map)['request_id'], value['id']);
+        expect(value.containsKey('result'), isFalse);
+      }
+    });
+
     test('returns the original payload when validation passes', () {
       final response = RpcResponse.success(id: 'req-1', result: {'ok': true});
       final wire = preparer.prepareForSend(response);

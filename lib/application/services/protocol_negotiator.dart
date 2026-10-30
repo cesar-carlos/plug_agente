@@ -1,5 +1,7 @@
 import 'package:plug_agente/core/constants/rpc_batch_constants.dart';
 import 'package:plug_agente/core/constants/rpc_batch_negotiation.dart';
+import 'package:plug_agente/domain/actions/action_io.dart';
+import 'package:plug_agente/domain/protocol/action_io_capability.dart';
 import 'package:plug_agente/domain/protocol/protocol_capabilities.dart';
 import 'package:plug_agente/domain/protocol/sql_operation_capability.dart';
 import 'package:plug_agente/domain/protocol/transport_extension_negotiation.dart';
@@ -49,6 +51,25 @@ class ProtocolNegotiator implements IProtocolNegotiator {
       agentCapabilities.extensions,
       serverCapabilities.extensions,
     );
+    final agentActions = agentCapabilities.extensions['agentActions'];
+    final serverActions = serverCapabilities.extensions['agentActions'];
+    if (agentActions is Map &&
+        serverActions is Map &&
+        agentActions['enabled'] == true &&
+        serverActions['enabled'] == true &&
+        agentActions['version'] is int &&
+        serverActions['version'] is int &&
+        agentActions['version'] == 1 &&
+        serverActions['version'] == 1 &&
+        selectedProtocol == 'jsonrpc-v2' &&
+        selectedEncoding == 'json' &&
+        negotiatedExtensions['binaryPayload'] == true &&
+        negotiatedExtensions['transportFrame'] == 'payload-frame/1.0' &&
+        effectiveLimits.maxDecodedPayloadBytes >= ActionIoLimits.jsonBytes &&
+        effectiveLimits.maxCompressedPayloadBytes >= ActionIoLimits.jsonBytes) {
+      final io = ActionIoCapability.negotiate(agentActions['io'], serverActions['io']);
+      if (io != null) negotiatedExtensions['agentActions'] = {'io': io};
+    }
     final compressionThreshold = _negotiateCompressionThreshold(
       agentCapabilities.extensions,
       serverCapabilities.extensions,

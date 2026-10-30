@@ -2,6 +2,8 @@
 // Reason: This value object stores immutable collections and compares policy
 // restrictions by their authorization semantics.
 
+import 'package:plug_agente/domain/entities/agent_action_authorization_scopes.dart';
+
 /// Runtime constraints encoded in a client-token payload.
 ///
 /// They are deliberately separate from the SQL policy flags: a token can have
@@ -66,6 +68,18 @@ class ClientTokenRuntimeRestrictions {
   final Set<String> actionIds;
 
   bool get hasRestrictions => database != null || declaresAgentActionMetadata;
+
+  /// Whether the policy declares an action operation independently of SQL access.
+  /// This is provisioning eligibility, not authorization for a particular execution.
+  bool get hasAgentActionOperationScope => agentActionScopes.any(
+    const {
+      AgentActionAuthorizationScopes.run,
+      AgentActionAuthorizationScopes.validateRun,
+      AgentActionAuthorizationScopes.readExecution,
+      AgentActionAuthorizationScopes.cancel,
+      AgentActionAuthorizationScopes.wildcard,
+    }.contains,
+  );
 
   /// Database matching is case-insensitive, unlike action IDs.
   String? get normalizedDatabase => database?.toLowerCase();

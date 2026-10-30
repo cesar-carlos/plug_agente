@@ -16,6 +16,7 @@ import 'package:plug_agente/domain/repositories/i_metrics_collector.dart';
 import 'package:plug_agente/domain/repositories/i_schema_validation_metrics_collector.dart';
 import 'package:plug_agente/domain/repositories/sql_execution_queue_metrics_collector.dart';
 import 'package:plug_agente/infrastructure/metrics/action_execution_queue_metrics_collector_impl.dart';
+import 'package:plug_agente/infrastructure/metrics/action_io_metrics_collector.dart';
 import 'package:plug_agente/infrastructure/metrics/agent_action_execution_metrics_collector_impl.dart';
 import 'package:plug_agente/infrastructure/metrics/auto_update_metrics_collector_impl.dart';
 import 'package:plug_agente/infrastructure/metrics/metrics_collector_snapshot_builder.dart';
@@ -73,6 +74,7 @@ class MetricsCollectorCore {
   late final SqlExecutionQueueMetricsCollectorImpl sqlQueueMetrics;
   late final ActionExecutionQueueMetricsCollectorImpl actionQueueMetrics;
   late final AgentActionExecutionMetricsCollectorImpl agentActionMetrics;
+  late final ActionIoMetricsCollector actionIoMetrics = ActionIoMetricsCollector(store);
   late final AutoUpdateMetricsCollectorImpl autoUpdateMetrics;
 
   final ListQueue<QueryMetrics> _metrics = ListQueue<QueryMetrics>();

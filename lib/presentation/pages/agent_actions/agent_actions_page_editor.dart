@@ -176,10 +176,14 @@ class _AgentActionEditorState extends State<AgentActionEditor> {
   }
 
   void _onDraftChanged() {
-    if (_draft.applyingLoadedDefinition || _draft.isDraftModifiedSinceLoad) {
+    if (_draft.applyingLoadedDefinition) {
       return;
     }
-    setState(_markDraftModified);
+    final wasApproved = _draft.remoteApprovalGranted;
+    _draft.invalidateEditorRemoteApproval();
+    if (!_draft.isDraftModifiedSinceLoad || wasApproved != _draft.remoteApprovalGranted) {
+      setState(_markDraftModified);
+    }
   }
 
   void _markDraftModified({bool invalidatePreflight = true}) {
@@ -219,6 +223,7 @@ class _AgentActionEditorState extends State<AgentActionEditor> {
     bool invalidatePreflight = true,
   }) {
     setState(() {
+      _draft.invalidateEditorRemoteApproval();
       update();
       _markDraftModified(invalidatePreflight: invalidatePreflight);
     });
@@ -701,6 +706,10 @@ class _AgentActionEditorState extends State<AgentActionEditor> {
       ),
       onRemoteEnabledChanged: (value) => unawaited(_onRemoteEnabledChanged(value)),
       onRemoteAdHocChanged: (value) => unawaited(_onRemoteAdHocChanged(value)),
+      onRemoteFaithfulIoChanged: (value) => _updateDraft(() {
+        _draft.remoteFaithfulIo = value;
+        _draft.remoteApprovalGranted = false;
+      }),
       onNotifyOnSuccessChanged: (value) =>
           _updateDraft(() => _draft.notifyOnSuccess = value, invalidatePreflight: false),
       onNotifyOnFailureChanged: (value) =>

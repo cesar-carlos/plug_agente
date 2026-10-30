@@ -10,6 +10,7 @@ import 'package:plug_agente/core/settings/app_settings_store.dart';
 import 'package:plug_agente/domain/entities/client_token_create_request.dart';
 import 'package:plug_agente/domain/entities/client_token_list_query.dart';
 import 'package:plug_agente/domain/entities/client_token_rule.dart';
+import 'package:plug_agente/domain/entities/client_token_runtime_restrictions.dart';
 import 'package:plug_agente/domain/entities/client_token_summary.dart';
 import 'package:plug_agente/domain/value_objects/client_permission_set.dart';
 import 'package:plug_agente/domain/value_objects/database_resource.dart';
@@ -300,7 +301,8 @@ class ClientTokenSectionController {
       notifyCreateTokenDialogChanged();
       return null;
     }
-    if (!isGlobalScopeMode && builtRules.isEmpty) {
+    final hasActionOperation = ClientTokenRuntimeRestrictions.fromPayload(payloadResult).hasAgentActionOperationScope;
+    if (!isGlobalScopeMode && builtRules.isEmpty && !hasActionOperation) {
       formErrorKey = ClientTokenFormErrorKey.ruleOrGlobalPermissionsRequired;
       notifyCreateTokenDialogChanged();
       return null;

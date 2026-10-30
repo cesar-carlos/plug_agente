@@ -27,7 +27,13 @@
         "request_id": { "type": "string" },
         "agent_id": { "type": "string" },
         "timestamp": { "type": "string", "format": "date-time" },
-        "requestServerTimings": { "type": "boolean" }
+        "requestServerTimings": { "type": "boolean" },
+        "action_io_remaining_ms": { "type": "integer", "minimum": 0, "maximum": 30000 },
+        "action_io_deadline_unix_ms": { "type": "integer", "minimum": 0, "maximum": 8640000000000000 }
+      },
+      "dependentRequired": {
+        "action_io_remaining_ms": ["action_io_deadline_unix_ms"],
+        "action_io_deadline_unix_ms": ["action_io_remaining_ms"]
       },
       "additionalProperties": false
     }

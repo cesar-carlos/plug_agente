@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:plug_agente/application/actions/agent_action_remote_rate_limiter.dart';
 import 'package:plug_agente/application/actions/agent_action_runtime_state_guard.dart';
 import 'package:plug_agente/application/rpc/agent_action_remote_authorization_service.dart';
@@ -26,6 +28,7 @@ import 'package:plug_agente/core/constants/rpc_sql_budget_constants.dart';
 import 'package:plug_agente/core/logging/log_correlation.dart';
 import 'package:plug_agente/core/runtime/agent_runtime_identity.dart';
 import 'package:plug_agente/core/settings/agent_action_retention_settings.dart';
+import 'package:plug_agente/domain/protocol/action_io_rpc_call_context.dart';
 import 'package:plug_agente/domain/protocol/protocol.dart';
 import 'package:plug_agente/domain/repositories/i_active_config_query_cache.dart';
 import 'package:plug_agente/domain/repositories/i_agent_action_remote_audit_store.dart';
@@ -99,13 +102,18 @@ class RpcMethodDispatcher implements IRpcRequestDispatcher {
     Duration batchExecutionStageBudget = _defaultBatchExecutionStageBudget,
     Iterable<RpcMethodHandler>? handlers,
     Iterable<RpcMethodHandler> additionalHandlers = const [],
+    RpcMethodHandler? actionIoValidateHandler,
+    RpcMethodHandler? actionIoRunHandler,
+    RpcMethodHandler Function(RpcMethodHandler legacy)? routeActionIoExecution,
     Future<Map<String, dynamic>> Function()? loadOpenRpcDocument,
     RpcMethodConcurrencyLimiter? methodConcurrencyLimiter,
     SqlStreamingCoordinator? sqlStreamingCoordinator,
     IOdbcConnectionSettings? odbcConnectionSettings,
     ISqlInFlightExecutionAbortPort? inFlightAbortPort,
     DefaultRpcMethodHandlerOperationsFactory? operationsFactory,
-  }) : _defaultLimits = defaultLimits,
+  }) : _actionIoValidateHandler = actionIoValidateHandler,
+       _actionIoRunHandler = actionIoRunHandler,
+       _defaultLimits = defaultLimits,
        _dispatchMetrics = dispatchMetrics,
        _inFlightAbortPort = inFlightAbortPort,
        _methodConcurrencyLimiter = methodConcurrencyLimiter ?? RpcMethodConcurrencyLimiter.fromEnvironment(),
@@ -162,14 +170,24 @@ class RpcMethodDispatcher implements IRpcRequestDispatcher {
       inFlightAbortPort: inFlightAbortPort,
       operationsFactory: operationsFactory,
     );
-    _handlersByMethod = _buildHandlerRegistry(
+    final registry = _buildHandlerRegistry(
       [
         ...(handlers ?? createDefaultRpcMethodHandlers(operations, loadOpenRpcDocument: loadOpenRpcDocument)),
         ...additionalHandlers,
       ],
     );
+    _handlersByMethod = Map.unmodifiable({
+      for (final entry in registry.entries)
+        entry.key:
+            routeActionIoExecution != null &&
+                const {'agent.action.getExecution', 'agent.action.cancel'}.contains(entry.key)
+            ? routeActionIoExecution(entry.value)
+            : entry.value,
+    });
   }
 
+  final RpcMethodHandler? _actionIoValidateHandler;
+  final RpcMethodHandler? _actionIoRunHandler;
   final TransportLimits _defaultLimits;
   final IRpcDispatchMetricsCollector? _dispatchMetrics;
   final RpcMethodConcurrencyLimiter _methodConcurrencyLimiter;
@@ -187,7 +205,12 @@ class RpcMethodDispatcher implements IRpcRequestDispatcher {
     TransportLimits? limits,
     Map<String, dynamic> negotiatedExtensions = const {},
   }) async {
-    final handler = _handlersByMethod[request.method];
+    final hasIo = request.params is Map<String, dynamic> && (request.params as Map<String, dynamic>).containsKey('io');
+    final handler = hasIo && request.method == 'agent.action.run' && _actionIoRunHandler != null
+        ? _actionIoRunHandler
+        : hasIo && request.method == 'agent.action.validateRun' && _actionIoValidateHandler != null
+        ? _actionIoValidateHandler
+        : _handlersByMethod[request.method];
     if (handler == null) {
       return _methodNotFound(request);
     }
@@ -225,6 +248,7 @@ class RpcMethodDispatcher implements IRpcRequestDispatcher {
             streamEmitter: streamEmitter,
             limits: limits ?? _defaultLimits,
             negotiatedExtensions: negotiatedExtensions,
+            actionIo: Zone.current[ActionIoRpcCallContext.zoneKey] as ActionIoRpcCallContext?,
           ),
         ),
       );

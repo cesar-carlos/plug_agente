@@ -8501,7 +8501,7 @@ abstract class AppLocalizations {
   /// No description provided for @ctEditUpdatesTokenHint.
   ///
   /// In en, this message translates to:
-  /// **'Edits to name, agent or payload keep the token. The token is rotated only when access rules change.'**
+  /// **'Metadata-only changes keep the token. Changes to access rules, including permissions and restrictions in the payload, rotate the token.'**
   String get ctEditUpdatesTokenHint;
 
   /// No description provided for @ctEditPolicyChangedHint.
@@ -9787,6 +9787,108 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Safe shutdown is unconfirmed. Review recovery with support.'**
   String get installationPreparationRecovery;
+
+  /// No description provided for @agentActionsFaithfulIoLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Allow faithful remote input and output'**
+  String get agentActionsFaithfulIoLabel;
+
+  /// No description provided for @agentActionsFaithfulIoHelp.
+  ///
+  /// In en, this message translates to:
+  /// **'Transfers the original bytes through the process pipes. Changing this option requires local approval again. Runtime availability depends on negotiated agent support.'**
+  String get agentActionsFaithfulIoHelp;
+
+  /// No description provided for @agentActionsFaithfulIoUnavailable.
+  ///
+  /// In en, this message translates to:
+  /// **'Available for saved executable, script, Java and developer actions without elevation.'**
+  String get agentActionsFaithfulIoUnavailable;
+
+  /// No description provided for @agentActionsIoProcessState.
+  ///
+  /// In en, this message translates to:
+  /// **'Process: {state, select, queued{Queued} starting{Starting} running{Running} finished{Finished} other{Unknown}}'**
+  String agentActionsIoProcessState(String state);
+
+  /// No description provided for @agentActionsIoInputState.
+  ///
+  /// In en, this message translates to:
+  /// **'Input: {state, select, pending{Pending} open{Open} closing{Closing} closed{Closed} failed{Failed} other{Unknown}}'**
+  String agentActionsIoInputState(String state);
+
+  /// No description provided for @agentActionsIoCaptureState.
+  ///
+  /// In en, this message translates to:
+  /// **'Capture: {state, select, capturing{In progress} draining{Draining} complete{Complete} incomplete{Incomplete} expired{Expired} other{Unknown}}'**
+  String agentActionsIoCaptureState(String state);
+
+  /// No description provided for @agentActionsIoOutputExpired.
+  ///
+  /// In en, this message translates to:
+  /// **'Stored output has expired. The execution result is retained.'**
+  String get agentActionsIoOutputExpired;
+
+  /// No description provided for @agentActionsIoPreviewNotice.
+  ///
+  /// In en, this message translates to:
+  /// **'UTF-8 preview, up to 64 KiB per page. Invalid or split characters may appear as replacement symbols. Stored bytes are unchanged.'**
+  String get agentActionsIoPreviewNotice;
+
+  /// No description provided for @agentActionsIoNextPage.
+  ///
+  /// In en, this message translates to:
+  /// **'Read next output page'**
+  String get agentActionsIoNextPage;
+
+  /// No description provided for @agentActionsIoEmptyPage.
+  ///
+  /// In en, this message translates to:
+  /// **'No output in this page.'**
+  String get agentActionsIoEmptyPage;
+
+  /// No description provided for @agentActionsIoPendingOutput.
+  ///
+  /// In en, this message translates to:
+  /// **'No new output yet.'**
+  String get agentActionsIoPendingOutput;
+
+  /// No description provided for @agentActionsIoSaveFile.
+  ///
+  /// In en, this message translates to:
+  /// **'Save file'**
+  String get agentActionsIoSaveFile;
+
+  /// No description provided for @agentActionsIoDownloadStream.
+  ///
+  /// In en, this message translates to:
+  /// **'Download {stream}'**
+  String agentActionsIoDownloadStream(String stream);
+
+  /// No description provided for @agentActionsIoDownloadFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'The output could not be saved. Check permissions, the destination and available disk space.'**
+  String get agentActionsIoDownloadFailed;
+
+  /// No description provided for @agentActionsIoDownloadComplete.
+  ///
+  /// In en, this message translates to:
+  /// **'The complete captured stream was saved.'**
+  String get agentActionsIoDownloadComplete;
+
+  /// No description provided for @agentActionsIoDownloadPartial.
+  ///
+  /// In en, this message translates to:
+  /// **'A partial output was saved. This file does not represent a complete capture.'**
+  String get agentActionsIoDownloadPartial;
+
+  /// No description provided for @agentActionsIoDownloadReplaceNotice.
+  ///
+  /// In en, this message translates to:
+  /// **'Choose a file name. Saving replaces an existing file with this name. Output may be partial if execution or capture is incomplete.'**
+  String get agentActionsIoDownloadReplaceNotice;
 }
 
 class _AppLocalizationsDelegate extends LocalizationsDelegate<AppLocalizations> {

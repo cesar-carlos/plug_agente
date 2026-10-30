@@ -77,6 +77,26 @@ abstract final class RpcWireMap {
     }
     return {
       ...omitNullEntriesDeep(result),
+      // I/O event schemas carry explicit nullable exit/progress observations.
+      if (result['execution_id'] is String &&
+          result['next_sequence'] is int &&
+          result['terminal'] is bool &&
+          result['output_complete'] is bool &&
+          result['events'] is List)
+        'events': result['events'],
+      // An unsuccessful I/O lookup requires an explicit null execution identity.
+      if (result['found'] == false &&
+          result['reason'] == 'not_found_in_retention_window' &&
+          result.containsKey('execution_id') &&
+          result['execution_id'] == null)
+        'execution_id': null,
+      // A null receipt count means unknown delivery, not an omitted property.
+      if (result['execution_id'] is String &&
+          result['message_id'] is String &&
+          result['sequence'] is int &&
+          result.containsKey('confirmed_bytes') &&
+          result['confirmed_bytes'] == null)
+        'confirmed_bytes': null,
       // SQL null is a cell value. Removing it loses a column or shifts array cells.
       if (result['rows'] is List && (result['row_count'] is int || result['columns'] is List)) 'rows': result['rows'],
       if (result['multi_result'] == true)

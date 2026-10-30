@@ -14,11 +14,14 @@ class AgentActionRemotePolicySection extends StatelessWidget {
     required this.remoteAdHocFeatureEnabled,
     required this.remoteEnabled,
     required this.remoteAdHoc,
+    required this.remoteFaithfulIo,
+    required this.faithfulIoEligible,
     required this.remoteApprovalGranted,
     required this.requiresReapproval,
     required this.reapprovalInfoBarKey,
     required this.onRemoteEnabledChanged,
     required this.onRemoteAdHocChanged,
+    required this.onRemoteFaithfulIoChanged,
     super.key,
   });
 
@@ -28,11 +31,14 @@ class AgentActionRemotePolicySection extends StatelessWidget {
   final bool remoteAdHocFeatureEnabled;
   final bool remoteEnabled;
   final bool remoteAdHoc;
+  final bool remoteFaithfulIo;
+  final bool faithfulIoEligible;
   final bool remoteApprovalGranted;
   final bool requiresReapproval;
   final Key reapprovalInfoBarKey;
   final ValueChanged<bool> onRemoteEnabledChanged;
   final ValueChanged<bool> onRemoteAdHocChanged;
+  final ValueChanged<bool> onRemoteFaithfulIoChanged;
 
   @override
   Widget build(BuildContext context) {
@@ -88,12 +94,30 @@ class AgentActionRemotePolicySection extends StatelessWidget {
             ),
           ],
         ),
+        const SizedBox(height: AppSpacing.sm),
+        AppCheckbox(
+          key: const ValueKey('remote-faithful-io'),
+          checked: remoteFaithfulIo,
+          onChanged: !enabled || !remoteEnabled || !faithfulIoEligible
+              ? null
+              : (value) => onRemoteFaithfulIoChanged(value ?? false),
+          content: Text(l10n.agentActionsFaithfulIoLabel),
+        ),
+        const SizedBox(height: AppSpacing.xs),
+        Text(
+          faithfulIoEligible ? l10n.agentActionsFaithfulIoHelp : l10n.agentActionsFaithfulIoUnavailable,
+          style: context.bodyMuted,
+        ),
         if (requiresReapproval) ...[
           const SizedBox(height: AppSpacing.sm),
           InfoBar(
             key: reapprovalInfoBarKey,
             title: Text(l10n.agentActionsFormRemoteReapprovalRequiredTitle),
             content: Text(l10n.agentActionsFormRemoteReapprovalRequiredMessage),
+            action: Button(
+              onPressed: enabled && remoteFeatureEnabled ? () => onRemoteEnabledChanged(true) : null,
+              child: Text(l10n.agentActionsConfirmRemoteReapprovalConfirm),
+            ),
             severity: InfoBarSeverity.warning,
             isLong: true,
           ),

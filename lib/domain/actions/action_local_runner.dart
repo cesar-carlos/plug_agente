@@ -23,6 +23,15 @@ abstract class AgentActionLocalRunner {
   });
 }
 
+/// Separates faithful bytes from legacy text capture and stdin templates.
+abstract class AgentActionIoLocalRunner extends AgentActionLocalRunner {
+  Future<Result<AgentActionProcessResult>> runIo({
+    required String executionId,
+    required AgentActionDefinition definition,
+    required AgentActionExecutionRequest request,
+  });
+}
+
 class AgentActionLocalRunnerRegistry {
   AgentActionLocalRunnerRegistry(Iterable<AgentActionLocalRunner> runners) : _runnersByType = _buildRegistry(runners);
 

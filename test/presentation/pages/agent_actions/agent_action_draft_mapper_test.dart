@@ -1,10 +1,80 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:plug_agente/application/actions/action_io_approval_guard.dart';
+import 'package:plug_agente/application/actions/agent_action_definition_snapshotter.dart';
+import 'package:plug_agente/application/actions/agent_action_remote_approval_reconciler.dart';
 import 'package:plug_agente/domain/actions/actions.dart';
 import 'package:plug_agente/presentation/pages/agent_actions/agent_action_draft.dart';
 import 'package:plug_agente/presentation/pages/agent_actions/agent_action_draft_kind.dart';
 import 'package:plug_agente/presentation/pages/agent_actions/agent_action_draft_mapper.dart';
 
 void main() {
+  test('explicit confirmation renews approval of an already approved action', () async {
+    final draft = AgentActionDraft();
+    addTearDown(draft.dispose);
+    final previous = AgentActionDefinition(
+      id: 'approved',
+      name: 'Approved process',
+      state: AgentActionState.active,
+      config: const ExecutableActionConfig(
+        executablePath: AgentActionPathReference(originalPath: r'C:\fixture.exe'),
+      ),
+      policies: AgentActionDefinitionPolicies(
+        remote: AgentActionRemotePolicy(
+          isEnabled: true,
+          approvedAt: DateTime.utc(2026),
+          approvedBy: 'local',
+        ),
+      ),
+    );
+    const AgentActionDraftMapper().applyDefinition(
+      draft,
+      previous,
+      capabilities: const AgentActionDraftCapabilities(remoteAdHocEnabled: false, elevatedEnabled: false),
+      hooks: AgentActionDraftMapperHooks(clearDeveloperConnections: () {}, markDirty: (_) {}, setDraftKind: (_) {}),
+    );
+    expect(
+      draft
+          .remotePolicy(remoteAdHocFeatureEnabled: false, localApprover: 'local', previousDefinition: previous)
+          .approvedAt,
+      previous.policies.remote.approvedAt,
+    );
+    draft.remoteFaithfulIo = true;
+    draft.remoteApprovalGranted = false;
+    draft.remoteApprovalGranted = true;
+    final renewed = draft.remotePolicy(
+      remoteAdHocFeatureEnabled: false,
+      localApprover: 'local',
+      previousDefinition: previous,
+    );
+    expect(renewed.approvedAt!.isAfter(previous.policies.remote.approvedAt!), isTrue);
+    expect(renewed.allowFaithfulIo, isTrue);
+    const snapshotter = AgentActionDefinitionSnapshotter();
+    final changed = previous.copyWith(policies: previous.policies.copyWith(remote: renewed));
+    final reconciled = await const AgentActionRemoteApprovalReconciler(snapshotter).reconcileAsync(
+      incoming: renewed,
+      previous: previous.policies.remote.copyWith(riskFingerprint: snapshotter.riskFingerprint(previous)),
+      definition: changed,
+    );
+    expect(reconciled.requiresReapproval, isFalse);
+    final saved = changed.copyWith(policies: changed.policies.copyWith(remote: reconciled));
+    expect(
+      (await const ActionIoApprovalGuard().validate(
+        definition: saved,
+        snapshotter: snapshotter,
+        secretFingerprints: () async => {},
+      )).isSuccess(),
+      isTrue,
+    );
+    draft.invalidateEditorRemoteApproval();
+    expect(draft.remoteApprovalGranted, isFalse);
+    expect(
+      draft
+          .remotePolicy(remoteAdHocFeatureEnabled: false, localApprover: 'local', previousDefinition: previous)
+          .approvedAt,
+      isNull,
+    );
+  });
+
   group('AgentActionDraftMapper.clear', () {
     test('resets every controller and flag to the defaults a fresh editor expects', () {
       final draft = AgentActionDraft()
@@ -15,6 +85,7 @@ void main() {
         ..developer.executorPath.text = r'C:\Data7\bin\Executor.exe'
         ..maxAttempts = 5
         ..notifyOnSuccess = true
+        ..remoteFaithfulIo = true
         ..remoteEnabled = true
         ..runElevated = true
         ..editingActionId = 'previous-action'
@@ -51,6 +122,7 @@ void main() {
       expect(draft.notifyOnTimeout, isFalse);
       expect(draft.remoteEnabled, isFalse);
       expect(draft.remoteAdHoc, isFalse);
+      expect(draft.remoteFaithfulIo, isFalse);
       expect(draft.remoteApprovalGranted, isFalse);
       expect(draft.runElevated, isFalse);
       expect(draft.state, AgentActionState.needsValidation);
@@ -85,6 +157,36 @@ void main() {
   });
 
   group('AgentActionDraftMapper.applyDefinition', () {
+    test('restores faithful I/O approval selection from a saved executable', () {
+      final draft = AgentActionDraft();
+      addTearDown(draft.dispose);
+      const definition = AgentActionDefinition(
+        id: 'faithful',
+        name: 'Binary process',
+        config: ExecutableActionConfig(
+          executablePath: AgentActionPathReference(originalPath: r'C:\fixture.exe'),
+        ),
+        policies: AgentActionDefinitionPolicies(
+          remote: AgentActionRemotePolicy(isEnabled: true, allowFaithfulIo: true),
+        ),
+      );
+      const AgentActionDraftMapper().applyDefinition(
+        draft,
+        definition,
+        capabilities: const AgentActionDraftCapabilities(remoteAdHocEnabled: false, elevatedEnabled: false),
+        hooks: AgentActionDraftMapperHooks(
+          clearDeveloperConnections: () {},
+          markDirty: (_) {},
+          setDraftKind: (_) {},
+        ),
+      );
+      expect(draft.remoteFaithfulIo, isTrue);
+      expect(
+        draft.remotePolicy(remoteAdHocFeatureEnabled: false, localApprover: 'local').allowFaithfulIo,
+        isTrue,
+      );
+    });
+
     test('preserves sub-minute runtime and stop time when editing a saved action', () {
       final draft = AgentActionDraft();
       addTearDown(draft.dispose);

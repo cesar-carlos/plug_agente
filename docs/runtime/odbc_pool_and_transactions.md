@@ -73,7 +73,7 @@ take effect without restarting the process.
 ## Native pool
 
 The agent uses the `odbc_fast` native pool (`OdbcNativeConnectionPool`)
-with typed [`PoolOptions`](https://pub.dev/documentation/odbc_fast/latest/odbc_fast/PoolOptions-class.html).
+with typed [`PoolOptions`](https://pub.dev/documentation/odbc_fast/latest/domain_entities_pool_options/PoolOptions-class.html).
 
 ```dart
 PoolOptions get _poolOptions => const PoolOptions(

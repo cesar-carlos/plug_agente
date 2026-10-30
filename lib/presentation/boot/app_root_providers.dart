@@ -1,4 +1,5 @@
 import 'package:plug_agente/application/actions/action_execution_queue.dart';
+import 'package:plug_agente/application/actions/action_io_local_cancellation.dart';
 import 'package:plug_agente/application/actions/agent_action_live_processes.dart';
 import 'package:plug_agente/application/actions/agent_action_runtime_state_guard.dart';
 import 'package:plug_agente/application/actions/agent_action_subsystem_coordinator.dart';
@@ -28,6 +29,7 @@ import 'package:plug_agente/application/use_cases/delete_agent_action_trigger.da
 import 'package:plug_agente/application/use_cases/delete_client_token.dart';
 import 'package:plug_agente/application/use_cases/execute_playground_query.dart';
 import 'package:plug_agente/application/use_cases/execute_streaming_query.dart';
+import 'package:plug_agente/application/use_cases/export_action_io_output.dart';
 import 'package:plug_agente/application/use_cases/export_agent_actions_bundle.dart';
 import 'package:plug_agente/application/use_cases/get_agent_action_execution.dart';
 import 'package:plug_agente/application/use_cases/get_client_token_secret.dart';
@@ -66,6 +68,8 @@ import 'package:plug_agente/core/settings/agent_action_cpu_settings.dart';
 import 'package:plug_agente/core/settings/agent_action_preflight_settings.dart';
 import 'package:plug_agente/core/settings/agent_action_retention_settings.dart';
 import 'package:plug_agente/core/storage/global_storage_path_resolver.dart';
+import 'package:plug_agente/domain/repositories/i_action_io_execution_ownership.dart';
+import 'package:plug_agente/domain/repositories/i_action_io_local_output.dart';
 import 'package:plug_agente/domain/repositories/i_agent_action_secret_store.dart';
 import 'package:plug_agente/domain/repositories/i_com_object_invocation_diagnostics.dart';
 import 'package:plug_agente/domain/repositories/i_sql_investigation_collector.dart';
@@ -230,6 +234,10 @@ List<SingleChildWidget> buildAppRootProviders() {
             cancelExecution: getIt<CancelAgentActionExecution>(),
             getExecution: getIt<GetAgentActionExecution>(),
             sliceCapturedOutput: getIt<SliceAgentActionCapturedOutput>(),
+            ioOutput: getIt<IActionIoLocalOutput>(),
+            ioOwnership: getIt<IActionIoExecutionOwnership>(),
+            exportIoOutput: getIt<ExportActionIoOutput>(),
+            createIoCancellation: getIt.call<ActionIoLocalCancellation>,
             listRecentRemoteAudit: getIt<ListRecentAgentActionRemoteAudit>(),
             exportBundle: getIt<ExportAgentActionsBundle>(),
             importBundle: getIt<ImportAgentActionsBundle>(),

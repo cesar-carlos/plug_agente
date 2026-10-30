@@ -11,10 +11,10 @@ import 'package:windows_action_runtime/src/windows_crt_runtime.dart';
 final class WindowsPipeReader {
   WindowsPipeReader._(this._api, this._descriptor);
 
-  factory WindowsPipeReader.takeOwnership(int address) {
+  factory WindowsPipeReader.takeOwnership(int address, {WindowsPipeReadApi? nativeApi}) {
     if (address <= 0) throw ArgumentError.value(address, 'address', 'Expected an owned pipe handle.');
     try {
-      final api = _CrtPipeApi.instance;
+      final api = nativeApi ?? _CrtPipeApi.instance;
       final descriptor = api.open(address, windowsCrtBinaryMode | windowsCrtNoInheritMode);
       if (descriptor < 0) throw const ProcessException('', [], 'Unable to adopt action output pipe');
       return WindowsPipeReader._(api, descriptor);
@@ -28,7 +28,7 @@ final class WindowsPipeReader {
     }
   }
 
-  final _CrtPipeApi _api;
+  final WindowsPipeReadApi _api;
   final int _descriptor;
   bool _closed = false;
 
@@ -52,19 +52,32 @@ final class WindowsPipeReader {
   }
 }
 
-final class _CrtPipeApi {
+abstract interface class WindowsPipeReadApi {
+  int open(int address, int flags);
+  int read(int descriptor, Pointer<Uint8> buffer, int capacity);
+  int close(int descriptor);
+}
+
+final class _CrtPipeApi implements WindowsPipeReadApi {
   _CrtPipeApi._(DynamicLibrary library)
-    : open = library.lookupFunction<Int32 Function(IntPtr, Int32), int Function(int, int)>('_open_osfhandle'),
-      read = library
+    : _open = library.lookupFunction<Int32 Function(IntPtr, Int32), int Function(int, int)>('_open_osfhandle'),
+      _read = library
           .lookupFunction<Int32 Function(Int32, Pointer<Uint8>, Uint32), int Function(int, Pointer<Uint8>, int)>(
             '_read',
           ),
-      close = library.lookupFunction<Int32 Function(Int32), int Function(int)>('_close');
+      _close = library.lookupFunction<Int32 Function(Int32), int Function(int)>('_close');
 
   static final _CrtPipeApi instance = _CrtPipeApi._(loadWindowsCrtRuntime());
-  final int Function(int, int) open;
-  final int Function(int, Pointer<Uint8>, int) read;
-  final int Function(int) close;
+  final int Function(int, int) _open;
+  final int Function(int, Pointer<Uint8>, int) _read;
+  final int Function(int) _close;
+
+  @override
+  int open(int address, int flags) => _open(address, flags);
+  @override
+  int read(int descriptor, Pointer<Uint8> buffer, int capacity) => _read(descriptor, buffer, capacity);
+  @override
+  int close(int descriptor) => _close(descriptor);
 }
 
 /// Runs [body] and then closes [reader].
@@ -78,13 +91,22 @@ void closePipeReaderAfter(WindowsPipeReader reader, void Function() body) => pre
 void preserveActionError(void Function() body, void Function() release) {
   try {
     body();
-    release();
-  } on Object {
+  } on Object catch (error, stack) {
     try {
       release();
-    } on Object {
-      // Intentionally ignored: closing after a read failure is best-effort.
+    } on Object catch (cleanupFailure) {
+      Error.throwWithStackTrace(WindowsPipeReadCleanupException(error, cleanupFailure), stack);
     }
     rethrow;
   }
+  release();
+}
+
+/// Preserves both failures while keeping arbitrary native diagnostics out of text.
+final class WindowsPipeReadCleanupException extends ProcessException {
+  WindowsPipeReadCleanupException(this.cause, this.cleanupFailure)
+    : super('', const [], 'Action output read failed; pipe cleanup also failed');
+
+  final Object cause;
+  final Object cleanupFailure;
 }

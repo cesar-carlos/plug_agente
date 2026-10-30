@@ -5,6 +5,7 @@ import 'package:plug_agente/infrastructure/metrics/metrics_collector.dart';
 import 'package:plug_agente/infrastructure/metrics/odbc_event_bridge.dart';
 import 'package:plug_agente/infrastructure/metrics/protocol_metrics.dart';
 import 'package:plug_agente/infrastructure/repositories/agent_config_drift_database.dart';
+import 'package:plug_agente/infrastructure/stores/action_io_journal_runtime.dart';
 import 'package:plug_agente/infrastructure/stores/sql_operation_journal_runtime.dart';
 
 final class InfrastructureShutdownPort implements IAppInfrastructureShutdownPort {
@@ -14,6 +15,9 @@ final class InfrastructureShutdownPort implements IAppInfrastructureShutdownPort
 
   @override
   Future<void> closeLocalDatabase() async {
+    if (_getIt.isRegistered<ActionIoJournalRuntime>()) {
+      (await _getIt<ActionIoJournalRuntime>().close()).getOrThrow();
+    }
     if (_getIt.isRegistered<SqlOperationJournalRuntime>()) {
       await _getIt<SqlOperationJournalRuntime>().close();
     }

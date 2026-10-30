@@ -213,6 +213,7 @@ final class RpcRequestSchemaAgentParamsValidator {
     const allowedKeys = {
       'action_id',
       'idempotency_key',
+      'io',
       AgentActionRpcConstants.agentActionRpcParamTriggerId,
       AgentActionRpcConstants.agentActionRpcParamTraceId,
       AgentActionRpcConstants.agentActionRpcParamRequestedBy,

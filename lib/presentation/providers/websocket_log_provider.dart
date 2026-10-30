@@ -144,7 +144,9 @@ class WebSocketLogProvider extends ChangeNotifier {
       _PendingLogEntry(
         direction: direction,
         event: event,
-        data: preview == null ? data : DashboardRpcLogFormatter.dataSnapshot(event, data),
+        data: LogSanitizer.sanitize(
+          preview == null ? data : DashboardRpcLogFormatter.dataSnapshot(event, data),
+        ),
         formattedPreview: preview,
       ),
     );

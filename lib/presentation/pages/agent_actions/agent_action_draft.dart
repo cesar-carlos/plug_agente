@@ -73,7 +73,31 @@ class AgentActionDraft {
   AgentActionConcurrencyBehavior concurrencyBehavior = AgentActionConcurrencyBehavior.enqueue;
   bool remoteEnabled = false;
   bool remoteAdHoc = false;
-  bool remoteApprovalGranted = false;
+  bool remoteFaithfulIo = false;
+  bool _remoteApprovalGranted = false;
+  bool _remoteApprovalConfirmedInEditor = false;
+
+  bool get remoteApprovalGranted => _remoteApprovalGranted;
+
+  set remoteApprovalGranted(bool granted) {
+    if (!granted || !_remoteApprovalGranted) {
+      _remoteApprovalConfirmedInEditor = granted;
+    }
+    _remoteApprovalGranted = granted;
+  }
+
+  /// Loading an existing grant must not approve changes made in this editor.
+  void restoreRemoteApproval(bool granted) {
+    _remoteApprovalGranted = granted;
+    _remoteApprovalConfirmedInEditor = false;
+  }
+
+  void invalidateEditorRemoteApproval() {
+    if (_remoteApprovalConfirmedInEditor) {
+      remoteApprovalGranted = false;
+    }
+  }
+
   bool runElevated = false;
   AgentActionPathChangePolicy pathChangePolicy = AgentActionPathChangePolicy.failIfChanged;
   AgentActionContextInjectionMode contextInjectionMode = AgentActionContextInjectionMode.argument;
@@ -321,8 +345,14 @@ class AgentActionDraft {
     final DateTime? approvedAt;
     if (!remoteApprovalGranted) {
       approvedAt = null;
-    } else if (previous?.approvedAt == null || (previous?.requiresReapproval ?? false)) {
-      approvedAt = DateTime.now().toUtc();
+    } else if (_remoteApprovalConfirmedInEditor ||
+        previous?.approvedAt == null ||
+        (previous?.requiresReapproval ?? false)) {
+      final now = DateTime.now().toUtc();
+      final previousApprovedAt = previous?.approvedAt;
+      approvedAt = previousApprovedAt != null && !now.isAfter(previousApprovedAt)
+          ? previousApprovedAt.add(const Duration(microseconds: 1))
+          : now;
     } else {
       approvedAt = previous!.approvedAt;
     }
@@ -330,6 +360,7 @@ class AgentActionDraft {
     return AgentActionRemotePolicy(
       isEnabled: true,
       allowAdHoc: remoteAdHocFeatureEnabled && remoteAdHoc,
+      allowFaithfulIo: remoteFaithfulIo,
       approvedBy: approvedAt == null ? null : (previous?.approvedBy ?? localApprover),
       approvedAt: approvedAt,
       approvalReason: previous?.approvalReason,

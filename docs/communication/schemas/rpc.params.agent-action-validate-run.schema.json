@@ -3,8 +3,16 @@
   "$id": "https://plugagente.dev/schemas/rpc.params.agent-action-validate-run.v1.json",
   "title": "agent.action.validateRun params",
   "type": "object",
-  "required": ["action_id", "idempotency_key"],
+  "required": [
+    "action_id",
+    "idempotency_key"
+  ],
   "properties": {
+    "trigger_id": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Optional enabled remote trigger, with the same selection rules as agent.action.run."
+    },
     "action_id": {
       "type": "string",
       "minLength": 1,
@@ -39,6 +47,9 @@
       "type": "string",
       "minLength": 1,
       "description": "Alias for client_token"
+    },
+    "io": {
+      "$ref": "https://plugagente.dev/schemas/action-io.configuration.schema.json"
     }
   },
   "additionalProperties": false

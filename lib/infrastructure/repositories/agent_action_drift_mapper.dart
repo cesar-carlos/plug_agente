@@ -282,6 +282,7 @@ class AgentActionDriftMapper {
       'remote': {
         'isEnabled': policies.remote.isEnabled,
         'allowAdHoc': policies.remote.allowAdHoc,
+        if (policies.remote.allowFaithfulIo) 'allowFaithfulIo': true,
         'approvedBy': policies.remote.approvedBy,
         'approvedAt': policies.remote.approvedAt?.toIso8601String(),
         'approvalReason': policies.remote.approvalReason,
@@ -413,6 +414,7 @@ class AgentActionDriftMapper {
         approvedBy: remote['approvedBy'] as String?,
         approvedAt: _parseOptionalDate(remote['approvedAt'] as String?),
         approvalReason: remote['approvalReason'] as String?,
+        allowFaithfulIo: remote['allowFaithfulIo'] as bool? ?? false,
         riskFingerprint: remote['riskFingerprint'] as String?,
         requiresReapproval: remote['requiresReapproval'] as bool? ?? false,
       ),

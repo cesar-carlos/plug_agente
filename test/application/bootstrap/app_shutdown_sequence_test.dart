@@ -4,9 +4,13 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:get_it/get_it.dart';
 import 'package:mocktail/mocktail.dart';
 import 'package:plug_agente/application/actions/action_execution_queue.dart';
+import 'package:plug_agente/application/actions/action_io_session_supervisor.dart';
 import 'package:plug_agente/application/bootstrap/app_shutdown_sequence.dart';
 import 'package:plug_agente/application/gateway/queued_database_gateway.dart';
+import 'package:plug_agente/core/services/i_app_infrastructure_shutdown_port.dart';
 import 'package:plug_agente/core/services/i_tray_service.dart';
+import 'package:plug_agente/domain/actions/action_failure.dart';
+import 'package:plug_agente/domain/repositories/i_action_io_session_control.dart';
 import 'package:plug_agente/domain/repositories/i_connection_pool.dart';
 import 'package:plug_agente/domain/repositories/i_database_gateway.dart';
 import 'package:plug_agente/domain/repositories/i_odbc_streaming_session_cache.dart';
@@ -19,6 +23,10 @@ class _MockStreamingSessionCache extends Mock implements IOdbcStreamingSessionCa
 class _MockQueuedDatabaseGateway extends Mock implements QueuedDatabaseGateway {}
 
 class _MockTrayService extends Mock implements ITrayService {}
+
+class _MockIoSession extends Mock implements IActionIoSessionControl {}
+
+class _MockInfrastructure extends Mock implements IAppInfrastructureShutdownPort {}
 
 void main() {
   late GetIt getIt;
@@ -64,6 +72,68 @@ void main() {
 
   tearDown(() async {
     await getIt.reset();
+  });
+
+  test('awaits native I/O cleanup before advancing infrastructure shutdown', () async {
+    final supervisor = ActionIoSessionSupervisor();
+    final session = _MockIoSession();
+    final cleaned = Completer<Result<Unit>>();
+    when(session.runAndDrain).thenAnswer((_) => cleaned.future);
+    when(session.stopAndDrain).thenAnswer((_) => cleaned.future);
+    getIt.registerSingleton<ActionIoSessionSupervisor>(supervisor);
+    (await supervisor.start('execution', () async => Success(session))).getOrThrow();
+    final shutdown = AppShutdownSequence(getIt).run(
+      runEarlyShutdownCoordinator: () async {},
+      dispatchAppCloseAgentActions: () async {},
+      applyOnAppExitPolicies: () async {},
+      shutdownOdbcWorker: () {},
+      resetShutdownStateForTesting: () {},
+    );
+    await Future<void>.delayed(Duration.zero);
+    expect(supervisor.accepting, isFalse);
+    verify(session.stopAndDrain).called(1);
+    verifyNever(() => connectionPool.closeAll());
+    expect(shutdownEvents, isEmpty);
+    cleaned.complete(const Success(unit));
+    await shutdown;
+    verify(() => connectionPool.closeAll()).called(1);
+  });
+
+  test('uncertain native I/O cleanup prevents journal closure and later shutdown effects', () async {
+    final supervisor = ActionIoSessionSupervisor();
+    final session = _MockIoSession();
+    final infrastructure = _MockInfrastructure();
+    final cleaned = Completer<Result<Unit>>();
+    when(session.runAndDrain).thenAnswer((_) => cleaned.future);
+    when(session.stopAndDrain).thenAnswer((_) => cleaned.future);
+    getIt.registerSingleton<ActionIoSessionSupervisor>(supervisor);
+    getIt.registerSingleton<IAppInfrastructureShutdownPort>(infrastructure);
+    (await supervisor.start('execution', () async => Success(session))).getOrThrow();
+    final shutdown = AppShutdownSequence(getIt).run(
+      runEarlyShutdownCoordinator: () async => shutdownEvents.add('early'),
+      dispatchAppCloseAgentActions: () async => shutdownEvents.add('app_close'),
+      applyOnAppExitPolicies: () async => shutdownEvents.add('exit_policies'),
+      shutdownOdbcWorker: () => shutdownEvents.add('worker'),
+      resetShutdownStateForTesting: () => shutdownEvents.add('reset'),
+    );
+    final failed = expectLater(shutdown, throwsA(isA<ActionRuntimeFailure>()));
+    await Future<void>.delayed(Duration.zero);
+    verifyNever(infrastructure.closeLocalDatabase);
+    cleaned.complete(
+      Failure(
+        ActionRuntimeFailure.withContext(
+          message: 'Native cleanup remains uncertain.',
+          code: 'ACTION_IO_CLEANUP_UNKNOWN',
+        ),
+      ),
+    );
+    await failed;
+    expect(supervisor.accepting, isFalse);
+    expect(supervisor.isSafelyIdle, isFalse);
+    expect(shutdownEvents, isEmpty);
+    verifyNever(infrastructure.closeLocalDatabase);
+    verifyNever(() => connectionPool.closeAll());
+    verifyNever(() => trayService.dispose());
   });
 
   test('drains streaming session cache before closing connection pool', () async {

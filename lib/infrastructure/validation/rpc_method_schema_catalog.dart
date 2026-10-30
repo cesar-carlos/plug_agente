@@ -7,6 +7,11 @@ class RpcMethodSchemaCatalog {
   const RpcMethodSchemaCatalog();
 
   static const Map<String, String> _paramsSchemaByMethod = <String, String>{
+    'agent.action.sendInput': TransportSchemaIds.paramsAgentActionSendInput,
+    'agent.action.closeInput': TransportSchemaIds.paramsAgentActionCloseInput,
+    'agent.action.getInputStatus': TransportSchemaIds.paramsAgentActionGetInputStatus,
+    'agent.action.readIo': TransportSchemaIds.paramsAgentActionReadIo,
+    'agent.action.findExecution': TransportSchemaIds.paramsAgentActionFindExecution,
     'sql.describeSchema': TransportSchemaIds.paramsSourceSchema,
     'sql.describeSource': TransportSchemaIds.paramsSourceDiscovery,
     'sql.operation.execute': TransportSchemaIds.paramsSqlOperationExecute,
@@ -26,6 +31,11 @@ class RpcMethodSchemaCatalog {
   };
 
   static const Map<String, String> _resultSchemaByMethod = <String, String>{
+    'agent.action.sendInput': TransportSchemaIds.resultAgentActionSendInput,
+    'agent.action.closeInput': TransportSchemaIds.resultAgentActionCloseInput,
+    'agent.action.getInputStatus': TransportSchemaIds.resultAgentActionGetInputStatus,
+    'agent.action.readIo': TransportSchemaIds.resultAgentActionReadIo,
+    'agent.action.findExecution': TransportSchemaIds.resultAgentActionFindExecution,
     'sql.describeSchema': TransportSchemaIds.resultSourceSchema,
     'sql.describeSource': TransportSchemaIds.resultSourceDiscovery,
     'sql.operation.execute': TransportSchemaIds.resultSqlOperation,

@@ -7,6 +7,23 @@ canal Hub Socket.IO (handshake assinado, contrato remoto), ver
 
 Index geral: [e2e_setup.md](e2e_setup.md).
 
+## Faithful remote I/O v1
+
+The negotiated, default-off byte bridge has its own
+[runtime reference and acceptance evidence](../communication/action_io.md).
+Use its private hub/desktop controllers for initial and interactive input,
+resumable output, credential rotation/revocation, native interruption and
+recovery. The local operational gate executes the contract/UI manifests;
+successful local tests do not replace those live scenarios.
+
+Faithful sessions use the dedicated encrypted journal for deduplication and
+retention, rather than the legacy RPC cache settings below. Output expires
+after 24 hours following confirmed termination, while deduplication survives
+at least three days; active or unknown sessions do not expire automatically.
+The physical-volume procedure requires a new bounded private VHD and Windows
+administrator privileges. See the acceptance record for the exact command,
+retained evidence and current pending status.
+
 ## Linha de comando (Windows)
 
 `commandLine` so roda por execucao manual na UI local; Hub, scheduler e

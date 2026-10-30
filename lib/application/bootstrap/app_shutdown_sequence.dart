@@ -2,6 +2,7 @@ import 'dart:developer' as developer;
 
 import 'package:get_it/get_it.dart';
 import 'package:plug_agente/application/actions/action_execution_queue.dart';
+import 'package:plug_agente/application/actions/action_io_session_supervisor.dart';
 import 'package:plug_agente/application/actions/agent_action_runtime_state_guard.dart';
 import 'package:plug_agente/application/gateway/queued_database_gateway.dart';
 import 'package:plug_agente/application/services/agent_action_captured_output_periodic_purge.dart';
@@ -33,6 +34,9 @@ final class AppShutdownSequence {
   }) async {
     _stopPeriodicPurges();
     _markAgentActionsDraining();
+    if (_getIt.isRegistered<ActionIoSessionSupervisor>()) {
+      (await _getIt<ActionIoSessionSupervisor>().shutdown()).getOrThrow();
+    }
     await _cancelPendingElevatedExecutions();
     await dispatchAppCloseAgentActions();
     await applyOnAppExitPolicies();

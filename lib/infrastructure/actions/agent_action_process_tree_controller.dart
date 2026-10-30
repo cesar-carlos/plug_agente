@@ -98,6 +98,9 @@ final class WindowsJobObjectProcessTreeController implements AgentActionProcessT
   @override
   Future<Result<void>> terminate(AgentActionProcessTreeLease lease) async {
     if (lease case _WindowsJobObjectLease(:final handle)) {
+      // CloseHandle permits immediate numeric-handle reuse by another job.
+      // Preserve the release outcome without touching a relinquished handle.
+      if (lease.released) return lease.releaseResult!;
       final result = _api.terminate(handle, 1);
       if (!result.value) return Failure(_failure('terminate_job', result.error.toInt()));
     }

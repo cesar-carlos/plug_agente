@@ -9,6 +9,21 @@ import 'package:plug_agente/infrastructure/actions/windows_action_job_api.dart';
 import 'package:win32/win32.dart';
 
 void main() {
+  for (final terminationOk in [true, false]) {
+    test('termination after release preserves result without touching a reusable handle ($terminationOk)', () async {
+      final api = _FakeApi();
+      final controller = WindowsJobObjectProcessTreeController(api: api);
+      final lease = (await controller.attach(_Process())).getOrThrow();
+      api.terminateOk = terminationOk;
+      final released = await controller.release(lease);
+      final calls = List<String>.of(api.calls);
+      // A closed numeric handle may now identify an unrelated Windows job.
+      api.terminateOk = !terminationOk;
+      final terminated = await controller.terminate(lease);
+      expect(api.calls, calls);
+      expect(terminated, same(released));
+    });
+  }
   test('applies CPU cap before assignment and reads job accounting', () async {
     final api = _FakeApi();
     final controller = WindowsJobObjectProcessTreeController(api: api, cpuLimitPercent: 50);

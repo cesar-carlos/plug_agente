@@ -1900,7 +1900,7 @@
   "ctButtonSaveTokenChanges": "Salvar alterações",
   "ctDialogEditRuleTitle": "Editar regra",
   "ctDialogSaveRule": "Salvar regra",
-  "ctEditUpdatesTokenHint": "Edicoes em nome, agente ou payload mantem o token. O token e rotacionado apenas quando as regras de acesso mudam.",
+  "ctEditUpdatesTokenHint": "Alterações apenas nos metadados mantêm o token. Mudanças nas regras de acesso, incluindo permissões e restrições no payload, rotacionam o token.",
   "ctEditPolicyChangedHint": "Salvar ira rotacionar o token porque as regras de acesso mudaram.",
   "ctEditMetadataOnlyHint": "Regras de acesso inalteradas. O token atual sera mantido.",
   "ctEditNoChangesHint": "Nenhuma alteracao para salvar.",
@@ -2123,8 +2123,12 @@
   "@pagedViewPosition": {
     "description": "Posição da página atual em uma superfície paginada.",
     "placeholders": {
-      "current": {"type": "int"},
-      "total": {"type": "int"}
+      "current": {
+        "type": "int"
+      },
+      "total": {
+        "type": "int"
+      }
     }
   },
   "agentActionsEditorNameHint": "Ex.: Atualizar estoque",
@@ -2213,5 +2217,50 @@
   "installationPreparationClosing": "Encerrando com segurança para instalar.",
   "installationPreparationBlocked": "A instalação está bloqueada por operações em andamento.",
   "installationPreparationCancelled": "A preparação da instalação foi cancelada.",
-  "installationPreparationRecovery": "O encerramento seguro não foi confirmado. Revise a recuperação com o suporte."
+  "installationPreparationRecovery": "O encerramento seguro não foi confirmado. Revise a recuperação com o suporte.",
+  "agentActionsFaithfulIoLabel": "Permitir entrada e saída remota fiel",
+  "agentActionsFaithfulIoHelp": "Transfere os bytes originais pelos pipes do processo. Alterar esta opção exige nova aprovação local. A disponibilidade depende do suporte negociado pelo agente.",
+  "agentActionsFaithfulIoUnavailable": "Disponível para ações salvas de executável, script, Java e desenvolvedor, sem elevação.",
+  "agentActionsIoProcessState": "Processo: {state, select, queued{Na fila} starting{Iniciando} running{Em execução} finished{Finalizado} other{Desconhecido}}",
+  "@agentActionsIoProcessState": {
+    "placeholders": {
+      "state": {
+        "type": "String"
+      }
+    }
+  },
+  "agentActionsIoInputState": "Entrada: {state, select, pending{Pendente} open{Aberta} closing{Fechando} closed{Fechada} failed{Falhou} other{Desconhecida}}",
+  "@agentActionsIoInputState": {
+    "placeholders": {
+      "state": {
+        "type": "String"
+      }
+    }
+  },
+  "agentActionsIoCaptureState": "Captura: {state, select, capturing{Em andamento} draining{Drenando} complete{Completa} incomplete{Incompleta} expired{Expirada} other{Desconhecida}}",
+  "@agentActionsIoCaptureState": {
+    "placeholders": {
+      "state": {
+        "type": "String"
+      }
+    }
+  },
+  "agentActionsIoOutputExpired": "A saída armazenada expirou. O resultado da execução foi preservado.",
+  "agentActionsIoPreviewNotice": "Prévia UTF-8, até 64 KiB por página. Caracteres inválidos ou divididos podem aparecer como símbolos de substituição. Os bytes armazenados não são alterados.",
+  "agentActionsIoNextPage": "Ler próxima página de saída",
+  "agentActionsIoEmptyPage": "Nenhuma saída nesta página.",
+  "agentActionsIoPendingOutput": "Ainda não há nova saída.",
+  "agentActionsIoSaveFile": "Salvar arquivo",
+  "agentActionsIoDownloadStream": "Baixar {stream}",
+  "agentActionsIoDownloadFailed": "Não foi possível salvar a saída. Verifique as permissões, o destino e o espaço disponível.",
+  "agentActionsIoDownloadComplete": "O stream capturado completo foi salvo.",
+  "agentActionsIoDownloadPartial": "Uma saída parcial foi salva. Este arquivo não representa uma captura completa.",
+  "agentActionsIoDownloadReplaceNotice": "Escolha um nome de arquivo. Salvar substitui um arquivo existente com esse nome. A saída pode ser parcial se a execução ou captura estiver incompleta.",
+  "@agentActionsIoDownloadStream": {
+    "placeholders": {
+      "stream": {
+        "type": "String"
+      }
+    }
+  }
 }

@@ -1,9 +1,13 @@
 import 'dart:async';
+import 'dart:typed_data';
 
 import 'package:plug_agente/core/config/feature_flags.dart';
 import 'package:plug_agente/core/constants/rpc_inbound_constants.dart';
 import 'package:plug_agente/core/logger/app_logger.dart';
+import 'package:plug_agente/domain/actions/action_io.dart';
 import 'package:plug_agente/domain/errors/failures.dart' as domain;
+import 'package:plug_agente/domain/protocol/action_io_capability.dart';
+import 'package:plug_agente/domain/protocol/action_io_rpc_call_context.dart';
 import 'package:plug_agente/domain/protocol/protocol.dart';
 import 'package:plug_agente/domain/protocol/rpc_wire_ack_id.dart';
 import 'package:plug_agente/domain/protocol/transport_extension_negotiation.dart';
@@ -11,6 +15,7 @@ import 'package:plug_agente/domain/repositories/i_rpc_request_dispatcher.dart';
 import 'package:plug_agente/domain/repositories/i_rpc_stream_emitter.dart';
 import 'package:plug_agente/domain/services/i_agent_health_status_provider.dart';
 import 'package:plug_agente/infrastructure/external_services/rpc_request_guard.dart';
+import 'package:plug_agente/infrastructure/external_services/transport/action_io_read_cancellations.dart';
 import 'package:plug_agente/infrastructure/external_services/transport/agent_latency_trace.dart';
 import 'package:plug_agente/infrastructure/external_services/transport/authorization_decision_logger.dart';
 import 'package:plug_agente/infrastructure/external_services/transport/payload_frame_codec.dart';
@@ -34,6 +39,7 @@ import 'package:plug_agente/infrastructure/metrics/metrics_collector.dart';
 import 'package:plug_agente/infrastructure/validation/json_schema_validator.dart';
 import 'package:plug_agente/infrastructure/validation/rpc_method_schema_catalog.dart';
 import 'package:plug_agente/infrastructure/validation/rpc_request_schema_validator.dart';
+import 'package:uuid/uuid.dart';
 
 /// Handles inbound `rpc:request` events (single and batch) from the hub.
 ///
@@ -174,6 +180,8 @@ class RpcInboundHandler {
   final IRpcStreamEmitter Function() _streamEmitterFactory;
   final bool Function() _hasReceivedCapabilities;
   final bool Function(int expectedGeneration) _isTransportSessionCurrent;
+  final String _ioConnectionId = const Uuid().v4();
+  final _readCancellations = ActionIoReadCancellations();
   final MetricsCollector? _metricsCollector;
   final void Function(bool paused)? _setHubSqlDashboardCapturePaused;
   late final RpcHealthPiggybackSampler? _healthPiggybackSampler;
@@ -209,10 +217,63 @@ class RpcInboundHandler {
 
   /// Processes a single inbound `rpc:request`. Acks are emitted as soon as the
   /// payload is parsed so the hub can release its in-flight slot quickly.
-  Future<void> handleRequest(dynamic data) async {
+  Future<void> handleRequest(dynamic data) =>
+      runZoned(() => _handleRequest(data), zoneValues: {ActionIoRpcCallContext.zoneKey: _ioContext(isBatch: false)});
+
+  /// Hub-only framed control: cancels a read wait, never a process or input.
+  void handleReadCancel(dynamic data) {
+    if (!_hasReceivedCapabilities() ||
+        !_isCurrentTransportSession() ||
+        !ActionIoCapability.negotiated(_protocolProvider().negotiatedExtensions)) {
+      return;
+    }
+    const maxControlBytes = 1024;
+    if (data is! Map<String, dynamic> ||
+        data['originalSize'] is! int ||
+        data['compressedSize'] is! int ||
+        (data['originalSize'] as int) > maxControlBytes ||
+        (data['compressedSize'] as int) > maxControlBytes) {
+      AppLogger.warning('Rejected oversized or malformed rpc:read.cancel control');
+      return;
+    }
+    final Object? bytes = data['payload'];
+    final bounded = switch (bytes) {
+      Uint8List() => bytes.length <= maxControlBytes,
+      ByteBuffer() => bytes.lengthInBytes <= maxControlBytes,
+      String() => bytes.length <= 1368,
+      _ => false,
+    };
+    if (!bounded) {
+      AppLogger.warning('Rejected oversized rpc:read.cancel attachment');
+      return;
+    }
+    final decoded = _frameCodec.decodeIncoming(data, sourceEvent: 'rpc:read.cancel');
+    if (decoded.isError()) {
+      AppLogger.warning('Rejected invalid rpc:read.cancel frame');
+      return;
+    }
+    final dynamic control = decoded.getOrNull();
+    if (control is! Map || control.length != 2 || control['version'] != 1 || control['version'] is! int) {
+      AppLogger.warning('Rejected invalid rpc:read.cancel control');
+      return;
+    }
+    final Object? id = control['request_id'];
+    if (id is! String && id is! int) {
+      AppLogger.warning('Rejected invalid rpc:read.cancel correlation');
+      return;
+    }
+    final result = _readCancellations.cancel(
+      generation: Zone.current[#transportRequestGeneration] as int? ?? 0,
+      requestId: id!,
+    );
+    if (result.isError()) AppLogger.warning('rpc:read.cancel capacity exhausted');
+  }
+
+  Future<void> _handleRequest(dynamic data) async {
     dynamic inboundRequestId;
     Object? inboundRequestMethod;
     RpcOutboundResponseReservation? responseReservation;
+    ActionIoReadLease? readLease;
     var responseReservationTransferred = false;
     try {
       final wirePayload = unwrapRpcInboundWirePayload(data);
@@ -404,13 +465,39 @@ class RpcInboundHandler {
           return;
         }
         latencyTrace?.markDispatchStarted();
-        final response = await _dispatcher.dispatch(
-          request,
-          _agentIdProvider(),
-          clientToken: clientToken,
-          streamEmitter: streamEmitter,
-          limits: protocol.effectiveLimits,
-          negotiatedExtensions: protocol.negotiatedExtensions,
+        var currentIo = Zone.current[ActionIoRpcCallContext.zoneKey] as ActionIoRpcCallContext?;
+        if (request.method == 'agent.action.readIo' &&
+            request.id != null &&
+            ActionIoCapability.negotiated(protocol.negotiatedExtensions)) {
+          final lease = _readCancellations
+              .acquire(
+                generation: Zone.current[#transportRequestGeneration] as int? ?? 0,
+                requestId: request.id as Object,
+              )
+              .getOrThrow();
+          readLease = lease;
+          currentIo = currentIo?.withCancellation(() => lease.isCancelled);
+        }
+        final remainingMs = request.meta?.actionIoRemainingMs;
+        final deadlineUnixMs = request.meta?.actionIoDeadlineUnixMs;
+        final response = await runZoned(
+          () => _dispatcher.dispatch(
+            request,
+            _agentIdProvider(),
+            clientToken: clientToken,
+            streamEmitter: streamEmitter,
+            limits: protocol.effectiveLimits,
+            negotiatedExtensions: protocol.negotiatedExtensions,
+          ),
+          zoneValues: {
+            if (currentIo != null)
+              ActionIoRpcCallContext.zoneKey: remainingMs != null && deadlineUnixMs != null
+                  ? currentIo.withTransportBudget(
+                      remainingMs: remainingMs,
+                      deadlineUnixMs: deadlineUnixMs,
+                    )
+                  : currentIo,
+          },
         );
         latencyTrace?.markDispatchComplete(isSqlMethod: request.method.startsWith('sql.'));
         final tracedResponse = _responsePreparer.attachRequestTrace(request, response);
@@ -481,6 +568,7 @@ class RpcInboundHandler {
       );
       responseReservationTransferred = responseReservation != null;
     } finally {
+      readLease?.release();
       if (!responseReservationTransferred) {
         responseReservation?.release();
       }
@@ -492,9 +580,28 @@ class RpcInboundHandler {
     if (_discardIfSessionStale('rpc_batch_before_validation')) {
       return Future<void>.value();
     }
-    return _batchHandler.handleBatchRequest(
-      data,
-      isSessionCurrent: _isCurrentTransportSession,
+    return runZoned(
+      () => _batchHandler.handleBatchRequest(data, isSessionCurrent: _isCurrentTransportSession),
+      zoneValues: {ActionIoRpcCallContext.zoneKey: _ioContext(isBatch: true)},
+    );
+  }
+
+  ActionIoRpcCallContext _ioContext({required bool isBatch}) {
+    final existing = Zone.current[ActionIoRpcCallContext.zoneKey] as ActionIoRpcCallContext?;
+    final generation = Zone.current[#transportRequestGeneration] as int?;
+    final receivedAt = DateTime.now();
+    final localDeadline = receivedAt.add(ActionIoLimits.requestTimeout);
+    final inheritedDeadline = existing?.deadline;
+    return ActionIoRpcCallContext(
+      connectionId: '$_ioConnectionId:${generation ?? 0}',
+      receivedAt: existing?.receivedAt ?? receivedAt,
+      deadline: inheritedDeadline != null && inheritedDeadline.isBefore(localDeadline)
+          ? inheritedDeadline
+          : localDeadline,
+      isBatch: isBatch,
+      onReadWait: _concurrencySlots.releaseDeferredIfPresent,
+      isCancelled: () =>
+          (existing?.isCancelled() ?? false) || (generation != null && !_isTransportSessionCurrent(generation)),
     );
   }
 
@@ -505,6 +612,7 @@ class RpcInboundHandler {
   /// instance is reusable: a subsequent `rpc:request` rearms the buffer and
   /// timer transparently.
   void resetAckBuffer() {
+    _readCancellations.reset();
     _ackCoalescer.resetAckBuffer();
     _healthPiggybackSampler?.reset();
     _outboundResponseAdmission.reset();

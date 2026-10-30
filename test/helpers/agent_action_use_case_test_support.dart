@@ -346,7 +346,7 @@ class FakeAgentActionRepository implements IAgentActionRepository {
         .toList(growable: false);
 
     return Success(
-      limit == null ? filtered : filtered.take(limit).toList(growable: false),
+      limit == null || limit <= 0 ? filtered : filtered.take(limit).toList(growable: false),
     );
   }
 

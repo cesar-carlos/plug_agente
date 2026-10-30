@@ -27,6 +27,9 @@ abstract class Failure implements Exception {
 
   String get code => _code;
 
+  /// Representation safe for diagnostics; [cause] retains the original object.
+  Object? get diagnosticCause => cause;
+
   bool get isRecoverable => false;
 
   bool get isTransient => false;
@@ -35,8 +38,8 @@ abstract class Failure implements Exception {
   String toString() {
     final buffer = StringBuffer('[$code] $message');
 
-    if (cause != null) {
-      buffer.write('\nCaused by: $cause');
+    if (diagnosticCause != null) {
+      buffer.write('\nCaused by: $diagnosticCause');
     }
 
     if (context.isNotEmpty) {
@@ -65,7 +68,7 @@ abstract class Failure implements Exception {
       sink.logStructured(
         level: 'ERROR',
         message: '[$code] $message',
-        error: cause,
+        error: diagnosticCause,
         stackTrace: stackTrace,
         context: sanitizedContext,
       );
@@ -76,7 +79,7 @@ abstract class Failure implements Exception {
       message,
       name: 'failure',
       level: 1000,
-      error: cause,
+      error: diagnosticCause,
       stackTrace: stackTrace,
       time: timestamp,
     );

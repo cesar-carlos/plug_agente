@@ -12,6 +12,22 @@ void main() {
     const validator = RpcRequestSchemaValidator();
 
     group('validateSingle', () {
+      test('accepts faithful I/O run and validation through transport ingress', () {
+        for (final method in ['agent.action.run', 'agent.action.validateRun']) {
+          final result = validator.validateSingle({
+            'jsonrpc': '2.0',
+            'method': method,
+            'id': 'faithful',
+            'params': {
+              'action_id': 'saved',
+              'idempotency_key': 'key',
+              'io': {'version': 1, 'mode': 'faithful', 'close_input': true, 'initial_input_base64': 'AA=='},
+            },
+          });
+          expect(result.isSuccess(), isTrue, reason: method);
+        }
+      });
+
       test('should succeed for valid request', () {
         final data = <String, dynamic>{
           'jsonrpc': '2.0',

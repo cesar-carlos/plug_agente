@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:drift/drift.dart' show Value;
 import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:plug_agente/application/actions/action_io_authorization.dart';
 import 'package:plug_agente/application/use_cases/count_active_client_tokens.dart';
 import 'package:plug_agente/application/use_cases/create_client_token.dart';
 import 'package:plug_agente/application/use_cases/delete_client_token.dart';
@@ -111,6 +112,132 @@ void main() {
     expect(row.version, created.version);
     expect(row.tokenValue, isNot(created.tokenValue));
     expect((await repository.countActiveTokens()).getOrThrow(), 1);
+  });
+
+  test('faithful permission edits rotate credentials and immediately narrow live authority', () async {
+    ClientTokenCreateRequest policy(List<String> scopes) => ClientTokenCreateRequest(
+      clientId: 'io-client',
+      agentId: 'io-agent',
+      allTables: false,
+      allViews: false,
+      rules: const [],
+      payload: {
+        'agent_action_scopes': scopes,
+        'agent_actions': {
+          'action_ids': ['saved-action'],
+        },
+      },
+    );
+    final originalPolicy = policy([
+      'agent_actions.io',
+      'agent_actions.run',
+      'agent_actions.read_execution',
+    ]);
+    expect((await provider.createToken(originalPolicy, refreshTokens: false)).isSuccess(), isTrue);
+    final original = provider.secretFeedback!;
+    final authorization = ActionIoAuthorization(repository);
+    final principal = (await authorization.authorize(
+      credential: original.tokenValue,
+      agentId: 'io-agent',
+      actionId: 'saved-action',
+      operation: ActionIoOperation.run,
+    )).getOrThrow();
+    expect(principal.clientId, 'io-client');
+    expect(principal.tokenId, original.tokenId);
+
+    expect(
+      (await provider.updateToken(
+        original.tokenId,
+        policy(['agent_actions.io', 'agent_actions.read_execution']),
+        expectedVersion: original.version,
+        refreshTokens: false,
+      )).isSuccess(),
+      isTrue,
+    );
+    final rotated = provider.secretFeedback!;
+    expect(rotated.tokenValue, isNot(original.tokenValue));
+    expect(rotated.tokenId, original.tokenId);
+    expect(
+      (await authorization.authorize(
+        credential: original.tokenValue,
+        agentId: 'io-agent',
+        actionId: 'saved-action',
+        operation: ActionIoOperation.readIo,
+      )).isError(),
+      isTrue,
+    );
+    final reader = (await authorization.authorize(
+      credential: rotated.tokenValue,
+      agentId: 'io-agent',
+      actionId: 'saved-action',
+      ownerClientId: principal.clientId,
+      operation: ActionIoOperation.readIo,
+    )).getOrThrow();
+    expect(reader.clientId, principal.clientId);
+    for (final operation in [ActionIoOperation.run, ActionIoOperation.sendInput, ActionIoOperation.cancel]) {
+      expect(
+        (await authorization.authorize(
+          credential: rotated.tokenValue,
+          agentId: 'io-agent',
+          actionId: 'saved-action',
+          operation: operation,
+        )).isError(),
+        isTrue,
+      );
+    }
+    expect(
+      (await authorization.authorize(
+        credential: rotated.tokenValue,
+        agentId: 'io-agent',
+        actionId: 'other-action',
+        operation: ActionIoOperation.readIo,
+      )).isError(),
+      isTrue,
+    );
+    expect((await provider.revokeToken(rotated.tokenId)).isSuccess(), isTrue);
+    expect(
+      (await authorization.authorize(
+        credential: rotated.tokenValue,
+        agentId: 'io-agent',
+        actionId: 'saved-action',
+        operation: ActionIoOperation.readIo,
+      )).isError(),
+      isTrue,
+    );
+  });
+
+  test('action-only provisioning rejects absent, unknown and transport-only operation grants', () async {
+    final existing = (await repository.createTokenWithIdentity(_request)).getOrThrow();
+    for (final scopes in [
+      <String>[],
+      ['unknown'],
+      ['agent_actions.io'],
+    ]) {
+      final request = ClientTokenCreateRequest(
+        clientId: 'client',
+        agentId: 'agent',
+        allTables: false,
+        allViews: false,
+        rules: const [],
+        payload: {'agent_action_scopes': scopes},
+      );
+      expect(
+        (await CreateClientToken(repository).createWithIdentity(request)).exceptionOrNull(),
+        isA<domain.ValidationFailure>(),
+      );
+      expect(
+        (await UpdateClientToken(repository)(
+          existing.tokenId,
+          request,
+          expectedVersion: existing.version,
+        )).exceptionOrNull(),
+        isA<domain.ValidationFailure>(),
+      );
+    }
+    expect((await repository.countActiveTokens()).getOrThrow(), 1);
+    final row = (await source.findRowById(existing.tokenId))!;
+    expect(row.version, existing.version);
+    expect(row.tokenHash, hashStoredClientToken(existing.tokenValue));
   });
 
   for (final action in ['revoke', 'delete']) {

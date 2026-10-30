@@ -5,6 +5,7 @@ class AgentActionRemotePolicy {
   const AgentActionRemotePolicy({
     this.isEnabled = false,
     this.allowAdHoc = false,
+    this.allowFaithfulIo = false,
     this.approvedBy,
     this.approvedAt,
     this.approvalReason,
@@ -14,6 +15,7 @@ class AgentActionRemotePolicy {
 
   final bool isEnabled;
   final bool allowAdHoc;
+  final bool allowFaithfulIo;
   final String? approvedBy;
   final DateTime? approvedAt;
   final String? approvalReason;
@@ -25,6 +27,7 @@ class AgentActionRemotePolicy {
   AgentActionRemotePolicy copyWith({
     bool? isEnabled,
     bool? allowAdHoc,
+    bool? allowFaithfulIo,
     String? approvedBy,
     DateTime? approvedAt,
     String? approvalReason,
@@ -38,6 +41,7 @@ class AgentActionRemotePolicy {
     return AgentActionRemotePolicy(
       isEnabled: isEnabled ?? this.isEnabled,
       allowAdHoc: allowAdHoc ?? this.allowAdHoc,
+      allowFaithfulIo: allowFaithfulIo ?? this.allowFaithfulIo,
       approvedBy: clearApprovedBy ? null : (approvedBy ?? this.approvedBy),
       approvedAt: clearApprovedAt ? null : (approvedAt ?? this.approvedAt),
       approvalReason: clearApprovalReason ? null : (approvalReason ?? this.approvalReason),
@@ -260,6 +264,7 @@ class AgentActionRetryPolicy {
     bool runElevated = false,
   }) {
     final configured = maxAttempts < 1 ? 1 : maxAttempts;
+    if (request.ioSession != null) return 1;
     if (configured <= 1) {
       return 1;
     }

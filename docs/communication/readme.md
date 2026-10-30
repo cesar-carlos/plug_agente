@@ -17,6 +17,7 @@ SQL Server and SQL Anywhere. Historical Firebird evidence is not current support
 | [openrpc.json](openrpc.json)                                               | Documento OpenRPC publicado pelo `rpc.discover`.                                                                                                         |
 | [source_discovery.md](source_discovery.md) | Physical identity, structural inspection and verified SELECT requirements. |
 | [sql_operations.md](sql_operations.md) | Durable operation journal, transactions, reconciliation and scoped acceptance evidence. |
+| [action_io.md](action_io.md) | Faithful remote process I/O: authorization, byte semantics, journal, limits, recovery and acceptance evidence. |
 | [schemas/](schemas/)                                                       | Schemas JSON dos params e results de cada metodo + envelopes RPC + frames de transporte.                                                                 |
 
 ## Review baseline

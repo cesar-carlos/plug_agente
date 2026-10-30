@@ -1032,6 +1032,7 @@ void main() {
 
         expect(tester.takeException(), isNull);
         expect(find.text(ptL10n.ctDialogEditTokenTitle), findsOneWidget);
+        expect(find.textContaining('incluindo permissões e restrições no payload'), findsOneWidget);
       },
     );
 

@@ -129,7 +129,7 @@ void _registerActionsUseCases(GetIt getIt) {
       () => BackfillAgentActionExecutionCorrelation(getIt<IAgentActionRepository>()),
     )
     ..registerLazySingleton(
-      () => ListAgentActionExecutions(getIt<IAgentActionRepository>()),
+      () => ListAgentActionExecutions(getIt<IAgentActionRepository>(), ioHistory: getIt<IActionIoLocalHistory>()),
     )
     ..registerLazySingleton(
       () => ListRecentAgentActionRemoteAudit(getIt<IAgentActionRemoteAuditStore>()),

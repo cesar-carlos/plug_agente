@@ -12,6 +12,11 @@ class FeatureFlags {
 
   Future<void> setEnableSqlOperations(bool value) => _prefs.setBool('feature_enable_sql_operations', value);
 
+  /// Prepares faithful I/O storage; capability advertisement still requires runtime readiness.
+  bool get enableActionIo => _prefs.getBool('feature_enable_action_io') ?? false;
+
+  Future<void> setEnableActionIo(bool value) => _prefs.setBool('feature_enable_action_io', value);
+
   // Keys
   static const _keyEnableBinaryPayload = 'feature_enable_binary_payload';
   static const _keyEnableCompression = 'feature_enable_compression';

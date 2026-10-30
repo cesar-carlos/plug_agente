@@ -1,9 +1,11 @@
+import 'package:plug_agente/application/actions/action_io_local_cancellation.dart';
 import 'package:plug_agente/application/actions/i_action_command_safety_assessor.dart';
 import 'package:plug_agente/application/ports/i_agent_actions_bundle_file_gateway.dart';
 import 'package:plug_agente/application/use_cases/cancel_agent_action_execution.dart';
 import 'package:plug_agente/application/use_cases/delete_agent_action_definition.dart';
 import 'package:plug_agente/application/use_cases/delete_agent_action_secret.dart';
 import 'package:plug_agente/application/use_cases/delete_agent_action_trigger.dart';
+import 'package:plug_agente/application/use_cases/export_action_io_output.dart';
 import 'package:plug_agente/application/use_cases/export_agent_actions_bundle.dart';
 import 'package:plug_agente/application/use_cases/get_agent_action_execution.dart';
 import 'package:plug_agente/application/use_cases/import_agent_actions_bundle.dart';
@@ -21,6 +23,8 @@ import 'package:plug_agente/application/use_cases/slice_agent_action_captured_ou
 import 'package:plug_agente/application/use_cases/test_agent_action_definition.dart';
 import 'package:plug_agente/core/config/feature_flags.dart';
 import 'package:plug_agente/core/settings/agent_action_retention_settings.dart';
+import 'package:plug_agente/domain/repositories/i_action_io_execution_ownership.dart';
+import 'package:plug_agente/domain/repositories/i_action_io_local_output.dart';
 import 'package:plug_agente/presentation/providers/agent_actions_provider.dart' show AgentActionsProvider;
 import 'package:uuid/uuid.dart';
 
@@ -50,10 +54,18 @@ final class AgentActionsProviderDependencies {
     required this.retentionSettings,
     required this.bundleFileGateway,
     this.saveAgentActionSecret,
+    this.ioOutput,
+    this.exportIoOutput,
+    this.createIoCancellation,
+    this.ioOwnership,
     this.deleteAgentActionSecret,
   });
 
   final ListAgentActionDefinitions listDefinitions;
+  final IActionIoLocalOutput? ioOutput;
+  final IActionIoExecutionOwnership? ioOwnership;
+  final ExportActionIoOutput? exportIoOutput;
+  final ActionIoLocalCancellation Function()? createIoCancellation;
   final ListAgentActionExecutions listExecutions;
   final SaveAgentActionDefinition saveDefinition;
   final DeleteAgentActionDefinition deleteDefinition;

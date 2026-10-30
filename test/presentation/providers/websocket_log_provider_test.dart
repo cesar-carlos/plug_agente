@@ -77,6 +77,38 @@ void main() {
   });
 
   group('WebSocketLogProvider', () {
+    test('snapshots redacted frame and I/O data before a delayed dashboard flush', () {
+      fakeAsync((async) {
+        final transport = _RecordingTransport();
+        final provider = WebSocketLogProvider(transportClient: transport);
+        provider.pauseForHubSqlCapture();
+        final frame = <String, dynamic>{
+          'enc': 'msgpack',
+          'cmp': 'gzip',
+          'requestId': 'original',
+          'payload': <int>[112, 114, 105, 118, 97, 116, 101],
+        };
+        transport.messageCallback?.call('IN', 'rpc:request', frame);
+        transport.messageCallback?.call('OUT', 'rpc:response', {
+          'result': {
+            'events': [
+              {'stream': 'stderr', 'data_base64': 'cHJpdmF0ZQ=='},
+            ],
+          },
+        });
+        frame['requestId'] = 'changed-after-capture';
+        provider.resumeAfterHubSqlCapture();
+        async.elapse(const Duration(milliseconds: 60));
+        final captured = provider.messages.singleWhere((message) => message.direction == 'IN');
+        expect((captured.data as Map)['requestId'], 'original');
+        expect((captured.data as Map)['payload'], '[REDACTED]');
+        final output = provider.messages.singleWhere((message) => message.direction == 'OUT');
+        expect(output.formattedData, contains('[REDACTED]'));
+        expect(output.formattedData, isNot(contains('cHJpdmF0ZQ==')));
+        expect(frame['payload'], <int>[112, 114, 105, 118, 97, 116, 101]);
+        provider.dispose();
+      });
+    });
     test('should forward transport messages when logging is enabled', () async {
       final transport = _RecordingTransport();
       final provider = WebSocketLogProvider(transportClient: transport);

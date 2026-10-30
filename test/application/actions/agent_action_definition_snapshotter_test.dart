@@ -9,6 +9,52 @@ void main() {
   const snapshotter = AgentActionDefinitionSnapshotter();
   const reconciler = AgentActionRemoteApprovalReconciler(snapshotter);
 
+  test('faithful I/O requires renewed approval and binds subsequent edits', () async {
+    final approvedAt = DateTime.utc(2026, 10);
+    final base = AgentActionDefinition(
+      id: 'saved',
+      name: 'Saved',
+      config: const CommandLineActionConfig(command: 'echo original'),
+      policies: AgentActionDefinitionPolicies(
+        remote: AgentActionRemotePolicy(isEnabled: true, approvedAt: approvedAt),
+      ),
+    );
+    final approved = reconciler.reconcile(
+      incoming: base.policies.remote,
+      previous: null,
+      definition: base,
+    );
+    final enabled = base.copyWith(
+      policies: base.policies.copyWith(remote: approved.copyWith(allowFaithfulIo: true)),
+    );
+    final stale = await reconciler.reconcileAsync(
+      incoming: enabled.policies.remote,
+      previous: approved,
+      definition: enabled,
+    );
+    expect(stale.requiresReapproval, isTrue);
+    expect(stale.canRunSavedAction, isFalse);
+    expect(stale.riskFingerprint, approved.riskFingerprint);
+    final renewed = reconciler.reconcile(
+      incoming: stale.copyWith(
+        approvedAt: approvedAt.add(const Duration(days: 1)),
+        requiresReapproval: false,
+      ),
+      previous: stale,
+      definition: enabled,
+    );
+    expect(renewed.canRunSavedAction, isTrue);
+    expect(renewed.riskFingerprint, snapshotter.riskFingerprint(enabled));
+    expect(renewed.riskFingerprint, isNot(approved.riskFingerprint));
+    final edited = enabled.copyWith(config: const CommandLineActionConfig(command: 'echo changed'));
+    final invalidated = reconciler.reconcile(
+      incoming: renewed,
+      previous: renewed,
+      definition: edited,
+    );
+    expect(invalidated.requiresReapproval, isTrue);
+  });
+
   group('AgentActionDefinitionSnapshotter.riskFingerprint', () {
     test('should change fingerprint when command changes', () {
       const base = AgentActionDefinition(
@@ -352,3 +398,4 @@ class _SnapshotterTestSecretStore implements IAgentActionSecretStore {
     _secrets[secretName] = secretValue;
   }
 }
+

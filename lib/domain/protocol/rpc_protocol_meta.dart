@@ -10,6 +10,8 @@ class RpcProtocolMeta {
     this.requestServerTimings,
     this.agentPhases,
     this.healthSnapshot,
+    this.actionIoRemainingMs,
+    this.actionIoDeadlineUnixMs,
   });
 
   factory RpcProtocolMeta.fromJson(Map<String, dynamic> json) {
@@ -23,6 +25,8 @@ class RpcProtocolMeta {
       requestServerTimings: json['requestServerTimings'] as bool?,
       agentPhases: _readPhaseMap(json['agent_phases']),
       healthSnapshot: _readObjectMap(json['health_snapshot']),
+      actionIoRemainingMs: json['action_io_remaining_ms'] as int?,
+      actionIoDeadlineUnixMs: json['action_io_deadline_unix_ms'] as int?,
     );
   }
 
@@ -32,6 +36,8 @@ class RpcProtocolMeta {
   final String? requestId;
   final String? agentId;
   final String? timestamp;
+  final int? actionIoRemainingMs;
+  final int? actionIoDeadlineUnixMs;
 
   /// Hub opt-in for server-side phase diagnostics (request-only).
   final bool? requestServerTimings;

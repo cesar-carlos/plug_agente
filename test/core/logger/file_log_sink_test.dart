@@ -56,6 +56,30 @@ void main() {
       expect(contents, isNot(contains('secret-value')));
     });
 
+    test('omits encoded frame bodies and process bytes from persisted context', () {
+      sink.logStructured(
+        level: 'WARNING',
+        message: 'I/O diagnostic',
+        context: <String, dynamic>{
+          'frame': {
+            'enc': 'msgpack',
+            'cmp': 'gzip',
+            'requestId': 'safe-correlation',
+            'payload': 'opaque-private-body',
+          },
+          'io': {'initial_input_base64': 'cHJpdmF0ZQ=='},
+          'events': [
+            {'stream': 'stdout', 'data_base64': 'cHJpdmF0ZQ=='},
+          ],
+        },
+      );
+      final contents = File(sink.logFilePath).readAsStringSync();
+      expect(contents, contains('safe-correlation'));
+      expect(contents, contains('[REDACTED]'));
+      expect(contents, isNot(contains('opaque-private-body')));
+      expect(contents, isNot(contains('cHJpdmF0ZQ==')));
+    });
+
     test('should rotate files when max size is exceeded', () {
       for (var index = 0; index < 6; index++) {
         sink.logStructured(

@@ -6,7 +6,11 @@ import 'package:plug_agente/application/actions/actions.dart';
 import 'package:plug_agente/core/constants/agent_action_captured_output_constants.dart';
 import 'package:plug_agente/core/theme/theme.dart';
 import 'package:plug_agente/domain/actions/actions.dart';
+import 'package:plug_agente/domain/repositories/i_action_io_local_output.dart';
 import 'package:plug_agente/l10n/app_localizations.dart';
+import 'package:plug_agente/presentation/pages/agent_actions/widgets/agent_action_io_download.dart';
+import 'package:plug_agente/presentation/pages/agent_actions/widgets/agent_action_io_output_preview.dart';
+import 'package:plug_agente/presentation/pages/agent_actions/widgets/agent_action_io_status_panel.dart';
 import 'package:plug_agente/presentation/pages/agent_actions/widgets/agent_action_presenter_labels.dart';
 import 'package:plug_agente/presentation/pages/agent_actions/widgets/agent_actions_page_keys.dart';
 import 'package:plug_agente/presentation/pages/agent_actions/widgets/agent_actions_paged_output.dart';
@@ -39,12 +43,18 @@ class AgentActionExecutionDiagnostics extends StatefulWidget {
     required this.execution,
     required this.l10n,
     required this.onSliceCapturedOutput,
+    this.ioOutput,
+    this.onExportIo,
+    this.canExportIo = false,
     super.key,
   });
 
   static const AgentActionFailureDiagnosticsResolver _diagnosticsResolver = AgentActionFailureDiagnosticsResolver();
 
   final AgentActionExecution execution;
+  final IActionIoLocalOutput? ioOutput;
+  final ActionIoDownload? onExportIo;
+  final bool canExportIo;
   final AppLocalizations l10n;
   final Future<Result<CapturedOutputUtf8Window>> Function({
     required String executionId,
@@ -100,6 +110,15 @@ class AgentActionExecutionDiagnosticsState extends State<AgentActionExecutionDia
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          if (execution.ioStatus case final status?) AgentActionIoStatusPanel(status: status),
+          if (execution.ioStatus != null && widget.ioOutput != null)
+            AgentActionIoOutputPreview(output: widget.ioOutput!, executionId: execution.id),
+          if (execution.ioStatus != null && widget.onExportIo != null)
+            AgentActionIoDownload(
+              key: ValueKey('io-download-${execution.id}'),
+              onExport: widget.onExportIo!,
+              enabled: widget.canExportIo,
+            ),
           Row(
             children: [
               Expanded(

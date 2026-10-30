@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
+import 'package:plug_agente/application/rpc/action_io_execution_router.dart';
 import 'package:plug_agente/application/rpc/client_token_get_policy_rate_limiter.dart';
 import 'package:plug_agente/application/rpc/rpc_method_concurrency_limiter.dart';
 import 'package:plug_agente/application/rpc/rpc_method_dispatcher.dart';
@@ -11,11 +12,15 @@ import 'package:plug_agente/application/services/query_normalizer_service.dart';
 import 'package:plug_agente/application/use_cases/authorize_sql_operation.dart';
 import 'package:plug_agente/application/use_cases/get_client_token_policy.dart';
 import 'package:plug_agente/core/config/feature_flags.dart';
+import 'package:plug_agente/domain/actions/action_failure.dart';
 import 'package:plug_agente/domain/protocol/protocol.dart';
 import 'package:plug_agente/domain/repositories/i_database_gateway.dart';
+import 'package:result_dart/result_dart.dart';
 import 'package:uuid/uuid.dart';
 
 import '../../helpers/rpc_method_dispatcher_test_support.dart';
+
+
 
 class _MockDatabaseGateway extends Mock implements IDatabaseGateway {}
 
@@ -69,6 +74,7 @@ class _BlockingRpcMethodHandler implements RpcMethodHandler {
 
 RpcMethodDispatcher _buildDispatcher({
   Iterable<RpcMethodHandler>? handlers,
+  RpcMethodHandler Function(RpcMethodHandler)? routeActionIoExecution,
   RpcMethodConcurrencyLimiter? methodConcurrencyLimiter,
 }) {
   return RpcMethodDispatcher(
@@ -82,12 +88,36 @@ RpcMethodDispatcher _buildDispatcher({
     getPolicyRateLimiter: _MockClientTokenGetPolicyRateLimiter(),
     featureFlags: _MockFeatureFlags(),
     handlers: handlers,
+    routeActionIoExecution: routeActionIoExecution,
     methodConcurrencyLimiter: methodConcurrencyLimiter,
   );
 }
 
 void main() {
   group('RpcMethodDispatcher handler registry', () {
+    test('routes durable I/O ownership without fallback on lookup failure', () async {
+      var failLookup = false;
+      final dispatcher = _buildDispatcher(
+        handlers: const [_StubRpcMethodHandler('agent.action.getExecution')],
+        routeActionIoExecution: (legacy) => ActionIoExecutionRouter(
+          legacy: legacy,
+          faithful: const _StubRpcMethodHandler('faithful'),
+          ownsExecution: (id) async =>
+              failLookup ? Failure(ActionRuntimeFailure('Journal unavailable')) : Success(id == 'io'),
+        ),
+      );
+      Future<RpcResponse> read(String id) => dispatcher.dispatch(
+        RpcRequest(jsonrpc: '2.0', method: 'agent.action.getExecution', id: 'request', params: {'execution_id': id}),
+        'agent',
+        clientToken: 'token',
+      );
+      expect(((await read('io')).result as Map)['method'], 'faithful');
+      expect(((await read('legacy')).result as Map)['method'], 'agent.action.getExecution');
+      failLookup = true;
+      expect((await read('io')).error, isNotNull);
+      expect((await read('legacy')).error, isNotNull);
+    });
+
     test('dispatches through a registered method handler', () async {
       final dispatcher = _buildDispatcher(
         handlers: const <RpcMethodHandler>[

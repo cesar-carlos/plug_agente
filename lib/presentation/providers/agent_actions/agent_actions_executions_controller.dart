@@ -8,6 +8,7 @@ import 'package:plug_agente/application/use_cases/run_agent_action_locally.dart'
 import 'package:plug_agente/application/use_cases/test_agent_action_definition.dart';
 import 'package:plug_agente/domain/actions/actions.dart';
 import 'package:plug_agente/presentation/providers/agent_actions/agent_actions_history_controller.dart';
+import 'package:result_dart/result_dart.dart';
 
 typedef AgentActionsExecutionsStateChanged = void Function();
 
@@ -20,11 +21,15 @@ class AgentActionsExecutionsController {
     required CancelAgentActionExecution cancelExecution,
     required String Function(Exception failure) messageFor,
     required AgentActionsExecutionsStateChanged onStateChanged,
+    Future<Result<AgentActionExecution>> Function(String)? cancelIoExecution,
+    Future<Result<bool>> Function(String)? ownsIoExecution,
   }) : _listExecutions = listExecutions,
        _runAction = runAction,
        _testDefinition = testDefinition,
        _previewDefinition = previewDefinition,
        _cancelExecution = cancelExecution,
+       _cancelIoExecution = cancelIoExecution,
+       _ownsIoExecution = ownsIoExecution,
        _messageFor = messageFor,
        _onStateChanged = onStateChanged;
 
@@ -33,6 +38,8 @@ class AgentActionsExecutionsController {
   final TestAgentActionDefinition _testDefinition;
   final PreviewAgentActionDefinition _previewDefinition;
   final CancelAgentActionExecution _cancelExecution;
+  final Future<Result<AgentActionExecution>> Function(String)? _cancelIoExecution;
+  final Future<Result<bool>> Function(String)? _ownsIoExecution;
   final String Function(Exception failure) _messageFor;
   final AgentActionsExecutionsStateChanged _onStateChanged;
 
@@ -237,36 +244,45 @@ class AgentActionsExecutionsController {
     return (errorMessage: null, preflightRecorded: true);
   }
 
-  Future<String?> cancelExecutionById(String executionId) async {
-    cancellingExecutionIds.add(executionId);
-    _onStateChanged();
-
-    final result = await _cancelExecution(executionId);
-
-    cancellingExecutionIds.remove(executionId);
-    if (result.isError()) {
-      final message = _messageFor(result.exceptionOrNull()!);
-      _onStateChanged();
-      return message;
-    }
-
-    return null;
+  Future<String?> cancelExecutionById(String executionId) {
+    final known = executions.where((execution) => execution.id == executionId).firstOrNull;
+    return _cancel(executionId, knownIo: known?.ioStatus != null);
   }
 
-  Future<String?> cancelExecution(AgentActionExecution execution) async {
-    cancellingExecutionIds.add(execution.id);
+  Future<String?> cancelExecution(AgentActionExecution execution) =>
+      _cancel(execution.id, knownIo: execution.ioStatus != null);
+
+  Future<String?> _cancel(String executionId, {required bool knownIo}) async {
+    cancellingExecutionIds.add(executionId);
     _onStateChanged();
-
-    final result = await _cancelExecution(execution.id);
-
-    cancellingExecutionIds.remove(execution.id);
-    if (result.isError()) {
-      final message = _messageFor(result.exceptionOrNull()!);
+    try {
+      var io = knownIo;
+      final ownership = _ownsIoExecution;
+      if (!io && ownership != null) io = (await ownership(executionId)).getOrThrow();
+      final ioCancel = _cancelIoExecution;
+      if (io && ioCancel == null) {
+        throw ActionRuntimeFailure.withContext(
+          message: 'I/O cancellation is unavailable.',
+          code: 'ACTION_IO_CANCEL_UNAVAILABLE',
+        );
+      }
+      final result = io ? await ioCancel!(executionId) : await _cancelExecution(executionId);
+      if (result.isError()) return _messageFor(result.exceptionOrNull()!);
+      return null;
+    } on ActionFailure catch (failure) {
+      return _messageFor(failure);
+    } on Object catch (error) {
+      return _messageFor(
+        ActionRuntimeFailure.withContext(
+          message: 'Cancellation could not be confirmed.',
+          code: 'ACTION_CANCEL_FAILED',
+          cause: error,
+        ),
+      );
+    } finally {
+      cancellingExecutionIds.remove(executionId);
       _onStateChanged();
-      return message;
     }
-
-    return null;
   }
 
   void _applyTestFailurePreview(Exception failure) {

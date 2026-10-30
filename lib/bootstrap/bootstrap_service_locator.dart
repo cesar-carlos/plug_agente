@@ -36,6 +36,7 @@ import 'package:plug_agente/infrastructure/repositories/agent_config_drift_datab
 import 'package:plug_agente/infrastructure/security/payload_signing_key_resolver.dart';
 import 'package:plug_agente/infrastructure/settings/odbc_connection_settings.dart';
 import 'package:plug_agente/infrastructure/storage/global_storage_acl_bootstrap.dart';
+import 'package:plug_agente/infrastructure/stores/action_io_journal_runtime.dart';
 import 'package:plug_agente/infrastructure/stores/flutter_secure_payload_signing_key_store.dart';
 import 'package:plug_agente/infrastructure/stores/sql_operation_journal_runtime.dart';
 import 'package:plug_agente/infrastructure/validation/json_schema_validator.dart';
@@ -331,6 +332,7 @@ Future<void> setupDependencies({
     final database = getIt<AppDatabase>();
     await database.customStatement('PRAGMA foreign_keys = ON');
     (await getIt<SqlOperationJournalRuntime>().initialize()).getOrThrow();
+    (await getIt<ActionIoJournalRuntime>().prepare(enabled: getIt<FeatureFlags>().enableActionIo)).getOrThrow();
   } on GlobalStorageAccessException catch (error, stackTrace) {
     developer.log(
       'Unable to initialize global database storage',

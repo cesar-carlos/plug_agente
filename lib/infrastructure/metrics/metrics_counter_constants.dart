@@ -1,5 +1,34 @@
 /// Stable counter keys for metrics export (OpenTelemetry, agent.getHealth).
 abstract final class MetricsCounterNames {
+  static const String actionIoLaunchesOwned = 'action_io_launches_owned';
+  static const String actionIoQueueWaiting = 'action_io_queue_waiting';
+  static const String actionIoSessionsOwned = 'action_io_sessions_owned';
+  static const String actionIoCleanupUnconfirmed = 'action_io_cleanup_unconfirmed';
+  static const String actionIoRemoteCalls = 'action_io_remote_calls_total';
+  static const String actionIoRemoteSuccess = 'action_io_remote_success_total';
+  static const String actionIoRemoteUnauthorized = 'action_io_remote_unauthorized_total';
+  static const String actionIoRemoteLimited = 'action_io_remote_limited_total';
+  static const String actionIoRemoteCancelled = 'action_io_remote_cancelled_total';
+  static const String actionIoRemoteUnknown = 'action_io_remote_unknown_total';
+  static const String actionIoRemoteFailed = 'action_io_remote_failed_total';
+  static const String actionIoReadersActive = 'action_io_readers_active';
+  static const String actionIoReadersPeak = 'action_io_readers_peak';
+  static const String actionIoReadBytes = 'action_io_read_bytes_total';
+  static const String actionIoPersistedOutputBytes = 'action_io_persisted_output_bytes_total';
+  static const String actionIoAdmittedInputBytes = 'action_io_admitted_input_bytes_total';
+  static const String actionIoInterruptedExecutions = 'action_io_interrupted_executions_total';
+  static const String actionIoInputWritten = 'action_io_input_written_total';
+  static const String actionIoInputFailed = 'action_io_input_failed_total';
+  static const String actionIoInputUnknown = 'action_io_input_unknown_total';
+  static const String actionIoInputConfirmedBytes = 'action_io_input_confirmed_bytes_total';
+  static const String actionIoInputUnknownProgress = 'action_io_input_unknown_progress_total';
+  static const String actionIoExecutionSucceeded = 'action_io_execution_succeeded_total';
+  static const String actionIoExecutionFailed = 'action_io_execution_failed_total';
+  static const String actionIoExecutionCancelled = 'action_io_execution_cancelled_total';
+  static const String actionIoExecutionUnknown = 'action_io_execution_unknown_total';
+  static const String actionIoCaptureComplete = 'action_io_capture_complete_total';
+  static const String actionIoCaptureIncomplete = 'action_io_capture_incomplete_total';
+
   static const String timeoutCancelSuccessCounter = 'timeout_cancel_success';
   static const String timeoutCancelFailureCounter = 'timeout_cancel_failure';
   static const String transactionRollbackFailureCounter = 'transaction_rollback_failure';

@@ -55,6 +55,7 @@ class AgentActionDefinitionSnapshotter {
       'remote': <String, Object?>{
         'isEnabled': policies.remote.isEnabled,
         'allowAdHoc': policies.remote.allowAdHoc,
+        if (policies.remote.allowFaithfulIo) 'allowFaithfulIo': true,
       },
       'capture': <String, Object?>{
         'redactBeforePersisting': policies.capture.redactBeforePersisting,
@@ -173,6 +174,7 @@ class AgentActionDefinitionSnapshotter {
       'remote': <String, Object?>{
         'isEnabled': policies.remote.isEnabled,
         'allowAdHoc': policies.remote.allowAdHoc,
+        if (policies.remote.allowFaithfulIo) 'allowFaithfulIo': true,
         'approvedBy': policies.remote.approvedBy,
         'approvedAt': policies.remote.approvedAt?.toUtc().toIso8601String(),
         'approvalReason': policies.remote.approvalReason,

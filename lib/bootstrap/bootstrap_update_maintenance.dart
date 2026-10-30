@@ -3,6 +3,7 @@ import 'dart:developer' as developer;
 
 import 'package:get_it/get_it.dart';
 import 'package:plug_agente/application/actions/action_execution_queue.dart';
+import 'package:plug_agente/application/actions/action_io_session_supervisor.dart';
 import 'package:plug_agente/application/actions/agent_action_trigger_scheduler.dart';
 import 'package:plug_agente/application/actions/elevated_action_execution_abort_registry.dart';
 import 'package:plug_agente/application/bootstrap/app_shutdown_sequence.dart';
@@ -17,6 +18,7 @@ import 'package:plug_agente/domain/repositories/i_connection_pool.dart';
 import 'package:plug_agente/domain/repositories/i_odbc_streaming_session_cache.dart';
 import 'package:plug_agente/infrastructure/external_services/odbc_in_flight_execution_registry.dart';
 import 'package:plug_agente/infrastructure/repositories/agent_config_drift_database.dart';
+import 'package:plug_agente/infrastructure/stores/action_io_journal_runtime.dart';
 import 'package:result_dart/result_dart.dart';
 
 class BootstrapUpdateMaintenance {
@@ -49,6 +51,9 @@ class BootstrapUpdateMaintenance {
     final actions = _services<ActionExecutionQueue>();
     _coordinator ??= UpdateMaintenanceCoordinator(
       freezeAdmission: () {
+        if (_services.isRegistered<ActionIoSessionSupervisor>()) {
+          _services<ActionIoSessionSupervisor>().pauseForMaintenance(_operation!).getOrThrow();
+        }
         admission.transition(_operation!, UpdateMaintenancePhase.draining);
         AppShutdownSequence(_services).stopPeriodicPurgesForMaintenance();
         if (_services.isRegistered<HubConnectionShutdownRegistry>()) {
@@ -59,6 +64,9 @@ class BootstrapUpdateMaintenance {
         actions.pauseAdmissionForMaintenance(_operation!);
       },
       restoreAdmission: () {
+        if (_services.isRegistered<ActionIoSessionSupervisor>()) {
+          _services<ActionIoSessionSupervisor>().resumeAfterMaintenance(_operation!).getOrThrow();
+        }
         if (_services.isRegistered<AgentActionTriggerScheduler>()) {
           _services<AgentActionTriggerScheduler>().resetAppCloseAfterMaintenance();
         }
@@ -86,6 +94,8 @@ class BootstrapUpdateMaintenance {
           sql.queueSize == 0 &&
           actions.runningCount == 0 &&
           actions.queuedCount == 0 &&
+          (!_services.isRegistered<ActionIoSessionSupervisor>() ||
+              _services<ActionIoSessionSupervisor>().isSafelyIdle) &&
           _nativeIdle() &&
           admission.idle &&
           (!_services.isRegistered<HubConnectionShutdownRegistry>() ||
@@ -109,6 +119,14 @@ class BootstrapUpdateMaintenance {
         confirmUpdateExitPoliciesForShutdown();
         _resourcesClosureStarted = true;
         admission.transition(_operation!, UpdateMaintenancePhase.resourcesClosed);
+        if (_services.isRegistered<ActionIoSessionSupervisor>()) {
+          final stopped = await _services<ActionIoSessionSupervisor>().shutdown();
+          if (stopped.isError()) return Failure(stopped.exceptionOrNull()!);
+        }
+        if (_services.isRegistered<ActionIoJournalRuntime>()) {
+          final ioClosed = await _services<ActionIoJournalRuntime>().close();
+          if (ioClosed.isError()) return Failure(ioClosed.exceptionOrNull()!);
+        }
         final drained = await _services<IOdbcStreamingSessionCache>().drainCachedSessions();
         if (drained.isError()) return Failure(drained.exceptionOrNull()!);
         final closed = await _services<IConnectionPool>().closeAll();

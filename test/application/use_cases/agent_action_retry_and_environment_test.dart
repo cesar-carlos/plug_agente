@@ -3,6 +3,7 @@ import 'package:mocktail/mocktail.dart';
 import 'package:plug_agente/application/actions/agent_operational_profile_resolver.dart';
 import 'package:plug_agente/application/use_cases/run_agent_action_locally.dart';
 import 'package:plug_agente/core/constants/agent_action_gate_constants.dart';
+import 'package:plug_agente/domain/actions/action_io_session_reference.dart';
 import 'package:plug_agente/domain/actions/actions.dart';
 import 'package:plug_agente/domain/repositories/i_agent_action_repository.dart';
 import 'package:plug_agente/infrastructure/metrics/metrics_collector.dart';
@@ -22,6 +23,34 @@ class _FixedProfileResolver extends AgentOperationalProfileResolver {
 
 void main() {
   group('AgentActionRetryPolicy', () {
+    test('faithful session survives request copies and never enables automatic retry', () {
+      const session = ActionIoSessionReference(
+        executionId: 'execution',
+        installationId: 'installation',
+        agentId: 'agent',
+        clientId: 'client',
+        actionId: 'a',
+      );
+      const request = AgentActionExecutionRequest(
+        actionId: 'a',
+        source: AgentActionRequestSource.remoteHub,
+        ioSession: session,
+      );
+      final queued = request.copyWith(returnWhenQueued: true, triggerId: 'trigger');
+      expect(queued.ioSession, same(session));
+      expect(queued.runtimeParameters, isEmpty);
+      const policy = AgentActionRetryPolicy(maxAttempts: 3, allowRemote: true);
+      expect(policy.effectiveMaxAttempts(queued), 1);
+      expect(
+        policy.effectiveMaxAttempts(
+          const AgentActionExecutionRequest(
+            actionId: 'a',
+            source: AgentActionRequestSource.remoteHub,
+          ),
+        ),
+        3,
+      );
+    });
     test('should default remote executions to a single attempt when allowRemote is false', () {
       const policy = AgentActionRetryPolicy(maxAttempts: 3);
       const request = AgentActionExecutionRequest(

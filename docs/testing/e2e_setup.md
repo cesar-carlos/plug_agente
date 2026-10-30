@@ -52,6 +52,15 @@ Preflights especificos:
 
 ### Agent-actions operational gate (local / CI)
 
+Faithful remote I/O has a separate
+[acceptance matrix and reproduction procedures](../communication/action_io.md).
+The operational gate below covers its contract and UI manifests; it does not
+replace the private hub/native/desktop scenarios or physical-volume exhaustion.
+For the latter, use `tool/homologation/action_io_full_volume.ps1` from an
+administrative PowerShell. It creates a bounded disposable VHD and retains
+`test.log` plus `result.json` on success after dismounting. Missing privileges,
+skipped live scenarios and static analysis alone are not homologation.
+
 Acoes agendadas (`agent.action.*`) tem gate dedicado sem Hub real:
 
 ```bash

@@ -4548,7 +4548,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get ctEditUpdatesTokenHint =>
-      'Edits to name, agent or payload keep the token. The token is rotated only when access rules change.';
+      'Metadata-only changes keep the token. Changes to access rules, including permissions and restrictions in the payload, rotate the token.';
 
   @override
   String get ctEditPolicyChangedHint => 'Saving will rotate the token because the access rules changed.';
@@ -5251,4 +5251,101 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get installationPreparationRecovery => 'Safe shutdown is unconfirmed. Review recovery with support.';
+
+  @override
+  String get agentActionsFaithfulIoLabel => 'Allow faithful remote input and output';
+
+  @override
+  String get agentActionsFaithfulIoHelp =>
+      'Transfers the original bytes through the process pipes. Changing this option requires local approval again. Runtime availability depends on negotiated agent support.';
+
+  @override
+  String get agentActionsFaithfulIoUnavailable =>
+      'Available for saved executable, script, Java and developer actions without elevation.';
+
+  @override
+  String agentActionsIoProcessState(String state) {
+    String _temp0 = intl.Intl.selectLogic(
+      state,
+      {
+        'queued': 'Queued',
+        'starting': 'Starting',
+        'running': 'Running',
+        'finished': 'Finished',
+        'other': 'Unknown',
+      },
+    );
+    return 'Process: $_temp0';
+  }
+
+  @override
+  String agentActionsIoInputState(String state) {
+    String _temp0 = intl.Intl.selectLogic(
+      state,
+      {
+        'pending': 'Pending',
+        'open': 'Open',
+        'closing': 'Closing',
+        'closed': 'Closed',
+        'failed': 'Failed',
+        'other': 'Unknown',
+      },
+    );
+    return 'Input: $_temp0';
+  }
+
+  @override
+  String agentActionsIoCaptureState(String state) {
+    String _temp0 = intl.Intl.selectLogic(
+      state,
+      {
+        'capturing': 'In progress',
+        'draining': 'Draining',
+        'complete': 'Complete',
+        'incomplete': 'Incomplete',
+        'expired': 'Expired',
+        'other': 'Unknown',
+      },
+    );
+    return 'Capture: $_temp0';
+  }
+
+  @override
+  String get agentActionsIoOutputExpired => 'Stored output has expired. The execution result is retained.';
+
+  @override
+  String get agentActionsIoPreviewNotice =>
+      'UTF-8 preview, up to 64 KiB per page. Invalid or split characters may appear as replacement symbols. Stored bytes are unchanged.';
+
+  @override
+  String get agentActionsIoNextPage => 'Read next output page';
+
+  @override
+  String get agentActionsIoEmptyPage => 'No output in this page.';
+
+  @override
+  String get agentActionsIoPendingOutput => 'No new output yet.';
+
+  @override
+  String get agentActionsIoSaveFile => 'Save file';
+
+  @override
+  String agentActionsIoDownloadStream(String stream) {
+    return 'Download $stream';
+  }
+
+  @override
+  String get agentActionsIoDownloadFailed =>
+      'The output could not be saved. Check permissions, the destination and available disk space.';
+
+  @override
+  String get agentActionsIoDownloadComplete => 'The complete captured stream was saved.';
+
+  @override
+  String get agentActionsIoDownloadPartial =>
+      'A partial output was saved. This file does not represent a complete capture.';
+
+  @override
+  String get agentActionsIoDownloadReplaceNotice =>
+      'Choose a file name. Saving replaces an existing file with this name. Output may be partial if execution or capture is incomplete.';
 }

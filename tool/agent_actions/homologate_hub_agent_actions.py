@@ -40,6 +40,30 @@ SIGNED_CAPABILITIES_FAIL = """Signed capabilities smoke failed. Socket connect s
 """
 
 
+def run_manifest_tests(paths: list[str]) -> int:
+    # Leave room for the resolved Flutter batch path and cmd.exe wrapper below
+    # Windows' 8191-character shell limit. Preserve manifest order and coverage.
+    command_limit = 6000
+    prefix = ["flutter", "test"]
+    if not paths:
+        raise ValueError("Test manifest cannot be empty.")
+    batches: list[list[str]] = []
+    command = prefix.copy()
+    for path in paths:
+        if len(subprocess.list2cmdline([*prefix, path])) > command_limit:
+            raise ValueError("Manifest test path exceeds the command budget.")
+        if len(subprocess.list2cmdline([*command, path])) > command_limit:
+            batches.append(command)
+            command = prefix.copy()
+        command.append(path)
+    batches.append(command)
+    for command in batches:
+        result = run_streaming(command)
+        if result != 0:
+            return result
+    return 0
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(
         description="Pre-flight checks for Hub agent.action.* homologation.",
@@ -128,7 +152,7 @@ def main() -> int:
 
         Console.step("Agent action contract tests (local)")
         contract_paths = read_manifest_test_paths("agent_actions_contract_test_paths.txt")
-        contract_exit = run_streaming(["flutter", "test", *contract_paths])
+        contract_exit = run_manifest_tests(contract_paths)
         if contract_exit != 0:
             Console.fail("Contract tests failed.")
             return contract_exit
@@ -136,7 +160,7 @@ def main() -> int:
 
         Console.step("Agent actions UI regression (local)")
         ui_paths = read_manifest_test_paths("agent_actions_ui_test_paths.txt")
-        ui_exit = run_streaming(["flutter", "test", *ui_paths])
+        ui_exit = run_manifest_tests(ui_paths)
         if ui_exit != 0:
             Console.fail("UI regression tests failed.")
             return ui_exit
@@ -195,7 +219,7 @@ def main() -> int:
     Console.step("Manual checklist")
     Console._emit(Console.GRAY, MANUAL_CHECKLIST)
     if args.run_contract_tests:
-        subprocess.run(
+        run(
             ["dart", "run", "tool/agent_actions/agent_action_security_gate_checklist.dart"],
             cwd=PROJECT_ROOT,
             check=False,

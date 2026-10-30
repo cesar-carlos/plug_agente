@@ -1,0 +1,42 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://plugagente.dev/schemas/rpc.params.agent-action-get-input-status.schema.json",
+  "title": "rpc.params.agent-action-get-input-status.schema.json",
+  "description": "I/O v1 contract. Requires explicit negotiation and faithful authorization. Schema presence does not enable runtime support.",
+  "type": "object",
+  "properties": {
+    "client_token": {
+      "type": "string",
+      "minLength": 1
+    },
+    "clientToken": {
+      "type": "string",
+      "minLength": 1
+    },
+    "auth": {
+      "type": "string",
+      "minLength": 1
+    },
+    "trace_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "requested_by": {
+      "type": "string",
+      "minLength": 1
+    },
+    "execution_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "message_id": {
+      "type": "string",
+      "minLength": 1
+    }
+  },
+  "required": [
+    "execution_id",
+    "message_id"
+  ],
+  "additionalProperties": false
+}

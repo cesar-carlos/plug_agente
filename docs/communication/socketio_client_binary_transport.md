@@ -9,6 +9,47 @@ O documento `docs/communication/socket_communication_standard.md` continua
 descrevendo o estado implementado atual do agente. Este guia descreve o
 comportamento que clientes devem seguir no contrato de transporte em producao.
 
+## Development extension: faithful action I/O
+
+Faithful action I/O requires exact `agentActions.io` v1 negotiation and explicit
+local opt-in, which remains disabled by default. A legacy peer cannot enable it
+through fallback. The method schemas and [implementation acceptance record](action_io.md)
+define the contract and completed development verification; this guide does not authorize
+production activation.
+
+Transport stdin/stdout/stderr as canonical base64 of the original bytes inside
+the existing JSON-RPC PayloadFrame. Do not append line endings, interpret business
+data, or derive bytes from legacy textual output. `accepted` confirms durable
+admission, `written` confirms pipe writing, and neither confirms program
+consumption or business success. ACK receipt is a separate transport event.
+Receipts in `written` state require numeric `confirmed_bytes`, including zero
+for an empty block or close. Unknown progress remains nullable; never convert
+an unknown count into zero or label it as confirmed writing.
+
+Use stable execution idempotency keys and message IDs/sequences. Resolve an
+uncertain result with findExecution/getExecution/getInputStatus and resume readIo
+from the last delivered cursor; never automatically replay an unknown process
+or message. Disconnection does not itself cancel the process. Explicit cancel
+remains an authorized operation. Mutations and waiting reads are excluded from
+batches and generic response caching.
+
+The hub supplies the remaining request budget; the agent bounds it by the
+absolute deadline and local receipt budget. Long reads reserve five seconds for
+reauthorization and response. A request that expires or is abandoned during
+authorization is rechecked before new run/input/cancel effects. Expiration does
+not undo committed bytes or imply that an earlier mutation had no effect.
+Keep the original identities when reconciling a missing response.
+
+The hub overwrites caller-supplied budget metadata with bounded integer
+`action_io_remaining_ms` and `action_io_deadline_unix_ms` values. The agent
+takes the earliest of its existing deadline, receipt time plus that relative
+budget, and the absolute deadline. Frame decoding does not restart the budget.
+Clock offsets can make a request expire early; a hub clock ahead of the agent
+cannot extend the relative receipt budget, but that relative bound alone does
+not measure transit time. The hub still enforces its own elapsed request limit.
+Do not interpret a hub timeout as proof that an earlier mutation was rejected;
+use the stable key and receipt lookup to resolve the actual outcome.
+
 ## Review and method availability — 2026-10-24
 
 Compared with the current `PayloadFrameCodec`, negotiation and response delivery
@@ -541,3 +582,12 @@ nao devem ser usadas para homologacao do contrato Socket.IO.
 Validacao estrutural opcional do envelope:
 
 - `docs/communication/schemas/payload-frame.schema.json`
+
+### Correlacao de falhas na validacao de resposta
+
+Quando a validacao de saida recusa um resultado, a resposta de erro conserva
+o id original e meta.request_id do hub. Em lote, cada resposta conserva sua
+correlacao; nao ha reexecucao de comandos. Sem identificador correlacionavel,
+o transporte falha localmente em vez de emitir um erro orfao com id nulo.
+Esse caminho nao torna valido o resultado recusado nem substitui a investigacao
+da causa original de schema.

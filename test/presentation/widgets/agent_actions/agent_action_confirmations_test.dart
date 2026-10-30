@@ -1,13 +1,16 @@
 import 'package:fluent_ui/fluent_ui.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:plug_agente/l10n/app_localizations.dart';
 import 'package:plug_agente/presentation/widgets/agent_actions/agent_action_confirmations.dart';
+import 'package:plug_agente/shared/widgets/common/actions/app_button.dart';
 
 Future<bool?> _runConfirmAndTap({
   required WidgetTester tester,
   required Future<bool> Function({required BuildContext context, required AppLocalizations l10n}) open,
   required String openLabel,
   required String tapLabel,
+  bool keyboard = false,
 }) async {
   bool? confirmed;
 
@@ -35,16 +38,41 @@ Future<bool?> _runConfirmAndTap({
   );
   await tester.pumpAndSettle();
 
-  await tester.tap(find.text(openLabel));
+  if (keyboard) {
+    await _tabTo(tester, find.widgetWithText(FilledButton, openLabel));
+    await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+  } else {
+    await tester.tap(find.text(openLabel));
+  }
   await tester.pumpAndSettle();
 
-  await tester.tap(find.text(tapLabel));
+  if (keyboard) {
+    expect(confirmed, isNull);
+    await _tabTo(tester, find.widgetWithText(AppButton, tapLabel));
+    await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+  } else {
+    await tester.tap(find.text(tapLabel));
+  }
   await tester.pumpAndSettle();
 
   return confirmed;
 }
 
 void main() {
+  for (final approve in [false, true]) {
+    testWidgets('keyboard ${approve ? 'confirms' : 'cancels'} remote reapproval explicitly', (tester) async {
+      final confirmed = await _runConfirmAndTap(
+        tester: tester,
+        open: confirmReapproveRemoteAgentAction,
+        openLabel: 'Open reapproval confirm',
+        tapLabel: approve ? 'Re-approve' : 'Cancel',
+        keyboard: true,
+      );
+      expect(confirmed, approve);
+      expect(find.text('Re-approve remote execution?'), findsNothing);
+      expect(tester.takeException(), isNull);
+    });
+  }
   testWidgets('confirmEnableElevatedAgentAction returns false when cancelled', (tester) async {
     bool? confirmed;
 
@@ -360,4 +388,24 @@ void main() {
     );
     expect(confirmed, isFalse);
   });
+}
+
+Future<void> _tabTo(WidgetTester tester, Finder target) async {
+  bool hasFocus() {
+    final context = FocusManager.instance.primaryFocus?.context;
+    if (context == null) return false;
+    final element = target.evaluate().single;
+    var found = identical(context, element);
+    context.visitAncestorElements((ancestor) {
+      if (identical(ancestor, element)) found = true;
+      return !found;
+    });
+    return found;
+  }
+
+  for (var attempt = 0; attempt < 20 && !hasFocus(); attempt++) {
+    await tester.sendKeyEvent(LogicalKeyboardKey.tab);
+    await tester.pumpAndSettle();
+  }
+  expect(hasFocus(), isTrue, reason: 'Control must be reachable through keyboard traversal.');
 }

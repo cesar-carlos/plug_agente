@@ -2654,3 +2654,22 @@ Pendencias: [`socket_communication_backlog.md`](socket_communication_backlog.md)
 - Guia de cliente: `docs/communication/socketio_client_binary_transport.md`
 - Evolucao pendente: `docs/communication/socket_communication_backlog.md`
 - Changelog historico: `docs/communication/socket_communication_roadmap.md`
+# Faithful action read cancellation (development I/O v1)
+
+The complete byte-bridge contract and executed development acceptance are
+recorded in [Remote action I/O reference](action_io.md).
+Planned implementation and acceptance are complete; the extension remains
+disabled by default and production activation is not authorized by this record.
+
+With exact `agentActions.io` v1 negotiated, the authenticated hub may send
+`rpc:read.cancel` in a PayloadFrame containing exactly
+`{"version":1,"request_id":<string-or-integer>}`. The ID retains its type and
+matches the agent-side logical RPC body, not a relay route or execution ID.
+The hub emits an uncompressed control of at most 1 KiB through the normal signing
+codec, once, only after dispatch and to the same ready agent socket. It is not a
+consumer-callable RPC, process cancellation, input closure, or acknowledgement.
+Missing delivery leaves the original bounded read deadline in force; there is no
+retry or process replay. The agent handles it outside ordinary dispatch slots,
+requires current negotiation/generation, and cancels only unary read waits.
+Early controls are bounded to 256 active/early entries and 30 seconds of monotonic
+retention; disconnect invalidates held leases. Credential checks remain unchanged.

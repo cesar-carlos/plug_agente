@@ -1,6 +1,7 @@
 import 'package:plug_agente/application/actions/agent_action_execution_gate_chain.dart';
 import 'package:plug_agente/application/actions/agent_action_execution_orchestrator.dart';
 import 'package:plug_agente/application/actions/agent_action_prepared_execution_cache.dart';
+import 'package:plug_agente/domain/actions/action_io_session_reference.dart';
 import 'package:plug_agente/infrastructure/actions/agent_action_prepare_execution_resolver.dart';
 
 import '../../helpers/agent_action_use_case_test_support.dart';
@@ -14,6 +15,36 @@ void main() {
   });
 
   group('AgentActionExecutionOrchestrator', () {
+    test('faithful session cannot fall through legacy replay or text runner', () async {
+      final runner = ControlledAgentActionLocalRunner();
+      final orchestrator = AgentActionExecutionOrchestrator(repository, const Uuid());
+      final result = await orchestrator.run(
+        gatedContext: AgentActionGatedExecutionContext(
+          definition: const AgentActionDefinition(
+            id: 'action',
+            name: 'Action',
+            state: AgentActionState.active,
+            config: ExecutableActionConfig(executablePath: AgentActionPathReference(originalPath: r'C:\fixture.exe')),
+          ),
+          runner: runner,
+        ),
+        request: const AgentActionExecutionRequest(
+          actionId: 'action',
+          source: AgentActionRequestSource.remoteHub,
+          idempotencyKey: 'key',
+          ioSession: ActionIoSessionReference(
+            executionId: 'execution',
+            installationId: 'installation',
+            agentId: 'agent',
+            clientId: 'client',
+            actionId: 'action',
+          ),
+        ),
+      );
+      expect((result.exceptionOrNull()! as ActionFailure).code, 'ACTION_IO_EXECUTOR_UNAVAILABLE');
+      expect(runner.startedCount, 0);
+      expect(repository.savedExecutions, isEmpty);
+    });
     test('should reuse persisted execution by idempotency key without starting runner', () async {
       repository.definitions['action-1'] = const AgentActionDefinition(
         id: 'action-1',

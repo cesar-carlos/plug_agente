@@ -1,3 +1,4 @@
+import 'package:plug_agente/application/actions/action_io_approval_guard.dart';
 import 'package:plug_agente/application/actions/agent_action_command_line_policy_validator.dart';
 import 'package:plug_agente/application/actions/agent_action_dangerous_command_policy_enforcer.dart';
 import 'package:plug_agente/application/actions/agent_action_definition_snapshotter.dart';
@@ -81,6 +82,7 @@ class AgentActionExecutionGateChain {
 
   Future<Result<AgentActionGatedExecutionContext>> evaluate({
     required AgentActionExecutionRequest request,
+    bool faithfulIo = false,
     AgentActionAuthorizationDeniedRecorder? onAuthorizationDenied,
   }) async {
     final requestValidationResult = _runtimeRequestValidator.validate(request);
@@ -123,6 +125,20 @@ class AgentActionExecutionGateChain {
       final failure = commandLinePolicyResult.exceptionOrNull()!;
       _recordAuthorizationDenied(onAuthorizationDenied, failure);
       return Failure(failure);
+    }
+
+    if (faithfulIo || request.ioSession != null) {
+      final fingerprinter = _secretReferenceFingerprinter;
+      final approval = await const ActionIoApprovalGuard().validate(
+        definition: definition,
+        snapshotter: _definitionSnapshotter,
+        secretFingerprints: fingerprinter == null ? null : () => fingerprinter.fingerprintsFor(definition),
+      );
+      if (approval.isError()) {
+        final failure = approval.exceptionOrNull()!;
+        _recordAuthorizationDenied(onAuthorizationDenied, failure);
+        return Failure(failure);
+      }
     }
 
     final remoteRiskResult = await _ensureRemoteRiskFingerprintCurrent(definition: definition);

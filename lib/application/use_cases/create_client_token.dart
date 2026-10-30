@@ -55,7 +55,7 @@ class CreateClientToken {
           ),
         );
       }
-    } else if (request.effectiveRules.isEmpty) {
+    } else if (request.effectiveRules.isEmpty && !request.policy.runtimeRestrictions.hasAgentActionOperationScope) {
       return Failure(
         domain.ValidationFailure(
           'At least one rule is required when global scope is disabled',

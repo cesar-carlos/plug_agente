@@ -32,6 +32,7 @@ class AgentActionEditorPolicyPanel {
     required this.runtimeCallbacks,
     required this.onRemoteEnabledChanged,
     required this.onRemoteAdHocChanged,
+    required this.onRemoteFaithfulIoChanged,
     required this.onNotifyOnSuccessChanged,
     required this.onNotifyOnFailureChanged,
     required this.onNotifyOnTimeoutChanged,
@@ -47,6 +48,7 @@ class AgentActionEditorPolicyPanel {
   final AgentActionRuntimePoliciesCallbacks runtimeCallbacks;
   final ValueChanged<bool> onRemoteEnabledChanged;
   final ValueChanged<bool> onRemoteAdHocChanged;
+  final ValueChanged<bool> onRemoteFaithfulIoChanged;
   final ValueChanged<bool> onNotifyOnSuccessChanged;
   final ValueChanged<bool> onNotifyOnFailureChanged;
   final ValueChanged<bool> onNotifyOnTimeoutChanged;
@@ -105,10 +107,22 @@ class AgentActionEditorPolicyPanel {
               remoteEnabled: draft.remoteEnabled,
               remoteAdHoc: draft.remoteAdHoc,
               remoteApprovalGranted: draft.remoteApprovalGranted,
-              requiresReapproval: definition?.policies.remote.requiresReapproval ?? false,
+              requiresReapproval:
+                  (definition?.policies.remote.requiresReapproval ?? false) ||
+                  (draft.remoteEnabled && !draft.remoteApprovalGranted),
               reapprovalInfoBarKey: AgentActionEditorKeys.remoteReapprovalInfoBar,
               onRemoteEnabledChanged: onRemoteEnabledChanged,
               onRemoteAdHocChanged: onRemoteAdHocChanged,
+              onRemoteFaithfulIoChanged: onRemoteFaithfulIoChanged,
+              remoteFaithfulIo: draft.remoteFaithfulIo,
+              faithfulIoEligible:
+                  !draft.runElevated &&
+                  const {
+                    AgentActionType.executable,
+                    AgentActionType.script,
+                    AgentActionType.jar,
+                    AgentActionType.developer,
+                  }.contains(draft.draftType),
             ),
         ],
       ),

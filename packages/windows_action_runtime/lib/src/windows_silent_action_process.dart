@@ -6,9 +6,10 @@ import 'dart:typed_data';
 
 import 'package:ffi/ffi.dart';
 import 'package:win32/win32.dart';
+import 'package:windows_action_runtime/src/windows_bounded_pipe_output.dart';
 import 'package:windows_action_runtime/src/windows_command_line_quoter.dart';
+import 'package:windows_action_runtime/src/windows_pipe_input_sink.dart';
 import 'package:windows_action_runtime/src/windows_pipe_reader.dart';
-import 'package:windows_action_runtime/src/windows_pipe_writer.dart';
 
 const _inheritedHandleListAttribute = 0x00020002;
 
@@ -30,6 +31,7 @@ final class WindowsSilentActionProcess implements Process {
     int captureStdoutBytes = 0,
     int captureStderrBytes = 0,
     bool requiresStdin = false,
+    bool faithfulOutput = false,
   }) async {
     if (executable.isEmpty || [executable, ...arguments, ?workingDirectory].any((value) => value.contains('\u0000'))) {
       throw ProcessException(executable, const [], 'Invalid process invocation');
@@ -41,8 +43,8 @@ final class WindowsSilentActionProcess implements Process {
         workingDirectory: workingDirectory,
         environment: environment,
         includeParentEnvironment: includeParentEnvironment,
-        captureStdout: captureStdoutBytes > 0,
-        captureStderr: captureStderrBytes > 0,
+        captureStdout: faithfulOutput || captureStdoutBytes > 0,
+        captureStderr: faithfulOutput || captureStderrBytes > 0,
         requiresStdin: requiresStdin,
       ),
     );
@@ -51,10 +53,18 @@ final class WindowsSilentActionProcess implements Process {
       HANDLE(Pointer.fromAddress(spawned.handle)),
       HANDLE(Pointer.fromAddress(spawned.thread)),
     );
-    process._stdout = _output(spawned.stdoutRead, captureStdoutBytes);
-    process._stderr = _output(spawned.stderrRead, captureStderrBytes);
+    if (faithfulOutput) {
+      final output = WindowsBoundedPipeOutput(spawned.stdoutRead);
+      final errors = WindowsBoundedPipeOutput(spawned.stderrRead);
+      process._faithfulOutputs.addAll([output, errors]);
+      process._stdout = output.stream;
+      process._stderr = errors.stream;
+    } else {
+      process._stdout = _output(spawned.stdoutRead, captureStdoutBytes);
+      process._stderr = _output(spawned.stderrRead, captureStderrBytes);
+    }
     if (spawned.stdinWrite != 0) {
-      process._stdinSink = IOSink(_PipeInputSink(spawned.stdinWrite));
+      process._stdinSink = IOSink(WindowsPipeInputSink(spawned.stdinWrite));
     }
     if (!startSuspended) {
       try {
@@ -230,6 +240,12 @@ final class WindowsSilentActionProcess implements Process {
   Stream<List<int>> get stderr => _stderr;
   Stream<List<int>> _stderr = const Stream.empty();
   IOSink? _stdinSink;
+  final List<WindowsBoundedPipeOutput> _faithfulOutputs = [];
+
+  /// Release capture after draining or after terminating the protected tree.
+  Future<void> closeCapturedOutput() async {
+    await Future.wait(_faithfulOutputs.map((output) => output.close()));
+  }
 
   @override
   IOSink get stdin => _stdinSink ??= IOSink(_ClosedInput());
@@ -399,111 +415,4 @@ void _drainOutput(int address, int maxBytes, SendPort destination) {
       }
     });
   });
-}
-
-/// Already released by the write worker after a failure. Do not close again.
-const _stdinReleased = -2;
-
-final class _PipeInputSink implements StreamConsumer<List<int>> {
-  _PipeInputSink(this._address);
-
-  final int _address;
-  int _descriptor = -1;
-  Future<void>? _pending;
-  Future<void>? _closeFuture;
-
-  @override
-  Future<void> addStream(Stream<List<int>> stream) {
-    if (_closeFuture != null) throw StateError('Silent process stdin is closed.');
-    if (_pending != null) throw StateError('Silent process stdin is already writing.');
-    return _pending = _write(stream);
-  }
-
-  Future<void> _write(Stream<List<int>> stream) async {
-    final builder = BytesBuilder(copy: false);
-    await for (final chunk in stream) {
-      if (chunk.isNotEmpty) builder.add(chunk);
-    }
-    final bytes = builder.takeBytes();
-    if (bytes.isEmpty) return;
-    try {
-      _descriptor = await _writeStdinIsolate(_address, _descriptor, bytes);
-    } on Object {
-      // The worker releases the pipe before the write error reaches this isolate.
-      _descriptor = _stdinReleased;
-      rethrow;
-    }
-  }
-
-  @override
-  Future<void> close() => _closeFuture ??= _close();
-
-  Future<void> _close() async {
-    Object? pendingError;
-    StackTrace? pendingStack;
-    try {
-      final pending = _pending;
-      if (pending != null) await pending;
-    } on Object catch (error, stack) {
-      pendingError = error;
-      pendingStack = stack;
-    }
-    if (_descriptor != _stdinReleased) {
-      final descriptor = _descriptor;
-      _descriptor = _stdinReleased;
-      try {
-        await _closeStdinIsolate(_address, descriptor);
-      } on Object {
-        // The write failure is the cause the caller can act on.
-        if (pendingError == null) rethrow;
-      }
-    }
-    if (pendingError != null) {
-      Error.throwWithStackTrace(pendingError, pendingStack!);
-    }
-  }
-}
-
-Future<int> _writeStdinIsolate(int address, int descriptor, Uint8List bytes) =>
-    Isolate.run(() => _openAndWriteStdin(address, descriptor, bytes));
-
-Future<void> _closeStdinIsolate(int address, int descriptor) => Isolate.run(() => _closeStdin(address, descriptor));
-
-int _openAndWriteStdin(int address, int descriptor, Uint8List bytes) {
-  final writer = descriptor >= 0
-      ? WindowsPipeWriter.fromDescriptor(descriptor)
-      : WindowsPipeWriter.takeOwnership(address);
-  try {
-    const chunkSize = 65536;
-    using((arena) {
-      final buffer = arena<Uint8>(chunkSize);
-      var offset = 0;
-      while (offset < bytes.length) {
-        final length = bytes.length - offset < chunkSize ? bytes.length - offset : chunkSize;
-        buffer.asTypedList(length).setRange(0, length, bytes, offset);
-        writer.write(buffer, length);
-        offset += length;
-      }
-    });
-    return writer.descriptor;
-  } on Object {
-    try {
-      writer.close();
-    } on Object {
-      // A close failure must not hide the write error that caused it.
-    }
-    rethrow;
-  }
-}
-
-void _closeStdin(int address, int descriptor) {
-  if (descriptor == _stdinReleased) return;
-  if (descriptor >= 0) {
-    WindowsPipeWriter.fromDescriptor(descriptor).close();
-    return;
-  }
-  final closed = CloseHandle(HANDLE(Pointer.fromAddress(address)));
-  if (!closed.value) {
-    throw ProcessException('', const [], 'Unable to close action input pipe', closed.error.toInt());
-  }
 }

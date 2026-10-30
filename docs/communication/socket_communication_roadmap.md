@@ -13,6 +13,21 @@ itens.
 
 ## Itens concluidos
 
+### Faithful action I/O v1 — development implementation, 2026-10-30
+
+The additive `agentActions.io` v1 contract, dedicated method schemas/OpenRPC,
+strict negotiation and method-specific validation are implemented. Both peers
+execute identical request/result/error/capability fixtures. The saved-action
+runtime connects durable admission, Windows pipes, bounded binary output and
+REST/socket/relay clients; unknown effects are reconciled without replay.
+
+Development implementation and planned acceptance are complete. The final
+agent gate passes 1,373 contract and 264 UI tests; server lint/typecheck and
+2,537 tests pass, with all 208 dedicated I/O tests executed without skips.
+Native hub/desktop, visual and actual isolated-volume exhaustion evidence is
+recorded in the [acceptance record](action_io.md).
+The extension remains disabled by default and production gates remain unchanged.
+
 Contract parity corrections (2026-10-24, profile **2.11.2**):
 
 - `sql.describeSchema` requires explicit integer `offset` and `pageSize` in both

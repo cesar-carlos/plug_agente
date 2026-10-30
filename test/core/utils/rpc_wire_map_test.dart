@@ -3,6 +3,51 @@ import 'package:plug_agente/core/utils/rpc_wire_map.dart';
 import 'package:plug_agente/domain/protocol/protocol.dart';
 
 void main() {
+  test('preserves null exit code in persisted I/O events through every wire sanitation path', () {
+    final result = <String, dynamic>{
+      'execution_id': 'execution',
+      'next_sequence': 2,
+      'terminal': true,
+      'output_complete': true,
+      'events': [
+        {'sequence': 1, 'type': 'process_exited', 'exit_code': null},
+        {'sequence': 2, 'type': 'completed', 'output_complete': true},
+      ],
+    };
+    final response = RpcResponse.success(id: 'page', result: result);
+    expect(RpcWireMap.sanitizeRpcResponse(response).result, result);
+    expect((RpcWireMap.sanitizeRpcResponseWirePayload(response.toJson()) as Map)['result'], result);
+    expect((RpcWireMap.sanitizeRpcResponseWirePayload([response.toJson()]) as List).single, response.toJson());
+  });
+  test('preserves required null execution identity for unsuccessful I/O lookup', () {
+    final result = <String, dynamic>{'found': false, 'execution_id': null, 'reason': 'not_found_in_retention_window'};
+    final response = RpcResponse.success(id: 'lookup', result: result);
+    expect(RpcWireMap.sanitizeRpcResponse(response).result, result);
+    expect((RpcWireMap.sanitizeRpcResponseWirePayload(response.toJson()) as Map)['result'], result);
+    expect((RpcWireMap.sanitizeRpcResponseWirePayload([response.toJson()]) as List).single, response.toJson());
+  });
+  test('preserves unknown confirmed byte count in I/O receipts on the wire', () {
+    final result = <String, dynamic>{
+      'execution_id': 'execution',
+      'message_id': 'input',
+      'sequence': 0,
+      'state': 'unknown',
+      'confirmed_bytes': null,
+      'next_input_sequence': 1,
+      'stdin_state': 'failed',
+    };
+    final wire =
+        RpcWireMap.sanitizeRpcResponseWirePayload(<String, dynamic>{
+              'jsonrpc': '2.0',
+              'id': 'receipt',
+              'result': result,
+            })
+            as Map<String, dynamic>;
+    expect(wire['result'], result);
+    final batch = RpcWireMap.sanitizeRpcResponseWirePayload([wire]) as List<dynamic>;
+    expect((batch.single as Map)['result'], result);
+    expect(RpcWireMap.sanitizeRpcResponse(RpcResponse.success(id: 'receipt', result: result)).result, result);
+  });
   group('RpcWireMap', () {
     test('native SQL envelopes preserve null cells in every result set', () {
       final rows = [

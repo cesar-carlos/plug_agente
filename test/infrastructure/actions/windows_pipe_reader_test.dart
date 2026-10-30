@@ -9,6 +9,40 @@ import 'package:windows_action_runtime/src/windows_pipe_reader.dart';
 
 void main() {
   group('native binary pipe reader', () {
+    test('cleanup failure is not retried after a successful read', () {
+      var releases = 0;
+      final failure = StateError('close failed');
+      expect(
+        () => preserveActionError(() {}, () {
+          releases++;
+          throw failure;
+        }),
+        throwsA(same(failure)),
+      );
+      expect(releases, 1);
+    });
+
+    test('read and cleanup failures retain both causes without exposing their text', () {
+      final primary = StateError('private read diagnostic');
+      final secondary = StateError('private close diagnostic');
+      var releases = 0;
+      Object? caught;
+      try {
+        preserveActionError(() => throw primary, () {
+          releases++;
+          throw secondary;
+        });
+      } on Object catch (error) {
+        caught = error;
+      }
+      expect(caught, isA<ProcessException>());
+      final combined = caught! as WindowsPipeReadCleanupException;
+      expect(combined.cause, same(primary));
+      expect(combined.cleanupFailure, same(secondary));
+      expect('$caught', isNot(contains('private')));
+      expect(releases, 1);
+    });
+
     test('closed writers remain EOF under concurrent garbage collection pressure', () async {
       final completed = await Future.wait([
         for (var worker = 0; worker < 4; worker++) Isolate.run(_readClosedPipesUnderGc),
@@ -75,7 +109,11 @@ void main() {
           () => throw const ProcessException('', [], 'Unable to close action output pipe descriptor', -1),
         ),
         throwsA(
-          isA<ProcessException>().having((error) => error.message, 'message', contains('CRT _read failed')),
+          isA<WindowsPipeReadCleanupException>().having(
+            (error) => error.cause,
+            'primary read failure',
+            isA<ProcessException>().having((error) => error.message, 'message', contains('CRT _read failed')),
+          ),
         ),
       );
     });

@@ -5,6 +5,15 @@ import 'package:plug_agente/core/settings/app_settings_store.dart';
 
 void main() {
   group('FeatureFlags', () {
+    test('faithful I/O is disabled by default and opt-in persists explicitly', () async {
+      final store = InMemoryAppSettingsStore();
+      final flags = FeatureFlags(store);
+      expect(flags.enableActionIo, isFalse);
+      await flags.setEnableActionIo(true);
+      expect(FeatureFlags(store).enableActionIo, isTrue);
+      await flags.setEnableActionIo(false);
+      expect(FeatureFlags(store).enableActionIo, isFalse);
+    });
     test('keeps binary payload enabled even with legacy disabled preference', () async {
       final store = InMemoryAppSettingsStore({
         'feature_enable_binary_payload': false,

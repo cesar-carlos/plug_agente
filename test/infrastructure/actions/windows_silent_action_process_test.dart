@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
@@ -153,6 +154,70 @@ if ($value -ceq $env:PLUG_TEST_VALUE) { exit 7 } else { exit 9 }
     expect(await process.exitCode.timeout(const Duration(seconds: 15)), 3);
   }, skip: !Platform.isWindows);
 
+  test('delivers interactive binary blocks before the input stream closes', () async {
+    const echo =
+        r'$i=[Console]::OpenStandardInput(); $o=[Console]::OpenStandardOutput(); '
+        r'while (($b=$i.ReadByte()) -ge 0) { $o.WriteByte([byte]$b); $o.Flush() }';
+    final process = await WindowsSilentActionProcess.start(
+      powershell,
+      [
+        '-NoProfile',
+        '-NonInteractive',
+        '-Command',
+        echo,
+      ],
+      captureStdoutBytes: 1024,
+      requiresStdin: true,
+    );
+    final source = StreamController<List<int>>();
+    final received = <int>[];
+    final echoed = Completer<void>();
+    final subscription = process.stdout.listen((bytes) {
+      received.addAll(bytes);
+      if (received.length >= 6 && !echoed.isCompleted) echoed.complete();
+    });
+    final sending = process.stdin.addStream(source.stream);
+    // Observe failure immediately; teardown still waits for ownership release.
+    unawaited(sending.catchError((Object _) {}));
+    try {
+      source.add([0, 13, 10]);
+      source.add([]);
+      source.add([26, 255, 128]);
+      await echoed.future.timeout(const Duration(seconds: 5));
+      expect(received, [0, 13, 10, 26, 255, 128]);
+      await source.close();
+      await sending;
+      process.stdin.add([42]);
+      await process.stdin.flush();
+      await process.stdin.close();
+      expect(await process.exitCode.timeout(const Duration(seconds: 5)), 0);
+    } finally {
+      process.kill();
+      await source.close();
+      await sending.catchError((Object _) {});
+      await subscription.cancel();
+      await process.exitCode;
+    }
+  }, skip: !Platform.isWindows);
+
+  test('a caller timeout leaves a blocked writer owned until process termination', () async {
+    final process = await start('Start-Sleep -Seconds 30', requiresStdin: true);
+    unawaited(process.stdin.done.catchError((Object _) {}));
+    process.stdin.add(List.filled(131072, 255));
+    final writing = process.stdin.flush();
+    unawaited(writing.catchError((Object _) {}));
+    try {
+      await expectLater(writing.timeout(const Duration(milliseconds: 150)), throwsA(isA<TimeoutException>()));
+      expect(process.kill(), isTrue);
+      await expectLater(writing.timeout(const Duration(seconds: 5)), throwsA(isA<ProcessException>()));
+      expect(await process.exitCode.timeout(const Duration(seconds: 5)), 1);
+    } finally {
+      process.kill();
+      await writing.catchError((Object _) {});
+      await process.exitCode;
+    }
+  }, skip: !Platform.isWindows);
+
   test('preserves environment values and supplies EOF on stdin', () async {
     final process = await start(
       r'''if ($env:PLUG_TEST_VALUE -ne 'space & " quote') { exit 9 }; if ([Console]::In.ReadToEnd().Length -ne 0) { exit 8 }; exit 3''',
@@ -174,5 +239,58 @@ if ($value -ceq $env:PLUG_TEST_VALUE) { exit 7 } else { exit 9 }
       WindowsSilentActionProcess.start(r'C:\missing-plug-fixture\missing.exe', []),
       throwsA(isA<ProcessException>()),
     );
+  }, skip: !Platform.isWindows);
+
+  test('faithful capture applies backpressure and preserves both complete binary streams', () async {
+    const command =
+        r'$b=New-Object byte[] 256; for($i=0;$i -lt 256;$i++){$b[$i]=[byte]$i}; '
+        r'$o=[Console]::OpenStandardOutput(); $e=[Console]::OpenStandardError(); '
+        r'for($i=0;$i -lt 4096;$i++){$o.Write($b,0,256)}; $o.Flush(); $e.Write($b,0,256); $e.Flush()';
+    final process = await WindowsSilentActionProcess.start(powershell, [
+      '-NoProfile',
+      '-NonInteractive',
+      '-Command',
+      command,
+    ], faithfulOutput: true);
+    final native = process as WindowsSilentActionProcess;
+    final first = Completer<void>();
+    final completed = Completer<void>();
+    final received = <int>[];
+    var exited = false;
+    unawaited(
+      process.exitCode.then((_) {
+        exited = true;
+      }),
+    );
+    final errors = process.stderr.expand((block) => block).toList();
+    late StreamSubscription<List<int>> output;
+    output = process.stdout.listen(
+      (block) {
+        expect(block.length, lessThanOrEqualTo(65536));
+        received.addAll(block);
+        if (!first.isCompleted) {
+          output.pause();
+          first.complete();
+        }
+      },
+      onDone: completed.complete,
+      onError: completed.completeError,
+    );
+    try {
+      await first.future.timeout(const Duration(seconds: 5));
+      await Future<void>.delayed(const Duration(milliseconds: 200));
+      expect(exited, isFalse);
+      output.resume();
+      await completed.future.timeout(const Duration(seconds: 10));
+      expect(await process.exitCode.timeout(const Duration(seconds: 5)), 0);
+      expect(received, List.generate(1048576, (index) => index % 256));
+      expect(await errors, List.generate(256, (index) => index));
+    } finally {
+      process.kill();
+      output.resume();
+      await output.cancel();
+      await native.closeCapturedOutput();
+      await process.exitCode;
+    }
   }, skip: !Platform.isWindows);
 }

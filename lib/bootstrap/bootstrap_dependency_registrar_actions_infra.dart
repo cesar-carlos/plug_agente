@@ -2,6 +2,73 @@ part of 'bootstrap_dependency_registrar.dart';
 
 void _registerActionsInfrastructure(GetIt getIt) {
   getIt
+    ..registerLazySingleton(() {
+      final runtime = getIt<ActionIoJournalRuntime>();
+      return ActionIoSessionLauncher(
+        authorization: getIt<ActionIoAuthorization>(),
+        validator: getIt<ActionIoLocalIntentValidator>(),
+        repository: getIt<IAgentActionRepository>(),
+        invocations: getIt<IActionIoInvocationResolver>(),
+        processes: getIt<IActionIoProcessFactory>(),
+        input: runtime.journal,
+        output: runtime.output,
+        queue: getIt<ActionIoExecutionQueue>(),
+      );
+    })
+    ..registerLazySingleton<IActionIoProcessFactory>(
+      () => WindowsActionIoProcessFactory(
+        WindowsJobObjectProcessTreeController(cpuLimitProvider: () => getIt<AgentActionCpuSettings>().limitPercent),
+      ),
+    )
+    ..registerLazySingleton(
+      () => ActionIoExecutionQueue(
+        getIt<ActionExecutionQueue>(),
+        getIt<ActionIoSessionSupervisor>(),
+        metrics: getIt<MetricsCollector>().actionIoMetrics,
+      ),
+    )
+    ..registerLazySingleton<IActionIoInvocationResolver>(
+      () => ActionIoInvocationResolver(
+        getIt<AgentActionAdapterRegistry>(),
+        getIt<ActionEnvironmentResolver>(),
+        const AgentOperationalProfileResolver(),
+      ),
+    )
+    ..registerLazySingleton<ActionIoSessionSupervisor>(
+      () => ActionIoSessionSupervisor(metrics: getIt<MetricsCollector>().actionIoMetrics),
+      dispose: (supervisor) async => (await supervisor.shutdown()).getOrThrow(),
+    )
+    ..registerLazySingleton(() => ActionIoAuthorization(getIt<IClientTokenRepository>()))
+    ..registerLazySingleton(
+      () => ActionIoIntentPreparer(
+        installationId: getIt<AgentRuntimeIdentity>().runtimeInstanceId,
+        authorization: getIt<ActionIoAuthorization>(),
+        sessions: getIt<ActionIoJournalRuntime>().journal,
+        repository: getIt<IAgentActionRepository>(),
+        triggers: getIt<RunAgentActionViaRemoteTrigger>(),
+      ),
+    )
+    ..registerLazySingleton(
+      () => ActionIoLocalIntentValidator(
+        repository: getIt<IAgentActionRepository>(),
+        snapshotter: getIt<AgentActionDefinitionSnapshotter>(),
+        secretFingerprinter: getIt<AgentActionSecretReferenceFingerprinter>(),
+        gates: getIt<AgentActionExecutionGateChain>(),
+        invocations: getIt<IActionIoInvocationResolver>(),
+        queue: getIt<ActionExecutionQueue>(),
+      ),
+    )
+    ..registerLazySingleton(() {
+      final runtime = getIt<ActionIoJournalRuntime>();
+      return ActionIoAdmission(
+        authorization: getIt<ActionIoAuthorization>(),
+        journal: runtime.journal,
+        sessions: runtime.journal,
+        accepting: () =>
+            getIt<FeatureFlags>().enableActionIo && runtime.isReady && getIt<ActionIoSessionSupervisor>().accepting,
+        validateLocalIntent: getIt<ActionIoLocalIntentValidator>().validate,
+      );
+    })
     ..registerLazySingleton(() => AgentActionCpuSettings(getIt<IAppSettingsStore>()))
     ..registerLazySingleton(() => AgentActionLiveProcesses(getIt<IAgentActionRepository>()))
     ..registerLazySingleton(
@@ -240,6 +307,10 @@ void _registerActionsInfrastructure(GetIt getIt) {
       () => AgentActionsRemoteCapabilityProvider(
         runtimeStateGuard: getIt<AgentActionRuntimeStateGuard>(),
         elevatedRunnerReadiness: getIt<ElevatedActionRunnerReadinessService>(),
+        faithfulIoAvailable: () =>
+            getIt<FeatureFlags>().enableActionIo &&
+            getIt<ActionIoJournalRuntime>().isReady &&
+            getIt<ActionIoSessionSupervisor>().accepting,
       ),
     )
     ..registerLazySingleton(ElevatedActionExecutionAbortRegistry.new)

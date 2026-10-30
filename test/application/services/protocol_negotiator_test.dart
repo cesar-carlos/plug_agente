@@ -2,6 +2,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:plug_agente/application/services/protocol_negotiator.dart';
 import 'package:plug_agente/core/constants/protocol_version.dart';
 import 'package:plug_agente/core/constants/rpc_batch_negotiation.dart';
+import 'package:plug_agente/domain/protocol/action_io_capability.dart';
 import 'package:plug_agente/domain/protocol/protocol_capabilities.dart';
 import 'package:plug_agente/domain/protocol/sql_operation_capability.dart';
 import 'package:plug_agente/domain/protocol/transport_extension_negotiation.dart';
@@ -12,6 +13,62 @@ void main() {
 
     setUp(() {
       negotiator = ProtocolNegotiator();
+    });
+
+    test('faithful I/O requires both exact offers and uncompressed transport capacity', () {
+      ProtocolCapabilities caps(
+        Object? io, {
+        int maxBytes = 1048576,
+        bool binary = true,
+        num version = 1,
+        List<String> protocols = const ['jsonrpc-v2'],
+      }) => ProtocolCapabilities(
+        protocols: protocols,
+        encodings: const ['json'],
+        compressions: const ['gzip', 'none'],
+        limits: TransportLimits(maxPayloadBytes: maxBytes),
+        extensions: {
+          'binaryPayload': binary,
+          'transportFrame': 'payload-frame/1.0',
+          'agentActions': {'enabled': true, 'version': version, 'io': ?io},
+        },
+      );
+      const offer = ActionIoCapability.advertisement;
+      expect(
+        ActionIoCapability.negotiated(
+          negotiator.negotiate(agentCapabilities: caps(offer), serverCapabilities: caps(offer)).negotiatedExtensions,
+        ),
+        isTrue,
+      );
+      for (final peer in [
+        caps(null),
+        caps({...offer, 'automatic_replay': true}),
+        caps({...offer, 'max_block_bytes': 32768}),
+        caps(offer, maxBytes: 65536),
+        caps(offer, binary: false),
+        caps(offer, version: 1.0),
+      ]) {
+        expect(
+          ActionIoCapability.negotiated(
+            negotiator.negotiate(agentCapabilities: caps(offer), serverCapabilities: peer).negotiatedExtensions,
+          ),
+          isFalse,
+        );
+        expect(
+          ActionIoCapability.negotiated(
+            negotiator.negotiate(agentCapabilities: peer, serverCapabilities: caps(offer)).negotiatedExtensions,
+          ),
+          isFalse,
+        );
+      }
+      final legacy = caps(offer, protocols: ['legacy']);
+      expect(
+        ActionIoCapability.negotiated(
+          negotiator.negotiate(agentCapabilities: legacy, serverCapabilities: legacy).negotiatedExtensions,
+        ),
+        isFalse,
+      );
+      expect(ActionIoCapability.negotiated(negotiator.createFallbackConfig().negotiatedExtensions), isFalse);
     });
 
     test('SQL operation negotiation rejects incompatible/missing capabilities and intersects ceilings', () {

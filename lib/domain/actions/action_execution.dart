@@ -1,5 +1,7 @@
 import 'package:plug_agente/domain/actions/action_adapter.dart';
 import 'package:plug_agente/domain/actions/action_enums.dart';
+import 'package:plug_agente/domain/actions/action_io_execution_status.dart';
+import 'package:plug_agente/domain/actions/action_io_session_reference.dart';
 
 class AgentActionExecutionRequest {
   const AgentActionExecutionRequest({
@@ -17,6 +19,7 @@ class AgentActionExecutionRequest {
     this.scheduledAt,
     this.triggeredAt,
     this.cachedPreparedExecution,
+    this.ioSession,
   });
 
   final String actionId;
@@ -36,6 +39,9 @@ class AgentActionExecutionRequest {
   /// Populated by the execution orchestrator after a Hub validate-run cache hit.
   final AgentActionPreparedExecution? cachedPreparedExecution;
 
+  /// Set only after durable I/O admission; never parsed from runtimeParameters.
+  final ActionIoSessionReference? ioSession;
+
   AgentActionExecutionRequest copyWith({
     String? actionId,
     AgentActionRequestSource? source,
@@ -52,9 +58,11 @@ class AgentActionExecutionRequest {
     DateTime? triggeredAt,
     AgentActionPreparedExecution? cachedPreparedExecution,
     bool clearCachedPreparedExecution = false,
+    ActionIoSessionReference? ioSession,
   }) {
     return AgentActionExecutionRequest(
       actionId: actionId ?? this.actionId,
+      ioSession: ioSession ?? this.ioSession,
       source: source ?? this.source,
       idempotencyKey: idempotencyKey ?? this.idempotencyKey,
       requestedBy: requestedBy ?? this.requestedBy,
@@ -112,6 +120,7 @@ class AgentActionExecution {
     this.failureCode,
     this.failurePhase,
     this.failureMessage,
+    this.ioStatus,
   });
 
   final String id;
@@ -150,6 +159,7 @@ class AgentActionExecution {
   final String? failureCode;
   final String? failurePhase;
   final String? failureMessage;
+  final ActionIoExecutionStatus? ioStatus;
 
   bool get isTerminal => status.isTerminal;
 
@@ -233,6 +243,7 @@ class AgentActionExecution {
       failureCode: failureCode ?? this.failureCode,
       failurePhase: failurePhase ?? this.failurePhase,
       failureMessage: failureMessage ?? this.failureMessage,
+      ioStatus: ioStatus,
     );
   }
 }

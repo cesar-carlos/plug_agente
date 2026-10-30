@@ -4,6 +4,9 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:get_it/get_it.dart';
 import 'package:mocktail/mocktail.dart';
 import 'package:odbc_fast/odbc_fast.dart' as odbc;
+import 'package:plug_agente/application/actions/action_io_admission.dart';
+import 'package:plug_agente/application/actions/action_io_authorization.dart';
+import 'package:plug_agente/application/actions/action_io_local_intent_validator.dart';
 import 'package:plug_agente/application/actions/agent_action_live_processes.dart';
 import 'package:plug_agente/application/services/active_config_resolver.dart';
 import 'package:plug_agente/application/services/hub_session_coordinator.dart';
@@ -18,6 +21,8 @@ import 'package:plug_agente/core/runtime/odbc_runtime_tuning.dart';
 import 'package:plug_agente/core/settings/agent_action_cpu_settings.dart';
 import 'package:plug_agente/core/settings/app_settings_store.dart' show GlobalAppSettingsStore, IAppSettingsStore;
 import 'package:plug_agente/core/storage/global_storage_path_resolver.dart';
+import 'package:plug_agente/domain/repositories/i_action_io_local_history.dart';
+import 'package:plug_agente/domain/repositories/i_action_io_local_output.dart';
 import 'package:plug_agente/domain/repositories/i_agent_config_repository.dart';
 import 'package:plug_agente/domain/repositories/i_authorization_trust_invalidator.dart';
 import 'package:plug_agente/domain/repositories/i_odbc_connection_settings.dart';
@@ -26,6 +31,7 @@ import 'package:plug_agente/infrastructure/actions/agent_action_process_lifecycl
 import 'package:plug_agente/infrastructure/actions/script_action_process_runner.dart';
 import 'package:plug_agente/infrastructure/repositories/agent_config_drift_database.dart';
 import 'package:plug_agente/infrastructure/settings/odbc_connection_settings.dart';
+import 'package:plug_agente/infrastructure/stores/action_io_journal_runtime.dart';
 
 /// Avoids `odbc_fast` loading `libodbc_engine` (missing on Linux CI).
 class _MockOdbcService extends Mock implements odbc.OdbcService {}
@@ -115,6 +121,16 @@ void main() {
   });
 
   test('registers persistence before transport hub dependencies resolve', () {
+    expect(sl.isRegistered<ActionIoAdmission>(), isTrue);
+    expect(sl<ActionIoAuthorization>(), isA<ActionIoAuthorization>());
+    expect(sl<ActionIoLocalIntentValidator>(), isA<ActionIoLocalIntentValidator>());
+    expect(sl.isRegistered<ActionIoJournalRuntime>(), isTrue);
+    final io = sl<ActionIoJournalRuntime>();
+    expect(sl<IActionIoLocalHistory>(), same(io));
+    expect(sl<IActionIoLocalOutput>(), same(io));
+    expect(io.path, sl<GlobalStorageContext>().actionIoJournalFilePath);
+    expect(io.isReady, isFalse);
+    expect(File(io.path).existsSync(), isFalse);
     expect(sl.isRegistered<AppDatabase>(), isTrue);
     expect(sl.isRegistered<IAgentConfigRepository>(), isTrue);
     expect(sl.isRegistered<ITransportClient>(), isTrue);

@@ -3,15 +3,41 @@ import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:plug_agente/core/constants/agent_action_rpc_constants.dart';
+import 'package:plug_agente/domain/protocol/action_io_capability.dart';
 import 'package:plug_agente/infrastructure/external_services/transport/open_rpc_document_loader.dart';
 import 'package:plug_agente/infrastructure/validation/schema_loader.dart';
 
 String _openRpcSchemaRef(String schemaFileName) => './schemas/$schemaFileName';
 
+final List<String> _publishedMethods = [
+  ...AgentActionRpcConstants.remotePublishedRpcMethodNamesOrdered,
+  ...ActionIoCapability.methods,
+];
+
 /// Published params/result schema refs per `agent.action.*` method (MVP wire).
 /// Paths are derived from [TransportSchemaIds] so OpenRPC stays aligned with the schema bundle.
 Map<String, ({String paramsSchema, String resultSchema})> get _agentActionOpenRpcSchemaRefs =>
     <String, ({String paramsSchema, String resultSchema})>{
+      'agent.action.sendInput': (
+        paramsSchema: _openRpcSchemaRef(TransportSchemaIds.paramsAgentActionSendInput),
+        resultSchema: _openRpcSchemaRef(TransportSchemaIds.resultAgentActionSendInput),
+      ),
+      'agent.action.closeInput': (
+        paramsSchema: _openRpcSchemaRef(TransportSchemaIds.paramsAgentActionCloseInput),
+        resultSchema: _openRpcSchemaRef(TransportSchemaIds.resultAgentActionCloseInput),
+      ),
+      'agent.action.getInputStatus': (
+        paramsSchema: _openRpcSchemaRef(TransportSchemaIds.paramsAgentActionGetInputStatus),
+        resultSchema: _openRpcSchemaRef(TransportSchemaIds.resultAgentActionGetInputStatus),
+      ),
+      'agent.action.readIo': (
+        paramsSchema: _openRpcSchemaRef(TransportSchemaIds.paramsAgentActionReadIo),
+        resultSchema: _openRpcSchemaRef(TransportSchemaIds.resultAgentActionReadIo),
+      ),
+      'agent.action.findExecution': (
+        paramsSchema: _openRpcSchemaRef(TransportSchemaIds.paramsAgentActionFindExecution),
+        resultSchema: _openRpcSchemaRef(TransportSchemaIds.resultAgentActionFindExecution),
+      ),
       AgentActionRpcConstants.agentActionRunRpcMethodName: (
         paramsSchema: _openRpcSchemaRef(TransportSchemaIds.paramsAgentActionRun),
         resultSchema: _openRpcSchemaRef(TransportSchemaIds.resultAgentActionGetExecution),
@@ -31,6 +57,16 @@ Map<String, ({String paramsSchema, String resultSchema})> get _agentActionOpenRp
     };
 
 const Set<String> _publishedAgentActionSchemaFiles = <String>{
+  TransportSchemaIds.paramsAgentActionSendInput,
+  TransportSchemaIds.resultAgentActionSendInput,
+  TransportSchemaIds.paramsAgentActionCloseInput,
+  TransportSchemaIds.resultAgentActionCloseInput,
+  TransportSchemaIds.paramsAgentActionGetInputStatus,
+  TransportSchemaIds.resultAgentActionGetInputStatus,
+  TransportSchemaIds.paramsAgentActionReadIo,
+  TransportSchemaIds.resultAgentActionReadIo,
+  TransportSchemaIds.paramsAgentActionFindExecution,
+  TransportSchemaIds.resultAgentActionFindExecution,
   TransportSchemaIds.paramsAgentActionRun,
   TransportSchemaIds.paramsAgentActionValidateRun,
   TransportSchemaIds.paramsAgentActionCancel,
@@ -121,7 +157,7 @@ void main() {
       final agentActionNames = names
           .where((n) => n.startsWith(AgentActionRpcConstants.remoteAgentActionMethodPrefix))
           .toSet();
-      expect(agentActionNames, AgentActionRpcConstants.remotePublishedRpcMethodNames);
+      expect(agentActionNames, _publishedMethods.toSet());
     });
 
     test('OpenRPC should list agent.action.* methods in stable published order', () {
@@ -134,7 +170,7 @@ void main() {
           ))
             entry['name'] as String,
       ];
-      expect(orderedAgentActionNames, AgentActionRpcConstants.remotePublishedRpcMethodNamesOrdered);
+      expect(orderedAgentActionNames, _publishedMethods);
     });
 
     test('OpenRPC should reference every published agent.action schema file', () {
@@ -153,7 +189,7 @@ void main() {
 
     test('should wire each published agent.action.* method to params and result schemas', () {
       final decoded = _readOpenRpcFromDisk();
-      for (final methodName in AgentActionRpcConstants.remotePublishedRpcMethodNamesOrdered) {
+      for (final methodName in _publishedMethods) {
         final expected = _agentActionOpenRpcSchemaRefs[methodName];
         expect(expected, isNotNull, reason: 'missing schema ref map for $methodName');
 
@@ -183,9 +219,9 @@ void main() {
         final agentActionNames = names
             .where((n) => n.startsWith(AgentActionRpcConstants.remoteAgentActionMethodPrefix))
             .toSet();
-        expect(agentActionNames, AgentActionRpcConstants.remotePublishedRpcMethodNames);
+        expect(agentActionNames, _publishedMethods.toSet());
 
-        for (final methodName in AgentActionRpcConstants.remotePublishedRpcMethodNamesOrdered) {
+        for (final methodName in _publishedMethods) {
           final method = _openRpcMethodByName(decoded, methodName);
           expect(method, isNotNull, reason: 'loader document missing $methodName');
           final expected = _agentActionOpenRpcSchemaRefs[methodName]!;

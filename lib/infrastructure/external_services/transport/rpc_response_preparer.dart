@@ -125,7 +125,7 @@ class RpcResponsePreparer {
     }
 
     final unavailable = _validateSchemaAvailability(payload, methodsById);
-    if (unavailable != null) return _fallbackForInvalidOutgoingPayload(unavailable);
+    if (unavailable != null) return _fallbackForInvalidOutgoingPayload(unavailable, payload);
 
     const softCap = ConnectionConstants.socketOutgoingContractValidationMaxBytes;
     if (softCap > 0 && _logSummarizer.exceedsByteBudget(payload, softCap)) {
@@ -147,11 +147,11 @@ class RpcResponsePreparer {
       if (schemaValidation == null) {
         return Success(sanitizedPayload as Object);
       }
-      return _fallbackForInvalidOutgoingPayload(schemaValidation);
+      return _fallbackForInvalidOutgoingPayload(schemaValidation, sanitizedPayload);
     }
 
     final failure = validation.exceptionOrNull()! as domain.Failure;
-    return _fallbackForInvalidOutgoingPayload(failure);
+    return _fallbackForInvalidOutgoingPayload(failure, sanitizedPayload);
   }
 
   domain.Failure? _validateSchemaAvailability(dynamic payload, Map<Object?, String> methodsById) {
@@ -270,33 +270,50 @@ class RpcResponsePreparer {
     return null;
   }
 
-  Result<dynamic> _fallbackForInvalidOutgoingPayload(domain.Failure failure) {
-    AppLogger.error(
-      'Outgoing rpc:response payload is invalid: ${failure.message}',
-    );
-    final fallback = prepareForSend(
-      buildErrorResponse(
-        id: null,
+  Result<dynamic> _fallbackForInvalidOutgoingPayload(domain.Failure failure, dynamic payload) {
+    AppLogger.error('Outgoing rpc:response payload is invalid: ${failure.code}');
+    final responses = payload is List ? payload : [payload];
+    final fallbacks = <Map<String, dynamic>>[];
+    for (final item in responses) {
+      final id = item is Map ? item['id'] : null;
+      if (id is! String && id is! num) {
+        return Failure(
+          domain.ServerFailure.withContext(
+            message: 'Cannot correlate invalid outgoing RPC response',
+            cause: failure,
+            context: {'rpc_error_code': RpcErrorCode.internalError},
+          ),
+        );
+      }
+      final meta = item is Map ? item['meta'] : null;
+      final wireId = meta is Map ? meta['request_id'] : null;
+      final response = buildErrorResponse(
+        id: id,
         code: RpcErrorCode.internalError,
         technicalMessage: RpcResponseConstants.outgoingContractValidationFailedTechnicalMessage,
-      ),
-    );
-
-    final fallbackValidation = _contractValidator.validateResponse(fallback);
-    if (fallbackValidation.isError()) {
-      final fallbackFailure = fallbackValidation.exceptionOrNull()! as domain.Failure;
-      AppLogger.error(
-        'Fallback rpc:response payload is invalid: ${fallbackFailure.message}',
       );
-      return Failure(
-        domain.ServerFailure.withContext(
-          message: 'Fallback rpc:response payload is invalid',
-          cause: fallbackFailure,
-          context: {'rpc_error_code': RpcErrorCode.internalError},
-        ),
+      final correlated = RpcResponse.error(
+        id: id,
+        error: response.error!,
+        meta: RpcProtocolMeta(requestId: wireId is String ? wireId : id.toString()),
       );
+      final fallback = RpcWireMap.sanitizeRpcResponseWirePayload(prepareForSend(correlated)) as Map<String, dynamic>;
+      final validation = _contractValidator.validateResponse(fallback);
+      if (validation.isError()) {
+        return Failure(
+          domain.ServerFailure.withContext(
+            message: 'Fallback rpc:response payload is invalid',
+            cause: validation.exceptionOrNull(),
+            context: {'rpc_error_code': RpcErrorCode.internalError},
+          ),
+        );
+      }
+      fallbacks.add(fallback);
     }
-    return Success(fallback as Object);
+    if (fallbacks.isEmpty) {
+      return Failure(domain.ServerFailure('Cannot correlate an empty RPC response batch'));
+    }
+    return Success(payload is List ? fallbacks : fallbacks.single);
   }
 
   /// Mirrors trace context (W3C `traceparent`/`tracestate` and/or legacy

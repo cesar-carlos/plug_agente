@@ -16,24 +16,66 @@
     "flags"
   ],
   "properties": {
-    "execution_id": { "type": "string", "minLength": 1 },
-    "action_id": { "type": "string", "minLength": 1 },
+    "execution_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "action_id": {
+      "type": "string",
+      "minLength": 1
+    },
     "action_type": {
       "type": "string",
-      "enum": ["commandLine", "executable", "script", "jar", "email", "comObject", "developer"]
+      "enum": [
+        "commandLine",
+        "executable",
+        "script",
+        "jar",
+        "email",
+        "comObject",
+        "developer"
+      ]
     },
     "status": {
       "type": "string",
-      "enum": ["queued", "running", "succeeded", "failed", "skipped", "cancelled", "killed", "timedOut", "interrupted", "unknown"]
+      "enum": [
+        "queued",
+        "running",
+        "succeeded",
+        "failed",
+        "skipped",
+        "cancelled",
+        "killed",
+        "timedOut",
+        "interrupted",
+        "unknown"
+      ]
     },
     "source": {
       "type": "string",
-      "enum": ["localUi", "scheduler", "remoteHub", "appLifecycle"]
+      "enum": [
+        "localUi",
+        "scheduler",
+        "remoteHub",
+        "appLifecycle"
+      ]
     },
-    "requested_at": { "type": "string", "format": "date-time" },
-    "idempotency_key": { "type": "string", "minLength": 1 },
-    "requested_by": { "type": "string", "minLength": 1 },
-    "trace_id": { "type": "string", "minLength": 1 },
+    "requested_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "idempotency_key": {
+      "type": "string",
+      "minLength": 1
+    },
+    "requested_by": {
+      "type": "string",
+      "minLength": 1
+    },
+    "trace_id": {
+      "type": "string",
+      "minLength": 1
+    },
     "runtime_instance_id": {
       "type": "string",
       "minLength": 1,
@@ -47,37 +89,78 @@
     "trigger": {
       "type": "object",
       "properties": {
-        "trigger_id": { "type": "string", "minLength": 1 },
+        "trigger_id": {
+          "type": "string",
+          "minLength": 1
+        },
         "trigger_type": {
           "type": "string",
-          "enum": ["manual", "remote", "once", "interval", "daily", "weekly", "monthly", "appStart", "appClose", "actionSucceeded", "actionFailed"]
+          "enum": [
+            "manual",
+            "remote",
+            "once",
+            "interval",
+            "daily",
+            "weekly",
+            "monthly",
+            "appStart",
+            "appClose",
+            "actionSucceeded",
+            "actionFailed"
+          ]
         },
-        "scheduled_at": { "type": "string", "format": "date-time" },
-        "triggered_at": { "type": "string", "format": "date-time" }
+        "scheduled_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "triggered_at": {
+          "type": "string",
+          "format": "date-time"
+        }
       },
       "additionalProperties": false
     },
     "timestamps": {
       "type": "object",
       "properties": {
-        "queue_started_at": { "type": "string", "format": "date-time" },
-        "process_started_at": { "type": "string", "format": "date-time" },
-        "finished_at": { "type": "string", "format": "date-time" },
-        "timeout_at": { "type": "string", "format": "date-time" }
+        "queue_started_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "process_started_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "finished_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "timeout_at": {
+          "type": "string",
+          "format": "date-time"
+        }
       },
       "additionalProperties": false
     },
     "process": {
       "type": "object",
       "properties": {
-        "pid": { "type": "integer", "minimum": 0 },
-        "exit_code": { "type": "integer" },
+        "pid": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "exit_code": {
+          "type": "integer"
+        },
         "executable": {
           "type": "string",
           "minLength": 1,
           "description": "Safe executable identity only. The raw command is never returned."
         },
-        "argument_count": { "type": "integer", "minimum": 0 },
+        "argument_count": {
+          "type": "integer",
+          "minimum": 0
+        },
         "command_preview": {
           "type": "string",
           "minLength": 1,
@@ -88,23 +171,49 @@
     },
     "output": {
       "type": "object",
-      "required": ["stdout", "stderr"],
+      "required": [
+        "stdout",
+        "stderr"
+      ],
       "properties": {
-        "stdout": { "$ref": "#/$defs/capturedOutput" },
-        "stderr": { "$ref": "#/$defs/capturedOutput" }
+        "stdout": {
+          "$ref": "#/$defs/capturedOutput"
+        },
+        "stderr": {
+          "$ref": "#/$defs/capturedOutput"
+        }
       },
       "additionalProperties": false
     },
     "flags": {
       "type": "object",
-      "required": ["terminal", "skipped", "timed_out", "cancelled", "killed", "redaction_applied"],
+      "required": [
+        "terminal",
+        "skipped",
+        "timed_out",
+        "cancelled",
+        "killed",
+        "redaction_applied"
+      ],
       "properties": {
-        "terminal": { "type": "boolean" },
-        "skipped": { "type": "boolean" },
-        "timed_out": { "type": "boolean" },
-        "cancelled": { "type": "boolean" },
-        "killed": { "type": "boolean" },
-        "redaction_applied": { "type": "boolean" }
+        "terminal": {
+          "type": "boolean"
+        },
+        "skipped": {
+          "type": "boolean"
+        },
+        "timed_out": {
+          "type": "boolean"
+        },
+        "cancelled": {
+          "type": "boolean"
+        },
+        "killed": {
+          "type": "boolean"
+        },
+        "redaction_applied": {
+          "type": "boolean"
+        }
       },
       "additionalProperties": false
     },
@@ -121,8 +230,14 @@
     "failure": {
       "type": "object",
       "properties": {
-        "code": { "type": "string", "minLength": 1 },
-        "phase": { "type": "string", "minLength": 1 },
+        "code": {
+          "type": "string",
+          "minLength": 1
+        },
+        "phase": {
+          "type": "string",
+          "minLength": 1
+        },
         "corrective_action": {
           "type": "string",
           "enum": [
@@ -138,7 +253,71 @@
             "review_runtime"
           ]
         },
-        "message": { "type": "string", "minLength": 1 }
+        "message": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "additionalProperties": false
+    },
+    "io": {
+      "type": "object",
+      "required": [
+        "version",
+        "mode",
+        "process_state",
+        "stdin_state",
+        "capture_state",
+        "output_expired",
+        "next_input_sequence"
+      ],
+      "properties": {
+        "version": {
+          "const": 1
+        },
+        "mode": {
+          "const": "faithful"
+        },
+        "process_state": {
+          "enum": [
+            "queued",
+            "starting",
+            "running",
+            "finished",
+            "unknown"
+          ]
+        },
+        "stdin_state": {
+          "enum": [
+            "pending",
+            "open",
+            "closing",
+            "closed",
+            "failed"
+          ]
+        },
+        "capture_state": {
+          "enum": [
+            "capturing",
+            "draining",
+            "complete",
+            "incomplete",
+            "expired"
+          ]
+        },
+        "output_expired": {
+          "type": "boolean"
+        },
+        "initial_message_id": {
+          "const": "system:initial"
+        },
+        "close_message_id": {
+          "const": "system:close"
+        },
+        "next_input_sequence": {
+          "type": "integer",
+          "minimum": 0
+        }
       },
       "additionalProperties": false
     }
@@ -147,15 +326,39 @@
   "$defs": {
     "capturedOutput": {
       "type": "object",
-      "required": ["captured", "truncated", "utf8_total_bytes", "offset", "next_offset", "response_truncated"],
+      "required": [
+        "captured",
+        "truncated",
+        "utf8_total_bytes",
+        "offset",
+        "next_offset",
+        "response_truncated"
+      ],
       "properties": {
-        "captured": { "type": "boolean" },
-        "text": { "type": "string" },
-        "truncated": { "type": "boolean" },
-        "utf8_total_bytes": { "type": "integer", "minimum": 0 },
-        "offset": { "type": "integer", "minimum": 0 },
-        "next_offset": { "type": "integer", "minimum": 0 },
-        "response_truncated": { "type": "boolean" }
+        "captured": {
+          "type": "boolean"
+        },
+        "text": {
+          "type": "string"
+        },
+        "truncated": {
+          "type": "boolean"
+        },
+        "utf8_total_bytes": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "offset": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "next_offset": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "response_truncated": {
+          "type": "boolean"
+        }
       },
       "additionalProperties": false
     }

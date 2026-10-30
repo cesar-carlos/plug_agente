@@ -5,6 +5,21 @@ and version bump instructions remain in `docs/install/release_guide.md`.
 
 ## Unreleased
 
+### Added — faithful remote action I/O
+
+- Connect saved, locally approved actions to incremental binary stdin/stdout/stderr
+  through negotiated agentActions.io v1, with durable encrypted receipts, ordered
+  close, resumable reads, quotas and recovery without automatic replay.
+- Require current local Client binding, scopes, allowlists and approval fingerprints;
+  integrate lifecycle shutdown, bounded Windows workers and isolated long reads.
+- Add localized faithful-mode configuration, independent execution/input/capture
+  states and explicit byte-preserving downloads. Preserve legacy contracts.
+- Add shared hub fixtures, native/crash/disk-full tests and private desktop
+  acceptance tooling. Consolidate operational documentation and repair links.
+- Keep I/O disabled by default. Development acceptance does not override the
+  coordinated persona-v2 or installer/publication gates.
+
+
 ## 1.8.7 - 2026-10-24
 
 Packaged locally as `installer/dist/PlugAgente-Setup-1.8.7.exe` from
