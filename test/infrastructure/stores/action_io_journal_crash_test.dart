@@ -27,14 +27,20 @@ void main() {
   final directories = <String, Directory>{};
   setUpAll(() async {
     expect(File(dartExecutable).existsSync(), isTrue, reason: 'Dart CLI required for isolated crash children');
-    // Finish native-asset preparation in every child before this process loads
-    // SQLite: Windows keeps a loaded DLL locked even after closing the database.
+    // Bundle once so crash children never replace a DLL loaded by another test.
+    final bundle = await Directory.systemTemp.createTemp('action-io-crash-bundle-');
+    addTearDown(() => bundle.delete(recursive: true));
+    final build = await Process.run(dartExecutable, [
+      'build', 'cli', '--target', 'test/helpers/action_io_crash_child.dart', '--output', bundle.path,
+    ]);
+    expect(build.exitCode, 0, reason: '${build.stdout}\n${build.stderr}');
+    final childExecutable = p.join(
+      bundle.path, 'bundle', 'bin', Platform.isWindows ? 'action_io_crash_child.exe' : 'action_io_crash_child',
+    );
     for (final stage in [...stages, ...outputStages]) {
       final directory = await Directory.systemTemp.createTemp('action-io-crash-test-');
       directories[stage] = directory;
-      final child = await Process.run(dartExecutable, [
-        'run',
-        'test/helpers/action_io_crash_child.dart',
+      final child = await Process.run(childExecutable, [
         '${directory.path}/journal.sqlite',
         stage,
       ]);
