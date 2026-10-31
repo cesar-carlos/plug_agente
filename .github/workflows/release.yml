@@ -167,7 +167,6 @@ jobs:
         run: python -m unittest tool.updater.test_install_check -v
 
       - name: Validate generated installer
-        shell: bash
         env:
           AUTO_UPDATE_FEED_PUBLIC_KEY: ${{ secrets.AUTO_UPDATE_FEED_PUBLIC_KEY }}
         run: |
