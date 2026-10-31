@@ -270,7 +270,13 @@ python tool/release/release_preflight.py --compile-iss
 - Apply the signing-provider requirements above. Certificate providers require
   Authenticode on project executables and the installer; `manifest` requires
   Ed25519 feed/manifest signatures without claiming an Authenticode publisher.
-- Production releases and all appcast updates require coordinated acceptance.
+- Production releases and appcast updates require coordinated acceptance, with one
+  owner-authorized exception on 2026-10-31 for stable tag `v1.9.0`, build
+  `1.9.0+1`, and its stable appcast. The owner accepted the outstanding risks
+  of an unevaluated real consumer/dataset, untested installed upgrade and
+  rollback, and incomplete coordinated image and per-gate evidence. All 13
+  persona-v2 gates remain open. Run the official signing, test, installer,
+  manifest and feed checks and retain the initial 5% rollout.
 - The 1.9.0 manual-test exception permits a GitHub prerelease only on the existing
   `homologation/1.9.0` tag at `bb592cdddd56efbf682778596811db886a1e381c`.
   Verify the installer against the SHA-256 recorded above, the checksum file

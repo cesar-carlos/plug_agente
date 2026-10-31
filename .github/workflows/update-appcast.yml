@@ -89,7 +89,10 @@ jobs:
           python-version: "3.11"
 
       - name: Require coordinated persona-v2 acceptance
-        run: python tool/release/check_persona_release.py
+        env:
+          REQUESTED_TAG: ${{ inputs.release_tag }}
+          REQUESTED_CHANNEL: ${{ inputs.channel }}
+        run: python tool/release/check_persona_release.py --tag "$REQUESTED_TAG" --build "1.9.0+1" --channel "$REQUESTED_CHANNEL"
 
       - name: Install Python dependencies
         run: python3 -m pip install --quiet "cryptography>=42.0.0" "jsonschema>=4.0.0"
