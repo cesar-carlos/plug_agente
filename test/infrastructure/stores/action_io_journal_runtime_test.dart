@@ -22,7 +22,7 @@ void main() {
   late String path;
   final runtimes = <ActionIoJournalRuntime>[];
   ActionIoJournalRuntime runtime() {
-    final result = ActionIoJournalRuntime(path);
+    final result = ActionIoJournalRuntime(path, freeBytes: (_) async => 1 << 30);
     runtimes.add(result);
     return result;
   }
@@ -197,6 +197,7 @@ void main() {
     final active = ActionIoJournalRuntime(
       path,
       clock: () => now,
+      freeBytes: (_) async => 1 << 30,
       retentionInterval: const Duration(milliseconds: 20),
     );
     runtimes.add(active);

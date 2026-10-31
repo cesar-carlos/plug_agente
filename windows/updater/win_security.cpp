@@ -105,17 +105,14 @@ void write_atomic(const fs::path& path, const std::string& bytes, bool preserve_
   const auto temporary = fs::path(path.native() + L".tmp");
   reject_reparse_path(temporary);
   {
-    Handle file(CreateFileW(temporary.c_str(), GENERIC_WRITE, 0, nullptr, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr));
+    const DWORD access = GENERIC_WRITE | (preserve_permissions ? WRITE_DAC : 0);
+    Handle file(CreateFileW(temporary.c_str(), access, 0, nullptr, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr));
+    if (preserve_permissions && (!file.valid() ||
+        !SetKernelObjectSecurity(file.get(), DACL_SECURITY_INFORMATION, permissions.data())))
+      throw std::runtime_error("policy_permissions_write_failed");
     DWORD written = 0;
     if (!file.valid() || !WriteFile(file.get(), bytes.data(), static_cast<DWORD>(bytes.size()), &written, nullptr) || written != bytes.size() ||
         !FlushFileBuffers(file.get())) throw std::runtime_error("journal_write_failed");
-  }
-  if (preserve_permissions) {
-    SECURITY_DESCRIPTOR_CONTROL control{}; DWORD revision = 0;
-    if (!GetSecurityDescriptorControl(permissions.data(), &control, &revision) ||
-        !SetFileSecurityW(temporary.c_str(), DACL_SECURITY_INFORMATION |
-          ((control & SE_DACL_PROTECTED) ? PROTECTED_DACL_SECURITY_INFORMATION : UNPROTECTED_DACL_SECURITY_INFORMATION), permissions.data()))
-      throw std::runtime_error("policy_permissions_write_failed");
   }
   if (preserve_permissions) {
     // ReplaceFile preserves the original DACL metadata (including inheritance).

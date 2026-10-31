@@ -23,4 +23,3 @@ final class WindowsActionIoProcessFactory implements IActionIoProcessFactory {
     return Success(process.getOrThrow());
   }
 }
-

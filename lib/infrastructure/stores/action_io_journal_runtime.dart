@@ -26,12 +26,14 @@ final class ActionIoJournalRuntime implements IActionIoLocalHistory, IActionIoLo
     this.path, {
     int Function()? concurrencyLimit,
     ActionIoSecureKeyStore? keyStore,
+    Future<int?> Function(String)? freeBytes,
     IActionIoMetrics? metrics,
     DateTime Function()? clock,
     Duration retentionInterval = const Duration(minutes: 1),
   }) : _metrics = metrics,
        _concurrencyLimit = concurrencyLimit,
        _keyStore = keyStore,
+       _freeBytes = freeBytes,
        _clock = clock ?? DateTime.now,
        _retentionInterval = retentionInterval;
 
@@ -39,11 +41,14 @@ final class ActionIoJournalRuntime implements IActionIoLocalHistory, IActionIoLo
   final IActionIoMetrics? _metrics;
   final int Function()? _concurrencyLimit;
   final ActionIoSecureKeyStore? _keyStore;
+  final Future<int?> Function(String)? _freeBytes;
   final DateTime Function() _clock;
   final Duration _retentionInterval;
   Timer? _retentionTimer;
   Future<Result<int>>? _expiring;
   RandomAccessFile? _owner;
+  static final _localOwners = <String>{};
+  String? _localOwnerPath;
   ActionIoJournalDatabase? _database;
   DriftActionIoJournal? _journal;
   ActionIoOutputJournal? _output;
@@ -145,7 +150,12 @@ final class ActionIoJournalRuntime implements IActionIoLocalHistory, IActionIoLo
       if (_retentionInterval <= Duration.zero) throw _failure('ACTION_IO_INVALID_RETENTION_INTERVAL');
       // Nonblocking OS lock. Keep its pathname stable after release; deleting it
       // could let another process lock a different inode for the same journal.
-      _owner = await File('$path.owner.lock').open(mode: FileMode.append);
+      final lockFile = File('$path.owner.lock');
+      // POSIX record locks alone do not exclude a second runtime in this isolate.
+      final lockPath = File.fromUri(lockFile.absolute.uri.normalizePath()).path;
+      if (!_localOwners.add(lockPath)) throw _failure('ACTION_IO_STORAGE_FAILED');
+      _localOwnerPath = lockPath;
+      _owner = await lockFile.open(mode: FileMode.append);
       await _owner!.lock();
       final database = ActionIoJournalDatabase(NativeDatabase.createInBackground(File(path)));
       _database = database;
@@ -163,7 +173,11 @@ final class ActionIoJournalRuntime implements IActionIoLocalHistory, IActionIoLo
                 ..limit(1))
               .get();
       if (mismatchedKey.isNotEmpty) throw _failure('ACTION_IO_KEY_UNAVAILABLE');
-      final physical = ActionIoPhysicalBudget(path, retainedPayloadBytes: () => readActionIoPayloadBytes(database));
+      final physical = ActionIoPhysicalBudget(
+        path,
+        freeBytes: _freeBytes,
+        retainedPayloadBytes: () => readActionIoPayloadBytes(database),
+      );
       final journal = DriftActionIoJournal(
         database,
         cipher,
@@ -249,6 +263,8 @@ final class ActionIoJournalRuntime implements IActionIoLocalHistory, IActionIoLo
       _database = null;
       await owner?.close();
       _owner = null;
+      if (_localOwnerPath case final lockPath?) _localOwners.remove(lockPath);
+      _localOwnerPath = null;
       return const Success(unit);
     } on Object catch (error) {
       return Failure(_failure('ACTION_IO_STORAGE_FAILED', cause: error));

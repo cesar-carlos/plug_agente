@@ -4,6 +4,7 @@ import 'package:file_picker/file_picker.dart';
 import 'package:fluent_ui/fluent_ui.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:path/path.dart' as p;
 import 'package:plug_agente/domain/actions/action_io.dart';
 import 'package:plug_agente/domain/actions/action_io_export_summary.dart';
 import 'package:plug_agente/l10n/app_localizations.dart';
@@ -45,7 +46,7 @@ void main() {
     await tester.sendKeyEvent(LogicalKeyboardKey.enter);
     await tester.pump();
     await tester.pump(const Duration(seconds: 1));
-    expect(exports, [(ActionIoStream.stderr, r'C:\fixture\stderr.bin')]);
+    expect(exports, [(ActionIoStream.stderr, p.join('fixture', 'stderr.bin'))]);
     await _tabTo(tester, find.widgetWithText(Button, 'Download stdout'));
     await tester.sendKeyEvent(LogicalKeyboardKey.enter);
     await tester.pump();
@@ -143,7 +144,7 @@ class _DirectoryPicker extends FilePickerPlatform {
     WindowsOptions windowsOptions = const WindowsOptions(),
     LinuxOptions linuxOptions = const LinuxOptions(),
     WebOptions webOptions = const WebOptions(),
-  }) async => r'C:\fixture';
+  }) async => 'fixture';
 }
 
 Future<void> _tabTo(WidgetTester tester, Finder target) async {

@@ -97,8 +97,10 @@ Future<void> main() async {
   }
   File(p.join(root, '.env')).writeAsStringSync('APP_ENV=homologation\nENABLE_SQL_OPERATIONS=false\n', flush: true);
   Object? failure;
+  StackTrace? failureStack;
   var phase = 'initialize';
   FlutterError.onError = (details) {
+    if (failure == null) failureStack = details.stack;
     failure ??= details.exception;
   };
   await runZonedGuarded(
@@ -259,8 +261,10 @@ Future<void> main() async {
         if (DateTime.now().isAfter(deadline)) throw StateError('Bootstrap fixture controller timed out.');
         await Future<void>.delayed(const Duration(milliseconds: 50));
       }
-      await transport.disconnect();
       phase = 'shutdown';
+      // Dispose UI subscriptions while their providers and transport still exist.
+      runApp(const SizedBox.shrink());
+      await WidgetsBinding.instance.endOfFrame;
       await shutdownApp();
       if (actionIoRuntime.isReady) {
         throw StateError('Application shutdown did not close the I/O journal.');
@@ -276,7 +280,11 @@ Future<void> main() async {
       ErrorTracker.captureException(error, stack, operation: 'homologation_bootstrap');
       File(
         p.join(root, 'boot-failed.json'),
-      ).writeAsStringSync(jsonEncode({'phase': phase, 'type': error.runtimeType.toString()}), flush: true);
+      ).writeAsStringSync(jsonEncode({
+        'phase': phase,
+        'type': failure.runtimeType.toString(),
+        'frames': (failureStack ?? stack).toString().split('\n').take(6).toList(),
+      }), flush: true);
       exit(1);
     },
   );

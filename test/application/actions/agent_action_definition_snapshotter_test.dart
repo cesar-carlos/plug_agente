@@ -398,4 +398,3 @@ class _SnapshotterTestSecretStore implements IAgentActionSecretStore {
     _secrets[secretName] = secretValue;
   }
 }
-
