@@ -5,6 +5,27 @@
   <link>https://github.com/cesar-carlos/plug_agente/releases</link>
   <description>Atualizações do Plug Agente</description>
   <item>
+   <title>Version 1.9.0+1</title>
+   <pubDate>Sat, 31 Oct 2026 17:24:57 +0000</pubDate>
+   <description>## What's Changed
+* chore(deps): bump actions/configure-pages from 5 to 6 by @dependabot[bot] in https://github.com/cesar-carlos/plug_agente/pull/3
+* chore(deps): bump actions/upload-pages-artifact from 3 to 5 by @dependabot[bot] in https://github.com/cesar-carlos/plug_agente/pull/4
+* chore(deps): bump actions/download-artifact from 7 to 8 by @dependabot[bot] in https://github.com/cesar-carlos/plug_agente/pull/5
+* chore(deps): bump actions/deploy-pages from 4 to 5 by @dependabot[bot] in https://github.com/cesar-carlos/plug_agente/pull/6
+* chore(deps): bump actions/setup-go from 6 to 7 by @dependabot[bot] in https://github.com/cesar-carlos/plug_agente/pull/7
+* chore(deps): bump actions/setup-python from 6 to 7 by @dependabot[bot] in https://github.com/cesar-carlos/plug_agente/pull/10
+* chore(deps): bump actions/checkout from 6 to 7 by @dependabot[bot] in https://github.com/cesar-carlos/plug_agente/pull/11
+* chore(deps): bump actions/github-script from 8 to 9 by @dependabot[bot] in https://github.com/cesar-carlos/plug_agente/pull/12
+* chore(deps): bump actions/upload-artifact from 6 to 7 by @dependabot[bot] in https://github.com/cesar-carlos/plug_agente/pull/13
+* chore(deps): bump actions/setup-node from 6 to 7 by @dependabot[bot] in https://github.com/cesar-carlos/plug_agente/pull/14
+
+## New Contributors
+* @dependabot[bot] made their first contribution in https://github.com/cesar-carlos/plug_agente/pull/3
+
+**Full Changelog**: https://github.com/cesar-carlos/plug_agente/compare/v1.8.6...v1.9.0</description>
+   <enclosure url="https://github.com/cesar-carlos/plug_agente/releases/download/v1.9.0/PlugAgente-Setup-1.9.0.exe" sparkle:version="1.9.0+1" sparkle:os="windows" plug:sha256="02b63e143a52039e6fe179c9eea123da7601187e2f7b2662525eee872beb1683" plug:channel="stable" plug:rolloutPercentage="5" length="21881275" type="application/octet-stream" plug:manifestUrl="https://github.com/cesar-carlos/plug_agente/releases/download/v1.9.0/PlugAgente-Manifest-1.9.0.json" plug:manifestSha256="c1255ae3c21d703cca3996de55b34c42f35ece3ff506c44dff9366d9582cca05" plug:edSignature="LXx0nZ8DoSIIjIHfZ82qwx9mqYc+o1XfqUQIj0SDS/Vk0ExU2rXhLNGPw0n0tSyLWHVopLaLEVEISA2GCtz6Bg==" plug:manifestSignature="0AGZBpEXR1I9dATjhvxN6t1UErzsxDW7YFQoSoUm3B9rHkmZ2JdhW7nIqfliM2SbMavCoYLpvzE/xDMyXy70BQ==" />
+  </item>
+  <item>
    <title>Version 1.8.6+1</title>
    <pubDate>Tue, 07 Jul 2026 17:38:14 +0000</pubDate>
    <description>**Full Changelog**: https://github.com/cesar-carlos/plug_agente/compare/v1.8.5...v1.8.6</description>
@@ -57,12 +78,6 @@
    <pubDate>Thu, 28 May 2026 00:45:41 +0000</pubDate>
    <description>**Full Changelog**: https://github.com/cesar-carlos/plug_agente/compare/v1.7.0...v1.7.1</description>
    <enclosure url="https://github.com/cesar-carlos/plug_agente/releases/download/v1.7.1/PlugAgente-Setup-1.7.1.exe" sparkle:version="1.7.1+1" sparkle:os="windows" plug:sha256="c3e0e33942b49f7a9a63e2efd89b2888752a5683f51577d0fa9b6580dc0b1ef2" plug:channel="stable" plug:rolloutPercentage="100" length="21236142" type="application/octet-stream" />
-  </item>
-  <item>
-   <title>Version 1.7.0+1</title>
-   <pubDate>Wed, 27 May 2026 22:21:00 +0000</pubDate>
-   <description>**Full Changelog**: https://github.com/cesar-carlos/plug_agente/compare/v1.6.9...v1.7.0</description>
-   <enclosure url="https://github.com/cesar-carlos/plug_agente/releases/download/v1.7.0/PlugAgente-Setup-1.7.0.exe" sparkle:version="1.7.0+1" sparkle:os="windows" plug:sha256="96be38b83aa045a6e86b1f1a9b952102159a57fae9d77df61aa09c6e45499fe9" plug:channel="stable" plug:rolloutPercentage="100" length="21233068" type="application/octet-stream" />
   </item>
  </channel>
 </rss>
