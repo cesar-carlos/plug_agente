@@ -12,6 +12,16 @@
 Fonte operacional para versionamento, build do instalador, tag e publicacao do
 Plug Agente.
 
+### Estado da 1.9.0+1 em 31 de outubro de 2026
+
+O build Windows e o instalador local passaram pela verificação de empacotamento.
+O SHA-256 do instalador é `26fdd6cca09e3b8e326ae054bf79e216e7d6c725215db45a0982145468d5fb0f`.
+Os arquivos `.keys.json` e `.exe.sha256` foram restaurados após um reempacotamento
+com hash idêntico. O ensaio instalado de upgrade e recuperação continua pendente.
+A [matriz da 1.9.0](../communication/sql_operations.md#mandatory-real-engine-matrix)
+descreve o alcance dos testes. O [manifesto coordenado](../../contracts/persona-v2-release.json)
+mantém a publicação da release e do appcast bloqueada.
+
 ## Versao e Tags
 
 - A versao nasce em `pubspec.yaml`, no formato `MAJOR.MINOR.PATCH+BUILD`.
@@ -260,7 +270,13 @@ python tool/release/release_preflight.py --compile-iss
 - Apply the signing-provider requirements above. Certificate providers require
   Authenticode on project executables and the installer; `manifest` requires
   Ed25519 feed/manifest signatures without claiming an Authenticode publisher.
-- Never publish while the coordinated release manifest remains blocked.
+- Production releases and all appcast updates require coordinated acceptance.
+- The 1.9.0 manual-test exception permits a GitHub prerelease only on the existing
+  `homologation/1.9.0` tag at `bb592cdddd56efbf682778596811db886a1e381c`.
+  Verify the installer against the SHA-256 recorded above, the checksum file
+  and the packaging evidence. Stage only the installer and checksum in a draft,
+  verify both uploaded assets, then publish with the prerelease flag and Latest
+  disabled. This path does not invoke the Windows release or appcast workflows.
 - The [installer guide](../../installer/readme.md) owns component signing details;
   the [auto-update guide](auto_update_setup.md) owns runtime feed validation.
 
