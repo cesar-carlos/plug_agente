@@ -12,8 +12,12 @@ Changes after a recorded snapshot stay in Unreleased.
 
 ## 1.9.0 - 2026-10-31
 
-Status: prepared
+Status: tagged
 Build: 1.9.0+1
+Source: bef9527554dcdfa58eb370eea0f092bbe8d83974
+
+- Published the [stable Windows release](https://github.com/cesar-carlos/plug_agente/releases/tag/v1.9.0) as Latest on 2026-10-31. The [stable appcast](https://cesar-carlos.github.io/plug_agente/appcast.xml) started at 5% rollout.
+- The owner accepted the outstanding consumer evaluation, installed upgrade/rollback and coordinated image evidence risks for this build only. All 13 persona-v2 gates remain pending. See the [release record](docs/install/release_guide.md#publicação-estável-da-v1901).
 
 - Remote execution history shows admitted stdin bytes and confirmed pipe writes separately.
 

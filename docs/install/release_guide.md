@@ -12,15 +12,14 @@
 Fonte operacional para versionamento, build do instalador, tag e publicacao do
 Plug Agente.
 
-### Estado da 1.9.0+1 em 31 de outubro de 2026
+### Publicação estável da v1.9.0+1
 
-O build Windows e o instalador local passaram pela verificação de empacotamento.
-O SHA-256 do instalador é `26fdd6cca09e3b8e326ae054bf79e216e7d6c725215db45a0982145468d5fb0f`.
-Os arquivos `.keys.json` e `.exe.sha256` foram restaurados após um reempacotamento
-com hash idêntico. O ensaio instalado de upgrade e recuperação continua pendente.
-A [matriz da 1.9.0](../communication/sql_operations.md#mandatory-real-engine-matrix)
-descreve o alcance dos testes. O [manifesto coordenado](../../contracts/persona-v2-release.json)
-mantém a publicação da release e do appcast bloqueada.
+Em 31 de outubro de 2026, o fluxo oficial publicou a tag `v1.9.0` como **Latest**.
+O instalador estável tem SHA-256 `02b63e143a52039e6fe179c9eea123da7601187e2f7b2662525eee872beb1683` e acompanha o manifesto assinado. O GitHub Pages passou a servir o build `1.9.0+1` no canal `stable` com rollout inicial de **5%**. A verificação final do feed passou. [Release e ativos oficiais](https://github.com/cesar-carlos/plug_agente/releases/tag/v1.9.0) · [Execução de publicação](https://github.com/cesar-carlos/plug_agente/actions/runs/41222555905) · [Appcast público](https://cesar-carlos.github.io/plug_agente/appcast.xml)
+
+A exceção autorizada cobre somente esse build estável e seu appcast. Foram aceitos os riscos da avaliação pendente com dataset revisado e consumidor real, da falta de ensaio instalado de upgrade e rollback, e da evidência incompleta da imagem coordenada por gate. O manifesto continua com `ready: false` e **0 de 13 gates aprovados**. [Manifesto coordenado](../../contracts/persona-v2-release.json) · [Matriz de homologação](../communication/sql_operations.md#mandatory-real-engine-matrix)
+
+O instalador anterior de homologação tem SHA-256 `26fdd6cca09e3b8e326ae054bf79e216e7d6c725215db45a0982145468d5fb0f`. Use o hash correspondente à distribuição que foi baixada. [Pré-release de homologação](https://github.com/cesar-carlos/plug_agente/releases/tag/homologation/1.9.0)
 
 ## Versao e Tags
 
@@ -279,7 +278,7 @@ python tool/release/release_preflight.py --compile-iss
   manifest and feed checks and retain the initial 5% rollout.
 - The 1.9.0 manual-test exception permits a GitHub prerelease only on the existing
   `homologation/1.9.0` tag at `bb592cdddd56efbf682778596811db886a1e381c`.
-  Verify the installer against the SHA-256 recorded above, the checksum file
+  Verify the homologation installer against its prerelease SHA-256 above, the checksum file
   and the packaging evidence. Stage only the installer and checksum in a draft,
   verify both uploaded assets, then publish with the prerelease flag and Latest
   disabled. This path does not invoke the Windows release or appcast workflows.

@@ -24,5 +24,7 @@ See docs/communication/sql_operations.md. Journal, bootstrap/DI/shutdown, RPC an
 ODBC executor are integrated. Versioned SQL-operation negotiation and transport are
 implemented; explicit homologation opt-in is disabled by default. See the owning
 project_specifics rule and docs for limits and remaining acceptance. Never retry
-unknown operations. Production installer/appcast remain blocked; three-engine
-homologation and MCP publication/standard composition are still pending.
+unknown operations. The 1.9.0 three-engine development matrix passed. The stable
+1.9.0+1 installer and appcast shipped under a version-specific risk exception.
+Persona-v2 acceptance remains pending. See the [homologation scope and
+remaining acceptance](docs/communication/sql_operations.md#mandatory-real-engine-matrix).

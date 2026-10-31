@@ -37,8 +37,9 @@ mandatory runtime checks documented in OpenRPC and the schemas.
 ### Evidências históricas de aceitação — 2026-10-24
 
 See the [2026-10-24 homologation report](../testing/homologation_2026-10-24.md)
-for current native results, isolated hub recovery, live-token and reviewed-base
-blockers. Passing a local suite does not mark coordinated release gates complete.
+for that run's native results, isolated hub recovery, live-token and reviewed-base
+blockers. The [1.9.0 matrix](sql_operations.md#mandatory-real-engine-matrix)
+records subsequent validation against the reviewed hub revision.
 
 The existing contract/transport test selection passed (295 tests), and focused
 checks confirmed the error-shape defect, six-parameter parser support and the

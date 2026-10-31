@@ -181,4 +181,5 @@ tests minimum grants, restart, restore preserving UUID and offline copy re-enrol
 MCP script run-sql-anywhere-identity-homologation.ps1 creates only a new private
 temporary fixture; never point these tests at a registered source.
 
-Latest local execution and remaining blockers: [2026-10-24 homologation report](homologation_2026-10-24.md).
+For the 1.9.0+1 local results, scope and remaining blockers, see the
+[real-engine matrix](../communication/sql_operations.md#mandatory-real-engine-matrix).

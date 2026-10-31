@@ -4,7 +4,10 @@ Current scope: PostgreSQL, SQL Server and SQL Anywhere. Firebird cases and
 four-engine matrices in dated sections are retained as historical evidence;
 Firebird is no longer supported. Current acceptance requires the three-engine
 matrix and all gates in the [release manifest](../../contracts/persona-v2-release.json).
-Production publication remains blocked. Never retry an unknown operation.
+The stable 1.9.0+1 installer and appcast were published under an owner-approved
+exception with 5% initial rollout. All persona-v2 gates remain pending. See the
+[release record](../install/release_guide.md#publicação-estável-da-v1901).
+Never retry an unknown operation.
 
 For physical identity and structural inspection, see
 [source discovery](source_discovery.md).
@@ -221,7 +224,19 @@ is executed in configured user sources and no operational app is launched.
 
 ## Mandatory real-engine matrix
 
-Current execution evidence and blockers: [2026-10-24 homologation report](../testing/homologation_2026-10-24.md).
+On 2026-10-31, agent 1.9.0+1 passed all 85 persistent MCP → hub → agent
+chain cases on PostgreSQL, SQL Server and SQL Anywhere. The standalone hub
+suite passed its synthetic transport case and nine native recovery cases
+covering interruption before, during and after commit on each engine.
+The final chain run verified unchanged source inventories. The MCP validation
+directory contains the report and its companion JSON under
+`plug_mcp/docs/persona-v2/validation/2026-10-31-agente-1-9-0.*`.
+
+All thirteen coordinated gates remain open. Outstanding work includes a
+reviewed consumer dataset and real adapter, a disposable Windows installation
+and upgrade rehearsal, and a CI image bound to the reviewed revisions and
+per-gate evidence. The [October 24 report](../testing/homologation_2026-10-24.md)
+records the earlier candidate and its original preflight results.
 
 Run tool/homologation/sql_operation_four_engines_test.dart explicitly, using
 PERSONA_SQL_FIXTURE_MANIFEST for three newly created private fixtures. It never
