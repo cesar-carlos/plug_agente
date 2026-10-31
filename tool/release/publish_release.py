@@ -139,9 +139,15 @@ def publish(release: Release, root: Path = PROJECT_ROOT) -> None:
         return
 
     if existing_source is None:
-        dirty = command(["git", "status", "--porcelain", "--untracked-files=no"], root).stdout.strip()
-        if dirty:
-            raise ValueError("Commit tracked source changes before publishing a new release")
+        # Compare Git's canonical content; Windows generators can rewrite an
+        # unchanged LF-tracked file with CRLF in the working copy.
+        for scope in (["--cached"], []):
+            difference = command(["git", "diff", "--no-ext-diff", "--exit-code", *scope, "--"], root, check=False)
+            if difference.returncode == 1:
+                paths = command(["git", "diff", "--name-only", *scope, "--"], root).stdout.strip()
+                raise ValueError(f"Commit tracked source changes before publishing a new release: {paths}")
+            if difference.returncode:
+                raise RuntimeError(f"Unable to compare release source: {difference.stderr.strip()}")
         command(["git", "tag", release.tag, commit], root)
         command(["git", "push", "--atomic", "origin", "HEAD:refs/heads/main", f"refs/tags/{release.tag}"], root)
 

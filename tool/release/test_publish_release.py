@@ -269,6 +269,13 @@ class ReleasePublicationTests(unittest.TestCase):
             self.publish()
         self.assertEqual(self.writes(), [])
 
+    def test_staged_source_changes_block_release(self):
+        (self.root / "pubspec.yaml").write_text("version: 1.8.6+2\n", encoding="utf-8")
+        self.git("add", "pubspec.yaml")
+        with self.assertRaisesRegex(ValueError, "Commit tracked source"):
+            self.publish()
+        self.assertEqual(self.writes(), [])
+
     def test_atomic_push_failure_does_not_create_a_release(self):
         self.fail_push = True
         with self.assertRaisesRegex(RuntimeError, "Atomic push rejected"):
