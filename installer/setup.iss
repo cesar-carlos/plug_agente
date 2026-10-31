@@ -302,6 +302,7 @@ end;
 
 #include "updater_recovery.iss"
 #include "updater_install_preparation.iss"
+#include "installation_command.iss"
 #include "installation_preparation.iss"
 
 function UpdaterExists(): Boolean;

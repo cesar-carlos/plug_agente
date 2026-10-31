@@ -37,6 +37,7 @@ final class ActionIoCredentialFixture {
         payload: const {
           'agent_action_scopes': [
             'agent_actions.io',
+            'agent_actions.list',
             'agent_actions.run',
             'agent_actions.validate_run',
             'agent_actions.read_execution',

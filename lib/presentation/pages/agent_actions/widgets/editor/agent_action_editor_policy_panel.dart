@@ -31,6 +31,7 @@ class AgentActionEditorPolicyPanel {
     required this.executionCallbacks,
     required this.runtimeCallbacks,
     required this.onRemoteEnabledChanged,
+    required this.onCatalogChanged,
     required this.onRemoteAdHocChanged,
     required this.onRemoteFaithfulIoChanged,
     required this.onNotifyOnSuccessChanged,
@@ -47,6 +48,7 @@ class AgentActionEditorPolicyPanel {
   final AgentActionExecutionPoliciesCallbacks executionCallbacks;
   final AgentActionRuntimePoliciesCallbacks runtimeCallbacks;
   final ValueChanged<bool> onRemoteEnabledChanged;
+  final VoidCallback onCatalogChanged;
   final ValueChanged<bool> onRemoteAdHocChanged;
   final ValueChanged<bool> onRemoteFaithfulIoChanged;
   final ValueChanged<bool> onNotifyOnSuccessChanged;
@@ -124,6 +126,22 @@ class AgentActionEditorPolicyPanel {
                     AgentActionType.developer,
                   }.contains(draft.draftType),
             ),
+          if (draft.remoteEnabled && draft.remoteFaithfulIo)
+            for (final field in [
+              (l10n.catalogPublicDescription, draft.publicDescription),
+              (l10n.catalogStdinDescription, draft.stdinDescription),
+              (l10n.catalogStdoutDescription, draft.stdoutDescription),
+              (l10n.catalogStderrDescription, draft.stderrDescription),
+            ])
+              InfoLabel(
+                label: field.$1,
+                child: TextBox(
+                  controller: field.$2,
+                  enabled: enabled,
+                  maxLength: 512,
+                  onChanged: (_) => onCatalogChanged(),
+                ),
+              ),
         ],
       ),
       notifications: AgentActionNotificationPolicySection(

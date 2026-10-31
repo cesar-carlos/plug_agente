@@ -1,3 +1,4 @@
+import 'package:plug_agente/application/actions/action_io_catalog.dart';
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
@@ -365,8 +366,25 @@ Future<void> main() async {
         },
       );
       if (hub != null) {
+        final second = definition.copyWith(id: 'action-second', name: 'Second catalog action',
+          config: ExecutableActionConfig(
+            executablePath: (definition.config as ExecutableActionConfig).executablePath,
+            arguments: ['-NoProfile', '-NonInteractive', '-File', File('tool/homologation/action_io_echo.ps1').absolute.path],
+          ),
+          policies: definition.policies.copyWith(remote: definition.policies.remote.copyWith(
+            stdinDescription: 'Arbitrary bytes until EOF', stdoutDescription: 'Exact echo', stderrDescription: 'EOF line',
+          )),
+        );
+        final signed = second.copyWith(policies: second.policies.copyWith(
+          remote: second.policies.remote.copyWith(riskFingerprint: snapshotter.riskFingerprint(second)),
+        ));
+        (await repository.saveDefinition(signed)).getOrThrow();
+        (await repository.saveTrigger(const AgentActionTrigger(
+          id: 'second-trigger', actionId: 'action-second', type: AgentActionTriggerType.remote,
+        ))).getOrThrow();
         await hub.connect(
           run: handler,
+          catalog: ActionIoCatalog(repository, authorization, (action) async => action.canRun && action.policies.remote.canRunSavedAction && action.policies.remote.allowFaithfulIo),
           validate: ActionIoRpcHandler(
             'agent.action.validateRun',
             contract: ActionIoRpcContract(JsonSchemaContractValidator(loader: loader)),
@@ -696,6 +714,9 @@ Future<void> main() async {
       final receipt = (await input.inputStatus(executionId, clientId, ActionIoLimits.initialMessageId)).getOrThrow();
       expect(receipt.state, ActionIoDeliveryState.written);
       expect(receipt.confirmedBytes, bytes.length);
+      final snapshot = (await input.getExecutionSnapshot(executionId)).getOrThrow();
+      expect(snapshot.admittedInputBytes, expectedBytes.length);
+      expect(snapshot.confirmedInputBytes, expectedBytes.length);
       expect(queue.runningCount, 0);
       final duplicateResponse = await dispatch(
         RpcRequest(jsonrpc: '2.0', method: request.method, id: 'duplicate', params: request.params),
@@ -754,6 +775,30 @@ Future<void> main() async {
         );
       }
       if (hub != null && credentials != null) {
+        final ownerCredential = hub.credential;
+        final probe = await credentials.provision('catalog-isolation-probe', hub.agentId);
+        Future<RpcResponse> page(String id, [String? cursor]) => hub.call(RpcRequest(
+          jsonrpc: '2.0', id: id, method: 'agent.action.listAvailable',
+          params: {'page_size': 1, if (cursor != null) 'cursor': cursor},
+        ));
+        try {
+          final first = await page('owner-catalog');
+          final ownerCursor = (first.result as Map)['next_cursor'] as String;
+          hub.credential = probe.tokenValue;
+          final foreign = await page('foreign-cursor', ownerCursor);
+          expect(foreign.error, isNotNull);
+          expect((foreign.error!.data as Map)['failure_code'], 'ACTION_CATALOG_INVALID_CURSOR');
+          expect(foreign.result, isNull);
+          final permitted = await page('probe-catalog');
+          final probeCursor = (permitted.result as Map)['next_cursor'] as String;
+          (await credentials.repository.revokeToken(probe.tokenId)).getOrThrow();
+          final revoked = await page('revoked-cursor', probeCursor);
+          expect(revoked.error, isNotNull);
+          expect((revoked.error!.data as Map)['failure_code'], 'ACTION_IO_UNAUTHORIZED');
+          expect(revoked.result, isNull);
+        } finally {
+          hub.credential = ownerCredential;
+        }
         await verifyActionIoHubOwnership(
           hub: hub,
           credentials: credentials,

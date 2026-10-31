@@ -17,6 +17,23 @@ final class ActionIoPipeFailure extends ActionRuntimeFailure {
         context: {'retryable': false},
       );
 
+  ActionIoPipeFailure.timedOut()
+    : confirmedBytes = null,
+      super.withContext(
+        message:
+            'A escrita no stdin excedeu o prazo. Parte da entrada pode ter sido entregue. Consulte o estado da mensagem.',
+        code: 'ACTION_STDIN_WRITE_TIMEOUT',
+        context: {
+          'phase': 'stdin_write',
+          'origin': 'runner',
+          'delivery_state': 'unknown',
+          'effects_possible': true,
+          'outcome_unknown': true,
+          'retryable': false,
+          'recovery': 'query_message',
+        },
+      );
+
   final int? confirmedBytes;
 
   @override

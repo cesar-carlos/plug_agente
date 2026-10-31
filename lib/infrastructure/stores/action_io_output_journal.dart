@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:drift/drift.dart';
 import 'package:plug_agente/domain/actions/action_failure.dart';
 import 'package:plug_agente/domain/actions/action_io.dart';
+import 'package:plug_agente/domain/actions/action_io_journal_changes.dart';
 import 'package:plug_agente/domain/actions/action_io_output.dart';
 import 'package:plug_agente/domain/repositories/i_action_io_metrics.dart';
 import 'package:plug_agente/domain/repositories/i_action_io_output_journal.dart';
@@ -12,7 +13,7 @@ import 'package:plug_agente/infrastructure/stores/action_io_payload_cipher.dart'
 import 'package:result_dart/result_dart.dart';
 import 'package:uuid/uuid.dart';
 
-final class ActionIoOutputJournal implements IActionIoOutputJournal {
+final class ActionIoOutputJournal with ActionIoJournalChanges implements IActionIoOutputJournal {
   ActionIoOutputJournal(
     this._db,
     this._cipher, {
@@ -27,21 +28,27 @@ final class ActionIoOutputJournal implements IActionIoOutputJournal {
 
   @override
   Future<Result<ActionIoOutputEvent>> append(String executionId, ActionIoStream stream, List<int> bytes) async {
+    if (bytes.isEmpty ||
+        bytes.length > ActionIoLimits.blockBytes ||
+        (bytes is! Uint8List && bytes.any((byte) => byte < 0 || byte > 255))) {
+      return Failure(_failure('ACTION_IO_INVALID_INPUT'));
+    }
     final owned = Uint8List.fromList(bytes);
     final result = await _guard(
       () => _db.transaction(() async {
-        if (owned.isEmpty || owned.length > ActionIoLimits.blockBytes) throw _failure('ACTION_IO_INVALID_INPUT');
         final session = await _session(executionId);
         if (!const {'capturing', 'draining'}.contains(session.captureState) || session.outputExpired) {
           throw _failure('ACTION_IO_CAPTURE_CLOSED');
         }
-        if (session.admittedInputBytes + session.stdoutBytes + session.stderrBytes + owned.length >
-                ActionIoLimits.executionBytes ||
+        final remaining =
+            ActionIoLimits.executionBytes - session.admittedInputBytes - session.stdoutBytes - session.stderrBytes;
+        if (remaining <= 0 ||
             session.nextEventSequence > ActionIoLimits.executionEvents - ActionIoLimits.terminalEventReserve) {
           throw _failure('ACTION_OUTPUT_LIMIT_EXCEEDED');
         }
-        (await _physicalCapacity?.call(owned.length))?.getOrThrow();
-        await requireActionIoPayloadCapacity(_db, owned.length);
+        final prefix = remaining < owned.length ? Uint8List.sublistView(owned, 0, remaining) : owned;
+        (await _physicalCapacity?.call(prefix.length))?.getOrThrow();
+        await requireActionIoPayloadCapacity(_db, prefix.length);
         final offset = stream == ActionIoStream.stdout ? session.stdoutBytes : session.stderrBytes;
         final sequence = session.nextEventSequence;
         final aad = ActionIoPayloadCipher.context(
@@ -51,7 +58,7 @@ final class ActionIoOutputJournal implements IActionIoOutputJournal {
           sequence: sequence,
           offset: offset,
         );
-        final encrypted = await _cipher.encrypt(owned, context: aad);
+        final encrypted = await _cipher.encrypt(prefix, context: aad);
         if (encrypted.isError()) throw encrypted.exceptionOrNull()!;
         final payload = encrypted.getOrThrow();
         final id = const Uuid().v4();
@@ -66,7 +73,7 @@ final class ActionIoOutputJournal implements IActionIoOutputJournal {
                 ciphertext: payload.ciphertext,
                 authenticationTag: payload.tag,
                 authenticatedContext: payload.context,
-                plaintextBytes: owned.length,
+                plaintextBytes: prefix.length,
               ),
             );
         await _db
@@ -85,14 +92,20 @@ final class ActionIoOutputJournal implements IActionIoOutputJournal {
         await (_db.update(_db.actionIoSessions)..where((s) => s.executionId.equals(executionId))).write(
           ActionIoSessionsCompanion(
             nextEventSequence: Value(sequence + 1),
-            stdoutBytes: Value(session.stdoutBytes + (stream == ActionIoStream.stdout ? owned.length : 0)),
-            stderrBytes: Value(session.stderrBytes + (stream == ActionIoStream.stderr ? owned.length : 0)),
+            stdoutBytes: Value(session.stdoutBytes + (stream == ActionIoStream.stdout ? prefix.length : 0)),
+            stderrBytes: Value(session.stderrBytes + (stream == ActionIoStream.stderr ? prefix.length : 0)),
           ),
         );
-        return ActionIoOutputEvent(sequence: sequence, stream: stream, offset: offset, bytes: owned);
+        return ActionIoOutputEvent(sequence: sequence, stream: stream, offset: offset, bytes: prefix);
       }),
     );
-    if (result.isSuccess()) _metrics?.recordPersistedOutputBytes(owned.length);
+    if (result.isSuccess()) {
+      signalJournalCommit(executionId);
+      final persisted = result.getOrThrow().bytes.length;
+      _metrics?.recordPersistedOutputBytes(persisted);
+      // Signal the capture worker only after the permitted prefix is durable.
+      if (persisted < owned.length) return Failure(_failure('ACTION_OUTPUT_LIMIT_EXCEEDED'));
+    }
     return result;
   }
 
@@ -162,6 +175,19 @@ final class ActionIoOutputJournal implements IActionIoOutputJournal {
           'stderr' => ActionIoStream.stderr,
           _ => throw _failure('ACTION_IO_INTEGRITY_FAILED'),
         };
+        // These metadata fields and canonical base64 are ASCII. Count the encoded payload
+        // without creating a second base64 string or decrypting a block outside the page.
+        final eventSize =
+            jsonEncode({
+              'sequence': row.sequence,
+              'type': 'output',
+              'stream': stream.name,
+              'offset': row.byteOffset,
+              'data_base64': '',
+            }).length +
+            4 * ((payload.plaintextBytes + 2) ~/ 3) +
+            1;
+        if (jsonSize + eventSize > ActionIoLimits.jsonBytes) break;
         final aad = ActionIoPayloadCipher.context(
           executionId: executionId,
           channel: stream.name,
@@ -182,20 +208,6 @@ final class ActionIoOutputJournal implements IActionIoOutputJournal {
         if (decrypted.isError()) throw decrypted.exceptionOrNull()!;
         final bytes = decrypted.getOrThrow();
         if (bytes.length != payload.plaintextBytes) throw _failure('ACTION_IO_INTEGRITY_FAILED');
-        final eventSize =
-            utf8
-                .encode(
-                  jsonEncode({
-                    'sequence': row.sequence,
-                    'type': 'output',
-                    'stream': stream.name,
-                    'offset': row.byteOffset,
-                    'data_base64': base64Encode(bytes),
-                  }),
-                )
-                .length +
-            1;
-        if (jsonSize + eventSize > ActionIoLimits.jsonBytes) break;
         events.add(ActionIoOutputEvent(sequence: row.sequence, stream: stream, offset: row.byteOffset!, bytes: bytes));
         size += bytes.length;
         jsonSize += eventSize;
@@ -223,6 +235,7 @@ final class ActionIoOutputJournal implements IActionIoOutputJournal {
       }),
     );
     if (result.isSuccess() && result.getOrThrow()) {
+      signalJournalCommit(executionId);
       _metrics?.recordExecutionOutcome(ActionIoExecutionOutcome.cancelled, captureComplete: true);
     }
     return result;
@@ -244,6 +257,7 @@ final class ActionIoOutputJournal implements IActionIoOutputJournal {
       failureCode: failureCode,
     );
     if (result.isSuccess()) {
+      signalJournalCommit(executionId);
       final outcome = !processTerminated
           ? ActionIoExecutionOutcome.unknown
           : failureCode == 'ACTION_CANCELLED'

@@ -110,52 +110,27 @@ class ReleasePreflightTests(unittest.TestCase):
         release_preflight.ensure_feed_public_key_embedded("1.6.6", "")
         release_preflight.ensure_feed_public_key_embedded("1.6.6", "   ")
 
-    def test_ensure_feed_public_key_embedded_accepts_when_present(self) -> None:
+    def test_compressed_installer_uses_bound_payload_evidence(self):
+        from tool.release.installer_key_evidence import inspect_payload, record
+        key = "AgioCsHZr/MmqPmckUOzs5IKWwjkCRaEFgQGS3wwRNA="
+        bundle = self.root / "build/windows/x64/runner/Release"
+        for name in ("data/app.so", "updater/plug_update_client.exe"):
+            path = bundle / name
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_bytes(b"payload-" + key.encode())
         installer = self.dist_dir / "PlugAgente-Setup-1.6.6.exe"
-        # Synthetic installer payload that embeds the pubkey verbatim, as it
-        # would after --dart-define injection at compile time.
-        installer.write_bytes(b"prefix-AgioCsHZr/MmqPmckUOzs5IKWwjkCRaEFgQGS3wwRNA=-suffix")
-
-        release_preflight.ensure_feed_public_key_embedded(
-            "1.6.6",
-            "AgioCsHZr/MmqPmckUOzs5IKWwjkCRaEFgQGS3wwRNA=",
-        )
-
-    def test_ensure_feed_public_key_embedded_rejects_when_missing(self) -> None:
-        installer = self.dist_dir / "PlugAgente-Setup-1.6.6.exe"
-        installer.write_bytes(b"installer without any key embedded")
-
-        with self.assertRaisesRegex(RuntimeError, "missing AUTO_UPDATE_FEED_PUBLIC_KEY"):
-            release_preflight.ensure_feed_public_key_embedded(
-                "1.6.6",
-                "AgioCsHZr/MmqPmckUOzs5IKWwjkCRaEFgQGS3wwRNA=",
-            )
-
-    def test_ensure_feed_public_key_embedded_accepts_csv_when_all_present(self) -> None:
-        installer = self.dist_dir / "PlugAgente-Setup-1.6.6.exe"
-        installer.write_bytes(
-            b"prefix-keyOne-middle-keyTwo-suffix"
-        )
-
-        release_preflight.ensure_feed_public_key_embedded("1.6.6", "keyOne, keyTwo")
-
-    def test_ensure_feed_public_key_embedded_rejects_csv_when_one_missing(self) -> None:
-        installer = self.dist_dir / "PlugAgente-Setup-1.6.6.exe"
-        installer.write_bytes(b"prefix-keyOne-suffix")
-
-        with self.assertRaisesRegex(RuntimeError, "missing AUTO_UPDATE_FEED_PUBLIC_KEY"):
-            release_preflight.ensure_feed_public_key_embedded("1.6.6", "keyOne,keyTwo")
-
-    def test_ensure_feed_public_key_embedded_handles_match_across_chunks(self) -> None:
-        installer = self.dist_dir / "PlugAgente-Setup-1.6.6.exe"
-        chunk = release_preflight._BINARY_SCAN_CHUNK_BYTES
-        key = "boundaryKey"
-        # Split the key across the chunk boundary so the implementation must
-        # carry over (key_len - 1) bytes to detect it.
-        payload = b"a" * (chunk - 3) + key.encode("ascii") + b"b" * 1024
-        installer.write_bytes(payload)
-
+        installer.write_bytes(b"compressed installer without plaintext key")
+        record(installer, bundle, key, inspect_payload(bundle, key))
         release_preflight.ensure_feed_public_key_embedded("1.6.6", key)
+        installer.write_bytes(b"changed compressed installer")
+        with self.assertRaisesRegex(RuntimeError, "evidence"):
+            release_preflight.ensure_feed_public_key_embedded("1.6.6", key)
+
+    def test_plaintext_key_without_packaging_evidence_is_not_proof(self):
+        key = "AgioCsHZr/MmqPmckUOzs5IKWwjkCRaEFgQGS3wwRNA="
+        (self.dist_dir / "PlugAgente-Setup-1.6.6.exe").write_bytes(key.encode())
+        with self.assertRaisesRegex(RuntimeError, "evidence"):
+            release_preflight.ensure_feed_public_key_embedded("1.6.6", key)
 
     def test_run_wraps_cmd_and_bat_files_for_windows_execution(self) -> None:
         with (

@@ -40,16 +40,19 @@ class AgentActionsRemoteCapabilityProvider implements IAgentActionsRemoteCapabil
       supportsElevated: elevatedActionsEnabled && _elevatedRunnerReadiness.isConfigured,
     );
     if (_faithfulIoAvailable?.call() ?? false) {
+      capability['catalogVersion'] = 1;
       capability['io'] = Map<String, Object>.of(ActionIoCapability.advertisement);
       for (final key in ['methods', 'supportedMethods']) {
         capability[key] = <String>[
           ...(capability[key] as List<String>),
           ...ActionIoCapability.methods,
+          'agent.action.listAvailable',
         ];
       }
       capability['authorizationScopes'] = <String>[
         ...(capability['authorizationScopes'] as List<String>),
         'agent_actions.io',
+        'agent_actions.list',
       ];
     }
     return capability;

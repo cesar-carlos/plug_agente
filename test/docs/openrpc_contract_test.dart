@@ -3,7 +3,6 @@ import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:plug_agente/core/constants/agent_action_rpc_constants.dart';
-import 'package:plug_agente/domain/protocol/action_io_capability.dart';
 import 'package:plug_agente/infrastructure/external_services/transport/open_rpc_document_loader.dart';
 import 'package:plug_agente/infrastructure/validation/schema_loader.dart';
 
@@ -11,7 +10,12 @@ String _openRpcSchemaRef(String schemaFileName) => './schemas/$schemaFileName';
 
 final List<String> _publishedMethods = [
   ...AgentActionRpcConstants.remotePublishedRpcMethodNamesOrdered,
-  ...ActionIoCapability.methods,
+  'agent.action.sendInput',
+  'agent.action.closeInput',
+  'agent.action.getInputStatus',
+  'agent.action.readIo',
+  'agent.action.listAvailable',
+  'agent.action.findExecution',
 ];
 
 /// Published params/result schema refs per `agent.action.*` method (MVP wire).
@@ -37,6 +41,10 @@ Map<String, ({String paramsSchema, String resultSchema})> get _agentActionOpenRp
       'agent.action.findExecution': (
         paramsSchema: _openRpcSchemaRef(TransportSchemaIds.paramsAgentActionFindExecution),
         resultSchema: _openRpcSchemaRef(TransportSchemaIds.resultAgentActionFindExecution),
+      ),
+      'agent.action.listAvailable': (
+        paramsSchema: _openRpcSchemaRef(TransportSchemaIds.paramsAgentActionListAvailable),
+        resultSchema: _openRpcSchemaRef(TransportSchemaIds.resultAgentActionListAvailable),
       ),
       AgentActionRpcConstants.agentActionRunRpcMethodName: (
         paramsSchema: _openRpcSchemaRef(TransportSchemaIds.paramsAgentActionRun),
@@ -67,6 +75,8 @@ const Set<String> _publishedAgentActionSchemaFiles = <String>{
   TransportSchemaIds.resultAgentActionReadIo,
   TransportSchemaIds.paramsAgentActionFindExecution,
   TransportSchemaIds.resultAgentActionFindExecution,
+  TransportSchemaIds.paramsAgentActionListAvailable,
+  TransportSchemaIds.resultAgentActionListAvailable,
   TransportSchemaIds.paramsAgentActionRun,
   TransportSchemaIds.paramsAgentActionValidateRun,
   TransportSchemaIds.paramsAgentActionCancel,

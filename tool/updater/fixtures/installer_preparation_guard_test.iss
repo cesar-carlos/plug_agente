@@ -9,7 +9,7 @@ SetupLogging=yes
 [Code]
 var
   Requests, Queries, Cancellations: Integer;
-  ManualClosure, ApplicationRunning: Boolean;
+  ManualClosure, ApplicationRunning, SimulateTimeout: Boolean;
   FirstParameters: String;
 procedure AssertTrue(Value: Boolean; MessageText: String);
 begin
@@ -41,6 +41,16 @@ begin
     Result := False;
   end;
 end;
+function RunInstallationCommand(const Filename, Parameters: String; Budget: Cardinal; var Details: String): Boolean;
+begin
+  AssertTrue(Budget > 0, 'Unbounded command budget');
+  Result := RunDependencyCommand(Filename, Parameters, Details);
+  if SimulateTimeout then
+  begin
+    Details := 'installation_command_timeout_unknown';
+    Result := False;
+  end;
+end;
 function CanMigrateManifestPolicy(const Administrator, Silent, Attempted: Boolean): Boolean;
 begin
   Result := False;
@@ -54,6 +64,16 @@ begin
   Directory := ExpandConstant('{tmp}\guard-app');
   Guard := Directory + '\.installation-lock';
   TestCase := ExpandConstant('{param:CASE}');
+  if TestCase = 'timeout' then
+  begin
+    SimulateTimeout := True;
+    AssertTrue(not PrepareRunningInstallation(Details), 'Timeout accepted');
+    AssertTrue(not PrepareRunningInstallation(Details), 'Unknown preparation retried');
+    ReleaseInstallationGuard;
+    AssertTrue((Requests = 1) and (Queries = 0) and (Cancellations = 0), 'Unknown command replayed');
+    AssertTrue(SaveStringToFile(ExpandConstant('{param:RESULT}'), 'passed', False), 'Result failed');
+    Exit;
+  end;
   if TestCase <> 'new' then AssertTrue(ForceDirectories(Directory), 'Fixture directory failed');
   if TestCase = 'guard_directory' then
   begin

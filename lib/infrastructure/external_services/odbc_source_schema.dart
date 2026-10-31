@@ -118,7 +118,7 @@ class OdbcSourceSchema implements ISourceSchemaProbe {
             nullable > 1 ||
             nullable < 0 ||
             (nullable == 1) != expectedColumn['nullable'] ||
-            integer(column['COLUMN_SIZE']) != expectedColumn['size'] ||
+            columnSize(column, dialect) != expectedColumn['size'] ||
             integer(column['DECIMAL_DIGITS']) != expectedColumn['scale']) {
           throw domain.DatabaseFailure.withContext(
             code: 'SOURCE_STRUCTURE_MISMATCH',
@@ -213,6 +213,19 @@ class OdbcSourceSchema implements ISourceSchemaProbe {
       : value is num && value.isFinite && value == value.roundToDouble()
       ? value.toInt()
       : int.tryParse(text(value));
+
+  /// SQL Server uses -1 for MAX storage; it is not a negative capacity.
+  /// Keep unknown size null in both inspection and subsequent structure checks.
+  static int? columnSize(Map<String, Object?> column, String dialect) {
+    final size = integer(column['COLUMN_SIZE']);
+    if (dialect == 'mssql' &&
+        size == -1 &&
+        const {'varchar', 'nvarchar', 'varbinary'}.contains(text(column['TYPE_NAME']).toLowerCase())) {
+      return null;
+    }
+    return size;
+  }
+
   static bool matches(Map<String, Object?> row, SchemaResource resource, String dialect, {String prefix = 'TABLE_'}) {
     String canonical(String s) => dialect == 'firebird' ? s.toUpperCase() : s;
     return canonical(text(row['${prefix}NAME'])) == canonical(resource.name) &&
@@ -254,7 +267,7 @@ class OdbcSourceSchema implements ISourceSchemaProbe {
                   : integer(r['NULLABLE']) == 1
                   ? true
                   : null,
-              'size': integer(r['COLUMN_SIZE']),
+              'size': columnSize(r, request.expected.dialect),
               'scale': integer(r['DECIMAL_DIGITS']),
             },
           )

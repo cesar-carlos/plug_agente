@@ -70,6 +70,18 @@ class ValidateAgentActionDefinition {
   ActionValidationFailure? _validateBasicDefinition(
     AgentActionDefinition definition,
   ) {
+    final catalog = definition.policies.remote;
+    if ([
+      catalog.publicDescription,
+      catalog.stdinDescription,
+      catalog.stdoutDescription,
+      catalog.stderrDescription,
+    ].any((text) => text.runes.length > 512)) {
+      return ActionValidationFailure.withContext(
+        message: 'Public catalog descriptions must be at most 512 characters.',
+        code: 'ACTION_CATALOG_DESCRIPTION_TOO_LONG',
+      );
+    }
     if (definition.id.trim().isEmpty) {
       return ActionValidationFailure.withContext(
         message: 'Action id is required.',

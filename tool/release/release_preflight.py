@@ -190,57 +190,12 @@ def ensure_installer_exists(version: str) -> None:
 
 # Scan in chunks so we never load a >30 MB binary into memory just to find
 # a 44-character base64 string.
-_BINARY_SCAN_CHUNK_BYTES = 4 * 1024 * 1024
-
-
-def _file_contains_bytes(path: Path, needle: bytes) -> bool:
-    if not needle:
-        return True
-    with path.open("rb") as fh:
-        overlap = b""
-        while True:
-            chunk = fh.read(_BINARY_SCAN_CHUNK_BYTES)
-            if not chunk:
-                return False
-            haystack = overlap + chunk
-            if needle in haystack:
-                return True
-            # Keep the trailing (len(needle) - 1) bytes so a match split across
-            # two chunks is still detected.
-            keep = max(0, len(needle) - 1)
-            overlap = haystack[-keep:] if keep else b""
-
-
 def ensure_feed_public_key_embedded(version: str, csv_keys: str) -> None:
-    """Ensures every Ed25519 public key in [csv_keys] is present in the
-    installer payload. Catches builds that forgot the
-    `--dart-define=AUTO_UPDATE_FEED_PUBLIC_KEY=...` flag.
-
-    Accepts a single key or a CSV (matches the runtime contract). A missing
-    key would make every silent check report `feedSignatureStatus:
-    publicKeyUnavailable`, defeating the rotation/signing rollout.
-    """
-    cleaned = (csv_keys or "").strip()
-    if not cleaned:
+    if not csv_keys.strip():
         return
-    installer = DIST_DIR / f"PlugAgente-Setup-{version}.exe"
-    if not installer.exists():
-        raise RuntimeError(
-            f"Installer not found at {installer}; cannot verify embedded public key."
-        )
-    keys = [entry.strip() for entry in cleaned.split(",") if entry.strip()]
-    missing: list[str] = []
-    for key in keys:
-        if not _file_contains_bytes(installer, key.encode("ascii")):
-            missing.append(key)
-    if missing:
-        joined = ", ".join(f"{m[:8]}…" for m in missing)
-        raise RuntimeError(
-            f"Installer is missing AUTO_UPDATE_FEED_PUBLIC_KEY value(s) [{joined}]. "
-            "Did the build forget the --dart-define flag? Re-run the build with the "
-            "pubkey embedded; otherwise REQUIRE_FEED_SIGNATURE=true clients will "
-            "report feedSignatureStatus=publicKeyUnavailable."
-        )
+    from tool.release.installer_key_evidence import verify
+    verify(DIST_DIR / f"PlugAgente-Setup-{version}.exe",
+           PROJECT_ROOT / "build/windows/x64/runner/Release", csv_keys)
 
 
 def ensure_github_pages_workflow_ready(repo: str) -> None:

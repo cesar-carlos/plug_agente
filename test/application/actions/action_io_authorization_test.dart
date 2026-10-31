@@ -102,6 +102,28 @@ void main() {
     when(() => repository.getTokenPolicySummaryByHash(any())).thenAnswer((_) async => Failure(failure));
     expect((await call()).exceptionOrNull(), same(failure));
   });
+  test('discovery requires list, io, run and the candidate action allowlist', () async {
+    const scopes = ['agent_actions.io', 'agent_actions.run', 'agent_actions.list'];
+    for (final missing in [null, ...scopes]) {
+      when(() => repository.getTokenPolicySummaryByHash(any())).thenAnswer(
+        (_) async => Success(record(payload: {
+          'agent_actions': {
+            'scopes': scopes.where((scope) => scope != missing).toList(),
+            'action_ids': ['allowed'],
+          },
+        })),
+      );
+      for (final id in ['allowed', 'other']) {
+        final result = await authorization.authorize(
+          agentId: 'agent',
+          actionId: id,
+          credential: 'secret',
+          operation: ActionIoOperation.listAvailable,
+        );
+        expect(result.isSuccess(), missing == null && id == 'allowed');
+      }
+    }
+  });
   test('locally matched JWT must also satisfy its lifetime', () async {
     String jwt(Map<String, dynamic> claims) => 'e30.${base64Url.encode(utf8.encode(jsonEncode(claims)))}.signature';
     final seconds = now.millisecondsSinceEpoch ~/ 1000;

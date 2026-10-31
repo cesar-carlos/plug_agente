@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:developer' as developer;
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
@@ -6,8 +7,9 @@ import 'package:flutter_test/flutter_test.dart';
 import '../../../tool/benchmarks/benchmark_transport_pipeline.dart';
 import '../../../tool/benchmarks/benchmark_vm_diagnostics.dart';
 
-void main() {
+Future<void> main() async {
   TestWidgetsFlutterBinding.ensureInitialized();
+  final service = await developer.Service.getInfo();
   test(
     'captures transport heap, CPU, allocations and GC outside qualification timing',
     () async {
@@ -26,5 +28,6 @@ void main() {
     },
     timeout: Timeout.none,
     tags: const ['perf'],
+    skip: service.serverUri == null ? 'Requires flutter test --enable-vmservice' : false,
   );
 }

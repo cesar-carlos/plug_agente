@@ -300,6 +300,27 @@
   }
 },
 {
+  "name": "agent.action.listAvailable",
+  "summary": "Faithful I/O v1; requires explicit agentActions.io negotiation and current local Client authorization. Disabled by default; catalog presence does not enable execution.",
+  "x-required-capability": "agentActions.catalog",
+  "paramStructure": "by-name",
+  "params": [
+    {
+      "required": true,
+      "name": "params",
+      "schema": {
+        "$ref": "./schemas/rpc.params.agent-action-list-available.schema.json"
+      }
+    }
+  ],
+  "result": {
+    "name": "result",
+    "schema": {
+      "$ref": "./schemas/rpc.result.agent-action-list-available.schema.json"
+    }
+  }
+},
+{
   "name": "agent.action.findExecution",
   "summary": "Faithful I/O v1; requires explicit agentActions.io negotiation and current local Client authorization. Disabled by default; catalog presence does not enable execution.",
   "x-required-capability": "agentActions.io",

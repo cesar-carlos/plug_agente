@@ -48,8 +48,19 @@ void main() {
     );
     expect(renewed.approvedAt!.isAfter(previous.policies.remote.approvedAt!), isTrue);
     expect(renewed.allowFaithfulIo, isTrue);
+    draft.stdinDescription.text = 'Raw bytes';
+    final described = draft.remotePolicy(
+      remoteAdHocFeatureEnabled: false,
+      localApprover: 'local',
+      previousDefinition: previous,
+    );
+    expect(described.stdinDescription, 'Raw bytes');
     const snapshotter = AgentActionDefinitionSnapshotter();
     final changed = previous.copyWith(policies: previous.policies.copyWith(remote: renewed));
+    expect(
+      snapshotter.riskFingerprint(changed),
+      snapshotter.riskFingerprint(previous.copyWith(policies: previous.policies.copyWith(remote: described))),
+    );
     final reconciled = await const AgentActionRemoteApprovalReconciler(snapshotter).reconcileAsync(
       incoming: renewed,
       previous: previous.policies.remote.copyWith(riskFingerprint: snapshotter.riskFingerprint(previous)),

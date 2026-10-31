@@ -1,3 +1,5 @@
+import { execFile } from "node:child_process";
+import { promisify } from "node:util";
 import {
   existsSync,
   readFileSync,
@@ -180,6 +182,17 @@ async function main(): Promise<void> {
                 JSON.stringify({ stage }),
               ),
           });
+          for (const mode of ["rest", "socket"]) {
+            const args = [join(serverRoot, "node_modules/tsx/dist/cli.mjs"),
+              join(serverRoot, "docs/snippets/action_io_echo_client.ts"), mode, join(root, "checkpoint-" + mode)];
+            const env = { ...process.env, PLUG_HUB_URL: server.getUrl(), PLUG_AGENT_ID: agentId,
+              PLUG_CLIENT_ID: "fixture-client", PLUG_ACTION_NAME: "Second catalog action",
+              PLUG_TRIGGER_ID: "second-trigger",
+              PLUG_HUB_TOKEN: session.client.accessToken, PLUG_AGENT_TOKEN: reference.credential };
+            for (const extra of [["--stop-after-input"], []]) {
+              await promisify(execFile)(process.execPath, [...args, ...extra], { env, windowsHide: true, timeout: 45000 });
+            }
+          }
           publishReferenceResult({
             success: true,
             transports: ["rest", "socket", "relay"],
@@ -189,6 +202,7 @@ async function main(): Promise<void> {
             success: false,
             error: error instanceof Error ? error.name : "unknown",
             code: (error as { code?: unknown })?.code,
+            failureCode: (error as { details?: { failure_code?: string } })?.details?.failure_code,
             location:
               error instanceof Error
                 ? error.stack

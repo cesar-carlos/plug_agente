@@ -10,6 +10,7 @@ import 'package:plug_agente/domain/repositories/i_client_token_repository.dart';
 import 'package:result_dart/result_dart.dart';
 
 enum ActionIoOperation {
+  listAvailable,
   run,
   validateRun,
   sendInput,
@@ -42,9 +43,26 @@ final class ActionIoAuthorization {
     required String actionId,
     required ActionIoOperation operation,
     String? ownerClientId,
+  }) => _authorize(
+    credential: credential, agentId: agentId, actionId: actionId,
+    operation: operation, ownerClientId: ownerClientId,
+  );
+
+  /// Authenticate the page even when the repository contains no visible actions.
+  Future<Result<ActionIoPrincipal>> authorizeCatalogPage({
+    required String credential,
+    required String agentId,
+  }) => _authorize(credential: credential, agentId: agentId, operation: ActionIoOperation.listAvailable);
+
+  Future<Result<ActionIoPrincipal>> _authorize({
+    required String credential,
+    required String agentId,
+    required ActionIoOperation operation,
+    String? actionId,
+    String? ownerClientId,
   }) async {
     final token = normalizeClientCredentialToken(credential);
-    if (token.isEmpty || agentId.trim().isEmpty || actionId.trim().isEmpty) {
+    if (token.isEmpty || agentId.trim().isEmpty || (actionId != null && actionId.trim().isEmpty)) {
       return Failure(_denied('missing_identity'));
     }
     final lookup = await _repository.getTokenPolicySummaryByHash(hashClientCredentialToken(token));
@@ -66,6 +84,7 @@ final class ActionIoAuthorization {
     final restrictions = ClientTokenRuntimeRestrictions.fromPayload(record.payload);
     if (!restrictions.declaresAgentActionMetadata) return Failure(_denied('explicit_scope_required'));
     final scope = switch (operation) {
+      ActionIoOperation.listAvailable => AgentActionAuthorizationScopes.list,
       ActionIoOperation.run ||
       ActionIoOperation.sendInput ||
       ActionIoOperation.closeInput => AgentActionAuthorizationScopes.run,
@@ -76,7 +95,18 @@ final class ActionIoAuthorization {
       ActionIoOperation.readIo ||
       ActionIoOperation.findExecution => AgentActionAuthorizationScopes.readExecution,
     };
-    for (final requiredScope in [AgentActionAuthorizationScopes.io, scope]) {
+    for (final requiredScope in [
+      AgentActionAuthorizationScopes.io,
+      scope,
+      if (operation == ActionIoOperation.listAvailable) AgentActionAuthorizationScopes.run,
+    ]) {
+      if (actionId == null) {
+        final scopes = restrictions.agentActionScopes;
+        if (!scopes.contains(AgentActionAuthorizationScopes.wildcard) && !scopes.contains(requiredScope)) {
+          return Failure(_denied('scope_or_action_denied'));
+        }
+        continue;
+      }
       if (!ClientTokenPolicyAgentActionAuthorization.grantsRemoteAgentAction(
         policyPayload: record.payload,
         requiredScope: requiredScope,

@@ -8,6 +8,7 @@ import 'package:plug_agente/presentation/providers/agent_actions_provider.dart';
 import 'package:plug_agente/presentation/widgets/agent_actions/agent_actions_cpu_settings_card.dart';
 import 'package:plug_agente/presentation/widgets/agent_actions/agent_actions_dangerous_command_warn_card.dart';
 import 'package:plug_agente/presentation/widgets/agent_actions/agent_actions_preflight_settings_card.dart';
+import 'package:plug_agente/presentation/widgets/agent_actions/agent_actions_remote_access_panel.dart';
 import 'package:plug_agente/presentation/widgets/agent_actions/agent_actions_retention_card.dart';
 import 'package:plug_agente/presentation/widgets/agent_actions/agent_actions_runtime_support_card.dart';
 import 'package:plug_agente/presentation/widgets/agent_actions/agent_actions_select_builder.dart';
@@ -57,6 +58,8 @@ class AgentActionsSettingsTab extends StatelessWidget {
               AgentActionsDangerousCommandWarnCard(provider: provider, l10n: l10n),
               const SizedBox(height: AppSpacing.md),
               AgentActionsRetentionCard(l10n: l10n, provider: provider),
+              const SizedBox(height: AppSpacing.md),
+              const AgentActionsRemoteAccessPanel(),
               if (runtimeCapabilities.isDegraded ||
                   runtimeCapabilities.isUnsupported ||
                   runtimeDiagnostics?.source == RuntimeDetectionSource.detectionFailed) ...[

@@ -57,6 +57,26 @@ void main() {
     });
   }
 
+  for (final nativeType in ['varchar', 'nvarchar', 'varbinary']) {
+    test('MAX $nativeType maps to nullable size and preserves structure verification', () async {
+      final fixture = SourceSchemaFixture(1);
+      fixture.columnRows.first[3] = nativeType;
+      fixture.columnRows.first[5] = -1;
+      fixture.expected.resources.first.columns.first['nativeType'] = nativeType;
+      fixture.expected.resources.first.columns.first['size'] = null;
+      expect(OdbcSourceSchema.columnSize({'TYPE_NAME': nativeType, 'COLUMN_SIZE': -1}, 'mssql'), isNull);
+      await fixture.validate(dialect: 'mssql');
+      fixture.columnRows.first[5] = 100;
+      await expectLater(fixture.validate(dialect: 'mssql'), throwsA(mismatch));
+    });
+  }
+  test('MAX normalization does not conceal other negative metadata or change zero', () {
+    expect(OdbcSourceSchema.columnSize({'TYPE_NAME': 'varchar', 'COLUMN_SIZE': -2}, 'mssql'), -2);
+    expect(OdbcSourceSchema.columnSize({'TYPE_NAME': 'varchar', 'COLUMN_SIZE': -1}, 'postgres'), -1);
+    expect(OdbcSourceSchema.columnSize({'TYPE_NAME': 'int', 'COLUMN_SIZE': -1}, 'mssql'), -1);
+    expect(OdbcSourceSchema.columnSize({'TYPE_NAME': 'nvarchar', 'COLUMN_SIZE': 0}, 'mssql'), 0);
+  });
+
   const key = <String, Object?>{
     'name': 'fk',
     'status': 'enabled',

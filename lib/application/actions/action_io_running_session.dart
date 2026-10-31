@@ -4,6 +4,7 @@ import 'package:plug_agente/application/actions/action_io_input_delivery.dart';
 import 'package:plug_agente/application/actions/action_io_output_capture.dart';
 import 'package:plug_agente/domain/actions/action_failure.dart';
 import 'package:plug_agente/domain/actions/action_io.dart';
+import 'package:plug_agente/domain/actions/action_io_journal_changes.dart';
 import 'package:plug_agente/domain/actions/action_policies.dart';
 import 'package:plug_agente/domain/repositories/i_action_io_journal.dart';
 import 'package:plug_agente/domain/repositories/i_action_io_output_journal.dart';
@@ -162,6 +163,10 @@ final class ActionIoRunningSession implements IActionIoSessionControl {
   }
 
   Future<void> _deliver(ActionIoInputDelivery delivery) async {
+    final journal = _inputJournal;
+    final changes = journal is IActionIoJournalChanges
+        ? (journal as IActionIoJournalChanges).observeChanges(executionId)
+        : null;
     try {
       while (!_stopInput) {
         final result = await delivery.deliverNext(deadline: deadline);
@@ -172,11 +177,16 @@ final class ActionIoRunningSession implements IActionIoSessionControl {
         }
         final receipt = result.getOrThrow().receipt;
         if (receipt?.stdinState == ActionIoStdinState.closed) return;
-        if (receipt == null) await Future<void>.delayed(const Duration(milliseconds: 100));
+        if (receipt == null) {
+          const fallback = Duration(milliseconds: 100);
+          await (changes?.wait(fallback) ?? Future<void>.delayed(fallback));
+        }
       }
     } on Object catch (error) {
       _record(error);
       await _stop();
+    } finally {
+      changes?.close();
     }
   }
 

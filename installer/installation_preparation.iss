@@ -4,6 +4,7 @@ var
   ManifestMigrationAttempted: Boolean;
   InstallationGuardOwned: Boolean;
   InstallationGuardHandle: THandle;
+  InstallationCommandUnknown: Boolean;
 
 function OpenInstallationGuard(Name: String; Access, Sharing: Cardinal;
   Security: Integer; Creation, Flags: Cardinal; Template: THandle): THandle;
@@ -18,8 +19,8 @@ procedure ReleaseInstallationGuard;
 var
   Details: String;
 begin
-  if InstallationRequested and not RunDependencyCommand(ExpandConstant('{tmp}\plug_update_client.exe'),
-    '--prepare-install ' + AddQuotes(ExpandConstant('{app}')) + ' ' + InstallationOperation + ' cancel', Details) then
+  if InstallationRequested and not InstallationCommandUnknown and not RunInstallationCommand(ExpandConstant('{tmp}\plug_update_client.exe'),
+    '--prepare-install ' + AddQuotes(ExpandConstant('{app}')) + ' ' + InstallationOperation + ' cancel', 5000, Details) then
     Log('Cancellation does not confirm restoration: ' + Details);
   if InstallationGuardOwned then
   begin
@@ -33,9 +34,14 @@ function PrepareRunningInstallation(var Details: String): Boolean;
 var
   Command, Client: String;
   Attempt: Integer;
-  Started: Cardinal;
+  Started, Elapsed: Cardinal;
 begin
   Result := False;
+  if InstallationCommandUnknown then
+  begin
+    Details := 'installation_command_timeout_unknown';
+    Exit;
+  end;
   ExtractTemporaryFile('plug_update_client.exe');
   Client := ExpandConstant('{tmp}\plug_update_client.exe');
   if DirExists(ExpandConstant('{app}')) and not InstallationGuardOwned then
@@ -65,13 +71,23 @@ begin
   Started := InstallationTickCount;
   for Attempt := 0 to 59 do
   begin
-    Result := RunDependencyCommand(Client, '--prepare-install ' +
-      AddQuotes(ExpandConstant('{app}')) + ' ' + InstallationOperation + ' ' + Command, Details);
+    Elapsed := InstallationTickCount - Started;
+    if Elapsed >= 59000 then Exit;
+    Result := RunInstallationCommand(Client, '--prepare-install ' +
+      AddQuotes(ExpandConstant('{app}')) + ' ' + InstallationOperation + ' ' + Command,
+      59000 - Elapsed, Details);
+    if Pos('installation_command_', Details) > 0 then
+    begin
+      InstallationCommandUnknown := True;
+      Exit;
+    end;
     Command := 'status';
     if Result then Exit;
     if Pos('installation_waiting_for_exit', Details) = 0 then Exit;
-    if InstallationTickCount - Started >= 59000 then Exit;
-    Sleep(1000);
+    Elapsed := InstallationTickCount - Started;
+    if Elapsed >= 59000 then Exit;
+    if 59000 - Elapsed < 1000 then Sleep(59000 - Elapsed)
+    else Sleep(1000);
   end;
 end;
 

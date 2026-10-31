@@ -25,12 +25,14 @@ contracts and the native Release build. The native authorization test requires
 the normal Windows token; the restricted execution environment refused its
 authorized-client path. No operational installation was used for validation.
 
-Remaining review item: the installer polling budget does not bound the blocking
-client subprocess call. A total deadline with preserved unknown outcomes needs
-separate implementation and regression coverage; timeout must never authorize
-file replacement or forced application exit. Installed cooperative shutdown,
-cross-session/admin identity and the full recovery acceptance matrix remain
-pending. Manual closure reported by the operator proves only that tested path.
+The command wait is now bounded by the remaining 59-second preparation budget,
+with at most one additional second to observe cleanup. A timeout terminates only
+the spawned command client, never the application. It records an unknown outcome,
+blocks installation and prevents another request/status/cancel dispatch in that
+setup session. No timeout authorizes file replacement. Compiled private Inno
+regressions cover a blocked real subprocess, output/nonzero exit and no replay.
+Installed cooperative shutdown, cross-session/admin identity and the full
+recovery acceptance matrix remain pending; production gates remain unchanged.
 
 ## Preparation Type Mismatch correction — 2026-10-25
 

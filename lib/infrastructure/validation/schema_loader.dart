@@ -65,7 +65,9 @@ class TransportSchemaIds {
   static const String resultAgentActionGetInputStatus = 'rpc.result.agent-action-get-input-status.schema.json';
   static const String paramsAgentActionReadIo = 'rpc.params.agent-action-read-io.schema.json';
   static const String resultAgentActionReadIo = 'rpc.result.agent-action-read-io.schema.json';
+  static const String paramsAgentActionListAvailable = 'rpc.params.agent-action-list-available.schema.json';
   static const String paramsAgentActionFindExecution = 'rpc.params.agent-action-find-execution.schema.json';
+  static const String resultAgentActionListAvailable = 'rpc.result.agent-action-list-available.schema.json';
   static const String resultAgentActionFindExecution = 'rpc.result.agent-action-find-execution.schema.json';
 
   static const List<String> all = [
@@ -79,7 +81,9 @@ class TransportSchemaIds {
     resultAgentActionGetInputStatus,
     paramsAgentActionReadIo,
     resultAgentActionReadIo,
+    paramsAgentActionListAvailable,
     paramsAgentActionFindExecution,
+    resultAgentActionListAvailable,
     resultAgentActionFindExecution,
 
     payloadFrame,

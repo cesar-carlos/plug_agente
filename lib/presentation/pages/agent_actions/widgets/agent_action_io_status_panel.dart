@@ -16,6 +16,7 @@ class AgentActionIoStatusPanel extends StatelessWidget {
         Text(l10n.agentActionsIoProcessState(status.processState)),
         Text(l10n.agentActionsIoInputState(status.stdinState)),
         Text(l10n.agentActionsIoCaptureState(status.captureState)),
+        Text(l10n.agentActionsIoByteCounts(status.admittedInputBytes, status.confirmedInputBytes, status.stdoutBytes, status.stderrBytes)),
         if (status.outputExpired) Text(l10n.agentActionsIoOutputExpired),
       ],
     );

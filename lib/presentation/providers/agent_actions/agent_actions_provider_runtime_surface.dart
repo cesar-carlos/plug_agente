@@ -1,6 +1,9 @@
 part of '../agent_actions_provider.dart';
 
 extension AgentActionsProviderRuntimeSurface on AgentActionsProvider {
+  Future<void> saveRemoteAccess({required bool remote, required bool io, bool? adHoc}) =>
+      _runtimeController.saveRemoteAccess(remote: remote, io: io, adHoc: adHoc);
+
   Future<void> savePreflightValidityDays(int days) => _runtimeController.savePreflightValidityDays(days);
 
   Future<void> clearPreflightPersistedOverride() => _runtimeController.clearPreflightPersistedOverride();

@@ -55,6 +55,34 @@ void main() {
   });
   tearDown(() => db.close());
 
+  test('an output commit wakes the reader with the durable event available', () async {
+    final observer = output.observeChanges('execution');
+    addTearDown(observer.close);
+    final wake = observer.wait(const Duration(minutes: 1));
+    (await output.append('execution', ActionIoStream.stderr, [0, 255])).getOrThrow();
+    await wake.timeout(const Duration(seconds: 2));
+    final page = (await output.read(
+      executionId: 'execution',
+      clientId: 'client',
+      afterSequence: 0,
+      maxBytes: ActionIoLimits.blockBytes,
+    )).getOrThrow();
+    expect((page.events.single as ActionIoOutputEvent).bytes, [0, 255]);
+  });
+
+  test('invalid integer bytes do not wrap into a valid journal record', () async {
+    for (final bytes in [
+      [-1],
+      [256],
+    ]) {
+      expect((await output.append('execution', ActionIoStream.stdout, bytes)).isError(), isTrue);
+    }
+    final event = (await output.append('execution', ActionIoStream.stdout, [0, 255])).getOrThrow();
+    expect(event.sequence, 1);
+    expect(event.offset, 0);
+    expect(event.bytes, [0, 255]);
+  });
+
   test('support export from durable history excludes both original output streams', () async {
     const stdout = 'private-business-output-sentinel';
     const stderr = 'private-business-error-sentinel';
@@ -141,6 +169,18 @@ void main() {
     afterSequence: after,
     maxBytes: 65536,
   )).getOrThrow();
+
+  test('crossing the shared byte limit commits exactly the permitted prefix', () async {
+    await db
+        .update(db.actionIoSessions)
+        .write(const ActionIoSessionsCompanion(admittedInputBytes: Value(ActionIoLimits.executionBytes - 2)));
+    final result = await output.append('execution', ActionIoStream.stderr, [0, 255, 65]);
+    expect((result.exceptionOrNull()! as ActionFailure).code, 'ACTION_OUTPUT_LIMIT_EXCEEDED');
+    expect((await output.append('execution', ActionIoStream.stdout, [65])).isError(), true);
+    final page = await read();
+    expect((page.events.single as ActionIoOutputEvent).bytes, [0, 255]);
+    expect(page.nextSequence, 1);
+  });
 
   test('SQLite page exhaustion rolls back output without losing its confirmed prefix', () async {
     (await output.append('execution', ActionIoStream.stdout, [0, 255])).getOrThrow();

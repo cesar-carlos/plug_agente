@@ -160,10 +160,15 @@ O build local usa manifest por padrão; `--manifest-only` é um alias compatíve
 Os fluxos oficiais recusam provedores de certificado. Do not treat an unsigned
 development build as a release artifact.
 
-A segunda chamada do preflight (`--check-installer --feed-public-key`)
-confirma que a chave publica Ed25519 esta embutida no `.exe` gerado; sem isso,
-clientes com `AUTO_UPDATE_REQUIRE_FEED_SIGNATURE=true` reportariam
-`feedSignatureStatus=publicKeyUnavailable` em todo silent check.
+The second preflight (`--check-installer --feed-public-key`) validates local
+packaging evidence in `installer/dist/PlugAgente-Setup-<version>.keys.json`.
+The builder checks every expected key in `data/app.so` and the native updater
+client before and after Inno compilation, then binds those payload hashes to the
+installer SHA-256. Preflight rechecks the installer and original bundle hashes;
+missing/stale evidence or a missing key fails closed. Keep the bundle and sidecar
+with the build evidence. Searching plaintext in the compressed setup is invalid.
+This local build record is not signed distribution evidence, installer extraction,
+or release approval; feed/manifest signatures and acceptance gates remain required.
 
 Quando `.env` define `AUTO_UPDATE_FEED_URL`, `AUTO_UPDATE_CHANNEL`,
 `AUTO_UPDATE_REQUIRE_VALID_SIGNATURE`, `AUTO_UPDATE_FEED_PUBLIC_KEY` ou

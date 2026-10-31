@@ -1,0 +1,88 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://plugagente.dev/schemas/rpc.result.agent-action-list-available.schema.json",
+  "title": "rpc.result.agent-action-list-available.schema.json",
+  "description": "Authorized action discovery v1. Requires separate catalog negotiation.",
+  "properties": {
+    "actions": {
+      "type": "array",
+      "maxItems": 50,
+      "items": {
+        "type": "object",
+        "properties": {
+          "action_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "name": {
+            "type": "string",
+            "minLength": 1
+          },
+          "trigger_ids": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1
+            },
+            "uniqueItems": true
+          },
+          "io_eligible": {
+            "type": "boolean"
+          },
+          "public_description": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "maxLength": 512
+          },
+          "stdin_description": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "maxLength": 512
+          },
+          "stdout_description": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "maxLength": 512
+          },
+          "stderr_description": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "maxLength": 512
+          }
+        },
+        "required": [
+          "action_id",
+          "name",
+          "trigger_ids",
+          "io_eligible",
+          "public_description",
+          "stdin_description",
+          "stdout_description",
+          "stderr_description"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "next_cursor": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "maxLength": 128
+    }
+  },
+  "required": [
+    "actions",
+    "next_cursor"
+  ],
+  "type": "object",
+  "additionalProperties": false
+}

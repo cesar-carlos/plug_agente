@@ -512,10 +512,13 @@ def main() -> None:
 
     step += 1
     print(f"\n{step}. Compilando instalador Inno Setup...", flush=True)
+    from tool.release.installer_key_evidence import inspect_payload, record
+    key_payload = inspect_payload(BUILD_DIR, feed_keys)
     run(build_iscc_command(), cwd=INSTALLER_DIR)
 
     DIST_DIR.mkdir(parents=True, exist_ok=True)
     installer_path = find_generated_installer()
+    record(installer_path, BUILD_DIR, feed_keys, key_payload)
     if should_sign_artifacts() and signing_cert_path() is not None:
         print(f"\n{step}.1. Verificando assinatura do instalador Windows...", flush=True)
         verify_signed_file(installer_path)

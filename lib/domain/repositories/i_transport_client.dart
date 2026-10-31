@@ -2,6 +2,11 @@ import 'package:plug_agente/domain/entities/query_response.dart';
 import 'package:plug_agente/domain/value_objects/hub_lifecycle_notification.dart';
 import 'package:result_dart/result_dart.dart';
 
+/// Current connection only. Null means negotiation is not complete.
+abstract interface class ActionIoConnectionDiagnostics {
+  bool? get negotiatedActionIo;
+}
+
 abstract class ITransportClient {
   /// Initiates the transport connection to [serverUrl].
   ///

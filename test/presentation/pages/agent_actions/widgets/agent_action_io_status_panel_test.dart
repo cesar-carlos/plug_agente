@@ -25,12 +25,16 @@ void main() {
                   stdinState: 'unknown',
                   captureState: 'incomplete',
                   outputExpired: true,
+                  admittedInputBytes: 7,
+                  confirmedInputBytes: 3,
                 ),
               ),
             ),
           ),
         );
         await tester.pumpAndSettle();
+        expect(find.textContaining(locale == 'en' ? 'Input admitted: 7 bytes' : 'Entrada admitida: 7 bytes'), findsOneWidget);
+        expect(find.textContaining(locale == 'en' ? 'Confirmed writes to stdin: 3 bytes' : 'Escrita confirmada em stdin: 3 bytes'), findsOneWidget);
         expect(find.text(locale == 'en' ? 'Process: Finished' : 'Processo: Finalizado'), findsOneWidget);
         expect(find.text(locale == 'en' ? 'Input: Unknown' : 'Entrada: Desconhecida'), findsOneWidget);
         expect(find.text(locale == 'en' ? 'Capture: Incomplete' : 'Captura: Incompleta'), findsOneWidget);

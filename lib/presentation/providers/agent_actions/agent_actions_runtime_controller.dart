@@ -11,6 +11,7 @@ import 'package:plug_agente/core/settings/agent_action_preflight_settings.dart';
 import 'package:plug_agente/core/settings/agent_action_retention_settings.dart';
 import 'package:plug_agente/core/storage/global_storage_path_resolver.dart';
 import 'package:plug_agente/domain/actions/actions.dart';
+import 'package:plug_agente/domain/errors/failures.dart' as failures;
 import 'package:plug_agente/presentation/providers/agent_actions/agent_actions_definitions_controller.dart';
 import 'package:plug_agente/presentation/providers/agent_actions/agent_actions_executions_controller.dart';
 import 'package:plug_agente/presentation/providers/agent_actions/agent_actions_history_controller.dart';
@@ -87,6 +88,24 @@ class AgentActionsRuntimeController {
 
   bool get isFeatureEnabled => _featureFlags.enableAgentActions;
   bool get isRemoteAgentActionsEnabled => _featureFlags.enableRemoteAgentActions;
+  bool get isActionIoEnabled => _featureFlags.enableActionIo;
+  bool isSavingRemoteAccess = false;
+  bool remoteAccessSaveFailed = false;
+
+  Future<void> saveRemoteAccess({required bool remote, required bool io, bool? adHoc}) async {
+    if (isSavingRemoteAccess || isMaintenanceMode) return;
+    isSavingRemoteAccess = true;
+    remoteAccessSaveFailed = false;
+    _onStateChanged();
+    final result = await _featureFlags.saveRemoteActionAccess(remote: remote, io: io, adHoc: adHoc);
+    result.fold((_) {}, (failure) {
+      remoteAccessSaveFailed = true;
+      if (failure is failures.Failure) failure.log();
+    });
+    isSavingRemoteAccess = false;
+    _onStateChanged();
+  }
+
   bool get isRemoteAdHocAgentActionsEnabled => _featureFlags.enableRemoteAdHocAgentActions;
   bool get isElevatedAgentActionsEnabled => _featureFlags.enableElevatedAgentActions;
   bool get isElevatedRunnerConfigured => _elevatedRunnerReadiness?.isConfigured ?? false;

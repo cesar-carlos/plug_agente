@@ -86,6 +86,10 @@ class AgentActionBackupSanitizer {
       policies: definition.policies.copyWith(
         remote: AgentActionRemotePolicy(
           allowAdHoc: definition.policies.remote.allowAdHoc,
+          publicDescription: definition.policies.remote.publicDescription,
+          stdinDescription: definition.policies.remote.stdinDescription,
+          stdoutDescription: definition.policies.remote.stdoutDescription,
+          stderrDescription: definition.policies.remote.stderrDescription,
           requiresReapproval: true,
         ),
       ),

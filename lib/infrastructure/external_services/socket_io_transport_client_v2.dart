@@ -10,6 +10,7 @@ import 'package:plug_agente/core/utils/sql_rpc_log_payload_compactor.dart';
 import 'package:plug_agente/domain/actions/action_local_runner.dart';
 import 'package:plug_agente/domain/entities/query_response.dart';
 import 'package:plug_agente/domain/errors/failures.dart' as domain;
+import 'package:plug_agente/domain/protocol/action_io_capability.dart';
 import 'package:plug_agente/domain/protocol/protocol.dart';
 import 'package:plug_agente/domain/repositories/i_agent_actions_remote_capability_provider.dart';
 import 'package:plug_agente/domain/repositories/i_protocol_negotiator.dart';
@@ -71,7 +72,7 @@ class SocketIOTransportClientV2Options {
 /// Socket.IO transport client for the v2 RPC contract.
 final class SocketIOTransportClientV2 extends _SocketIoTransportHost
     with _SocketIoTransportEmit
-    implements ITransportClient {
+    implements ITransportClient, ActionIoConnectionDiagnostics {
   SocketIOTransportClientV2({
     required SocketDataSource dataSource,
     required IProtocolNegotiator negotiator,
@@ -284,6 +285,11 @@ final class SocketIOTransportClientV2 extends _SocketIoTransportHost
   }
 
   bool get _hasReceivedCapabilities => _pipeline.capabilitiesNegotiator.hasReceivedCapabilities;
+
+  @override
+  bool? get negotiatedActionIo => isConnected && _hasReceivedCapabilities
+      ? ActionIoCapability.negotiated(_lifecycle.currentProtocol.negotiatedExtensions)
+      : null;
 
   bool get _usesBinaryTransport {
     if (!_hasReceivedCapabilities) {

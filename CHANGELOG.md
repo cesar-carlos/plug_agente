@@ -10,6 +10,19 @@ Changes after a recorded snapshot stay in Unreleased.
 
 ## Unreleased
 
+- Remote execution history shows admitted stdin bytes and confirmed pipe writes separately.
+
+- Edit public catalog descriptions and diagnose remote I/O for the selected action and current hub connection.
+
+- Add paginated discovery of authorized saved I/O actions, with an explicit list scope and Client-bound cursors.
+
+- Add an off-by-default remote ad-hoc preference without expanding RPC contracts, authorization or release gates.
+
+- Add explicit remote-action and process I/O opt-ins under System Actions preferences, with persistence errors and restart guidance; authorization and production gates remain unchanged.
+
+- Bound installer preparation client waits and preserve unknown outcomes without replay or forced application termination.
+- Validate feed keys through payload checks and installer-bound local packaging evidence instead of plaintext scanning of compressed setup bytes.
+
 ### Added — faithful remote action I/O
 
 - Connect saved, locally approved actions to incremental binary stdin/stdout/stderr

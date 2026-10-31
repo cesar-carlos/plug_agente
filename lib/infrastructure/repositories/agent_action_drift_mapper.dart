@@ -282,6 +282,10 @@ class AgentActionDriftMapper {
       'remote': {
         'isEnabled': policies.remote.isEnabled,
         'allowAdHoc': policies.remote.allowAdHoc,
+        if (policies.remote.publicDescription.isNotEmpty) 'publicDescription': policies.remote.publicDescription,
+        if (policies.remote.stdinDescription.isNotEmpty) 'stdinDescription': policies.remote.stdinDescription,
+        if (policies.remote.stdoutDescription.isNotEmpty) 'stdoutDescription': policies.remote.stdoutDescription,
+        if (policies.remote.stderrDescription.isNotEmpty) 'stderrDescription': policies.remote.stderrDescription,
         if (policies.remote.allowFaithfulIo) 'allowFaithfulIo': true,
         'approvedBy': policies.remote.approvedBy,
         'approvedAt': policies.remote.approvedAt?.toIso8601String(),
@@ -411,6 +415,10 @@ class AgentActionDriftMapper {
       remote: AgentActionRemotePolicy(
         isEnabled: remote['isEnabled'] as bool? ?? false,
         allowAdHoc: remote['allowAdHoc'] as bool? ?? false,
+        publicDescription: remote['publicDescription'] as String? ?? '',
+        stdinDescription: remote['stdinDescription'] as String? ?? '',
+        stdoutDescription: remote['stdoutDescription'] as String? ?? '',
+        stderrDescription: remote['stderrDescription'] as String? ?? '',
         approvedBy: remote['approvedBy'] as String?,
         approvedAt: _parseOptionalDate(remote['approvedAt'] as String?),
         approvalReason: remote['approvalReason'] as String?,

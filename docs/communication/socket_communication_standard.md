@@ -92,6 +92,7 @@ Cross-references:
   - `agent.action.getExecution` (feature flag `enableRemoteAgentActions`)
   - `agent.action.sendInput`, `agent.action.closeInput`
   - `agent.action.getInputStatus`, `agent.action.readIo`, `agent.action.findExecution`
+  - `agent.action.listAvailable` consulta uma página de ações autorizadas e requer `agentActions.catalogVersion: 1`.
     (`agentActions.io` v1; opt-in `enableActionIo` default **off**; autorização local obrigatória)
   - `client_token.getPolicy`
   - `rpc.discover`

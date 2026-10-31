@@ -267,6 +267,22 @@ void main() {
     expect(await db.select(db.actionIoMessages).get(), isEmpty);
   });
 
+  test('local capability refusals describe the cause before accessing the token or journal', () async {
+    for (final enabled in [false, true]) {
+      final response = await call('sendInput', message(), enabled: enabled, negotiated: false);
+      final data = response.error!.data as Map<String, dynamic>;
+      expect(data['failure_code'], 'CAPABILITY_UNAVAILABLE');
+      expect(data['reason'], enabled ? 'incompatible' : 'disabled');
+      expect(data['user_message'], contains(enabled ? 'negociou' : 'desativado'));
+      expect(response.error!.message, data['user_message']);
+      expect(data['origin'], 'agent');
+      expect(data['phase'], 'preflight');
+      expect(data['effects_possible'], false);
+      expect(data['outcome_unknown'], false);
+      expect(data['retryable'], false);
+      verifyNever(() => tokens.getTokenPolicySummaryByHash(any()));
+    }
+  });
   test('disabled absent negotiation notifications and mutating batches never admit input', () async {
     for (final response in [
       await call('sendInput', message(), enabled: false),

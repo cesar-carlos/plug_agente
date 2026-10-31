@@ -1,5 +1,6 @@
 import 'dart:convert';
 
+import 'package:plug_agente/application/actions/action_io_catalog.dart';
 import 'package:plug_agente/application/actions/action_io_execution_projection.dart';
 import 'package:plug_agente/application/actions/action_io_remote_access.dart';
 import 'package:plug_agente/application/mappers/failure_to_rpc_error_mapper.dart';
@@ -20,6 +21,7 @@ final class ActionIoRpcHandler implements RpcMethodHandler {
     required IActionIoRpcContract contract,
     required bool Function() enabled,
     this.validateRun,
+    this.catalog,
     this.run,
     ActionIoRemoteAccess? access,
     ActionIoRemoteAccess Function()? accessProvider,
@@ -31,7 +33,10 @@ final class ActionIoRpcHandler implements RpcMethodHandler {
        _contract = contract,
        _enabled = enabled;
 
+  final ActionIoCatalog Function()? catalog;
+
   static const methods = {
+    'agent.action.listAvailable',
     'agent.action.sendInput',
     'agent.action.closeInput',
     'agent.action.getInputStatus',
@@ -50,8 +55,17 @@ final class ActionIoRpcHandler implements RpcMethodHandler {
   Future<RpcResponse> handle(RpcRequest request, RpcDispatchContext context) async {
     try {
       final call = context.actionIo;
-      if (!_enabled() || !ActionIoCapability.negotiated(context.negotiatedExtensions) || call == null) {
-        throw _unavailable('CAPABILITY_UNAVAILABLE');
+      if (!_enabled()) {
+        throw _capabilityRefused(
+          'disabled',
+          'O I/O remoto está desativado no agente. Verifique a habilitação local e reconecte o agente.',
+        );
+      }
+      if (!ActionIoCapability.negotiated(context.negotiatedExtensions) || call == null) {
+        throw _capabilityRefused(
+          'incompatible',
+          'A conexão não negociou o contexto necessário para I/O remoto. Verifique o suporte do servidor e reconecte o agente.',
+        );
       }
       if (request.method != method ||
           (!methods.contains(method) &&
@@ -90,6 +104,12 @@ final class ActionIoRpcHandler implements RpcMethodHandler {
       final executionId = params['execution_id'] as String? ?? '';
       late final Map<String, dynamic> result;
       switch (method) {
+        case 'agent.action.listAvailable':
+          if ((context.negotiatedExtensions['agentActions'] as Map?)?['catalogVersion'] != 1 || catalog == null) {
+            throw _capabilityRefused('incompatible', 'A conexão não negociou o catálogo de ações.');
+          }
+          result = await catalog!().page(agentId: context.agentId, credential: credential,
+            pageSize: params['page_size'] as int? ?? 20, cursor: params['cursor'] as String?);
         case 'agent.action.run':
           result = await run!(request, context);
         case 'agent.action.cancel':
@@ -199,6 +219,22 @@ final class ActionIoRpcHandler implements RpcMethodHandler {
 
   ActionValidationFailure _invalid(String code) =>
       ActionValidationFailure.withContext(message: 'Invalid I/O request.', code: code, context: {'retryable': false});
+  ActionRuntimeFailure _capabilityRefused(String reason, String message) => ActionRuntimeFailure.withContext(
+    message: message,
+    code: 'CAPABILITY_UNAVAILABLE',
+    context: {
+      'reason': reason,
+      'user_message': message,
+      'phase': 'preflight',
+      'origin': 'agent',
+      'capability': 'agentActions.io v1',
+      'recovery': 'local_intervention',
+      'effects_possible': false,
+      'outcome_unknown': false,
+      'retryable': false,
+    },
+  );
+
   ActionRuntimeFailure _unavailable(String code) => ActionRuntimeFailure.withContext(
     message: 'The I/O operation is unavailable.',
     code: code,

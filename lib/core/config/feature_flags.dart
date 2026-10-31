@@ -1,5 +1,7 @@
 import 'package:plug_agente/core/config/outbound_compression_mode.dart';
 import 'package:plug_agente/core/settings/app_settings_store.dart';
+import 'package:plug_agente/domain/errors/failures.dart' as failures;
+import 'package:result_dart/result_dart.dart';
 
 /// Feature flags for controlling rollout and experimentation.
 class FeatureFlags {
@@ -16,6 +18,45 @@ class FeatureFlags {
   bool get enableActionIo => _prefs.getBool('feature_enable_action_io') ?? false;
 
   Future<void> setEnableActionIo(bool value) => _prefs.setBool('feature_enable_action_io', value);
+
+  /// Saves only the local opt-ins; approval, authorization and release gates are unchanged.
+  Future<Result<Unit>> saveRemoteActionAccess({required bool remote, required bool io, bool? adHoc}) async {
+    final previous = {
+      'feature_enable_remote_agent_actions': enableRemoteAgentActions,
+      'feature_enable_action_io': enableActionIo,
+      if (adHoc != null) _keyEnableRemoteAdHocAgentActions: enableRemoteAdHocAgentActions,
+    };
+    try {
+      await _prefs.setValues({
+        'feature_enable_remote_agent_actions': remote,
+        'feature_enable_action_io': io,
+        _keyEnableRemoteAdHocAgentActions: ?adHoc,
+      });
+      await _prefs.flushPendingPersistence();
+      if (_prefs.lastPersistError != null) throw Exception('Settings persistence failed');
+      return const Success(unit);
+    } on Object catch (error) {
+      try {
+        await _prefs.setValues(previous);
+        await _prefs.flushPendingPersistence();
+        if (_prefs.lastPersistError != null) throw Exception('Settings rollback persistence failed');
+      } on Object catch (rollbackError) {
+        return Failure(
+          failures.ConfigurationFailure.withContext(
+            message: 'Unable to restore remote action preferences.',
+            cause: error,
+            context: {'rollbackError': rollbackError.runtimeType.toString()},
+          ),
+        );
+      }
+      return Failure(
+        failures.ConfigurationFailure.withContext(
+          message: 'Unable to save remote action preferences.',
+          cause: error,
+        ),
+      );
+    }
+  }
 
   // Keys
   static const _keyEnableBinaryPayload = 'feature_enable_binary_payload';

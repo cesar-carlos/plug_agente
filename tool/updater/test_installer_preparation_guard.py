@@ -21,7 +21,7 @@ class InstallationGuardTests(unittest.TestCase):
             compile_result = subprocess.run([build_installer.find_iscc(), "/Q", f"/O{root}",
                 f"/DTestProductionFile={production}", str(fixture)], capture_output=True, text=True, timeout=60)
             self.assertEqual(compile_result.returncode, 0, compile_result.stdout + compile_result.stderr)
-            for case in ("existing", "new", "existing_guard", "guard_directory", "manual_closure"):
+            for case in ("existing", "new", "existing_guard", "guard_directory", "manual_closure", "timeout"):
                 with self.subTest(case=case):
                     result = root / f"{case}.result"
                     log = root / f"{case}.log"

@@ -777,6 +777,9 @@ void main() {
     final polls = await Future.wait([journal.beginNextInput('execution'), journal.beginNextInput('execution')]);
     final claimed = polls.map((r) => r.getOrThrow().input).whereType<ActionIoPendingInput>().single;
     expect(claimed.bytes, [0, 255]);
+    final pending = (await journal.getExecutionSnapshot('execution')).getOrThrow();
+    expect(pending.admittedInputBytes, 2);
+    expect(pending.confirmedInputBytes, 0);
     expect(
       (await journal.inputStatus('execution', 'client', 'first')).getOrThrow().state,
       ActionIoDeliveryState.writing,
@@ -793,6 +796,7 @@ void main() {
     expect((await journal.beginNextInput('execution')).getOrThrow().input!.close, isTrue);
     final closed = await journal.finishInput('execution', 'close', ActionIoDeliveryState.written, confirmedBytes: 0);
     expect(closed.getOrThrow().stdinState, ActionIoStdinState.closed);
+    expect((await journal.listExecutionSnapshots(limit: 1)).getOrThrow().single.confirmedInputBytes, 2);
     final state = await db.select(db.actionIoSessions).getSingle();
     expect(state.queuedInputMessages, 0);
     expect(state.queuedInputBytes, 0);

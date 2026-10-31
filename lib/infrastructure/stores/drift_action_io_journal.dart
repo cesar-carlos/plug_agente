@@ -6,6 +6,7 @@ import 'package:plug_agente/domain/actions/action_failure.dart';
 import 'package:plug_agente/domain/actions/action_io.dart';
 import 'package:plug_agente/domain/actions/action_io_execution_snapshot.dart';
 import 'package:plug_agente/domain/actions/action_io_journal.dart';
+import 'package:plug_agente/domain/actions/action_io_journal_changes.dart';
 import 'package:plug_agente/domain/actions/action_io_session_reference.dart';
 import 'package:plug_agente/domain/repositories/i_action_io_execution_ownership.dart';
 import 'package:plug_agente/domain/repositories/i_action_io_journal.dart';
@@ -19,6 +20,7 @@ import 'package:result_dart/result_dart.dart';
 import 'package:uuid/uuid.dart';
 
 final class DriftActionIoJournal
+    with ActionIoJournalChanges
     implements IActionIoJournal, IActionIoSessionLookup, IActionIoLocalHistory, IActionIoExecutionOwnership {
   DriftActionIoJournal(
     this._db,
@@ -71,16 +73,28 @@ final class DriftActionIoJournal
     query
       ..orderBy([(row) => OrderingTerm.desc(row.createdAt), (row) => OrderingTerm.asc(row.executionId)])
       ..limit(limit);
-    return (await query.get()).map(_snapshot).toList(growable: false);
+    return _snapshots(await query.get());
   });
 
   @override
   Future<Result<ActionIoExecutionSnapshot>> getExecutionSnapshot(String executionId) => _guard(() async {
     final row = await _session(executionId);
-    return _snapshot(row);
+    return (await _snapshots([row])).single;
   });
 
-  ActionIoExecutionSnapshot _snapshot(ActionIoSession row) => ActionIoExecutionSnapshot(
+  Future<List<ActionIoExecutionSnapshot>> _snapshots(List<ActionIoSession> rows) async {
+    if (rows.isEmpty) return [];
+    final messages = _db.actionIoMessages;
+    final sum = messages.confirmedBytes.sum();
+    final query = _db.selectOnly(messages)
+      ..addColumns([messages.executionId, sum])
+      ..where(messages.executionId.isIn(rows.map((row) => row.executionId)))
+      ..groupBy([messages.executionId]);
+    final totals = {for (final row in await query.get()) row.read(messages.executionId): row.read(sum) ?? 0};
+    return [for (final row in rows) _snapshot(row, totals[row.executionId] ?? 0)];
+  }
+
+  ActionIoExecutionSnapshot _snapshot(ActionIoSession row, int confirmedInputBytes) => ActionIoExecutionSnapshot(
     session: _reference(row),
     idempotencyKey: row.idempotencyKey,
     createdAt: row.createdAt,
@@ -88,6 +102,10 @@ final class DriftActionIoJournal
     stdinState: row.stdinState,
     captureState: row.captureState,
     outputExpired: row.outputExpired,
+    admittedInputBytes: row.admittedInputBytes,
+    confirmedInputBytes: confirmedInputBytes,
+    stdoutBytes: row.stdoutBytes,
+    stderrBytes: row.stderrBytes,
     nextInputSequence: row.nextInputSequence,
     terminalAt: row.terminalAt,
     exitCode: row.exitCode,
@@ -235,7 +253,7 @@ final class DriftActionIoJournal
           sequence: sequence++,
           bytes: initial,
           internalMessage: true,
-          recordMetrics: false,
+          standaloneAdmission: false,
         )).getOrThrow();
       }
       if (io?.closeInput == true) {
@@ -247,7 +265,7 @@ final class DriftActionIoJournal
           bytes: const [],
           close: true,
           internalMessage: true,
-          recordMetrics: false,
+          standaloneAdmission: false,
         )).getOrThrow();
       }
       return result(intent.executionId, created: true);
@@ -281,7 +299,7 @@ final class DriftActionIoJournal
     required List<int> bytes,
     bool close = false,
     bool internalMessage = false,
-    bool recordMetrics = true,
+    bool standaloneAdmission = true,
   }) async {
     final ownedBytes = Uint8List.fromList(bytes);
     var created = false;
@@ -387,7 +405,11 @@ final class DriftActionIoJournal
         );
       }),
     );
-    if (result.isSuccess() && created && recordMetrics) _metrics?.recordAdmittedInputBytes(ownedBytes.length);
+    // Initial messages belong to the outer claim transaction and precede worker startup.
+    if (result.isSuccess() && created && standaloneAdmission) {
+      signalJournalCommit(executionId);
+      _metrics?.recordAdmittedInputBytes(ownedBytes.length);
+    }
     return result;
   }
 

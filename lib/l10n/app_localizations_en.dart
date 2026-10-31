@@ -782,7 +782,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get agentActionsHelpRemoteAdHocMessage =>
-      'Allows free-form commands sent by the Hub when the global feature is enabled. Keep it disabled except in controlled environments because it greatly increases risk exposure.';
+      'This saved action will also require the remote ad-hoc option in Preferences. Leave this policy off when testing input and output for an approved action.';
 
   @override
   String get agentActionsHelpNotificationsTitle => 'Notifications';
@@ -1036,7 +1036,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get agentActionsFormRemoteExecutionEnabled => 'Allow remote Hub execution';
 
   @override
-  String get agentActionsFormRemoteAdHocEnabled => 'Allow remote ad-hoc commands';
+  String get agentActionsFormRemoteAdHocEnabled => 'Require the ad-hoc policy for this action';
 
   @override
   String get agentActionsFormRemoteApprovedHint => 'Remote execution is approved for this definition.';
@@ -1069,14 +1069,14 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get agentActionsFormRemoteFeatureDisabledMessage =>
-      'Enable the remote agent actions feature flag before the Hub can call agent.action.* for this agent.';
+      'Enable in System Actions → Preferences → Remote actions and input/output.';
 
   @override
   String get agentActionsFormRemoteAdHocFeatureDisabledTitle => 'Remote ad-hoc disabled';
 
   @override
   String get agentActionsFormRemoteAdHocFeatureDisabledMessage =>
-      'Enable the remote ad-hoc feature flag to allow free-form hub commands on this agent.';
+      'Enable in System Actions → Preferences → Remote actions and input/output.';
 
   @override
   String get agentActionsRiskRemote => 'Remote';
@@ -1324,11 +1324,11 @@ class AppLocalizationsEn extends AppLocalizations {
   String get agentActionsConfirmRemoteCancel => 'Cancel';
 
   @override
-  String get agentActionsConfirmRemoteAdHocTitle => 'Enable remote ad-hoc commands?';
+  String get agentActionsConfirmRemoteAdHocTitle => 'Require the ad-hoc policy for this action?';
 
   @override
   String get agentActionsConfirmRemoteAdHocMessage =>
-      'Ad-hoc remote commands are high risk and should stay disabled unless you explicitly need them.';
+      'This saved action will require the ad-hoc policy in agent preferences. Leave it off for the standard input and output test.';
 
   @override
   String get agentActionsConfirmRemoteAdHocConfirm => 'Enable ad-hoc';
@@ -5348,4 +5348,84 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get agentActionsIoDownloadReplaceNotice =>
       'Choose a file name. Saving replaces an existing file with this name. Output may be partial if execution or capture is incomplete.';
+
+  @override
+  String get remoteAccessTitle => 'Remote actions and input/output';
+
+  @override
+  String get remoteAccessEnabled => 'Allow remote actions';
+
+  @override
+  String get remoteAccessIo => 'Allow process input/output';
+
+  @override
+  String get remoteAccessDescription =>
+      'Only saved and locally approved actions can run remotely. Credentials, permissions and execution limits remain required.';
+
+  @override
+  String get remoteAccessRestart =>
+      'After changing these options, exit the agent from the tray and open it again to prepare input/output and reconnect to the Hub. Active processes are not automatically cancelled.';
+
+  @override
+  String get remoteAccessSaveError =>
+      'Could not save the remote access options. Check storage permissions and try again.';
+
+  @override
+  String get remoteAccessAdHoc => 'Allow the ad-hoc policy for saved actions';
+
+  @override
+  String get remoteAccessAdHocHelp =>
+      'Enables the ad-hoc policy for approved actions. Does not grant permissions, elevation or commands outside the supported remote contract.';
+
+  @override
+  String get remoteCheckActions => 'Enable remote actions to start the I/O check.';
+
+  @override
+  String get remoteCheckIo => 'Enable process input/output for this agent.';
+
+  @override
+  String get remoteCheckApproval => 'Save an action with faithful I/O and approve its current definition.';
+
+  @override
+  String get remoteCheckHub =>
+      'Restart the agent after settings changes, then use validateRun from the hub to verify the connection, credential and trigger.';
+
+  @override
+  String agentActionsIoByteCounts(int input, int written, int output, int error) {
+    return 'Input admitted: $input bytes · Confirmed writes to stdin: $written bytes · stdout: $output bytes · stderr: $error bytes';
+  }
+
+  @override
+  String get catalogPublicDescription => 'Public action description';
+
+  @override
+  String get catalogStdinDescription => 'Input format (stdin)';
+
+  @override
+  String get catalogStdoutDescription => 'Output format (stdout)';
+
+  @override
+  String get catalogStderrDescription => 'Error format (stderr)';
+
+  @override
+  String get catalogCheckMaintenance => 'Exit maintenance to test execution.';
+
+  @override
+  String get catalogCheckConnection => 'Connect the agent to the hub and verify negotiation using the client.';
+
+  @override
+  String get catalogCheckExecutor => 'Use a pipe-compatible executor and turn off elevation.';
+
+  @override
+  String get catalogCheckTrigger => 'Check for an enabled remote trigger for this action.';
+
+  @override
+  String get catalogNegotiated => 'Remote I/O is negotiated on this connection.';
+
+  @override
+  String get catalogIncompatible =>
+      'Remote I/O was not negotiated. Check the hub version and configuration, then reconnect.';
+
+  @override
+  String get catalogAwaiting => 'Remote I/O negotiation has not been confirmed yet.';
 }

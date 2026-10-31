@@ -10,6 +10,10 @@ final class ActionIoExecutionSnapshot {
     required this.stdinState,
     required this.captureState,
     required this.outputExpired,
+    this.admittedInputBytes = 0,
+    this.confirmedInputBytes = 0,
+    this.stdoutBytes = 0,
+    this.stderrBytes = 0,
     this.nextInputSequence = 0,
     this.terminalAt,
     this.exitCode,
@@ -23,6 +27,10 @@ final class ActionIoExecutionSnapshot {
   final String stdinState;
   final String captureState;
   final bool outputExpired;
+  final int admittedInputBytes;
+  final int confirmedInputBytes;
+  final int stdoutBytes;
+  final int stderrBytes;
   final int nextInputSequence;
   final DateTime? terminalAt;
   final int? exitCode;

@@ -74,6 +74,10 @@ class AgentActionDraft {
   bool remoteEnabled = false;
   bool remoteAdHoc = false;
   bool remoteFaithfulIo = false;
+  final publicDescription = TextEditingController();
+  final stdinDescription = TextEditingController();
+  final stdoutDescription = TextEditingController();
+  final stderrDescription = TextEditingController();
   bool _remoteApprovalGranted = false;
   bool _remoteApprovalConfirmedInEditor = false;
 
@@ -154,6 +158,10 @@ class AgentActionDraft {
   /// call instead of 38 lines of boilerplate.
   Iterable<TextEditingController> get _allControllers sync* {
     yield* _userEditableControllers;
+    yield publicDescription;
+    yield stdinDescription;
+    yield stdoutDescription;
+    yield stderrDescription;
     yield developer.connectionSearch;
     yield displayBindings.actionTypeDisplay;
     yield displayBindings.powerShellModeDisplay;
@@ -338,7 +346,12 @@ class AgentActionDraft {
     AgentActionDefinition? previousDefinition,
   }) {
     if (!remoteEnabled) {
-      return const AgentActionRemotePolicy();
+      return AgentActionRemotePolicy(
+        publicDescription: publicDescription.text.trim(),
+        stdinDescription: stdinDescription.text.trim(),
+        stdoutDescription: stdoutDescription.text.trim(),
+        stderrDescription: stderrDescription.text.trim(),
+      );
     }
 
     final previous = previousDefinition?.policies.remote;
@@ -361,6 +374,10 @@ class AgentActionDraft {
       isEnabled: true,
       allowAdHoc: remoteAdHocFeatureEnabled && remoteAdHoc,
       allowFaithfulIo: remoteFaithfulIo,
+      publicDescription: publicDescription.text.trim(),
+      stdinDescription: stdinDescription.text.trim(),
+      stdoutDescription: stdoutDescription.text.trim(),
+      stderrDescription: stderrDescription.text.trim(),
       approvedBy: approvedAt == null ? null : (previous?.approvedBy ?? localApprover),
       approvedAt: approvedAt,
       approvalReason: previous?.approvalReason,

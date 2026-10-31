@@ -81,6 +81,14 @@ void main() {
   );
   DateTime deadline() => DateTime.now().add(const Duration(seconds: 5));
 
+  test('an input commit wakes the worker even when admission precedes its wait', () async {
+    final observer = journal.observeChanges('e');
+    addTearDown(observer.close);
+    await admit('m', 0, [0, 255]);
+    await observer.wait(const Duration(minutes: 1)).timeout(const Duration(seconds: 2));
+    expect((await journal.inputStatus('e', 'c', 'm')).getOrThrow().state, ActionIoDeliveryState.accepted);
+  });
+
   test('commits writing before native access and delivers empty messages separately from EOF', () async {
     await admit('first', 0, [0, 255, 13, 10]);
     await admit('empty', 1, []);
@@ -182,6 +190,7 @@ void main() {
     final worker = delivery();
     final result = await worker.deliverNext(deadline: DateTime.now().add(const Duration(milliseconds: 100)));
     expect(result.exceptionOrNull(), isA<ActionIoPipeFailure>());
+    expect((result.exceptionOrNull()! as ActionIoPipeFailure).code, 'ACTION_STDIN_WRITE_TIMEOUT');
     expect(stopped, 1);
     var settled = false;
     final settlement = worker.waitForNativeCompletion().then((_) {
@@ -195,6 +204,7 @@ void main() {
     final receipt = (await journal.inputStatus('e', 'c', 'm')).getOrThrow();
     expect(receipt.state, ActionIoDeliveryState.unknown);
     expect(receipt.confirmedBytes, isNull);
+    expect((await db.select(db.actionIoMessages).getSingle()).failureCode, 'ACTION_STDIN_WRITE_TIMEOUT');
     expect(pipe.writes, [
       [1],
     ]);

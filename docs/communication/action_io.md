@@ -14,7 +14,65 @@ installation and publication are outside this acceptance.
 - Hub adapters and reference clients are documented in the sibling server's
   `docs/plug_agente/remote_action_io_specification.md`.
 
+## Local activation for manual testing
+
+In **System Actions → Preferences**, expand **Remote actions and input/output**, enable
+**Allow remote actions**, then **Allow process input/output**. These opt-ins are
+disabled by default. Exit through the tray and reopen the agent after changes:
+startup prepares/reconciles the journal and the connection negotiates capability.
+The controls are unavailable during maintenance and report persistence failures.
+They do not approve any action, provision credentials, grant scopes or elevation,
+or complete any production gate. The separate **Allow remote ad-hoc** control is
+also off by default. It only enables the existing per-action ad-hoc policy; it
+does not expand the RPC contract or the faithful I/O executor eligibility. Existing processes are not
+automatically cancelled when the opt-ins are disabled.
+
+## First test with an installed agent
+
+1. Copy the [echo script](../../tool/homologation/action_io_echo.ps1) to a
+   directory readable by the agent, for example `C:\PlugIoTeste`. Follow the
+   host's script signing policy. Create an **Executable** action pointing to
+   Windows PowerShell. Enter the following arguments separately, in order:
+   `-NoLogo`, `-NoProfile`, `-NonInteractive`, `-File`,
+   `C:\PlugIoTeste\action_io_echo.ps1`.
+2. Select faithful I/O, use one remote trigger, save and approve the action
+   locally. Leave elevation and the optional ad-hoc policy off. Record the
+   action ID. After restarting the agent, check that the test hub and agent
+   negotiated `agentActions.io` v1 on the current connection.
+3. Follow the sibling server guide `docs/plug_agente/remote_action_io_examples.md`
+   with its REST or socket adapter. Authenticate at the hub and supply the
+   locally provisioned Client credential for this action. Use `validateRun`
+   first. A refusal here lets you check the trigger, approval and scopes
+   before launching a process.
+4. Run with a fresh idempotency key, initial input `AA0K/w==` and
+   `close_input: false`. Send `Gg==` at the returned next input sequence.
+   Check the message receipts, then close stdin at the next sequence.
+   Read from cursor zero until capture completes. Concatenate decoded stdout
+   events in stream-offset order. Expect hex **00 0D 0A FF 1A**, stderr
+   containing **EOF**, exit code zero and complete capture. Event boundaries
+   may differ between runs.
+5. If a response is lost, use the original action ID and key with
+   `findExecution`, check the original message ID with `getInputStatus`,
+   and resume reading from the last delivered cursor.
+
 ## Operations and authorization
+
+`agent.action.listAvailable` discovers saved actions through an authenticated
+connection that negotiated both I/O v1 and `agentActions.catalogVersion: 1`.
+Grant `agent_actions.list`, `agent_actions.run` and `agent_actions.io` explicitly
+or use the existing wildcard policy. The agent applies the action allowlist.
+Call with `page_size` (1–50, default 20), then pass each non-null `next_cursor`
+as `cursor`. A null cursor ends the listing. A cursor is bound to the agent,
+Client and runtime. Start discovery again if its boundary was deleted or the
+runtime restarted. An empty authorized page is distinct from an unsupported
+method or rejected credential. Use `validateRun` for the selected trigger.
+
+In the advanced action editor, enable faithful I/O and enter the optional public
+description and stdin/stdout/stderr formats (512 characters per field). Clients
+receive null for an unspecified format. Descriptive edits do not change the
+approval fingerprint. System Actions preferences diagnose the selected action,
+its active remote trigger, elevation, executor, and live I/O negotiation. Use
+the hub client to check the actual calling credential.
 
 Only locally saved and approved actions with eligible pipe executors may run.
 No remote arbitrary commands, runtime parameters, PTY or elevation are enabled.
@@ -100,6 +158,29 @@ Native workers retain handle ownership until actual completion; a Dart timeout
 does not cancel native I/O. Capture must apply bounded backpressure and persist
 before exposing bytes. Cleanup errors cannot replace the primary failure.
 Restart reconciles state and projections without recovering pipes or replaying.
+
+## Availability before execution
+
+If the agent receives a request after I/O was disabled locally, the RPC error carries
+failure_code CAPABILITY_UNAVAILABLE, reason disabled and an actionable Portuguese
+user_message. An incompatible agreement or missing I/O call context returns reason
+incompatible. Both refusals originate in the agent before token lookup or action
+execution. The response includes phase preflight, recovery local_intervention,
+effects_possible false, outcome_unknown false and retryable false. Reconnect after
+correcting the local configuration. These fields describe this request only.
+
+When the extension is absent from registration, the hub can refuse the request
+before forwarding it. An omitted extension alone does not establish the installed
+version or whether a local administrator disabled I/O. A timeout after dispatch
+requires reconciliation with the existing execution or message identity.
+
+When an output block crosses the shared 64 MiB budget, the journal commits the remaining prefix and then reports ACTION_OUTPUT_LIMIT_EXCEEDED to the capture worker. The transaction counts only persisted bytes. Exhausted event slots and storage failures can prevent any further append. Non-byte integer values are rejected before copying. A native stdin write deadline records ACTION_STDIN_WRITE_TIMEOUT with delivery unknown. A later pipe completion cannot confirm consumption or replay the message.
+
+### Waiting for committed I/O
+
+Input workers and long reads subscribe only for their execution. An input admission or output commit wakes the corresponding waiter. A commit between checking the journal and starting the wait is retained as one pending notification. Notifications carry no payload and grant no permission. The worker still claims each input from the journal and rechecks authorization. A long read still checks cancellation, deadline and current authorization before returning its page. The existing 100 ms polling interval covers cancellation and journals without notifications. Closing the worker or read releases its subscription.
+
+A slow or reconnecting client should retain sequence and per-stream offsets. A terminal session can still have unread pages. Continue reading through the completed event and verify capture completeness before accepting the final output.
 
 ## Storage and unknown-outcome recovery
 
@@ -202,3 +283,5 @@ not versioned portable test reports. Rerun the documented controllers when neede
 The volume run identity is `d3de71369bd3456cb77a621cd46ea069`; its system-temp
 folder retains test.log, result.json and the dismounted image. Fixture SHA-256:
 `B9B8DF13CABAE4C516F2B385518CFD75BF99A534C89CF9412521E20C32782455`.
+
+The local execution panel counts admitted stdin bytes separately from the sum of confirmed pipe writes recorded for its messages. Unknown writes add no confirmed bytes. A confirmed write does not establish that the child consumed the data.

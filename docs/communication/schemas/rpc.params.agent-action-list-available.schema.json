@@ -1,0 +1,40 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://plugagente.dev/schemas/rpc.params.agent-action-list-available.schema.json",
+  "title": "rpc.params.agent-action-list-available.schema.json",
+  "description": "Authorized action discovery v1. Requires separate catalog negotiation.",
+  "type": "object",
+  "properties": {
+    "client_token": {
+      "type": "string",
+      "minLength": 1
+    },
+    "clientToken": {
+      "type": "string",
+      "minLength": 1
+    },
+    "auth": {
+      "type": "string",
+      "minLength": 1
+    },
+    "trace_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "requested_by": {
+      "type": "string",
+      "minLength": 1
+    },
+    "page_size": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 50
+    },
+    "cursor": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128
+    }
+  },
+  "additionalProperties": false
+}

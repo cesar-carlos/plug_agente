@@ -127,6 +127,9 @@ flutter test --exclude-tags "live || slow || perf"
 # Suite completa, incluindo marcados (pode falhar se opt-ins estiverem ligados sem .env adequado)
 flutter test
 
+# Heap and CPU diagnostics require the VM Service. Run both explicitly.
+flutter test --enable-vmservice --concurrency 1 test/tool/benchmark_vm_diagnostics_test.dart test/infrastructure/codecs/transport_diagnostics_benchmark_test.dart
+
 # Testes de integracao marcados com a tag live
 flutter test --tags live test/integration/
 ```

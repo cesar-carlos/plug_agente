@@ -704,6 +704,7 @@ class _AgentActionEditorState extends State<AgentActionEditor> {
         onStderrEncodingModeChanged: (value) => _updateDraft(() => _draft.stderrEncodingMode = value),
         onOnAppExitChanged: (value) => _updateDraft(() => _draft.onAppExit = value),
       ),
+      onCatalogChanged: () => _markDraftModified(invalidatePreflight: false),
       onRemoteEnabledChanged: (value) => unawaited(_onRemoteEnabledChanged(value)),
       onRemoteAdHocChanged: (value) => unawaited(_onRemoteAdHocChanged(value)),
       onRemoteFaithfulIoChanged: (value) => _updateDraft(() {

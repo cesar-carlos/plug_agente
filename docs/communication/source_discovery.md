@@ -213,3 +213,13 @@ In that historical fixture, PostgreSQL, SQL Server and Firebird refused the
 query after removal; SQL Anywhere refused adoption based on unknown enforcement.
 Current SQL Anywhere 16 scoped proof is described above; Firebird is unsupported. Esse alcance
 não conclui a matriz integral nem libera instalador/appcast/deploy.
+
+## SQL Server MAX column metadata
+
+The catalog preserves the -1 MAX sentinel before dividing Unicode lengths.
+Inspection maps that sentinel to nullable size only for varchar, nvarchar and
+varbinary on SQL Server. Structural revalidation applies the same mapping; a
+change from MAX to a bounded size still refuses the previous expectation.
+Other negative values are not normalized into valid evidence. The wire schema
+continues to reject negative sizes. Local regression does not prove the deployed
+agent version or the cause of a particular remote inspection failure.

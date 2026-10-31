@@ -275,7 +275,7 @@ void main() {
     await tester.tap(find.text('Open ad-hoc confirm'));
     await tester.pumpAndSettle();
 
-    expect(find.text('Enable remote ad-hoc commands?'), findsOneWidget);
+    expect(find.text('Require the ad-hoc policy for this action?'), findsOneWidget);
 
     await tester.tap(find.text('Enable ad-hoc'));
     await tester.pumpAndSettle();

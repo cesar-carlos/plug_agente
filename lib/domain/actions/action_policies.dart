@@ -6,6 +6,10 @@ class AgentActionRemotePolicy {
     this.isEnabled = false,
     this.allowAdHoc = false,
     this.allowFaithfulIo = false,
+    this.publicDescription = '',
+    this.stdinDescription = '',
+    this.stdoutDescription = '',
+    this.stderrDescription = '',
     this.approvedBy,
     this.approvedAt,
     this.approvalReason,
@@ -16,6 +20,10 @@ class AgentActionRemotePolicy {
   final bool isEnabled;
   final bool allowAdHoc;
   final bool allowFaithfulIo;
+  final String publicDescription;
+  final String stdinDescription;
+  final String stdoutDescription;
+  final String stderrDescription;
   final String? approvedBy;
   final DateTime? approvedAt;
   final String? approvalReason;
@@ -28,6 +36,10 @@ class AgentActionRemotePolicy {
     bool? isEnabled,
     bool? allowAdHoc,
     bool? allowFaithfulIo,
+    String? publicDescription,
+    String? stdinDescription,
+    String? stdoutDescription,
+    String? stderrDescription,
     String? approvedBy,
     DateTime? approvedAt,
     String? approvalReason,
@@ -42,6 +54,10 @@ class AgentActionRemotePolicy {
       isEnabled: isEnabled ?? this.isEnabled,
       allowAdHoc: allowAdHoc ?? this.allowAdHoc,
       allowFaithfulIo: allowFaithfulIo ?? this.allowFaithfulIo,
+      publicDescription: publicDescription ?? this.publicDescription,
+      stdinDescription: stdinDescription ?? this.stdinDescription,
+      stdoutDescription: stdoutDescription ?? this.stdoutDescription,
+      stderrDescription: stderrDescription ?? this.stderrDescription,
       approvedBy: clearApprovedBy ? null : (approvedBy ?? this.approvedBy),
       approvedAt: clearApprovedAt ? null : (approvedAt ?? this.approvedAt),
       approvalReason: clearApprovalReason ? null : (approvalReason ?? this.approvalReason),

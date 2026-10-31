@@ -50,6 +50,10 @@ abstract final class ActionIoExecutionProjection {
           stdinState: snapshot.stdinState,
           captureState: snapshot.captureState,
           outputExpired: snapshot.outputExpired,
+          admittedInputBytes: snapshot.admittedInputBytes,
+          confirmedInputBytes: snapshot.confirmedInputBytes,
+          stdoutBytes: snapshot.stdoutBytes,
+          stderrBytes: snapshot.stderrBytes,
         ),
       ),
     );

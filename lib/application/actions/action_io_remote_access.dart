@@ -5,6 +5,7 @@ import 'package:plug_agente/domain/actions/action_failure.dart';
 import 'package:plug_agente/domain/actions/action_io.dart';
 import 'package:plug_agente/domain/actions/action_io_execution_snapshot.dart';
 import 'package:plug_agente/domain/actions/action_io_journal.dart';
+import 'package:plug_agente/domain/actions/action_io_journal_changes.dart';
 import 'package:plug_agente/domain/actions/action_io_output.dart';
 import 'package:plug_agente/domain/actions/action_io_session_reference.dart';
 import 'package:plug_agente/domain/errors/failures.dart' as domain;
@@ -181,6 +182,10 @@ final class ActionIoRemoteAccess {
     _metrics?.setActiveReaders(_readers.length);
     _clients.update(session.clientId, (count) => count + 1, ifAbsent: () => 1);
     _connections.update(connectionId, (count) => count + 1, ifAbsent: () => 1);
+    final journal = _output;
+    final changes = wait > Duration.zero && journal is IActionIoJournalChanges
+        ? (journal as IActionIoJournalChanges).observeChanges(executionId)
+        : null;
     try {
       final available = deadline.difference(_now()) - ActionIoLimits.responseReserve;
       final effective = available <= Duration.zero ? Duration.zero : (wait < available ? wait : available);
@@ -210,9 +215,11 @@ final class ActionIoRemoteAccess {
           waitingNotified = true;
           onReadWait?.call();
         }
-        await Future<void>.delayed(remaining < _pollInterval ? remaining : _pollInterval);
+        final fallback = remaining < _pollInterval ? remaining : _pollInterval;
+        await (changes?.wait(fallback) ?? Future<void>.delayed(fallback));
       }
     } finally {
+      changes?.close();
       _releaseRead(reader, reservation);
     }
   });

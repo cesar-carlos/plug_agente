@@ -26,6 +26,9 @@ extension AgentActionsProviderReadModel on AgentActionsProvider {
   bool get isMaintenanceStrictMode => _runtimeController.isMaintenanceStrictMode;
   bool get isDangerousCommandWarnModeEnabled => _runtimeController.isDangerousCommandWarnModeEnabled;
   bool get isRemoteAgentActionsEnabled => _runtimeController.isRemoteAgentActionsEnabled;
+  bool get isActionIoEnabled => _runtimeController.isActionIoEnabled;
+  bool get remoteAccessSaveFailed => _runtimeController.remoteAccessSaveFailed;
+  bool get isSavingRemoteAccess => _runtimeController.isSavingRemoteAccess;
   bool get isRemoteAdHocAgentActionsEnabled => _runtimeController.isRemoteAdHocAgentActionsEnabled;
   bool get isElevatedAgentActionsEnabled => _runtimeController.isElevatedAgentActionsEnabled;
   bool get isElevatedRunnerConfigured => _runtimeController.isElevatedRunnerConfigured;

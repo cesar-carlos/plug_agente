@@ -74,7 +74,7 @@ final class ActionIoInputDelivery {
           if (identical(_native, operation)) _native = null;
         }),
       );
-      final written = await operation.timeout(timeout);
+      final written = await operation.timeout(timeout, onTimeout: () => Failure(ActionIoPipeFailure.timedOut()));
       if (written.isError()) return await _fail(input, written.exceptionOrNull()!, started: true);
       final receipt = await _journal.finishInput(
         executionId,

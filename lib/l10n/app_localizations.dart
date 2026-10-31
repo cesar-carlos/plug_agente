@@ -1481,7 +1481,7 @@ abstract class AppLocalizations {
   /// No description provided for @agentActionsHelpRemoteAdHocMessage.
   ///
   /// In en, this message translates to:
-  /// **'Allows free-form commands sent by the Hub when the global feature is enabled. Keep it disabled except in controlled environments because it greatly increases risk exposure.'**
+  /// **'This saved action will also require the remote ad-hoc option in Preferences. Leave this policy off when testing input and output for an approved action.'**
   String get agentActionsHelpRemoteAdHocMessage;
 
   /// No description provided for @agentActionsHelpNotificationsTitle.
@@ -1949,7 +1949,7 @@ abstract class AppLocalizations {
   /// No description provided for @agentActionsFormRemoteAdHocEnabled.
   ///
   /// In en, this message translates to:
-  /// **'Allow remote ad-hoc commands'**
+  /// **'Require the ad-hoc policy for this action'**
   String get agentActionsFormRemoteAdHocEnabled;
 
   /// No description provided for @agentActionsFormRemoteApprovedHint.
@@ -2009,7 +2009,7 @@ abstract class AppLocalizations {
   /// No description provided for @agentActionsFormRemoteFeatureDisabledMessage.
   ///
   /// In en, this message translates to:
-  /// **'Enable the remote agent actions feature flag before the Hub can call agent.action.* for this agent.'**
+  /// **'Enable in System Actions → Preferences → Remote actions and input/output.'**
   String get agentActionsFormRemoteFeatureDisabledMessage;
 
   /// No description provided for @agentActionsFormRemoteAdHocFeatureDisabledTitle.
@@ -2021,7 +2021,7 @@ abstract class AppLocalizations {
   /// No description provided for @agentActionsFormRemoteAdHocFeatureDisabledMessage.
   ///
   /// In en, this message translates to:
-  /// **'Enable the remote ad-hoc feature flag to allow free-form hub commands on this agent.'**
+  /// **'Enable in System Actions → Preferences → Remote actions and input/output.'**
   String get agentActionsFormRemoteAdHocFeatureDisabledMessage;
 
   /// No description provided for @agentActionsRiskRemote.
@@ -2459,13 +2459,13 @@ abstract class AppLocalizations {
   /// No description provided for @agentActionsConfirmRemoteAdHocTitle.
   ///
   /// In en, this message translates to:
-  /// **'Enable remote ad-hoc commands?'**
+  /// **'Require the ad-hoc policy for this action?'**
   String get agentActionsConfirmRemoteAdHocTitle;
 
   /// No description provided for @agentActionsConfirmRemoteAdHocMessage.
   ///
   /// In en, this message translates to:
-  /// **'Ad-hoc remote commands are high risk and should stay disabled unless you explicitly need them.'**
+  /// **'This saved action will require the ad-hoc policy in agent preferences. Leave it off for the standard input and output test.'**
   String get agentActionsConfirmRemoteAdHocMessage;
 
   /// No description provided for @agentActionsConfirmRemoteAdHocConfirm.
@@ -9889,6 +9889,150 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Choose a file name. Saving replaces an existing file with this name. Output may be partial if execution or capture is incomplete.'**
   String get agentActionsIoDownloadReplaceNotice;
+
+  /// No description provided for @remoteAccessTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Remote actions and input/output'**
+  String get remoteAccessTitle;
+
+  /// No description provided for @remoteAccessEnabled.
+  ///
+  /// In en, this message translates to:
+  /// **'Allow remote actions'**
+  String get remoteAccessEnabled;
+
+  /// No description provided for @remoteAccessIo.
+  ///
+  /// In en, this message translates to:
+  /// **'Allow process input/output'**
+  String get remoteAccessIo;
+
+  /// No description provided for @remoteAccessDescription.
+  ///
+  /// In en, this message translates to:
+  /// **'Only saved and locally approved actions can run remotely. Credentials, permissions and execution limits remain required.'**
+  String get remoteAccessDescription;
+
+  /// No description provided for @remoteAccessRestart.
+  ///
+  /// In en, this message translates to:
+  /// **'After changing these options, exit the agent from the tray and open it again to prepare input/output and reconnect to the Hub. Active processes are not automatically cancelled.'**
+  String get remoteAccessRestart;
+
+  /// No description provided for @remoteAccessSaveError.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not save the remote access options. Check storage permissions and try again.'**
+  String get remoteAccessSaveError;
+
+  /// No description provided for @remoteAccessAdHoc.
+  ///
+  /// In en, this message translates to:
+  /// **'Allow the ad-hoc policy for saved actions'**
+  String get remoteAccessAdHoc;
+
+  /// No description provided for @remoteAccessAdHocHelp.
+  ///
+  /// In en, this message translates to:
+  /// **'Enables the ad-hoc policy for approved actions. Does not grant permissions, elevation or commands outside the supported remote contract.'**
+  String get remoteAccessAdHocHelp;
+
+  /// No description provided for @remoteCheckActions.
+  ///
+  /// In en, this message translates to:
+  /// **'Enable remote actions to start the I/O check.'**
+  String get remoteCheckActions;
+
+  /// No description provided for @remoteCheckIo.
+  ///
+  /// In en, this message translates to:
+  /// **'Enable process input/output for this agent.'**
+  String get remoteCheckIo;
+
+  /// No description provided for @remoteCheckApproval.
+  ///
+  /// In en, this message translates to:
+  /// **'Save an action with faithful I/O and approve its current definition.'**
+  String get remoteCheckApproval;
+
+  /// No description provided for @remoteCheckHub.
+  ///
+  /// In en, this message translates to:
+  /// **'Restart the agent after settings changes, then use validateRun from the hub to verify the connection, credential and trigger.'**
+  String get remoteCheckHub;
+
+  /// No description provided for @agentActionsIoByteCounts.
+  ///
+  /// In en, this message translates to:
+  /// **'Input admitted: {input} bytes · Confirmed writes to stdin: {written} bytes · stdout: {output} bytes · stderr: {error} bytes'**
+  String agentActionsIoByteCounts(int input, int written, int output, int error);
+
+  /// No description provided for @catalogPublicDescription.
+  ///
+  /// In en, this message translates to:
+  /// **'Public action description'**
+  String get catalogPublicDescription;
+
+  /// No description provided for @catalogStdinDescription.
+  ///
+  /// In en, this message translates to:
+  /// **'Input format (stdin)'**
+  String get catalogStdinDescription;
+
+  /// No description provided for @catalogStdoutDescription.
+  ///
+  /// In en, this message translates to:
+  /// **'Output format (stdout)'**
+  String get catalogStdoutDescription;
+
+  /// No description provided for @catalogStderrDescription.
+  ///
+  /// In en, this message translates to:
+  /// **'Error format (stderr)'**
+  String get catalogStderrDescription;
+
+  /// No description provided for @catalogCheckMaintenance.
+  ///
+  /// In en, this message translates to:
+  /// **'Exit maintenance to test execution.'**
+  String get catalogCheckMaintenance;
+
+  /// No description provided for @catalogCheckConnection.
+  ///
+  /// In en, this message translates to:
+  /// **'Connect the agent to the hub and verify negotiation using the client.'**
+  String get catalogCheckConnection;
+
+  /// No description provided for @catalogCheckExecutor.
+  ///
+  /// In en, this message translates to:
+  /// **'Use a pipe-compatible executor and turn off elevation.'**
+  String get catalogCheckExecutor;
+
+  /// No description provided for @catalogCheckTrigger.
+  ///
+  /// In en, this message translates to:
+  /// **'Check for an enabled remote trigger for this action.'**
+  String get catalogCheckTrigger;
+
+  /// No description provided for @catalogNegotiated.
+  ///
+  /// In en, this message translates to:
+  /// **'Remote I/O is negotiated on this connection.'**
+  String get catalogNegotiated;
+
+  /// No description provided for @catalogIncompatible.
+  ///
+  /// In en, this message translates to:
+  /// **'Remote I/O was not negotiated. Check the hub version and configuration, then reconnect.'**
+  String get catalogIncompatible;
+
+  /// No description provided for @catalogAwaiting.
+  ///
+  /// In en, this message translates to:
+  /// **'Remote I/O negotiation has not been confirmed yet.'**
+  String get catalogAwaiting;
 }
 
 class _AppLocalizationsDelegate extends LocalizationsDelegate<AppLocalizations> {

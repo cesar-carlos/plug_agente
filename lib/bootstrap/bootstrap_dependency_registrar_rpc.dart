@@ -6,6 +6,20 @@ void _registerRpc(
   required int Function(String key, int fallback) readNonNegativeIntEnv,
 }) {
   getIt
+    ..registerLazySingleton(() => ActionIoCatalog(
+      getIt<IAgentActionRepository>(), getIt<ActionIoAuthorization>(), (action) async {
+        if (action.policies.elevated.runElevated || const {
+          AgentActionType.commandLine, AgentActionType.email, AgentActionType.comObject,
+        }.contains(action.type)) return false;
+        final result = await const ActionIoApprovalGuard().validate(
+          definition: action, snapshotter: const AgentActionDefinitionSnapshotter(),
+          secretFingerprints: () => getIt<AgentActionSecretReferenceFingerprinter>().fingerprintsFor(action),
+        );
+        if (result.exceptionOrNull() case final ActionFailure failure when failure.code == 'ACTION_IO_NOT_APPROVED') return false;
+        result.getOrThrow();
+        return true;
+      },
+    ))
     ..registerLazySingleton(
       () => ActionIoRun(
         preparer: getIt<ActionIoIntentPreparer>(),
@@ -221,6 +235,7 @@ void _registerRpc(
           for (final method in ActionIoRpcHandler.methods)
             ActionIoRpcHandler(
               method,
+              catalog: () => getIt<ActionIoCatalog>(),
               accessProvider: () => getIt<ActionIoRemoteAccess>(),
               contract: ActionIoRpcContract(getIt<JsonSchemaContractValidator>()),
               enabled: () => getIt<FeatureFlags>().enableActionIo && getIt<ActionIoJournalRuntime>().isReady,

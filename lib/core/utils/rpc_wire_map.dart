@@ -67,6 +67,10 @@ abstract final class RpcWireMap {
 
   /// Preserve required nullable journal fields; null means indeterminate, never zero.
   static Map<String, dynamic> _sanitizeResult(Map<String, dynamic> result) {
+    if (result['actions'] is List && result.containsKey('next_cursor')) {
+      // Catalog descriptions and the terminal cursor are explicitly nullable.
+      return Map<String, dynamic>.from(result);
+    }
     // sourceSchema v1 has required nullable fields: schema, native metadata and nextOffset.
     // Their absence must not be confused with an observation of null/unknown.
     if (result['contractVersion'] == 1 &&

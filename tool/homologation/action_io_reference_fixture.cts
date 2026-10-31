@@ -42,14 +42,20 @@ export async function verifyReferenceClient(options: {
             agentId: options.agentId,
             bearerToken: () => options.accessToken,
             signal: abortController.signal,
-            fetch: (url: string, init: RequestInit) =>
-              fetch(url, {
+            fetch: async (url: string, init: RequestInit) => {
+              const response = await fetch(url, {
                 ...init,
                 body: JSON.stringify({
                   ...JSON.parse(init.body as string),
                   timeoutMs: requestBudgetMs,
                 }),
-              }),
+              });
+              if (!response.ok && JSON.parse(init.body as string).command.method === "agent.action.listAvailable") {
+                const error = (await response.clone().json()).error;
+                options.progress(`catalog:${error.code}:${error.message}`);
+              }
+              return response;
+            },
           });
         } else {
           socket = io(`${options.hubUrl}/consumers`, {
@@ -134,6 +140,20 @@ export async function verifyReferenceClient(options: {
       let client: InstanceType<typeof ActionIoReferenceClient> =
         new ActionIoReferenceClient(transport, () => options.credential);
       const key = `reference-${mode}-${randomUUID()}`;
+      const discovered = [];
+      for await (const action of client.listAvailable(1)) discovered.push(action);
+      assert.deepEqual(discovered.map((action) => action.action_id), ["action", "action-second"]);
+      assert.equal(discovered[1]!.stdin_description, "Arbitrary bytes until EOF");
+      assert.equal(discovered[1]!.stdout_description, "Exact echo");
+      assert.equal(discovered[1]!.stderr_description, "EOF line");
+      const echoId = discovered.find((entry) => entry.name === "Saved")!.action_id as string;
+      const catalogEntry = {
+        actionId: options.actionId,
+        name: "Binary echo",
+        input: "Raw bytes until EOF",
+        output: "Same bytes on stdout",
+      };
+      assert.deepEqual(await client.availableActions([catalogEntry]), [catalogEntry]);
       const initial = Uint8Array.from(
         { length: 65536 },
         (_, index) => index & 255,
@@ -144,7 +164,7 @@ export async function verifyReferenceClient(options: {
       );
       const suffix = Uint8Array.from([0, 255, 13, 10, 26, 128, 1]);
       options.progress(`${mode}:run`);
-      const run = await client.run(options.actionId, key, {
+      const run = await client.run(echoId, key, {
         initial,
         closeInput: false,
       });

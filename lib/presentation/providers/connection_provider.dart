@@ -65,7 +65,10 @@ class ConnectionProvider extends ChangeNotifier implements HubRecoveryUiSink {
     HubConnectionShutdownRegistry? hubConnectionShutdownRegistry,
     ConnectionDbDiagnosticsCoordinator? dbDiagnosticsCoordinator,
     HubConnectionCoordinator? hubConnectionCoordinator,
-  }) : _hubConnectionShutdownRegistry = hubConnectionShutdownRegistry,
+  }) : _actionIoDiagnostics = transportClient is ActionIoConnectionDiagnostics
+           ? transportClient as ActionIoConnectionDiagnostics
+           : null,
+       _hubConnectionShutdownRegistry = hubConnectionShutdownRegistry,
        _hubSessionCoordinator = hubSessionCoordinator ?? hubRecoveryAuthCoordinator,
        _authProvider = authProvider,
        _configProvider = configProvider,
@@ -209,6 +212,9 @@ class ConnectionProvider extends ChangeNotifier implements HubRecoveryUiSink {
     _displayState.isDbConnected = connected;
     notifyListeners();
   }
+
+  final ActionIoConnectionDiagnostics? _actionIoDiagnostics;
+  bool? get negotiatedActionIo => isConnected ? _actionIoDiagnostics?.negotiatedActionIo : null;
 
   bool get isConnected => _displayState.status == ConnectionStatus.connected;
 

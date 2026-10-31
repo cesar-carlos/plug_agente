@@ -3,6 +3,15 @@ import 'package:plug_agente/core/utils/rpc_wire_map.dart';
 import 'package:plug_agente/domain/protocol/protocol.dart';
 
 void main() {
+  test('preserves the terminal catalog cursor and an unspecified stream description', () {
+    final result = <String, dynamic>{
+      'next_cursor': null,
+      'actions': [{'action_id': 'a', 'stdin_description': null}],
+    };
+    final response = RpcResponse.success(id: 'catalog', result: result);
+    expect(RpcWireMap.sanitizeRpcResponse(response).result, result);
+    expect((RpcWireMap.sanitizeRpcResponseWirePayload([response.toJson()]) as List).single, response.toJson());
+  });
   test('preserves null exit code in persisted I/O events through every wire sanitation path', () {
     final result = <String, dynamic>{
       'execution_id': 'execution',

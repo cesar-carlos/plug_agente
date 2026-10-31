@@ -1,3 +1,4 @@
+import 'package:plug_agente/application/actions/action_io_catalog.dart';
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
@@ -105,6 +106,7 @@ final class ActionIoHubFixture {
   Future<void> connect({
     required ActionIoRpcHandler run,
     required ActionIoRpcHandler validate,
+    required ActionIoCatalog catalog,
     required ActionIoRemoteAccess access,
     required ActionIoRpcContract contract,
   }) async {
@@ -122,7 +124,7 @@ final class ActionIoHubFixture {
     final handlers = [
       observedRun,
       for (final method in {...ActionIoRpcHandler.methods, 'agent.action.getExecution', 'agent.action.cancel'})
-        ActionIoRpcHandler(method, contract: contract, enabled: () => true, access: access),
+        ActionIoRpcHandler(method, contract: contract, enabled: () => true, access: access, catalog: () => catalog),
     ];
     final dispatcher = RpcMethodDispatcher(
       databaseGateway: database,
@@ -241,7 +243,7 @@ final class ActionIoHubFixture {
         flush: true,
       );
       await pending.rename(request.path);
-      final deadline = DateTime.now().add(const Duration(seconds: 60));
+      final deadline = DateTime.now().add(const Duration(seconds: 100));
       while (!result.existsSync()) {
         if (!DateTime.now().isBefore(deadline)) throw StateError('Reference client fixture timed out.');
         await Future<void>.delayed(const Duration(milliseconds: 50));

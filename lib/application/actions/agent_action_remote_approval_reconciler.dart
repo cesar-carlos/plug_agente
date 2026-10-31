@@ -18,7 +18,12 @@ class AgentActionRemoteApprovalReconciler {
     required AgentActionDefinition definition,
   }) async {
     if (!incoming.isEnabled) {
-      return const AgentActionRemotePolicy();
+      return AgentActionRemotePolicy(
+        publicDescription: incoming.publicDescription,
+        stdinDescription: incoming.stdinDescription,
+        stdoutDescription: incoming.stdoutDescription,
+        stderrDescription: incoming.stderrDescription,
+      );
     }
 
     final secretFingerprints = await _resolveSecretFingerprints(definition);
@@ -66,7 +71,12 @@ class AgentActionRemoteApprovalReconciler {
     required AgentActionDefinition definition,
   }) {
     if (!incoming.isEnabled) {
-      return const AgentActionRemotePolicy();
+      return AgentActionRemotePolicy(
+        publicDescription: incoming.publicDescription,
+        stdinDescription: incoming.stdinDescription,
+        stdoutDescription: incoming.stdoutDescription,
+        stderrDescription: incoming.stderrDescription,
+      );
     }
 
     final newFingerprint = _snapshotter.riskFingerprint(definition);

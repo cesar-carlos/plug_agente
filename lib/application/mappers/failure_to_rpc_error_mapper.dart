@@ -32,7 +32,6 @@ class FailureToRpcErrorMapper {
     bool useTimeoutByStage = false,
   }) {
     final code = _getErrorCode(failure, useTimeoutByStage);
-    final message = RpcErrorCode.getMessage(code);
     final data = _buildErrorData(
       failure,
       code,
@@ -40,9 +39,15 @@ class FailureToRpcErrorMapper {
       useTimeoutByStage,
     );
 
+    // This guard fails before accessing the action and supplies a fixed public message.
+    final isCapabilityRefusal =
+        failure is ActionRuntimeFailure &&
+        failure.code == 'CAPABILITY_UNAVAILABLE' &&
+        failure.context['phase'] == 'preflight' &&
+        failure.context['effects_possible'] == false;
     return RpcError(
       code: code,
-      message: message,
+      message: isCapabilityRefusal ? data['user_message'] as String : RpcErrorCode.getMessage(code),
       data: data,
     );
   }
@@ -465,6 +470,10 @@ class FailureToRpcErrorMapper {
           return reason;
         }
       }
+    }
+    if (failure is ActionRuntimeFailure && failure.code == 'CAPABILITY_UNAVAILABLE') {
+      final reason = failure.context['reason'];
+      if (reason == 'disabled' || reason == 'incompatible') return reason as String;
     }
     if (failure is ActionRuntimeFailure && code == RpcErrorCode.agentActionsTemporarilyUnavailable) {
       final reason = failure.context['reason']?.toString();
