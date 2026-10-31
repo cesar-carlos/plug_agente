@@ -102,6 +102,7 @@ jobs:
         uses: subosito/flutter-action@v2
         with:
           channel: stable
+          flutter-version: '3.47.7'
           cache: true
 
       - name: Install Flutter dependencies
@@ -142,6 +143,10 @@ jobs:
 
       - name: Verify existing release tag source
         run: python -m tool.release.publish_release --check-tag
+
+      - name: Check dependency and SDK generated files
+        shell: bash
+        run: git diff --exit-code -- . ':(exclude)pubspec.yaml' ':(exclude)installer/setup.iss' ':(exclude)lib/core/constants/app_version.g.dart'
 
       - name: Release quality gate
         if: inputs.run_tests
@@ -193,6 +198,7 @@ jobs:
           else
             git commit -m "chore: bump version to ${VERSION_SHORT}"
           fi
+          git diff --exit-code
 
       - name: Generate signed updater manifest
         if: ${{ !inputs.dry_run }}
