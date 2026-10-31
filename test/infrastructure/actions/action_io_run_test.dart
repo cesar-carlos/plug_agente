@@ -1,4 +1,3 @@
-import 'package:plug_agente/application/actions/action_io_catalog.dart';
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
@@ -11,6 +10,7 @@ import 'package:plug_agente/application/actions/action_environment_resolver.dart
 import 'package:plug_agente/application/actions/action_execution_queue.dart';
 import 'package:plug_agente/application/actions/action_io_admission.dart';
 import 'package:plug_agente/application/actions/action_io_authorization.dart';
+import 'package:plug_agente/application/actions/action_io_catalog.dart';
 import 'package:plug_agente/application/actions/action_io_execution_queue.dart';
 import 'package:plug_agente/application/actions/action_io_intent_preparer.dart';
 import 'package:plug_agente/application/actions/action_io_local_intent_validator.dart';
@@ -779,7 +779,7 @@ Future<void> main() async {
         final probe = await credentials.provision('catalog-isolation-probe', hub.agentId);
         Future<RpcResponse> page(String id, [String? cursor]) => hub.call(RpcRequest(
           jsonrpc: '2.0', id: id, method: 'agent.action.listAvailable',
-          params: {'page_size': 1, if (cursor != null) 'cursor': cursor},
+          params: {'page_size': 1, 'cursor': ?cursor},
         ));
         try {
           final first = await page('owner-catalog');

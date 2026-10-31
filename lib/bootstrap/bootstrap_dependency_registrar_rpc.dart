@@ -10,7 +10,9 @@ void _registerRpc(
       getIt<IAgentActionRepository>(), getIt<ActionIoAuthorization>(), (action) async {
         if (action.policies.elevated.runElevated || const {
           AgentActionType.commandLine, AgentActionType.email, AgentActionType.comObject,
-        }.contains(action.type)) return false;
+        }.contains(action.type)) {
+          return false;
+        }
         final result = await const ActionIoApprovalGuard().validate(
           definition: action, snapshotter: const AgentActionDefinitionSnapshotter(),
           secretFingerprints: () => getIt<AgentActionSecretReferenceFingerprinter>().fingerprintsFor(action),
