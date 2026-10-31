@@ -10,6 +10,11 @@ Changes after a recorded snapshot stay in Unreleased.
 
 ## Unreleased
 
+## 1.9.0 - 2026-10-31
+
+Status: prepared
+Build: 1.9.0+1
+
 - Remote execution history shows admitted stdin bytes and confirmed pipe writes separately.
 
 - Edit public catalog descriptions and diagnose remote I/O for the selected action and current hub connection.
@@ -41,6 +46,8 @@ Changes after a recorded snapshot stay in Unreleased.
 
 - Resolve the Dart CLI when crash-journal tests run under Flutter, instead of
   launching `flutter_tester` as a CLI and leaving the release gate waiting.
+- Isolate SQLite native assets in crash tests and verify journal recovery on Linux.
+- Preserve and verify the Windows policy file's access permissions across atomic replacement.
 
 
 ### Changed — release history validation

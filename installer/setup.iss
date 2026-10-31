@@ -5,7 +5,7 @@
 
 #include "constants.iss"
 #define MyAppName "Plug Agente"
-#define MyAppVersion "1.8.9"
+#define MyAppVersion "1.9.0"
 #ifndef MyAppWorkerVersion
   #if defined(SIGN_INSTALLER) || defined(ExternalSignedUninstallerDir)
     #error Signed installers require the exact MyAppWorkerVersion including build number
