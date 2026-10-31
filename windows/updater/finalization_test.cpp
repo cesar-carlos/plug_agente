@@ -33,6 +33,16 @@ void policy_persistence(const fs::path& root) {
     std::wcerr << L"Original: " << access(original) << L"; actual: " << access(actual) << L'\n';
     throw std::runtime_error("policy_permissions_changed");
   }
+  // Also cover an explicit non-inheriting DACL on a volume with inheritable
+  // parent ACEs, regardless of the CI account's default temporary directory.
+  {
+    Handle file(CreateFileW(policy.c_str(), WRITE_DAC, 0, nullptr, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, nullptr));
+    if (!file.valid() || !SetKernelObjectSecurity(file.get(), DACL_SECURITY_INFORMATION,
+        const_cast<uint8_t*>(original.data()))) throw std::runtime_error("fixture_explicit_acl_failed");
+  }
+  const auto explicit_acl = access(permissions(policy));
+  write_atomic(policy, "manifest", true);
+  if (access(permissions(policy)) != explicit_acl) throw std::runtime_error("explicit_policy_permissions_changed");
   {
     Handle locked(CreateFileW(temporary.c_str(), GENERIC_WRITE, 0, nullptr, CREATE_NEW, FILE_ATTRIBUTE_NORMAL, nullptr));
     if (!locked.valid()) throw std::runtime_error("fixture_lock_failed");

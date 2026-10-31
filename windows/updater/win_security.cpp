@@ -8,6 +8,7 @@
 #include <wintrust.h>
 #include <wtsapi32.h>
 #include <fstream>
+#include <cstring>
 #include <iomanip>
 #include <sstream>
 #include "third_party/monocypher-ed25519.h"
@@ -91,6 +92,24 @@ std::string read_file(const fs::path& path, size_t limit) {
   if (!input.eof()) throw std::runtime_error("file_read_failed");
   return result;
 }
+static bool matches_policy_dacl(HANDLE file, PSECURITY_DESCRIPTOR expected) {
+  DWORD size = 0;
+  GetKernelObjectSecurity(file, DACL_SECURITY_INFORMATION, nullptr, 0, &size);
+  std::vector<uint8_t> actual(size);
+  SECURITY_DESCRIPTOR_CONTROL left{}, right{};
+  DWORD revision = 0;
+  BOOL has_left, has_right, defaulted;
+  PACL left_acl, right_acl;
+  if (!size || !GetKernelObjectSecurity(file, DACL_SECURITY_INFORMATION, actual.data(), size, &size) ||
+      !GetSecurityDescriptorControl(expected, &left, &revision) ||
+      !GetSecurityDescriptorControl(actual.data(), &right, &revision) ||
+      !GetSecurityDescriptorDacl(expected, &has_left, &left_acl, &defaulted) ||
+      !GetSecurityDescriptorDacl(actual.data(), &has_right, &right_acl, &defaulted))
+    throw std::runtime_error("policy_permissions_unconfirmed");
+  if (((left ^ right) & (SE_DACL_PROTECTED | SE_DACL_AUTO_INHERITED)) || has_left != has_right) return false;
+  if (!has_left || !left_acl || !right_acl) return !has_left || left_acl == right_acl;
+  return left_acl->AclSize == right_acl->AclSize && std::memcmp(left_acl, right_acl, left_acl->AclSize) == 0;
+}
 void write_atomic(const fs::path& path, const std::string& bytes, bool preserve_permissions) {
   reject_reparse_path(path);
   std::vector<uint8_t> permissions;
@@ -119,8 +138,15 @@ void write_atomic(const fs::path& path, const std::string& bytes, bool preserve_
     // Do not ignore merge errors or fall back to a less restrictive replacement.
     if (!ReplaceFileW(path.c_str(), temporary.c_str(), nullptr, 0, nullptr, nullptr))
       throw std::runtime_error("policy_replace_failed");
-    Handle persisted(CreateFileW(path.c_str(), GENERIC_WRITE, FILE_SHARE_READ, nullptr, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, nullptr));
-    if (!persisted.valid() || !FlushFileBuffers(persisted.get())) throw std::runtime_error("policy_flush_unconfirmed");
+    Handle persisted(CreateFileW(path.c_str(), GENERIC_WRITE | WRITE_DAC, FILE_SHARE_READ, nullptr, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, nullptr));
+    // ReplaceFile can merge inherited ACEs from the parent even when the old
+    // DACL had explicit entries only. Restore the saved DACL on the final handle.
+    if (!persisted.valid()) throw std::runtime_error("policy_permissions_unconfirmed");
+    if (!matches_policy_dacl(persisted.get(), permissions.data()) &&
+        (!SetKernelObjectSecurity(persisted.get(), DACL_SECURITY_INFORMATION, permissions.data()) ||
+         !matches_policy_dacl(persisted.get(), permissions.data())))
+      throw std::runtime_error("policy_permissions_write_failed");
+    if (!FlushFileBuffers(persisted.get())) throw std::runtime_error("policy_flush_unconfirmed");
   } else if (!MoveFileExW(temporary.c_str(), path.c_str(), MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH)) {
     throw std::runtime_error("journal_replace_failed");
   }
