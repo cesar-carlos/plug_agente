@@ -26,7 +26,7 @@ Future<ClientTokenSubmitFeedback?> showClientTokenCreateDialog({
 
   controller.loadTokenIntoForm(
     baseToken,
-    localAgentId: context.read<ConfigProvider>().currentConfig?.agentId,
+    localAgentId: _configuredAgentId(context),
   );
   provider.clearMutationError();
   provider.clearLastCreatedToken();
@@ -179,5 +179,15 @@ Future<ClientTokenSubmitFeedback?> showClientTokenCreateDialog({
   } finally {
     controller.markCreateTokenDialogOpen(false);
     controller.detachDialogControllerListeners();
+  }
+}
+
+/// The token section can open outside the config shell, where no
+/// [ConfigProvider] exists. Prefill only when that provider is present.
+String? _configuredAgentId(BuildContext context) {
+  try {
+    return context.read<ConfigProvider>().currentConfig?.agentId;
+  } on ProviderNotFoundException {
+    return null;
   }
 }
