@@ -5,6 +5,12 @@
   <link>https://github.com/cesar-carlos/plug_agente/releases</link>
   <description>Atualizações do Plug Agente</description>
   <item>
+   <title>Version 1.9.1+1</title>
+   <pubDate>Wed, 04 Nov 2026 18:07:28 +0000</pubDate>
+   <description>**Full Changelog**: https://github.com/cesar-carlos/plug_agente/compare/v1.9.0...v1.9.1</description>
+   <enclosure url="https://github.com/cesar-carlos/plug_agente/releases/download/v1.9.1/PlugAgente-Setup-1.9.1.exe" sparkle:version="1.9.1+1" sparkle:os="windows" plug:sha256="4284a76cf4089fbaaa40f073d20077b39f2affe572fccb916572d3bf853e9ed4" plug:channel="stable" plug:rolloutPercentage="5" length="21889227" type="application/octet-stream" plug:manifestUrl="https://github.com/cesar-carlos/plug_agente/releases/download/v1.9.1/PlugAgente-Manifest-1.9.1.json" plug:manifestSha256="359da42c98d73ec33b35e132955dec01d01f4cb03df7d6145ce81b872c709cd3" plug:edSignature="jWC3OU9JTwZ6HDnzVPXqNIYpNZWgI0rbCUcwkqjA83MVwO1g9ZYtcds8n+ZOS7U9BQhEkpHuXekFGpYJT+EQCw==" plug:manifestSignature="YmDr7WWRSIqLi/z4DWRSngGo4EqHigfP+08iwXqtwUcafv7dSjsgkNjGbCcYsKBuEliWFQpQzprX3Rx3QeqfCA==" />
+  </item>
+  <item>
    <title>Version 1.9.0+1</title>
    <pubDate>Sat, 31 Oct 2026 17:24:57 +0000</pubDate>
    <description>## What's Changed
@@ -72,12 +78,6 @@
    <pubDate>Thu, 28 May 2026 14:46:28 +0000</pubDate>
    <description>**Full Changelog**: https://github.com/cesar-carlos/plug_agente/compare/v1.7.1...v1.7.2</description>
    <enclosure url="https://github.com/cesar-carlos/plug_agente/releases/download/v1.7.2/PlugAgente-Setup-1.7.2.exe" sparkle:version="1.7.2+1" sparkle:os="windows" plug:sha256="b84e7a323ffac305f069dc8ddb11b415627292c75ccb4088521b043b7741496b" plug:channel="stable" plug:rolloutPercentage="100" length="21242699" type="application/octet-stream" />
-  </item>
-  <item>
-   <title>Version 1.7.1+1</title>
-   <pubDate>Thu, 28 May 2026 00:45:41 +0000</pubDate>
-   <description>**Full Changelog**: https://github.com/cesar-carlos/plug_agente/compare/v1.7.0...v1.7.1</description>
-   <enclosure url="https://github.com/cesar-carlos/plug_agente/releases/download/v1.7.1/PlugAgente-Setup-1.7.1.exe" sparkle:version="1.7.1+1" sparkle:os="windows" plug:sha256="c3e0e33942b49f7a9a63e2efd89b2888752a5683f51577d0fa9b6580dc0b1ef2" plug:channel="stable" plug:rolloutPercentage="100" length="21236142" type="application/octet-stream" />
   </item>
  </channel>
 </rss>
