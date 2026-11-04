@@ -868,10 +868,15 @@ void main() {
         await tester.tap(find.text(ptL10n.ctButtonNewToken));
         await tester.pumpAndSettle();
 
-        final payloadField = find.byWidgetPredicate((widget) {
-          return widget is TextBox && widget.maxLines == 4;
-        });
+        final payloadField = find.descendant(
+          of: find.byKey(const Key('client-token-payload-field')),
+          matching: find.byType(TextBox),
+        );
         await tester.enterText(payloadField, '{invalid json');
+        await tester.pumpAndSettle();
+
+        expect(find.text(ptL10n.ctErrorPayloadInvalidJson), findsOneWidget);
+
         await tester.ensureVisible(find.text(ptL10n.ctButtonCreateToken));
         await tester.tap(find.text(ptL10n.ctButtonCreateToken));
         await tester.pumpAndSettle();
@@ -890,9 +895,10 @@ void main() {
         await tester.tap(find.text(ptL10n.ctButtonNewToken));
         await tester.pumpAndSettle();
 
-        final payloadField = find.byWidgetPredicate((widget) {
-          return widget is TextBox && widget.maxLines == 4;
-        });
+        final payloadField = find.descendant(
+          of: find.byKey(const Key('client-token-payload-field')),
+          matching: find.byType(TextBox),
+        );
         await tester.enterText(payloadField, '{"database":123}');
         await tester.ensureVisible(find.text(ptL10n.ctButtonCreateToken));
         await tester.tap(find.text(ptL10n.ctButtonCreateToken));

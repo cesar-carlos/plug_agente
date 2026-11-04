@@ -4267,6 +4267,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get ctButtonIncludeFaithfulIoScopes => 'Include faithful I/O scopes';
 
   @override
+  String get ctButtonFormatPayloadJson => 'Format JSON';
+
+  @override
   String get ctFlagAllTables => 'All tables';
 
   @override

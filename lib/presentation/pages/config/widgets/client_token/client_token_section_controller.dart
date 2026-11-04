@@ -19,6 +19,8 @@ import 'package:plug_agente/presentation/pages/config/widgets/client_token_list_
 import 'package:plug_agente/presentation/pages/config/widgets/client_token_rule_file_service.dart';
 import 'package:plug_agente/presentation/pages/config/widgets/client_token_rules_grid.dart';
 
+const _payloadEncoder = JsonEncoder.withIndent('  ');
+
 /// Keys for localized form validation messages resolved by the section widget.
 enum ClientTokenFormErrorKey {
   globalPermissionRequired,
@@ -114,7 +116,7 @@ class ClientTokenSectionController {
     nameController.addListener(notifyCreateTokenDialogChanged);
     clientIdController.addListener(notifyCreateTokenDialogChanged);
     agentIdController.addListener(notifyCreateTokenDialogChanged);
-    payloadController.addListener(notifyCreateTokenDialogChanged);
+    payloadController.addListener(_onPayloadTextChanged);
     _dialogControllerListenersAttached = true;
   }
 
@@ -125,7 +127,7 @@ class ClientTokenSectionController {
     nameController.removeListener(notifyCreateTokenDialogChanged);
     clientIdController.removeListener(notifyCreateTokenDialogChanged);
     agentIdController.removeListener(notifyCreateTokenDialogChanged);
-    payloadController.removeListener(notifyCreateTokenDialogChanged);
+    payloadController.removeListener(_onPayloadTextChanged);
     _dialogControllerListenersAttached = false;
   }
 
@@ -256,7 +258,7 @@ class ClientTokenSectionController {
     nameController.text = baseToken?.name ?? '';
     clientIdController.text = baseToken?.clientId ?? generateClientId();
     agentIdController.text = _agentIdForForm(baseToken?.agentId, localAgentId);
-    payloadController.text = baseToken?.payload.isEmpty ?? true ? '' : jsonEncode(baseToken!.payload);
+    payloadController.text = _displayPayload(baseToken?.payload);
     rules
       ..clear()
       ..addAll(
@@ -373,12 +375,93 @@ class ClientTokenSectionController {
     return true;
   }
 
+  bool formatPayloadJson() {
+    final raw = payloadController.text.trim();
+    if (raw.isEmpty) {
+      _setPayloadFormError(null);
+      notifyCreateTokenDialogChanged();
+      return true;
+    }
+
+    final (:payload, :error) = parseClientTokenPayloadJson(raw);
+    if (error != null || payload == null) {
+      _setPayloadFormError(
+        error == ClientTokenPayloadParseError.notAnObject
+            ? ClientTokenFormErrorKey.payloadMustBeJsonObject
+            : ClientTokenFormErrorKey.payloadInvalidJson,
+      );
+      notifyCreateTokenDialogChanged();
+      return false;
+    }
+
+    final encoded = _payloadEncoder.convert(payload);
+    _setPayloadFormError(_payloadValidationKey(validateClientTokenPayload(payload)));
+    if (payloadController.text != encoded) {
+      payloadController.text = encoded;
+    } else {
+      notifyCreateTokenDialogChanged();
+    }
+    return payloadIssueKey == null;
+  }
+
+  ClientTokenFormErrorKey? get payloadIssueKey {
+    final raw = payloadController.text.trim();
+    if (raw.isEmpty) return null;
+    final (:payload, :error) = parseClientTokenPayloadJson(raw);
+    return switch (error) {
+      ClientTokenPayloadParseError.invalidJson => ClientTokenFormErrorKey.payloadInvalidJson,
+      ClientTokenPayloadParseError.notAnObject => ClientTokenFormErrorKey.payloadMustBeJsonObject,
+      null => _payloadValidationKey(validateClientTokenPayload(payload!)),
+    };
+  }
+
+  void _onPayloadTextChanged() {
+    if (_isPayloadFormError(formErrorKey) && formErrorKey != payloadIssueKey) {
+      formErrorKey = null;
+    }
+    notifyCreateTokenDialogChanged();
+  }
+
+  void _setPayloadFormError(ClientTokenFormErrorKey? next) {
+    if (next == null) {
+      if (_isPayloadFormError(formErrorKey)) formErrorKey = null;
+      return;
+    }
+    formErrorKey = next;
+  }
+
   String _agentIdForForm(String? storedAgentId, String? localAgentId) {
     final stored = storedAgentId?.trim();
     if (stored != null && stored.isNotEmpty) return stored;
     final local = localAgentId?.trim();
     if (local == null || local.isEmpty) return '';
     return local;
+  }
+
+  String _displayPayload(Map<String, dynamic>? payload) {
+    if (payload == null || payload.isEmpty) return '';
+    return _payloadEncoder.convert(payload);
+  }
+
+  ClientTokenFormErrorKey? _payloadValidationKey(ClientTokenPayloadValidationError? error) {
+    return switch (error) {
+      null => null,
+      ClientTokenPayloadValidationError.databaseMustBeString => ClientTokenFormErrorKey.payloadDatabaseMustBeString,
+      ClientTokenPayloadValidationError.databaseCannotBeEmpty => ClientTokenFormErrorKey.payloadDatabaseCannotBeEmpty,
+      ClientTokenPayloadValidationError.runtimeRestrictionsInvalid =>
+        ClientTokenFormErrorKey.payloadRuntimeRestrictionsInvalid,
+    };
+  }
+
+  bool _isPayloadFormError(ClientTokenFormErrorKey? key) {
+    return switch (key) {
+      ClientTokenFormErrorKey.payloadInvalidJson ||
+      ClientTokenFormErrorKey.payloadMustBeJsonObject ||
+      ClientTokenFormErrorKey.payloadDatabaseMustBeString ||
+      ClientTokenFormErrorKey.payloadDatabaseCannotBeEmpty ||
+      ClientTokenFormErrorKey.payloadRuntimeRestrictionsInvalid => true,
+      _ => false,
+    };
   }
 
   void clearTokenDraftForm() {

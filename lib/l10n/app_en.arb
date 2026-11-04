@@ -1808,6 +1808,7 @@
   "ctAgentIdFaithfulHelp": "Required for faithful input and output. Use this agent's identifier.",
   "ctHintPayloadJson": "JSON object. For faithful I/O, include the agent_actions scopes.",
   "ctButtonIncludeFaithfulIoScopes": "Include faithful I/O scopes",
+  "ctButtonFormatPayloadJson": "Format JSON",
   "ctFlagAllTables": "All tables",
   "ctFlagAllViews": "All views",
   "ctFlagAllPermissions": "All permissions",

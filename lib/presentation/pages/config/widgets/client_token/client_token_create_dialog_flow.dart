@@ -69,6 +69,10 @@ Future<ClientTokenSubmitFeedback?> showClientTokenCreateDialog({
               dialogL10n,
               controller.formErrorKey,
             );
+            final payloadIssue = ClientTokenSectionCoordinator.formErrorMessage(
+              dialogL10n,
+              controller.payloadIssueKey,
+            );
 
             return ChangeNotifierProvider<ClientTokenProvider>.value(
               value: provider,
@@ -139,6 +143,8 @@ Future<ClientTokenSubmitFeedback?> showClientTokenCreateDialog({
                           onDeleteRule: controller.removeRule,
                           onDismissCreatedToken: tokenProvider.clearLastCreatedToken,
                           onIncludeFaithfulIoScopes: controller.includeFaithfulActionIoScopes,
+                          onFormatPayload: controller.formatPayloadJson,
+                          payloadIssue: payloadIssue == formError ? '' : payloadIssue,
                           onFieldSubmitted: () => coordinator.handleSubmitToken(dialogContext, tokenProvider),
                         ),
                       ),

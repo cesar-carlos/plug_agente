@@ -4274,6 +4274,9 @@ class AppLocalizationsPt extends AppLocalizations {
   String get ctButtonIncludeFaithfulIoScopes => 'Incluir escopos de entrada fiel';
 
   @override
+  String get ctButtonFormatPayloadJson => 'Formatar JSON';
+
+  @override
   String get ctFlagAllTables => 'all_tables';
 
   @override

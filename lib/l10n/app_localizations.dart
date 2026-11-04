@@ -7946,6 +7946,12 @@ abstract class AppLocalizations {
   /// **'Include faithful I/O scopes'**
   String get ctButtonIncludeFaithfulIoScopes;
 
+  /// No description provided for @ctButtonFormatPayloadJson.
+  ///
+  /// In en, this message translates to:
+  /// **'Format JSON'**
+  String get ctButtonFormatPayloadJson;
+
   /// No description provided for @ctFlagAllTables.
   ///
   /// In en, this message translates to:

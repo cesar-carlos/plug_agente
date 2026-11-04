@@ -1808,6 +1808,7 @@
   "ctAgentIdFaithfulHelp": "Obrigatório para entrada fiel. Use o identificador deste agente.",
   "ctHintPayloadJson": "Objeto JSON. Para entrada fiel, inclua os escopos agent_actions.",
   "ctButtonIncludeFaithfulIoScopes": "Incluir escopos de entrada fiel",
+  "ctButtonFormatPayloadJson": "Formatar JSON",
   "ctFlagAllTables": "all_tables",
   "ctFlagAllViews": "all_views",
   "ctFlagAllPermissions": "all_permissions",

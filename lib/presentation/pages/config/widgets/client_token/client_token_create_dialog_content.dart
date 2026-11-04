@@ -47,6 +47,8 @@ class ClientTokenCreateDialogContent extends StatelessWidget {
     required this.onDeleteRule,
     required this.onDismissCreatedToken,
     required this.onIncludeFaithfulIoScopes,
+    required this.onFormatPayload,
+    required this.payloadIssue,
     required this.onFieldSubmitted,
     super.key,
   });
@@ -84,6 +86,8 @@ class ClientTokenCreateDialogContent extends StatelessWidget {
   final ValueChanged<int> onDeleteRule;
   final VoidCallback onDismissCreatedToken;
   final VoidCallback onIncludeFaithfulIoScopes;
+  final VoidCallback onFormatPayload;
+  final String payloadIssue;
   final VoidCallback onFieldSubmitted;
 
   bool get _isGlobalScopeMode => allTables || allViews;
@@ -140,18 +144,37 @@ class ClientTokenCreateDialogContent extends StatelessWidget {
             FocusTraversalOrder(
               order: const NumericFocusOrder(4),
               child: AppTextField(
+                key: const Key('client-token-payload-field'),
                 label: l10n.ctFieldPayloadJsonOptional,
                 controller: payloadController,
                 hint: l10n.ctHintPayloadJson,
-                maxLines: 4,
+                maxLines: 8,
                 textInputAction: TextInputAction.newline,
               ),
             ),
+            if (payloadIssue.isNotEmpty) ...[
+              const SizedBox(height: AppSpacing.sm),
+              InlineFeedbackCard(
+                severity: InfoBarSeverity.error,
+                message: payloadIssue,
+              ),
+            ],
             const SizedBox(height: AppSpacing.sm),
-            AppButton(
-              label: l10n.ctButtonIncludeFaithfulIoScopes,
-              isPrimary: false,
-              onPressed: onIncludeFaithfulIoScopes,
+            Wrap(
+              spacing: AppSpacing.sm,
+              runSpacing: AppSpacing.sm,
+              children: [
+                AppButton(
+                  label: l10n.ctButtonFormatPayloadJson,
+                  isPrimary: false,
+                  onPressed: onFormatPayload,
+                ),
+                AppButton(
+                  label: l10n.ctButtonIncludeFaithfulIoScopes,
+                  isPrimary: false,
+                  onPressed: onIncludeFaithfulIoScopes,
+                ),
+              ],
             ),
             const SizedBox(height: AppSpacing.md),
             ClientTokenCreateDialogPolicySection(
