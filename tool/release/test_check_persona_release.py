@@ -1,5 +1,5 @@
 import unittest
-from tool.release.check_persona_release import REQUIRED, ready
+from tool.release.check_persona_release import REQUIRED, accepted_risk, ready
 
 class PersonaReleaseGateTest(unittest.TestCase):
     def test_partial_manifest_never_publishes(self):
@@ -24,3 +24,11 @@ class PersonaReleaseGateTest(unittest.TestCase):
                 partial = [gate for gate in REQUIRED if gate != missing]
                 self.assertFalse(ready({"generation": "persona-v2", "ready": True,
                                         "requiredGates": partial, "completedGates": partial}))
+
+    def test_owner_risk_acceptance_names_only_the_accepted_stable_builds(self):
+        self.assertTrue(accepted_risk("v1.9.0", "1.9.0+1", "stable", "version: 1.9.0+1\n"))
+        self.assertTrue(accepted_risk("v1.9.1", "1.9.1+1", "stable", "version: 1.9.1+1\n"))
+        self.assertFalse(accepted_risk("v1.9.1", "1.9.1+1", "stable", "version: 1.9.0+1\n"))
+        self.assertFalse(accepted_risk("v1.9.1", "1.9.1+1", "beta", "version: 1.9.1+1\n"))
+        self.assertFalse(accepted_risk("v1.9.2", "1.9.2+1", "stable", "version: 1.9.2+1\n"))
+        self.assertFalse(accepted_risk("v1.9.0", "1.9.1+1", "stable", "version: 1.9.1+1\n"))

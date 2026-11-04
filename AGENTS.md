@@ -26,5 +26,6 @@ implemented; explicit homologation opt-in is disabled by default. See the owning
 project_specifics rule and docs for limits and remaining acceptance. Never retry
 unknown operations. The 1.9.0 three-engine development matrix passed. The stable
 1.9.0+1 installer and appcast shipped under a version-specific risk exception.
-Persona-v2 acceptance remains pending. See the [homologation scope and
+Stable 1.9.1+1 has a separate owner acceptance of the same risks and does not
+close the persona-v2 gates. Persona-v2 acceptance remains pending. See the [homologation scope and
 remaining acceptance](docs/communication/sql_operations.md#mandatory-real-engine-matrix).

@@ -10,6 +10,18 @@ Changes after a recorded snapshot stay in Unreleased.
 
 ## Unreleased
 
+## 1.9.1 - 2026-11-04
+
+Status: prepared
+Build: 1.9.1+1
+
+- Explain faithful I/O refusals with the missing agent binding, the required scopes, or the action that owns the remote trigger.
+- Prefill the client token Agent ID from the current agent when configuration is available, and insert `agent_actions.run`, `agent_actions.read_execution` and `agent_actions.io` into the payload on request.
+- Copy action and trigger identifiers from the action screen.
+- Add a manual remote echo runner under `docs/testes_acao_remota`. Local credentials and the last call result stay out of Git.
+- Quote each segment of a qualified publication-fixture table so an already qualified SQL Server name is not prefixed again.
+- The owner accepted the same outstanding persona-v2 risks for stable `1.9.1+1` only. All 13 gates remain open.
+
 ## 1.9.0 - 2026-10-31
 
 Status: tagged

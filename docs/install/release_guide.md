@@ -19,6 +19,10 @@ O instalador estável tem SHA-256 `02b63e143a52039e6fe179c9eea123da7601187e2f7b2
 
 A exceção autorizada cobre somente esse build estável e seu appcast. Foram aceitos os riscos da avaliação pendente com dataset revisado e consumidor real, da falta de ensaio instalado de upgrade e rollback, e da evidência incompleta da imagem coordenada por gate. O manifesto continua com `ready: false` e **0 de 13 gates aprovados**. [Manifesto coordenado](../../contracts/persona-v2-release.json) · [Matriz de homologação](../communication/sql_operations.md#mandatory-real-engine-matrix)
 
+### Autorização da v1.9.1+1
+
+Em 4 de novembro de 2026, o responsável aceitou os mesmos riscos em aberto para a tag estável `v1.9.1`, build `1.9.1+1` e o appcast estável desse build. A avaliação com consumidor real, o upgrade e o rollback instalados e a evidência da imagem coordenada continuam pendentes. Os 13 gates permanecem abertos. Esta autorização não cobre outra versão. A publicação usa o workflow oficial, com rollout inicial de 5%.
+
 O instalador anterior de homologação tem SHA-256 `26fdd6cca09e3b8e326ae054bf79e216e7d6c725215db45a0982145468d5fb0f`. Use o hash correspondente à distribuição que foi baixada. [Pré-release de homologação](https://github.com/cesar-carlos/plug_agente/releases/tag/homologation/1.9.0)
 
 ## Versao e Tags
@@ -269,13 +273,14 @@ python tool/release/release_preflight.py --compile-iss
 - Apply the signing-provider requirements above. Certificate providers require
   Authenticode on project executables and the installer; `manifest` requires
   Ed25519 feed/manifest signatures without claiming an Authenticode publisher.
-- Production releases and appcast updates require coordinated acceptance, with one
-  owner-authorized exception on 2026-10-31 for stable tag `v1.9.0`, build
-  `1.9.0+1`, and its stable appcast. The owner accepted the outstanding risks
-  of an unevaluated real consumer/dataset, untested installed upgrade and
-  rollback, and incomplete coordinated image and per-gate evidence. All 13
-  persona-v2 gates remain open. Run the official signing, test, installer,
-  manifest and feed checks and retain the initial 5% rollout.
+- Production releases and appcast updates require coordinated acceptance, with
+  owner-authorized exceptions for stable `v1.9.0` / `1.9.0+1` on 2026-10-31 and
+  stable `v1.9.1` / `1.9.1+1` on 2026-11-04. Each exception covers only that
+  build and its stable appcast. The owner accepted the outstanding risks of an
+  unevaluated real consumer/dataset, untested installed upgrade and rollback,
+  and incomplete coordinated image and per-gate evidence. All 13 persona-v2
+  gates remain open. Run the official signing, test, installer, manifest and
+  feed checks and retain the initial 5% rollout.
 - The 1.9.0 manual-test exception permits a GitHub prerelease only on the existing
   `homologation/1.9.0` tag at `bb592cdddd56efbf682778596811db886a1e381c`.
   Verify the homologation installer against its prerelease SHA-256 above, the checksum file

@@ -15,9 +15,15 @@ def ready(manifest):
         and all(item in manifest["completedGates"] for item in REQUIRED)
     )
 
+# Owner-accepted builds only. Another version stays blocked while the gates are open.
+ACCEPTED_RISK = {
+    ("v1.9.0", "1.9.0+1", "stable"),
+    ("v1.9.1", "1.9.1+1", "stable"),
+}
+
 def accepted_risk(tag, build, channel, pubspec):
     return (
-        (tag, build, channel) == ("v1.9.0", "1.9.0+1", "stable")
+        (tag, build, channel) in ACCEPTED_RISK
         and re.findall(r"^version:\s*(\S+)\s*$", pubspec, re.MULTILINE) == [build]
     )
 
@@ -30,6 +36,6 @@ if __name__ == "__main__":
     root = Path(__file__).resolve().parents[2]
     manifest = json.loads((root / "contracts/persona-v2-release.json").read_text(encoding="utf-8"))
     if not ready(manifest) and accepted_risk(args.tag, args.build, args.channel, (root / "pubspec.yaml").read_text()):
-        print("Applying the documented v1.9.0 stable risk acceptance. Persona-v2 gates remain open.")
+        print(f"Applying the documented {args.tag} stable risk acceptance. Persona-v2 gates remain open.")
     elif not ready(manifest):
         raise SystemExit("Publication blocked: persona-v2 coordinated acceptance is incomplete.")

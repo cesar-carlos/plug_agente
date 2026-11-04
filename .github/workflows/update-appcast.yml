@@ -92,7 +92,9 @@ jobs:
         env:
           REQUESTED_TAG: ${{ inputs.release_tag }}
           REQUESTED_CHANNEL: ${{ inputs.channel }}
-        run: python tool/release/check_persona_release.py --tag "$REQUESTED_TAG" --build "1.9.0+1" --channel "$REQUESTED_CHANNEL"
+        run: |
+          BUILD=$(python -c "import re; from pathlib import Path; print(re.search(r'^version:\s*(\S+)', Path('pubspec.yaml').read_text(encoding='utf-8'), re.M).group(1))")
+          python tool/release/check_persona_release.py --tag "$REQUESTED_TAG" --build "$BUILD" --channel "$REQUESTED_CHANNEL"
 
       - name: Install Python dependencies
         run: python3 -m pip install --quiet "cryptography>=42.0.0" "jsonschema>=4.0.0"
