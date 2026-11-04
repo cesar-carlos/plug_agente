@@ -114,6 +114,7 @@ class ClientTokenIdentityFields extends StatelessWidget {
         label: l10n.ctFieldAgentIdOptional,
         controller: agentIdController,
         hint: l10n.ctHintAgentId,
+        helperText: l10n.ctAgentIdFaithfulHelp,
         focusNode: agentFocusNode,
         textInputAction: TextInputAction.done,
         onSubmitted: (_) => onAgentSubmitted(),

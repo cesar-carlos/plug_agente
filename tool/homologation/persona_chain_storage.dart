@@ -113,12 +113,13 @@ class ChainAgentStorage {
             ])
               for (final name in {
                 table,
-                switch (engine) {
-                  'postgres' => 'public.$table',
-                  'mssql' => 'dbo.$table',
-                  'sybase' => 'dba.$table',
-                  _ => table,
-                },
+                if (!table.contains('.'))
+                  switch (engine) {
+                    'postgres' => 'public.$table',
+                    'mssql' => 'dbo.$table',
+                    'sybase' => 'dba.$table',
+                    _ => table,
+                  },
               })
                 ClientTokenRule(
                   resource: DatabaseResource(resourceType: DatabaseResourceType.table, name: name),

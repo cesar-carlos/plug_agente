@@ -7,6 +7,7 @@ import 'package:flutter/material.dart';
 import 'package:plug_agente/application/client_tokens/client_token_payload_parser.dart';
 import 'package:plug_agente/core/constants/app_constants.dart';
 import 'package:plug_agente/core/settings/app_settings_store.dart';
+import 'package:plug_agente/domain/entities/agent_action_authorization_scopes.dart';
 import 'package:plug_agente/domain/entities/client_token_create_request.dart';
 import 'package:plug_agente/domain/entities/client_token_list_query.dart';
 import 'package:plug_agente/domain/entities/client_token_rule.dart';
@@ -247,14 +248,14 @@ class ClientTokenSectionController {
     return _ruleFileService.exportToFile(savePath, rules);
   }
 
-  void loadTokenIntoForm(ClientTokenSummary? baseToken) {
+  void loadTokenIntoForm(ClientTokenSummary? baseToken, {String? localAgentId}) {
     formErrorKey = null;
     editingTokenId = baseToken?.id;
     editingTokenVersion = baseToken?.version;
     editingTokenSnapshot = baseToken;
     nameController.text = baseToken?.name ?? '';
     clientIdController.text = baseToken?.clientId ?? generateClientId();
-    agentIdController.text = baseToken?.agentId ?? '';
+    agentIdController.text = _agentIdForForm(baseToken?.agentId, localAgentId);
     payloadController.text = baseToken?.payload.isEmpty ?? true ? '' : jsonEncode(baseToken!.payload);
     rules
       ..clear()
@@ -318,6 +319,66 @@ class ClientTokenSectionController {
       globalPermissions: globalPermissions,
       rules: isGlobalScopeMode ? const <ClientTokenRule>[] : builtRules,
     );
+  }
+
+  /// Merges the faithful I/O scopes into the payload without removing other keys.
+  bool includeFaithfulActionIoScopes() {
+    const requiredScopes = <String>[
+      AgentActionAuthorizationScopes.run,
+      AgentActionAuthorizationScopes.readExecution,
+      AgentActionAuthorizationScopes.io,
+    ];
+    final raw = payloadController.text.trim();
+    final Map<String, dynamic> payload;
+    if (raw.isEmpty) {
+      payload = <String, dynamic>{};
+    } else {
+      try {
+        final decoded = jsonDecode(raw);
+        if (decoded is! Map) {
+          formErrorKey = ClientTokenFormErrorKey.payloadMustBeJsonObject;
+          notifyCreateTokenDialogChanged();
+          return false;
+        }
+        payload = Map<String, dynamic>.from(decoded);
+      } on FormatException {
+        formErrorKey = ClientTokenFormErrorKey.payloadInvalidJson;
+        notifyCreateTokenDialogChanged();
+        return false;
+      }
+    }
+
+    final existingActions = payload['agent_actions'];
+    final actions = existingActions is Map ? Map<String, dynamic>.from(existingActions) : <String, dynamic>{};
+    final scopes = <String>[];
+    final currentScopes = actions['scopes'];
+    if (currentScopes is List) {
+      for (final item in currentScopes) {
+        if (item is String && item.trim().isNotEmpty) scopes.add(item.trim());
+      }
+    } else if (currentScopes is String && currentScopes.trim().isNotEmpty) {
+      scopes.add(currentScopes.trim());
+    }
+    for (final scope in requiredScopes) {
+      if (!scopes.contains(scope)) scopes.add(scope);
+    }
+    actions['scopes'] = scopes;
+    payload['agent_actions'] = actions;
+    final encoded = const JsonEncoder.withIndent('  ').convert(payload);
+    formErrorKey = null;
+    if (payloadController.text != encoded) {
+      payloadController.text = encoded;
+    }
+    notifyCreateTokenDialogChanged();
+    return true;
+  }
+
+  String _agentIdForForm(String? storedAgentId, String? localAgentId) {
+    final stored = storedAgentId?.trim();
+    if (stored != null && stored.isNotEmpty) return stored;
+    final local = localAgentId?.trim();
+    if (local == null || local.isEmpty) return '';
+    return local;
   }
 
   void clearTokenDraftForm() {

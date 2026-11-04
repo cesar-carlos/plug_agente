@@ -136,11 +136,14 @@ o retorno esperado e o status inicial (`queued` ou estado persistido
 idempotente), e o Hub deve consultar `agent.action.getExecution` para acompanhar
 `running`/terminal.
 - **Erros:** comandos ad-hoc ou parametros extras sao rejeitados pelo schema;
-acao sem gatilho `remote` habilitado retorna `invalid_params` com `reason`
-`remote_trigger_required`; multiplos gatilhos `remote` sem `trigger_id` retorna
-`remote_trigger_ambiguous`; `trigger_id` invalido/desabilitado retorna
-`remote_trigger_action_mismatch`, `remote_trigger_type_mismatch` ou
-`trigger_disabled`. Acao nao aprovada para remoto, idempotencia ausente, fila
+acao inexistente retorna `execution_not_found` antes da conferencia do
+gatilho; a mensagem cita `trigger_action_id` quando o `trigger_id` informado
+pertence a outra acao. Acao existente sem gatilho `remote` habilitado retorna
+`invalid_params` com `reason` `remote_trigger_required`; multiplos gatilhos
+`remote` sem `trigger_id` retorna `remote_trigger_ambiguous`; `trigger_id`
+invalido/desabilitado retorna `remote_trigger_action_mismatch`,
+`remote_trigger_type_mismatch` ou `trigger_disabled`. A mensagem de
+`remote_trigger_action_mismatch` inclui o `action_id` dono do gatilho. Acao nao aprovada para remoto, idempotencia ausente, fila
 cheia, timeout e falhas de runner retornam erros estruturados via
 `FailureToRpcErrorMapper`.
 Reuso de `idempotency_key` com payload permitido diferente retorna

@@ -6,6 +6,7 @@ import 'package:plug_agente/application/actions/action_trigger_schedule_calculat
 import 'package:plug_agente/core/theme/theme.dart';
 import 'package:plug_agente/domain/actions/actions.dart';
 import 'package:plug_agente/l10n/app_localizations.dart';
+import 'package:plug_agente/presentation/pages/agent_actions/widgets/agent_action_copyable_identifier.dart';
 import 'package:plug_agente/presentation/providers/agent_actions_provider.dart';
 import 'package:plug_agente/presentation/widgets/agent_actions/agent_action_confirmations.dart';
 import 'package:plug_agente/presentation/widgets/agent_actions/agent_action_trigger_datetime_field.dart';
@@ -226,6 +227,21 @@ class _AgentActionTriggerSaveDialogState extends State<AgentActionTriggerSaveDia
           content: Text(remoteError),
           severity: InfoBarSeverity.error,
         ),
+      );
+    }
+
+    final existingTrigger = widget.existing;
+    if (existingTrigger != null) {
+      addField(
+        AgentActionCopyableIdentifier(
+          value: existingTrigger.id,
+          label: l10n.agentActionsTriggerIdLabel,
+          placement: 'trigger_dialog',
+          l10n: l10n,
+          copyTooltip: l10n.agentActionsCopyTriggerId,
+          copiedMessage: l10n.agentActionsTriggerIdCopied,
+        ),
+        spacing: children.isEmpty ? 0 : AppSpacing.sm,
       );
     }
 

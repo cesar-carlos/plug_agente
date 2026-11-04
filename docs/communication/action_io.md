@@ -91,7 +91,13 @@ change requires fresh approval.
 
 Every operation requires a current locally provisioned credential, nonempty Client,
 agent binding, valid lifetime, no revocation, action allowlist and both
-`agent_actions.io` (or explicit wildcard) and the operation scope. Offline JWT
+`agent_actions.io` (or explicit wildcard) and the operation scope. In the client
+token editor, **Agent ID** must be this agent's identifier. The payload must
+declare `agent_actions.run`, `agent_actions.read_execution` and
+`agent_actions.io`. The editor can insert those scopes. `action_ids`, when
+present, limits the token to those saved actions. Saving a scope change rotates
+the token secret. A missing binding or payload is reported in `user_message`.
+Offline JWT
 validation alone is insufficient. Rotation preserves access only for the same
 Client with current grants. People sharing one Client share ownership.
 Authorization is checked at admission, before spawn/write and after long polls.

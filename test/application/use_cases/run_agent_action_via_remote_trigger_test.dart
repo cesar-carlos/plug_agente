@@ -2,6 +2,7 @@ import 'package:plug_agente/application/use_cases/dispatch_agent_action_trigger.
 import 'package:plug_agente/application/use_cases/run_agent_action_locally.dart';
 import 'package:plug_agente/application/use_cases/run_agent_action_via_remote_trigger.dart';
 import 'package:plug_agente/core/config/feature_flags.dart';
+import 'package:plug_agente/core/constants/agent_action_rpc_constants.dart';
 import 'package:plug_agente/core/constants/agent_action_trigger_constants.dart';
 import 'package:plug_agente/core/settings/app_settings_store.dart';
 import 'package:plug_agente/domain/actions/actions.dart';
@@ -159,5 +160,105 @@ void main() {
       expect(result.getOrThrow(), 'remote-1');
       expect(repository.savedExecutions, isEmpty);
     });
+
+    test('should report a missing action instead of requiring a remote trigger', () async {
+      final useCase = _useCase(FakeAgentActionRepository());
+
+      final result = await useCase.resolveEnabledRemoteTriggerId(actionId: 'missing-action');
+
+      expect(result.isError(), isTrue);
+      final failure = result.exceptionOrNull()! as ActionNotFoundFailure;
+      expect(failure.context['action_id'], 'missing-action');
+      expect(failure.context['reason'], AgentActionRpcConstants.agentActionExecutionNotFoundContextReason);
+      expect(failure.context['user_message'], 'A acao informada nao foi encontrada.');
+    });
+
+    test('should name the owning action when the requested action does not exist', () async {
+      final repository = FakeAgentActionRepository();
+      repository.definitions['action-owner'] = const AgentActionDefinition(
+        id: 'action-owner',
+        name: 'Owner',
+        state: AgentActionState.active,
+        config: _structuredTestConfig,
+      );
+      repository.triggers['remote-1'] = const AgentActionTrigger(
+        id: 'remote-1',
+        actionId: 'action-owner',
+        type: AgentActionTriggerType.remote,
+      );
+      final useCase = _useCase(repository);
+
+      final result = await useCase.resolveEnabledRemoteTriggerId(
+        actionId: 'missing-action',
+        triggerId: 'remote-1',
+      );
+
+      expect(result.isError(), isTrue);
+      final failure = result.exceptionOrNull()! as ActionNotFoundFailure;
+      expect(failure.context['trigger_action_id'], 'action-owner');
+      expect(
+        failure.context['user_message'],
+        'A acao informada nao foi encontrada. O gatilho informado pertence a acao action-owner.',
+      );
+    });
+
+    test('should name the owning action when the remote trigger belongs to another action', () async {
+      final repository = FakeAgentActionRepository();
+      repository.definitions['action-requested'] = const AgentActionDefinition(
+        id: 'action-requested',
+        name: 'Requested',
+        state: AgentActionState.active,
+        config: _structuredTestConfig,
+      );
+      repository.definitions['action-owner'] = const AgentActionDefinition(
+        id: 'action-owner',
+        name: 'Owner',
+        state: AgentActionState.active,
+        config: _structuredTestConfig,
+      );
+      repository.triggers['remote-1'] = const AgentActionTrigger(
+        id: 'remote-1',
+        actionId: 'action-owner',
+        type: AgentActionTriggerType.remote,
+      );
+      final useCase = _useCase(repository);
+
+      final result = await useCase.resolveEnabledRemoteTriggerId(
+        actionId: 'action-requested',
+        triggerId: 'remote-1',
+      );
+
+      expect(result.isError(), isTrue);
+      final failure = result.exceptionOrNull()! as ActionValidationFailure;
+      expect(failure.code, AgentActionFailureCode.remoteTriggerInvalid);
+      expect(failure.context['trigger_action_id'], 'action-owner');
+      expect(
+        failure.context['reason'],
+        AgentActionTriggerConstants.remoteTriggerActionMismatchReason,
+      );
+      expect(
+        failure.context['user_message'],
+        'O gatilho remoto informado nao pertence a esta acao. Ele pertence a acao action-owner.',
+      );
+    });
   });
+}
+
+RunAgentActionViaRemoteTrigger _useCase(FakeAgentActionRepository repository) {
+  return RunAgentActionViaRemoteTrigger(
+    repository,
+    DispatchAgentActionTrigger(
+      repository,
+      RunAgentActionLocally(
+        repository,
+        AgentActionLocalRunnerRegistry([
+          FakeAgentActionLocalRunner(
+            actionType: AgentActionType.executable,
+            result: Failure(ActionRuntimeFailure('should not run')),
+          ),
+        ]),
+        const Uuid(),
+      ),
+    ),
+  );
 }

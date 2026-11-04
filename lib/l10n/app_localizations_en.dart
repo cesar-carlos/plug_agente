@@ -39,6 +39,27 @@ class AppLocalizationsEn extends AppLocalizations {
   String get agentActionsMoreActions => 'More actions';
 
   @override
+  String get agentActionsCopyActionId => 'Copy action identifier';
+
+  @override
+  String get agentActionsActionIdCopied => 'Action identifier copied';
+
+  @override
+  String get agentActionsCopyTriggerId => 'Copy trigger identifier';
+
+  @override
+  String get agentActionsTriggerIdCopied => 'Trigger identifier copied';
+
+  @override
+  String get agentActionsActionIdLabel => 'Action identifier';
+
+  @override
+  String get agentActionsTriggerIdLabel => 'Trigger identifier';
+
+  @override
+  String get agentActionsCopy => 'Copy';
+
+  @override
   String get agentActionsTestSelected => 'Test action';
 
   @override
@@ -4234,10 +4255,16 @@ class AppLocalizationsEn extends AppLocalizations {
   String get ctHintClientId => 'Generated automatically';
 
   @override
-  String get ctHintAgentId => 'agent-01';
+  String get ctHintAgentId => 'This agent\'s identifier';
 
   @override
-  String get ctHintPayloadJson => 'JSON object (e.g. display_name, env)';
+  String get ctAgentIdFaithfulHelp => 'Required for faithful input and output. Use this agent\'s identifier.';
+
+  @override
+  String get ctHintPayloadJson => 'JSON object. For faithful I/O, include the agent_actions scopes.';
+
+  @override
+  String get ctButtonIncludeFaithfulIoScopes => 'Include faithful I/O scopes';
 
   @override
   String get ctFlagAllTables => 'All tables';

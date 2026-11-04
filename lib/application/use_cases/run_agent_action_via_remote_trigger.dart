@@ -97,6 +97,20 @@ class RunAgentActionViaRemoteTrigger {
     required String actionId,
     required String? triggerId,
   }) async {
+    final definitionResult = await _repository.getDefinition(actionId);
+    if (definitionResult.isError()) {
+      final failure = definitionResult.exceptionOrNull()!;
+      if (failure is ActionNotFoundFailure) {
+        return Failure(
+          await _missingActionFailure(
+            actionId: actionId,
+            triggerId: triggerId,
+          ),
+        );
+      }
+      return Failure(failure);
+    }
+
     final trimmedTriggerId = triggerId?.trim();
     if (trimmedTriggerId != null && trimmedTriggerId.isNotEmpty) {
       return _validateExplicitRemoteTrigger(
@@ -166,7 +180,8 @@ class RunAgentActionViaRemoteTrigger {
             'trigger_id': trigger.id,
             'trigger_action_id': trigger.actionId,
             'reason': AgentActionTriggerConstants.remoteTriggerActionMismatchReason,
-            'user_message': 'O gatilho remoto informado nao pertence a esta acao.',
+            'user_message':
+                'O gatilho remoto informado nao pertence a esta acao. Ele pertence a acao ${trigger.actionId}.',
           },
         ),
       );
@@ -202,5 +217,36 @@ class RunAgentActionViaRemoteTrigger {
     }
 
     return Success(trigger.id);
+  }
+
+  Future<ActionNotFoundFailure> _missingActionFailure({
+    required String actionId,
+    required String? triggerId,
+  }) async {
+    final trimmedTriggerId = triggerId?.trim();
+    String? owningActionId;
+    if (trimmedTriggerId != null && trimmedTriggerId.isNotEmpty) {
+      final triggerResult = await _repository.getTrigger(trimmedTriggerId);
+      if (triggerResult.isSuccess()) {
+        final owner = triggerResult.getOrThrow().actionId.trim();
+        if (owner.isNotEmpty && owner != actionId) {
+          owningActionId = owner;
+        }
+      }
+    }
+
+    final userMessage = owningActionId == null
+        ? 'A acao informada nao foi encontrada.'
+        : 'A acao informada nao foi encontrada. O gatilho informado pertence a acao $owningActionId.';
+    return ActionNotFoundFailure.withContext(
+      message: 'Remote agent action was not found.',
+      context: {
+        'action_id': actionId,
+        'reason': AgentActionRpcConstants.agentActionExecutionNotFoundContextReason,
+        'user_message': userMessage,
+        if (trimmedTriggerId != null && trimmedTriggerId.isNotEmpty) 'trigger_id': trimmedTriggerId,
+        'trigger_action_id': ?owningActionId,
+      },
+    );
   }
 }

@@ -4,6 +4,7 @@ import 'package:fluent_ui/fluent_ui.dart';
 import 'package:plug_agente/core/theme/theme.dart';
 import 'package:plug_agente/domain/actions/actions.dart';
 import 'package:plug_agente/l10n/app_localizations.dart';
+import 'package:plug_agente/presentation/pages/agent_actions/widgets/agent_action_copyable_identifier.dart';
 import 'package:plug_agente/presentation/pages/agent_actions/widgets/agent_action_presenter_labels.dart';
 import 'package:plug_agente/presentation/pages/agent_actions/widgets/agent_actions_page_confirmations.dart';
 import 'package:plug_agente/presentation/pages/agent_actions/widgets/agent_actions_test_preview.dart';
@@ -111,8 +112,16 @@ class AgentActionSelectedDetailContent extends StatelessWidget {
           runSpacing: AppSpacing.xs,
           children: [
             AgentActionDetailPill(text: agentActionDefinitionTypeLabel(definition, l10n)),
-            AgentActionDetailPill(text: definition.id),
           ],
+        ),
+        const SizedBox(height: AppSpacing.sm),
+        AgentActionCopyableIdentifier(
+          value: definition.id,
+          label: l10n.agentActionsActionIdLabel,
+          placement: 'detail',
+          l10n: l10n,
+          copyTooltip: l10n.agentActionsCopyActionId,
+          copiedMessage: l10n.agentActionsActionIdCopied,
         ),
         const SizedBox(height: AppSpacing.sm),
         AgentActionRiskChips(

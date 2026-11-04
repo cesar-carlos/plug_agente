@@ -4,6 +4,7 @@ import 'package:fluent_ui/fluent_ui.dart';
 import 'package:plug_agente/core/theme/theme.dart';
 import 'package:plug_agente/domain/actions/actions.dart';
 import 'package:plug_agente/l10n/app_localizations.dart';
+import 'package:plug_agente/presentation/pages/agent_actions/widgets/agent_action_id_copy_button.dart';
 import 'package:plug_agente/presentation/pages/agent_actions/widgets/agent_action_presenter_labels.dart';
 import 'package:plug_agente/presentation/pages/agent_actions/widgets/agent_actions_page_confirmations.dart';
 import 'package:plug_agente/presentation/providers/agent_actions_provider.dart';
@@ -41,11 +42,22 @@ class AgentActionDefinitionNameCell extends StatelessWidget {
                   style: const TextStyle(height: 1.15),
                 ),
               ),
-              Text(
-                definition.id,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: context.captionText.copyWith(height: 1.1),
+              Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      definition.id,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: context.captionText.copyWith(height: 1.1),
+                    ),
+                  ),
+                  AgentActionIdCopyButton(
+                    actionId: definition.id,
+                    l10n: l10n,
+                    placement: 'list',
+                  ),
+                ],
               ),
             ],
           ),
@@ -175,6 +187,14 @@ class AgentActionDefinitionRowActions extends StatelessWidget {
             ),
           ),
           items: [
+            MenuFlyoutItem(
+              key: ValueKey<String>('agent_action_definition_copy_id_${definition.id}'),
+              leading: const Icon(FluentIcons.copy),
+              text: Text(l10n.agentActionsCopyActionId),
+              onPressed: () {
+                unawaited(copyAgentActionId(context, l10n, definition.id));
+              },
+            ),
             MenuFlyoutItem(
               key: ValueKey<String>('agent_action_definition_details_${definition.id}'),
               leading: const Icon(FluentIcons.view),

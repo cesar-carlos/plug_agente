@@ -10,6 +10,7 @@ import 'package:plug_agente/presentation/pages/config/widgets/client_token/clien
 import 'package:plug_agente/presentation/pages/config/widgets/client_token/client_token_section_controller.dart';
 import 'package:plug_agente/presentation/pages/config/widgets/client_token/client_token_section_coordinator.dart';
 import 'package:plug_agente/presentation/providers/client_token_provider.dart';
+import 'package:plug_agente/presentation/providers/config_provider.dart';
 import 'package:provider/provider.dart';
 
 Future<ClientTokenSubmitFeedback?> showClientTokenCreateDialog({
@@ -23,7 +24,10 @@ Future<ClientTokenSubmitFeedback?> showClientTokenCreateDialog({
   final l10n = AppLocalizations.of(context)!;
   final isEditingToken = baseToken != null;
 
-  controller.loadTokenIntoForm(baseToken);
+  controller.loadTokenIntoForm(
+    baseToken,
+    localAgentId: context.read<ConfigProvider>().currentConfig?.agentId,
+  );
   provider.clearMutationError();
   provider.clearLastCreatedToken();
   provider.clearLastUpdateOutcome();
@@ -134,6 +138,7 @@ Future<ClientTokenSubmitFeedback?> showClientTokenCreateDialog({
                           onEditRule: (index) => coordinator.openEditRuleModal(dialogContext, index),
                           onDeleteRule: controller.removeRule,
                           onDismissCreatedToken: tokenProvider.clearLastCreatedToken,
+                          onIncludeFaithfulIoScopes: controller.includeFaithfulActionIoScopes,
                           onFieldSubmitted: () => coordinator.handleSubmitToken(dialogContext, tokenProvider),
                         ),
                       ),

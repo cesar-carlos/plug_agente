@@ -152,6 +152,48 @@ abstract class AppLocalizations {
   /// **'More actions'**
   String get agentActionsMoreActions;
 
+  /// No description provided for @agentActionsCopyActionId.
+  ///
+  /// In en, this message translates to:
+  /// **'Copy action identifier'**
+  String get agentActionsCopyActionId;
+
+  /// No description provided for @agentActionsActionIdCopied.
+  ///
+  /// In en, this message translates to:
+  /// **'Action identifier copied'**
+  String get agentActionsActionIdCopied;
+
+  /// No description provided for @agentActionsCopyTriggerId.
+  ///
+  /// In en, this message translates to:
+  /// **'Copy trigger identifier'**
+  String get agentActionsCopyTriggerId;
+
+  /// No description provided for @agentActionsTriggerIdCopied.
+  ///
+  /// In en, this message translates to:
+  /// **'Trigger identifier copied'**
+  String get agentActionsTriggerIdCopied;
+
+  /// No description provided for @agentActionsActionIdLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Action identifier'**
+  String get agentActionsActionIdLabel;
+
+  /// No description provided for @agentActionsTriggerIdLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Trigger identifier'**
+  String get agentActionsTriggerIdLabel;
+
+  /// No description provided for @agentActionsCopy.
+  ///
+  /// In en, this message translates to:
+  /// **'Copy'**
+  String get agentActionsCopy;
+
   /// No description provided for @agentActionsTestSelected.
   ///
   /// In en, this message translates to:
@@ -7883,14 +7925,26 @@ abstract class AppLocalizations {
   /// No description provided for @ctHintAgentId.
   ///
   /// In en, this message translates to:
-  /// **'agent-01'**
+  /// **'This agent\'s identifier'**
   String get ctHintAgentId;
+
+  /// No description provided for @ctAgentIdFaithfulHelp.
+  ///
+  /// In en, this message translates to:
+  /// **'Required for faithful input and output. Use this agent\'s identifier.'**
+  String get ctAgentIdFaithfulHelp;
 
   /// No description provided for @ctHintPayloadJson.
   ///
   /// In en, this message translates to:
-  /// **'JSON object (e.g. display_name, env)'**
+  /// **'JSON object. For faithful I/O, include the agent_actions scopes.'**
   String get ctHintPayloadJson;
+
+  /// No description provided for @ctButtonIncludeFaithfulIoScopes.
+  ///
+  /// In en, this message translates to:
+  /// **'Include faithful I/O scopes'**
+  String get ctButtonIncludeFaithfulIoScopes;
 
   /// No description provided for @ctFlagAllTables.
   ///

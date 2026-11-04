@@ -43,6 +43,10 @@ migrate_working_dir/
 /release_body.txt
 /artifacts/odbc_validation/
 
+# Credenciais e resultado local do teste manual de ação remota
+/docs/testes_acao_remota/config.local.json
+/docs/testes_acao_remota/ultima_chamada.json
+
 # Flutter/Dart/Pub related
 **/doc/api/
 **/ios/Flutter/.last_build_id

@@ -44,8 +44,11 @@ final class ActionIoAuthorization {
     required ActionIoOperation operation,
     String? ownerClientId,
   }) => _authorize(
-    credential: credential, agentId: agentId, actionId: actionId,
-    operation: operation, ownerClientId: ownerClientId,
+    credential: credential,
+    agentId: agentId,
+    actionId: actionId,
+    operation: operation,
+    ownerClientId: ownerClientId,
   );
 
   /// Authenticate the page even when the repository contains no visible actions.
@@ -137,6 +140,26 @@ final class ActionIoAuthorization {
   ActionAuthorizationFailure _denied(String reason) => ActionAuthorizationFailure.withContext(
     message: 'The current local credential does not authorize this I/O operation.',
     code: 'ACTION_IO_UNAUTHORIZED',
-    context: {'reason': reason, 'retryable': false, 'effects_possible': false},
+    context: {
+      'reason': reason,
+      'user_message': _userMessage(reason),
+      'retryable': false,
+      'effects_possible': false,
+    },
   );
+
+  String _userMessage(String reason) => switch (reason) {
+    'missing_identity' => 'Informe a credencial e o agente antes de usar a entrada fiel.',
+    'inactive_credential' => 'Esta credencial está revogada ou inválida. Use um token ativo.',
+    'agent_binding_required' =>
+      'O token não está vinculado a este agente. No token, preencha Agent ID com o identificador deste agente e salve.',
+    'execution_owner_mismatch' => 'Esta execução pertence a outro cliente.',
+    'credential_lifetime_invalid' => 'A credencial está fora do período de validade.',
+    'invalid_policy' => 'A política do token está inválida. Revogue o token e crie outro.',
+    'explicit_scope_required' =>
+      'O payload do token não declara os escopos da entrada fiel. Inclua agent_actions.run, agent_actions.read_execution e agent_actions.io.',
+    'scope_or_action_denied' =>
+      'O token não autoriza esta ação. Inclua o escopo agent_actions.io e, se houver lista, o identificador da ação.',
+    _ => 'Você não tem permissão para executar esta operação.',
+  };
 }

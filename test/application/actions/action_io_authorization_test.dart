@@ -4,6 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
 import 'package:plug_agente/application/actions/action_io_authorization.dart';
 import 'package:plug_agente/core/utils/client_token_credential.dart';
+import 'package:plug_agente/domain/actions/action_failure.dart';
 import 'package:plug_agente/domain/entities/client_token_summary.dart';
 import 'package:plug_agente/domain/errors/failures.dart' as domain;
 import 'package:plug_agente/domain/repositories/i_client_token_repository.dart';
@@ -54,6 +55,21 @@ void main() {
     expect((await call()).isSuccess(), isTrue);
     when(() => repository.getTokenPolicySummaryByHash(any())).thenAnswer((_) async => Success(record(revoked: true)));
     expect((await call()).isError(), isTrue);
+  });
+  test('explains a missing agent binding and a payload without action scopes', () async {
+    when(() => repository.getTokenPolicySummaryByHash(any())).thenAnswer((_) async => Success(record(agent: null)));
+    final unbound = (await call()).exceptionOrNull();
+    expect(unbound, isA<ActionAuthorizationFailure>());
+    expect((unbound! as ActionAuthorizationFailure).context['user_message'], contains('Agent ID'));
+
+    when(
+      () => repository.getTokenPolicySummaryByHash(any()),
+    ).thenAnswer((_) async => Success(record(payload: const {})));
+    final missingScopes = (await call()).exceptionOrNull();
+    expect(
+      (missingScopes! as ActionAuthorizationFailure).context['user_message'],
+      contains('agent_actions.io'),
+    );
   });
   test('requires local identity, agent binding, explicit io and operation scopes', () async {
     for (final denied in [
@@ -106,12 +122,16 @@ void main() {
     const scopes = ['agent_actions.io', 'agent_actions.run', 'agent_actions.list'];
     for (final missing in [null, ...scopes]) {
       when(() => repository.getTokenPolicySummaryByHash(any())).thenAnswer(
-        (_) async => Success(record(payload: {
-          'agent_actions': {
-            'scopes': scopes.where((scope) => scope != missing).toList(),
-            'action_ids': ['allowed'],
-          },
-        })),
+        (_) async => Success(
+          record(
+            payload: {
+              'agent_actions': {
+                'scopes': scopes.where((scope) => scope != missing).toList(),
+                'action_ids': ['allowed'],
+              },
+            },
+          ),
+        ),
       );
       for (final id in ['allowed', 'other']) {
         final result = await authorization.authorize(

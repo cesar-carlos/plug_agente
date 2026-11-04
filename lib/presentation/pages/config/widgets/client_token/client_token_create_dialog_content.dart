@@ -8,6 +8,7 @@ import 'package:plug_agente/presentation/pages/config/widgets/client_token/clien
 import 'package:plug_agente/presentation/pages/config/widgets/client_token/client_token_create_dialog_rules_section.dart';
 import 'package:plug_agente/presentation/pages/config/widgets/client_token/client_token_form_shared.dart';
 import 'package:plug_agente/presentation/pages/config/widgets/client_token_rules_grid.dart';
+import 'package:plug_agente/shared/widgets/common/actions/app_button.dart';
 import 'package:plug_agente/shared/widgets/common/feedback/inline_feedback_card.dart';
 import 'package:plug_agente/shared/widgets/common/form/app_text_field.dart';
 
@@ -45,6 +46,7 @@ class ClientTokenCreateDialogContent extends StatelessWidget {
     required this.onEditRule,
     required this.onDeleteRule,
     required this.onDismissCreatedToken,
+    required this.onIncludeFaithfulIoScopes,
     required this.onFieldSubmitted,
     super.key,
   });
@@ -81,6 +83,7 @@ class ClientTokenCreateDialogContent extends StatelessWidget {
   final ValueChanged<int> onEditRule;
   final ValueChanged<int> onDeleteRule;
   final VoidCallback onDismissCreatedToken;
+  final VoidCallback onIncludeFaithfulIoScopes;
   final VoidCallback onFieldSubmitted;
 
   bool get _isGlobalScopeMode => allTables || allViews;
@@ -143,6 +146,12 @@ class ClientTokenCreateDialogContent extends StatelessWidget {
                 maxLines: 4,
                 textInputAction: TextInputAction.newline,
               ),
+            ),
+            const SizedBox(height: AppSpacing.sm),
+            AppButton(
+              label: l10n.ctButtonIncludeFaithfulIoScopes,
+              isPrimary: false,
+              onPressed: onIncludeFaithfulIoScopes,
             ),
             const SizedBox(height: AppSpacing.md),
             ClientTokenCreateDialogPolicySection(

@@ -6,6 +6,7 @@ import 'package:plug_agente/application/actions/agent_action_failure_diagnostics
 import 'package:plug_agente/core/theme/theme.dart';
 import 'package:plug_agente/domain/actions/actions.dart';
 import 'package:plug_agente/l10n/app_localizations.dart';
+import 'package:plug_agente/presentation/pages/agent_actions/widgets/agent_action_copyable_identifier.dart';
 import 'package:plug_agente/presentation/pages/agent_actions/widgets/agent_action_presenter_labels.dart';
 import 'package:plug_agente/presentation/providers/agent_actions_provider.dart';
 import 'package:plug_agente/presentation/widgets/agent_actions/agent_action_trigger_save_dialog.dart';
@@ -149,6 +150,15 @@ class _AgentActionEditorSchedulingSectionState extends State<AgentActionEditorSc
                       children: [
                         Text(agentActionTriggerDisplayTitle(trigger, l10n), style: context.bodyStrong),
                         Text(agentActionTriggerSummaryLine(trigger, l10n), style: context.bodyMuted),
+                        const SizedBox(height: AppSpacing.xs),
+                        AgentActionCopyableIdentifier(
+                          value: trigger.id,
+                          label: l10n.agentActionsTriggerIdLabel,
+                          placement: 'editor_trigger',
+                          l10n: l10n,
+                          copyTooltip: l10n.agentActionsCopyTriggerId,
+                          copiedMessage: l10n.agentActionsTriggerIdCopied,
+                        ),
                       ],
                     ),
                   ),

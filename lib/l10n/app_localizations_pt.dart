@@ -39,6 +39,27 @@ class AppLocalizationsPt extends AppLocalizations {
   String get agentActionsMoreActions => 'Mais ações';
 
   @override
+  String get agentActionsCopyActionId => 'Copiar identificador da ação';
+
+  @override
+  String get agentActionsActionIdCopied => 'Identificador copiado';
+
+  @override
+  String get agentActionsCopyTriggerId => 'Copiar identificador do gatilho';
+
+  @override
+  String get agentActionsTriggerIdCopied => 'Identificador do gatilho copiado';
+
+  @override
+  String get agentActionsActionIdLabel => 'Identificador da ação';
+
+  @override
+  String get agentActionsTriggerIdLabel => 'Identificador do gatilho';
+
+  @override
+  String get agentActionsCopy => 'Copiar';
+
+  @override
   String get agentActionsTestSelected => 'Testar ação';
 
   @override
@@ -4241,10 +4262,16 @@ class AppLocalizationsPt extends AppLocalizations {
   String get ctHintClientId => 'Gerado automaticamente';
 
   @override
-  String get ctHintAgentId => 'agent-01';
+  String get ctHintAgentId => 'Identificador deste agente';
 
   @override
-  String get ctHintPayloadJson => 'Objeto JSON (ex.: display_name, env)';
+  String get ctAgentIdFaithfulHelp => 'Obrigatório para entrada fiel. Use o identificador deste agente.';
+
+  @override
+  String get ctHintPayloadJson => 'Objeto JSON. Para entrada fiel, inclua os escopos agent_actions.';
+
+  @override
+  String get ctButtonIncludeFaithfulIoScopes => 'Incluir escopos de entrada fiel';
 
   @override
   String get ctFlagAllTables => 'all_tables';

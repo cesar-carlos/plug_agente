@@ -13,7 +13,10 @@ class PublicationFixture {
     for (final table in tables) {
       final name = table['table'] as String;
       // Dedicated namespace prevents collision with identity and chain fixtures.
-      if (!RegExp(r'^publication_[a-z0-9_]{1,48}$').hasMatch(name) || !names.add(name)) {
+      final campoTable =
+          engine == 'mssql' &&
+          const {'dbo.orcamentobalcao', 'dbo.tipooperacaosaida', 'dbo.contareceber', 'dbo.contapagar'}.contains(name);
+      if ((!campoTable && !RegExp(r'^publication_[a-z0-9_]{1,48}$').hasMatch(name)) || !names.add(name)) {
         throw StateError('Invalid or duplicate fixture table.');
       }
       final columns = _columns(table);
@@ -110,6 +113,8 @@ class PublicationFixture {
     return engine == 'mssql' ? '[$value]' : '"$value"';
   }
 
+  String _quoteTable(String name) => name.split('.').map(_quote).join('.');
+
   String _type(Map<String, dynamic> column) => switch (column['type']) {
     'integer' when column['generated'] == true => switch (engine) {
       'mssql' => 'BIGINT IDENTITY(1,1)',
@@ -154,12 +159,12 @@ class PublicationFixture {
       for (final key in table['uniqueKeys'] as List<dynamic>)
         'UNIQUE (${(key as List<dynamic>).cast<String>().map(_quote).join(',')})',
       for (final fk in ((table['foreignKeys'] as List<dynamic>?) ?? []).cast<Map<String, dynamic>>())
-        'FOREIGN KEY (${(fk['columns'] as List<dynamic>).cast<String>().map(_quote).join(',')}) REFERENCES ${_quote(fk['targetTable'] as String)} (${(fk['targetColumns'] as List<dynamic>).cast<String>().map(_quote).join(',')})${fk['onUpdate'] == 'cascade' ? ' ON UPDATE CASCADE' : ''}${fk['onDelete'] == 'cascade' ? ' ON DELETE CASCADE' : ''}',
+        'FOREIGN KEY (${(fk['columns'] as List<dynamic>).cast<String>().map(_quote).join(',')}) REFERENCES ${_quoteTable(fk['targetTable'] as String)} (${(fk['targetColumns'] as List<dynamic>).cast<String>().map(_quote).join(',')})${fk['onUpdate'] == 'cascade' ? ' ON UPDATE CASCADE' : ''}${fk['onDelete'] == 'cascade' ? ' ON DELETE CASCADE' : ''}',
       for (final check in ((table['checks'] as List<dynamic>?) ?? []).cast<Map<String, dynamic>>())
         'CHECK (${_quote(check['column'] as String)} >= ${check['min']} AND ${_quote(check['column'] as String)} <= ${check['max']})',
     ];
     (await service.executeQuery(
-      'CREATE TABLE ${_quote(table['table'] as String)} (${definitions.join(',')})',
+      'CREATE TABLE ${_quoteTable(table['table'] as String)} (${definitions.join(',')})',
       connectionId: id,
     )).getOrThrow();
   }
@@ -177,12 +182,12 @@ class PublicationFixture {
         final audit = table['${event}Audit'] as Map<String, dynamic>?;
         if (audit == null) continue;
         final name = table['table'] as String;
-        final source = _quote(name);
-        final target = _quote(audit['targetTable'] as String);
+        final source = _quoteTable(name);
+        final target = _quoteTable(audit['targetTable'] as String);
         final columns = _columns(table).map((c) => _quote(c['name'] as String)).toList();
         final list = columns.join(',');
         final values = columns.map((c) => 'n.$c').join(',');
-        final trigger = _quote('${name}_a$event');
+        final trigger = _quoteTable('${name}_a$event');
         final operation = event.toUpperCase();
         final image = event == 'delete' ? 'OLD' : 'NEW';
         if (engine == 'postgres') {
@@ -213,7 +218,10 @@ class PublicationFixture {
   // Called only after a confirmed terminal result. Reset identity deterministically.
   Future<void> clear() => _connected((id) async {
     for (final table in tables.reversed) {
-      (await service.executeQuery('DROP TABLE ${_quote(table['table'] as String)}', connectionId: id)).getOrThrow();
+      (await service.executeQuery(
+        'DROP TABLE ${_quoteTable(table['table'] as String)}',
+        connectionId: id,
+      )).getOrThrow();
     }
     for (final table in tables) {
       await _create(id, table);
@@ -249,7 +257,7 @@ class PublicationFixture {
       if (!seen.add(name)) throw StateError('Duplicate fixture seed.');
       final table = tables.singleWhere((t) => t['table'] == name);
       final count = (await service.executeQuery(
-        'SELECT COUNT(*) FROM ${_quote(name)}',
+        'SELECT COUNT(*) FROM ${_quoteTable(name)}',
         connectionId: id,
       )).getOrThrow().rows.single.single;
       if (count.toString() != '0') throw StateError('Fixture is not empty; refusing replacement.');
@@ -266,7 +274,7 @@ class PublicationFixture {
         };
         (await service.executeQueryNamed(
           id,
-          'INSERT INTO ${_quote(name)} (${columns.map((c) => _quote(c['name'] as String)).join(',')}) VALUES (${columns.map((c) => ':${c['name']}').join(',')})',
+          'INSERT INTO ${_quoteTable(name)} (${columns.map((c) => _quote(c['name'] as String)).join(',')}) VALUES (${columns.map((c) => ':${c['name']}').join(',')})',
           params,
         )).getOrThrow();
       }
