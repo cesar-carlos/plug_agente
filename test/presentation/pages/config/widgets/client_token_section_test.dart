@@ -962,8 +962,10 @@ void main() {
         expect(find.text(ptL10n.ctButtonImportRules), findsOneWidget);
         expect(find.text(ptL10n.ctButtonAddRule), findsOneWidget);
 
+        await tester.ensureVisible(find.text(ptL10n.ctFlagAllTables));
         await tester.tap(find.text(ptL10n.ctFlagAllTables));
         await tester.pumpAndSettle();
+        await tester.ensureVisible(find.text(ptL10n.ctPermissionRead));
         await tester.tap(find.text(ptL10n.ctPermissionRead));
         await tester.pumpAndSettle();
 
