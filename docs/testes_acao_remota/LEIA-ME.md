@@ -20,13 +20,14 @@ Isto não liga produção e não envia comando livre. A entrada vai em `io.initi
 1. Copie `config.example.json` para `config.local.json` nesta pasta.
 2. Preencha a URL do Hub, o `agentId`, o `clientToken` da credencial local, o `actionId` e o `echo`.
 3. Informe `accessToken` ou o e-mail e a senha do Client que já tem acesso a esse agente.
-4. Na credencial local, preencha **Agent ID** com o identificador deste agente. O exemplo `agent-01` não vale. No **Payload JSON**, declare os escopos da entrada fiel. O botão **Incluir escopos de entrada fiel** grava os três escopos. `action_ids` é opcional e, quando presente, limita o token a essas ações. Salvar o payload rotaciona o token: copie o valor novo para `clientToken`. O `echo` é uma linha só. O exemplo usa `eco-remoto-ok`.
+4. Na credencial local, preencha **Agent ID** com o identificador deste agente. O exemplo `agent-01` não vale. Em **Payload JSON**, clique em **Incluir escopos de entrada fiel** para adicionar os quatro escopos do exemplo. `action_ids` é opcional e, quando presente, limita o token a essas ações. Salvar o payload rotaciona o token: copie o valor novo para `clientToken`. O `echo` é uma linha só. O exemplo usa `eco-remoto-ok`.
 
 ```json
 {
   "agent_actions": {
     "scopes": [
       "agent_actions.run",
+      "agent_actions.validate_run",
       "agent_actions.read_execution",
       "agent_actions.io"
     ],
@@ -37,11 +38,13 @@ Isto não liga produção e não envia comando livre. A entrada vai em `io.initi
 }
 ```
 
+Para executar o teste completo, rode o comando abaixo **sem `-SomenteValidar`**. Ele chama `agent.action.run` e confere se o agente devolveu o eco enviado.
+
 ```powershell
 powershell -NoProfile -ExecutionPolicy Bypass -File .\docs\testes_acao_remota\chamar_daqui.ps1
 ```
 
-Só o preflight, sem iniciar processo:
+Use `-SomenteValidar` para validar a ação sem iniciar o processo. Essa opção chama `agent.action.validateRun` e exige `agent_actions.validate_run` e `agent_actions.io`, ambos incluídos pelo botão. Se a credencial foi salva antes da inclusão de `agent_actions.validate_run`, edite-a, clique novamente no botão, salve e copie o novo token para `clientToken`.
 
 ```powershell
 powershell -NoProfile -ExecutionPolicy Bypass -File .\docs\testes_acao_remota\chamar_daqui.ps1 -SomenteValidar

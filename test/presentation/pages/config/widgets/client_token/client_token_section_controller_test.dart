@@ -44,7 +44,7 @@ void main() {
     final payload = jsonDecode(controller.payloadController.text) as Map<String, dynamic>;
     expect(payload['database'], 'erp');
     expect(payload['agent_actions'], {
-      'scopes': ['agent_actions.run', 'agent_actions.read_execution', 'agent_actions.io'],
+      'scopes': ['agent_actions.run', 'agent_actions.validate_run', 'agent_actions.read_execution', 'agent_actions.io'],
     });
   });
 

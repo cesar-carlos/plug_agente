@@ -71,6 +71,36 @@ void main() {
       contains('agent_actions.io'),
     );
   });
+  test('validateRun identifies its missing scope separately from an excluded action', () async {
+    Future<ActionAuthorizationFailure> validate(String actionId) async {
+      final result = await authorization.authorize(
+        credential: 'secret',
+        agentId: 'agent',
+        actionId: actionId,
+        operation: ActionIoOperation.validateRun,
+      );
+      return result.exceptionOrNull()! as ActionAuthorizationFailure;
+    }
+
+    final missingScope = await validate('action');
+    expect(missingScope.context['reason'], 'scope_or_action_denied');
+    expect(missingScope.context['user_message'], contains('agent_actions.validate_run'));
+
+    when(() => repository.getTokenPolicySummaryByHash(any())).thenAnswer(
+      (_) async => Success(
+        record(
+          payload: {
+            'agent_actions': {
+              'scopes': ['agent_actions.io', 'agent_actions.validate_run'],
+              'action_ids': ['action'],
+            },
+          },
+        ),
+      ),
+    );
+    final excluded = await validate('other');
+    expect(excluded.context['user_message'], isNot(contains('agent_actions.validate_run')));
+  });
   test('requires local identity, agent binding, explicit io and operation scopes', () async {
     for (final denied in [
       record(client: ''),

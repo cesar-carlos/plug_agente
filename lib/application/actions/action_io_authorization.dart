@@ -115,7 +115,14 @@ final class ActionIoAuthorization {
         requiredScope: requiredScope,
         actionId: actionId,
       )) {
-        return Failure(_denied('scope_or_action_denied'));
+        return Failure(
+          _denied(
+            'scope_or_action_denied',
+            userMessage: requiredScope == AgentActionAuthorizationScopes.validateRun
+                ? 'Para validar a ação sem executá-la, inclua o escopo agent_actions.validate_run na credencial.'
+                : null,
+          ),
+        );
       }
     }
     return Success(ActionIoPrincipal(clientId: record.clientId, agentId: agentId, tokenId: record.id));
@@ -137,12 +144,12 @@ final class ActionIoAuthorization {
     }
   }
 
-  ActionAuthorizationFailure _denied(String reason) => ActionAuthorizationFailure.withContext(
+  ActionAuthorizationFailure _denied(String reason, {String? userMessage}) => ActionAuthorizationFailure.withContext(
     message: 'The current local credential does not authorize this I/O operation.',
     code: 'ACTION_IO_UNAUTHORIZED',
     context: {
       'reason': reason,
-      'user_message': _userMessage(reason),
+      'user_message': userMessage ?? _userMessage(reason),
       'retryable': false,
       'effects_possible': false,
     },

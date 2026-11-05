@@ -327,6 +327,7 @@ class ClientTokenSectionController {
   bool includeFaithfulActionIoScopes() {
     const requiredScopes = <String>[
       AgentActionAuthorizationScopes.run,
+      AgentActionAuthorizationScopes.validateRun,
       AgentActionAuthorizationScopes.readExecution,
       AgentActionAuthorizationScopes.io,
     ];
