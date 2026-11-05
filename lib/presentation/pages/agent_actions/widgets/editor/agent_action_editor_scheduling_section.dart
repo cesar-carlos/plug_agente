@@ -10,6 +10,7 @@ import 'package:plug_agente/presentation/pages/agent_actions/widgets/agent_actio
 import 'package:plug_agente/presentation/pages/agent_actions/widgets/agent_action_presenter_labels.dart';
 import 'package:plug_agente/presentation/providers/agent_actions_provider.dart';
 import 'package:plug_agente/presentation/widgets/agent_actions/agent_action_trigger_save_dialog.dart';
+import 'package:plug_agente/shared/widgets/common/layout/app_card.dart';
 
 class AgentActionEditorSchedulingSection extends StatefulWidget {
   const AgentActionEditorSchedulingSection({
@@ -99,29 +100,44 @@ class _AgentActionEditorSchedulingSectionState extends State<AgentActionEditorSc
             .map((trigger) => trigger.nextRunAt!)
             .toList()
           ..sort();
+    final canManage = widget.enabled && widget.provider.canManageTriggers && !widget.provider.isSavingTrigger;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         Text(l10n.agentActionsEditorScheduleHint, style: context.bodyMuted),
-        const SizedBox(height: AppSpacing.sm),
+        const SizedBox(height: AppSpacing.md),
         Wrap(
           spacing: AppSpacing.sm,
           runSpacing: AppSpacing.sm,
+          crossAxisAlignment: WrapCrossAlignment.center,
           children: [
             Button(
               key: const ValueKey('agent_action_editor_add_trigger'),
-              onPressed:
-                  widget.enabled && widget.provider.canManageTriggers && !widget.provider.isSavingTrigger && !_loading
-                  ? () => unawaited(_edit())
-                  : null,
-              child: Text(l10n.agentActionsTriggerAdd),
+              onPressed: canManage && !_loading ? () => unawaited(_edit()) : null,
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Icon(FluentIcons.add, size: 12),
+                  const SizedBox(width: AppSpacing.xs),
+                  Text(l10n.agentActionsTriggerAdd),
+                ],
+              ),
             ),
-            Button(onPressed: !_loading ? () => unawaited(_reload()) : null, child: Text(l10n.agentActionsRefresh)),
+            Tooltip(
+              message: l10n.agentActionsRefresh,
+              child: IconButton(
+                icon: Icon(FluentIcons.refresh, semanticLabel: l10n.agentActionsRefresh),
+                onPressed: !_loading ? () => unawaited(_reload()) : null,
+              ),
+            ),
           ],
         ),
-        const SizedBox(height: AppSpacing.sm),
+        const SizedBox(height: AppSpacing.md),
         if (_loading)
-          const ProgressRing()
+          const Align(
+            alignment: Alignment.centerLeft,
+            child: SizedBox.square(dimension: 20, child: ProgressRing(strokeWidth: 2)),
+          )
         else if (_error != null)
           InfoBar(
             title: Text(l10n.agentActionsErrorTitle),
@@ -136,43 +152,118 @@ class _AgentActionEditorSchedulingSectionState extends State<AgentActionEditorSc
                 : l10n.agentActionsEditorNextRun(
                     DateFormat.yMd(l10n.localeName).add_Hm().format(nextRuns.first.toLocal()),
                   ),
-            style: context.bodyMuted,
+            style: context.bodyStrong,
           ),
-          if (_triggers.isEmpty) Text(l10n.agentActionsTriggersEmpty, style: context.bodyMuted),
-          for (final trigger in _triggers)
-            Padding(
-              padding: const EdgeInsets.only(top: AppSpacing.sm),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(agentActionTriggerDisplayTitle(trigger, l10n), style: context.bodyStrong),
-                        Text(agentActionTriggerSummaryLine(trigger, l10n), style: context.bodyMuted),
-                        const SizedBox(height: AppSpacing.xs),
-                        AgentActionCopyableIdentifier(
-                          value: trigger.id,
-                          label: l10n.agentActionsTriggerIdLabel,
-                          placement: 'editor_trigger',
-                          l10n: l10n,
-                          copyTooltip: l10n.agentActionsCopyTriggerId,
-                          copiedMessage: l10n.agentActionsTriggerIdCopied,
-                        ),
-                      ],
-                    ),
-                  ),
-                  Button(
-                    onPressed: widget.enabled && widget.provider.canManageTriggers && !widget.provider.isSavingTrigger
-                        ? () => unawaited(_edit(trigger))
-                        : null,
-                    child: Text(l10n.agentActionsTriggerEdit),
-                  ),
-                ],
-              ),
+          if (_triggers.isEmpty) ...[
+            const SizedBox(height: AppSpacing.sm),
+            Text(l10n.agentActionsTriggersEmpty, style: context.bodyMuted),
+          ],
+          for (final trigger in _triggers) ...[
+            const SizedBox(height: AppSpacing.sm),
+            _EditorTriggerCard(
+              trigger: trigger,
+              l10n: l10n,
+              canEdit: canManage,
+              onEdit: () => unawaited(_edit(trigger)),
             ),
+          ],
         ],
       ],
+    );
+  }
+}
+
+class _EditorTriggerCard extends StatelessWidget {
+  const _EditorTriggerCard({
+    required this.trigger,
+    required this.l10n,
+    required this.canEdit,
+    required this.onEdit,
+  });
+
+  final AgentActionTrigger trigger;
+  final AppLocalizations l10n;
+  final bool canEdit;
+  final VoidCallback onEdit;
+
+  @override
+  Widget build(BuildContext context) {
+    final nextRun = trigger.nextRunAt;
+    final scheduleLabel = nextRun == null
+        ? l10n.agentActionsTriggerNotScheduled
+        : l10n.agentActionsTriggerNextRun(
+            DateFormat.yMd(l10n.localeName).add_Hm().format(nextRun.toLocal()),
+          );
+    final notes = agentActionTriggerScheduleNotes(trigger, l10n);
+    final statusLabel = trigger.isEnabled ? l10n.agentActionsTriggerEnabled : l10n.agentActionsTriggerDisabled;
+    return AppCard(
+      padding: const EdgeInsets.all(AppSpacing.md),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Wrap(
+                      spacing: AppSpacing.sm,
+                      runSpacing: AppSpacing.xs,
+                      crossAxisAlignment: WrapCrossAlignment.center,
+                      children: [
+                        Text(agentActionTriggerDisplayTitle(trigger, l10n), style: context.bodyStrong),
+                        _TriggerStatusChip(label: statusLabel, enabled: trigger.isEnabled),
+                      ],
+                    ),
+                    const SizedBox(height: AppSpacing.xs),
+                    Text(agentActionTriggerTypeLabel(trigger.type, l10n), style: context.bodyMuted),
+                    Text(scheduleLabel, style: context.bodyText),
+                    if (notes != null) Text(notes, style: context.captionText),
+                  ],
+                ),
+              ),
+              const SizedBox(width: AppSpacing.sm),
+              Button(
+                onPressed: canEdit ? onEdit : null,
+                child: Text(l10n.agentActionsTriggerEdit),
+              ),
+            ],
+          ),
+          const SizedBox(height: AppSpacing.sm),
+          AgentActionCopyableIdentifier(
+            value: trigger.id,
+            label: l10n.agentActionsTriggerIdLabel,
+            placement: 'editor_trigger',
+            l10n: l10n,
+            copyTooltip: l10n.agentActionsCopyTriggerId,
+            copiedMessage: l10n.agentActionsTriggerIdCopied,
+            compact: true,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _TriggerStatusChip extends StatelessWidget {
+  const _TriggerStatusChip({required this.label, required this.enabled});
+
+  final String label;
+  final bool enabled;
+
+  @override
+  Widget build(BuildContext context) {
+    final color = enabled ? context.appColors.success : context.appColors.textSecondary;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: AppSpacing.sm, vertical: 2),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.14),
+        borderRadius: BorderRadius.circular(AppRadius.sm),
+        border: Border.all(color: color.withValues(alpha: 0.45)),
+      ),
+      child: Text(label, style: context.captionStrong.copyWith(color: color)),
     );
   }
 }

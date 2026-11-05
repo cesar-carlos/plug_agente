@@ -269,13 +269,24 @@ void main() {
       actionId: 'action-1',
       type: AgentActionTriggerType.daily,
       nextRunAt: DateTime(2027, 1, 1, 9),
-      schedule: const AgentActionTriggerSchedule(timeOfDayMinutes: 540),
+      schedule: const AgentActionTriggerSchedule(
+        timeOfDayMinutes: 540,
+        timezoneId: 'America/Manaus',
+        ignoreMissedRuns: false,
+      ),
     );
     await pumpHarness(tester, harness);
     await openSelectedActionDialog(tester, expandPolicies: false);
     await showActionEditorPage(tester, 'schedule');
     expect(find.textContaining('Próximo disparo:'), findsOneWidget);
     expect(find.text(l10n.agentActionsEditorScheduleHint), findsOneWidget);
+    expect(find.text(l10n.agentActionsTriggerTypeDaily), findsOneWidget);
+    expect(find.text(l10n.agentActionsTriggerEnabled), findsOneWidget);
+    expect(find.text('trigger-1'), findsOneWidget);
+    expect(find.textContaining('America/Manaus'), findsOneWidget);
+    expect(find.textContaining(l10n.agentActionsTriggerSummaryCatchUpEnabled), findsOneWidget);
+    expect(find.byKey(const ValueKey('agent_action_editor_trigger_copy_id_trigger-1')), findsOneWidget);
+    expect(find.text(l10n.agentActionsCopy), findsNothing);
     final add = find.byKey(const ValueKey('agent_action_editor_add_trigger'));
     await tester.ensureVisible(add);
     await tester.pumpAndSettle();

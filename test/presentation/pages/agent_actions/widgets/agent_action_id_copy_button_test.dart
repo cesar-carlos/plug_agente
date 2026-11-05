@@ -39,8 +39,8 @@ void main() {
         supportedLocales: AppLocalizations.supportedLocales,
         home: ScaffoldPage(
           content: SizedBox(
-            height: 40,
-            width: 320,
+            height: 48,
+            width: 640,
             child: AgentActionDefinitionNameCell(
               definition: const AgentActionDefinition(
                 id: actionId,
@@ -56,6 +56,10 @@ void main() {
     );
 
     expect(tester.takeException(), isNull);
+    final idRect = tester.getRect(find.text(actionId));
+    final copyRect = tester.getRect(find.byKey(const ValueKey<String>('agent_action_list_copy_id_$actionId')));
+    expect(copyRect.left, lessThanOrEqualTo(idRect.right + 8));
+    expect((copyRect.center.dy - idRect.center.dy).abs(), lessThan(6));
     await tester.tap(find.byKey(const ValueKey<String>('agent_action_list_copy_id_$actionId')));
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 400));

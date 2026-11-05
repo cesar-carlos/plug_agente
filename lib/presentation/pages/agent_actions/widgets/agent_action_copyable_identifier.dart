@@ -13,6 +13,7 @@ class AgentActionCopyableIdentifier extends StatelessWidget {
     required this.l10n,
     required this.copyTooltip,
     required this.copiedMessage,
+    this.compact = false,
     super.key,
   });
 
@@ -23,8 +24,12 @@ class AgentActionCopyableIdentifier extends StatelessWidget {
   final String copyTooltip;
   final String copiedMessage;
 
+  /// Keeps the value beside the copy icon instead of stretching a fake field.
+  final bool compact;
+
   @override
   Widget build(BuildContext context) {
+    if (compact) return _compact(context);
     final resources = FluentTheme.of(context).resources;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -71,6 +76,36 @@ class AgentActionCopyableIdentifier extends StatelessWidget {
                   ],
                 ),
               ),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+
+  Widget _compact(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(label, style: context.captionStrong),
+        const SizedBox(height: AppSpacing.xs),
+        Row(
+          children: [
+            Flexible(
+              child: SelectableText(
+                value,
+                style: context.captionText.copyWith(
+                  fontFamily: 'Cascadia Mono',
+                  fontFamilyFallback: const ['Consolas', 'monospace'],
+                ),
+              ),
+            ),
+            AgentActionIdCopyButton(
+              actionId: value,
+              l10n: l10n,
+              placement: placement,
+              tooltip: copyTooltip,
+              copiedMessage: copiedMessage,
             ),
           ],
         ),

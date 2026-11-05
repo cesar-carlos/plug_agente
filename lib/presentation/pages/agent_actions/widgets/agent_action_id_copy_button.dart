@@ -11,6 +11,7 @@ class AgentActionIdCopyButton extends StatelessWidget {
     required this.placement,
     this.tooltip,
     this.copiedMessage,
+    this.dense = false,
     super.key,
   });
 
@@ -19,6 +20,9 @@ class AgentActionIdCopyButton extends StatelessWidget {
   final String placement;
   final String? tooltip;
   final String? copiedMessage;
+
+  /// Shrinks the hit target so the icon stays on a caption line.
+  final bool dense;
 
   @override
   Widget build(BuildContext context) {
@@ -33,6 +37,11 @@ class AgentActionIdCopyButton extends StatelessWidget {
           semanticLabel: label,
         ),
         iconButtonMode: IconButtonMode.tiny,
+        style: dense
+            ? const ButtonStyle(
+                padding: WidgetStatePropertyAll(EdgeInsets.symmetric(horizontal: 4)),
+              )
+            : null,
         onPressed: () {
           unawaited(
             copyAgentActionId(

@@ -159,6 +159,22 @@ String agentActionTriggerSummaryLine(AgentActionTrigger trigger, AppLocalization
   return withTimezone;
 }
 
+/// Time zone, catch-up and event source, omitted when the trigger has none.
+String? agentActionTriggerScheduleNotes(AgentActionTrigger trigger, AppLocalizations l10n) {
+  final notes = <String>[];
+  final eventSource = trigger.isExecutionEventTrigger ? trigger.schedule.sourceActionId?.trim() : null;
+  if (eventSource != null && eventSource.isNotEmpty) notes.add(eventSource);
+  final ianaId = trigger.schedule.timezoneId?.trim();
+  if (ianaId != null && ianaId.isNotEmpty) {
+    notes.add(l10n.agentActionsTriggerSummaryTimeZone(ianaId));
+  }
+  if (trigger.isTemporalTrigger && !trigger.schedule.ignoreMissedRuns) {
+    notes.add(l10n.agentActionsTriggerSummaryCatchUpEnabled);
+  }
+  if (notes.isEmpty) return null;
+  return notes.join(' · ');
+}
+
 String formatAgentActionTriggerLocalDateTime(DateTime value) {
   final local = value.toLocal();
   String two(int n) => n.toString().padLeft(2, '0');

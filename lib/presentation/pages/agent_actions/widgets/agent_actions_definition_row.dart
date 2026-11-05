@@ -44,7 +44,7 @@ class AgentActionDefinitionNameCell extends StatelessWidget {
               ),
               Row(
                 children: [
-                  Expanded(
+                  Flexible(
                     child: Text(
                       definition.id,
                       maxLines: 1,
@@ -56,6 +56,7 @@ class AgentActionDefinitionNameCell extends StatelessWidget {
                     actionId: definition.id,
                     l10n: l10n,
                     placement: 'list',
+                    dense: true,
                   ),
                 ],
               ),
