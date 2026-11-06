@@ -24,7 +24,7 @@ final class OdbcStreamingNamedParameterPreparer implements IStreamingNamedParame
     try {
       final parsed = NamedParameterParser.extract(sql);
       NamedParameterParser.toPositionalParams(
-        namedParams: Map<String, Object?>.from(parameters),
+        namedParams: parameters,
         paramNames: parsed.paramNames,
       );
       return Success(

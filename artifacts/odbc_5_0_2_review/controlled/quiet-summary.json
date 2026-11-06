@@ -1,0 +1,307 @@
+{
+  "method": "Paired log time ratios of per-run medians, Student t df=7, exploratory 95% intervals",
+  "practical_threshold_pct": 5,
+  "system_cpu_pct": {
+    "min": 13.96854764107308,
+    "median": 18.08419657174398,
+    "max": 26.231971153846153
+  },
+  "limitations": [
+    "Shared Windows host, no exclusive CPU or database reservation",
+    "CPU affinity and priority constrain benchmark scheduling but do not isolate other workloads",
+    "Intervals are exploratory and not adjusted for multiple comparisons",
+    "Component benchmark, not full Flutter/Hub latency"
+  ],
+  "results": [
+    {
+      "engine": "SQL Server",
+      "scenario": "workerCount=4",
+      "baseline_median_ms": 201.7715,
+      "candidate_median_ms": 205.405,
+      "paired_time_change_pct": -2.3732042879128445,
+      "approx_95_ci_pct": [
+        -21.105434127972288,
+        20.806688466598654
+      ],
+      "candidate_faster_pairs": 3,
+      "pairs": {
+        "0": {
+          "5.0.1": 200.891,
+          "5.0.2": 204.51
+        },
+        "1": {
+          "5.0.2": 199.575,
+          "5.0.1": 277.65
+        },
+        "2": {
+          "5.0.1": 202.652,
+          "5.0.2": 291.143
+        },
+        "3": {
+          "5.0.2": 206.3,
+          "5.0.1": 193.098
+        },
+        "4": {
+          "5.0.1": 191.325,
+          "5.0.2": 200.16
+        },
+        "5": {
+          "5.0.2": 245.754,
+          "5.0.1": 197.419
+        },
+        "6": {
+          "5.0.1": 280.813,
+          "5.0.2": 213.703
+        },
+        "7": {
+          "5.0.2": 198.899,
+          "5.0.1": 268.306
+        }
+      },
+      "classification": "inconclusive"
+    },
+    {
+      "engine": "SQL Server",
+      "scenario": "workerCount=4 columnar",
+      "baseline_median_ms": 191.90699999999998,
+      "candidate_median_ms": 189.5505,
+      "paired_time_change_pct": -1.0893287991494693,
+      "approx_95_ci_pct": [
+        -20.21067977797645,
+        22.614415690965583
+      ],
+      "candidate_faster_pairs": 4,
+      "pairs": {
+        "0": {
+          "5.0.1": 190.41,
+          "5.0.2": 267.196
+        },
+        "1": {
+          "5.0.2": 193.33,
+          "5.0.1": 269.556
+        },
+        "2": {
+          "5.0.1": 191.037,
+          "5.0.2": 189.833
+        },
+        "3": {
+          "5.0.2": 174.475,
+          "5.0.1": 214.833
+        },
+        "4": {
+          "5.0.1": 180.144,
+          "5.0.2": 188.684
+        },
+        "5": {
+          "5.0.2": 189.268,
+          "5.0.1": 253.793
+        },
+        "6": {
+          "5.0.1": 192.777,
+          "5.0.2": 266.311
+        },
+        "7": {
+          "5.0.2": 185.198,
+          "5.0.1": 177.18
+        }
+      },
+      "classification": "inconclusive"
+    },
+    {
+      "engine": "SQL Server",
+      "scenario": "workerCount=4 columnar compressed",
+      "baseline_median_ms": 195.6175,
+      "candidate_median_ms": 196.473,
+      "paired_time_change_pct": 1.4443371740881616,
+      "approx_95_ci_pct": [
+        -3.296375957363673,
+        6.417454842776493
+      ],
+      "candidate_faster_pairs": 4,
+      "pairs": {
+        "0": {
+          "5.0.1": 268.661,
+          "5.0.2": 264.941
+        },
+        "1": {
+          "5.0.2": 268.164,
+          "5.0.1": 267.857
+        },
+        "2": {
+          "5.0.1": 197.263,
+          "5.0.2": 193.164
+        },
+        "3": {
+          "5.0.2": 223.227,
+          "5.0.1": 192.346
+        },
+        "4": {
+          "5.0.1": 193.972,
+          "5.0.2": 189.832
+        },
+        "5": {
+          "5.0.2": 198.506,
+          "5.0.1": 202.485
+        },
+        "6": {
+          "5.0.1": 188.843,
+          "5.0.2": 191.56
+        },
+        "7": {
+          "5.0.2": 194.44,
+          "5.0.1": 189.306
+        }
+      },
+      "classification": "inconclusive"
+    },
+    {
+      "engine": "SQL Server",
+      "scenario": "native pool",
+      "baseline_median_ms": 311.3445,
+      "candidate_median_ms": 312.0085,
+      "paired_time_change_pct": 0.5255535310657145,
+      "approx_95_ci_pct": [
+        -6.184069908428436,
+        7.715042667738015
+      ],
+      "candidate_faster_pairs": 5,
+      "pairs": {
+        "0": {
+          "5.0.1": 314.549,
+          "5.0.2": 311.531
+        },
+        "1": {
+          "5.0.2": 292.999,
+          "5.0.1": 331.147
+        },
+        "2": {
+          "5.0.1": 333.423,
+          "5.0.2": 329.207
+        },
+        "3": {
+          "5.0.2": 358.932,
+          "5.0.1": 342.978
+        },
+        "4": {
+          "5.0.1": 307.573,
+          "5.0.2": 301.385
+        },
+        "5": {
+          "5.0.2": 312.486,
+          "5.0.1": 277.228
+        },
+        "6": {
+          "5.0.1": 308.14,
+          "5.0.2": 343.203
+        },
+        "7": {
+          "5.0.2": 278.893,
+          "5.0.1": 297.902
+        }
+      },
+      "classification": "inconclusive"
+    },
+    {
+      "engine": "SQL Anywhere",
+      "scenario": "workerCount=4",
+      "baseline_median_ms": 132.95299999999997,
+      "candidate_median_ms": 138.6645,
+      "paired_time_change_pct": 2.2854073916522832,
+      "approx_95_ci_pct": [
+        -5.973564788315578,
+        11.269820468277736
+      ],
+      "candidate_faster_pairs": 4,
+      "pairs": {
+        "0": {
+          "5.0.1": 123.178,
+          "5.0.2": 139.656
+        },
+        "1": {
+          "5.0.2": 137.673,
+          "5.0.1": 145.563
+        },
+        "2": {
+          "5.0.1": 141.584,
+          "5.0.2": 124.893
+        },
+        "3": {
+          "5.0.2": 127.11,
+          "5.0.1": 136.378
+        },
+        "4": {
+          "5.0.1": 128.109,
+          "5.0.2": 140.897
+        },
+        "5": {
+          "5.0.2": 152.88,
+          "5.0.1": 153.324
+        },
+        "6": {
+          "5.0.1": 129.528,
+          "5.0.2": 150.307
+        },
+        "7": {
+          "5.0.2": 135.257,
+          "5.0.1": 126.652
+        }
+      },
+      "classification": "inconclusive"
+    },
+    {
+      "engine": "SQL Anywhere",
+      "scenario": "workerCount=4 columnar",
+      "baseline_median_ms": 140.829,
+      "candidate_median_ms": 128.6055,
+      "paired_time_change_pct": -9.215096085556674,
+      "approx_95_ci_pct": [
+        -16.809668259395583,
+        -0.9272038431851426
+      ],
+      "candidate_faster_pairs": 6,
+      "pairs": {
+        "0": {
+          "5.0.1": 141.658,
+          "5.0.2": 137.416
+        },
+        "1": {
+          "5.0.2": 138.008,
+          "5.0.1": 167.484
+        },
+        "2": {
+          "5.0.1": 128.593,
+          "5.0.2": 129.492
+        },
+        "3": {
+          "5.0.2": 98.611,
+          "5.0.1": 117.861
+        },
+        "4": {
+          "5.0.1": 117.351,
+          "5.0.2": 99.58
+        },
+        "5": {
+          "5.0.2": 121.0,
+          "5.0.1": 140.0
+        },
+        "6": {
+          "5.0.1": 145.508,
+          "5.0.2": 159.101
+        },
+        "7": {
+          "5.0.2": 127.719,
+          "5.0.1": 149.48
+        }
+      },
+      "classification": "inconclusive"
+    }
+  ],
+  "external_cpu_pct": {
+    "min": 2.9547828682286226,
+    "mean": 5.730736485187526,
+    "max": 14.893830128205128
+  },
+  "accepted_pairs": 48,
+  "rejected_pairs": 0,
+  "load_filter": "Below 15% idle CPU for two seconds, at most 15% external CPU during each paired measurement; local database CPU excluded"
+}
