@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:plug_agente/core/config/feature_flags.dart';
 import 'package:plug_agente/core/constants/agent_action_policy_defaults.dart';
 import 'package:plug_agente/core/constants/agent_action_rpc_constants.dart';
@@ -8,6 +10,7 @@ import 'package:plug_agente/core/constants/rpc_inbound_constants.dart';
 import 'package:plug_agente/core/logger/app_logger.dart';
 import 'package:plug_agente/core/utils/pool_semaphore.dart';
 import 'package:plug_agente/domain/errors/failures.dart' as domain;
+import 'package:plug_agente/domain/protocol/action_io_rpc_call_context.dart';
 import 'package:plug_agente/domain/protocol/protocol.dart';
 import 'package:plug_agente/domain/protocol/rpc_wire_ack_id.dart';
 import 'package:plug_agente/domain/repositories/i_rpc_request_dispatcher.dart';
@@ -652,12 +655,23 @@ class RpcBatchInboundHandler {
         return (index: index, response: null, id: request.id, method: request.method);
       }
       final clientToken = extractClientTokenFromRpcParams(request.params);
-      final response = await _dispatcher.dispatch(
-        request,
-        _agentIdProvider(),
-        clientToken: clientToken,
-        limits: _protocolProvider().effectiveLimits,
-        negotiatedExtensions: _protocolProvider().negotiatedExtensions,
+      final call = Zone.current[ActionIoRpcCallContext.zoneKey] as ActionIoRpcCallContext?;
+      final protocol = _protocolProvider();
+      final response = await runZoned(
+        () => _dispatcher.dispatch(
+          request,
+          _agentIdProvider(),
+          clientToken: clientToken,
+          limits: _protocolProvider().effectiveLimits,
+          negotiatedExtensions: protocol.negotiatedExtensions,
+        ),
+        zoneValues: {
+          if (call != null)
+            ActionIoRpcCallContext.zoneKey: call.withRequestBudget(
+              request.meta,
+              clockNegotiated: (protocol.negotiatedExtensions['agentActions'] as Map?)?['deadlineClock'] == 1,
+            ),
+        },
       );
       final tracedResponse = _responsePreparer.attachRequestTrace(request, response);
       final enrichedResponse =

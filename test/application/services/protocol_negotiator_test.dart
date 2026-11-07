@@ -15,6 +15,32 @@ void main() {
       negotiator = ProtocolNegotiator();
     });
 
+    test('deadline clock is enabled only by both peers with faithful I/O', () {
+      ProtocolCapabilities caps(int? clock) => ProtocolCapabilities(
+        protocols: const ['jsonrpc-v2'],
+        encodings: const ['json'],
+        compressions: const ['none'],
+        extensions: {
+          'binaryPayload': true,
+          'transportFrame': 'payload-frame/1.0',
+          'agentActions': {
+            'enabled': true,
+            'version': 1,
+            'io': ActionIoCapability.advertisement,
+            'deadlineClock': ?clock,
+          },
+        },
+      );
+      for (final local in [null, 1, 2]) {
+        for (final remote in [null, 1, 2]) {
+          final extensions = negotiator
+              .negotiate(agentCapabilities: caps(local), serverCapabilities: caps(remote))
+              .negotiatedExtensions;
+          expect((extensions['agentActions'] as Map)['deadlineClock'], local == 1 && remote == 1 ? 1 : null);
+        }
+      }
+    });
+
     test('faithful I/O requires both exact offers and uncompressed transport capacity', () {
       ProtocolCapabilities caps(
         Object? io, {

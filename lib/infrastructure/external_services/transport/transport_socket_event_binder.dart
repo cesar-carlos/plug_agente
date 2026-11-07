@@ -253,6 +253,14 @@ class TransportSocketEventBinder {
       _onHeartbeatAck(data);
     });
 
+    socket.on('rpc:clock.probe', (data) {
+      if (_isStaleConnectGeneration(connectGeneration)) return;
+      runZoned(
+        () => _inboundHandler.handleClockProbe(data),
+        zoneValues: <Symbol, Object>{#transportRequestGeneration: _transportSessionGenerationProvider()},
+      );
+    });
+
     socket.on('rpc:read.cancel', (data) {
       if (_isStaleConnectGeneration(connectGeneration)) return;
       runZoned(

@@ -41,6 +41,7 @@ class AgentActionsRemoteCapabilityProvider implements IAgentActionsRemoteCapabil
     );
     if (_faithfulIoAvailable?.call() ?? false) {
       capability['catalogVersion'] = 1;
+      capability['deadlineClock'] = 1;
       capability['io'] = Map<String, Object>.of(ActionIoCapability.advertisement);
       for (final key in ['methods', 'supportedMethods']) {
         capability[key] = <String>[

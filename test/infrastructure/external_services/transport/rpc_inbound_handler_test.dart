@@ -333,6 +333,83 @@ void main() {
       expect(calls.every((c) => c.isCancelled()), isTrue);
     });
 
+    test('clock probe binds unary and batch budgets to the live connection', () async {
+      protocol = const ProtocolConfig(
+        protocol: 'jsonrpc-v2',
+        encoding: 'json',
+        compression: 'none',
+        negotiatedExtensions: {
+          'agentActions': {'io': ActionIoCapability.advertisement, 'deadlineClock': 1},
+        },
+      );
+      Map<dynamic, dynamic>? sample;
+      runZoned(
+        () => handler.handleClockProbe([
+          {'version': 1},
+          (dynamic value) {
+            sample = value as Map;
+          },
+        ]),
+        zoneValues: {#transportRequestGeneration: 1},
+      );
+      expect(sample, isNotNull);
+      final calls = <ActionIoRpcCallContext>[];
+      when(
+        () => dispatcher.dispatch(
+          any(),
+          any(),
+          clientToken: any(named: 'clientToken'),
+          streamEmitter: any(named: 'streamEmitter'),
+          limits: any(named: 'limits'),
+          negotiatedExtensions: any(named: 'negotiatedExtensions'),
+        ),
+      ).thenAnswer((call) async {
+        calls.add(Zone.current[ActionIoRpcCallContext.zoneKey]! as ActionIoRpcCallContext);
+        return RpcResponse.success(id: (call.positionalArguments[0] as RpcRequest).id, result: <String, Object>{});
+      });
+      for (final batch in [false, true]) {
+        final request = {
+          'jsonrpc': '2.0',
+          'id': batch ? 'batch-clock' : 'single-clock',
+          'method': 'agent.action.listAvailable',
+          'params': <String, Object>{},
+          'meta': {
+            'action_io_clock_id': sample!['clock_id'],
+            'action_io_monotonic_deadline_ms': (sample!['monotonic_ms'] as int) + 10000,
+            'action_io_remaining_ms': 10000,
+            'action_io_deadline_unix_ms': 0,
+          },
+        };
+        final bytes = Uint8List.fromList(utf8.encode(jsonEncode(batch ? [request] : request)));
+        final frame = PayloadFrame(
+          schemaVersion: '1.0',
+          enc: 'json',
+          cmp: 'none',
+          contentType: 'application/json',
+          originalSize: bytes.length,
+          compressedSize: bytes.length,
+          payload: bytes,
+        ).toJson();
+        await runZoned(() => handler.handleRequest(frame), zoneValues: {#transportRequestGeneration: 1});
+      }
+      expect(calls, hasLength(2));
+      expect(calls.every((c) => c.isActive), isTrue);
+      expect(calls.map((c) => c.monotonicDeadlineMs).toSet(), hasLength(1));
+      activeTransportSessionGeneration = 2;
+      expect(calls.every((c) => !c.isActive), isTrue);
+      sample = null;
+      runZoned(
+        () => handler.handleClockProbe([
+          {'version': 1},
+          (dynamic value) {
+            sample = value as Map;
+          },
+        ]),
+        zoneValues: {#transportRequestGeneration: 1},
+      );
+      expect(sample, isNull);
+    });
+
     test('nested trusted context preserves cancellation and never extends its deadline', () async {
       final calls = <ActionIoRpcCallContext>[];
       when(

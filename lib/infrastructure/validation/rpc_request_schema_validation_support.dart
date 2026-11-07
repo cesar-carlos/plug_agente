@@ -33,6 +33,8 @@ final class RpcRequestSchemaValidationSupport {
       'request_id',
       'agent_id',
       'timestamp',
+      'action_io_clock_id',
+      'action_io_monotonic_deadline_ms',
       'action_io_remaining_ms',
       'action_io_deadline_unix_ms',
     };
@@ -44,6 +46,19 @@ final class RpcRequestSchemaValidationSupport {
       );
     }
 
+    if (meta.containsKey('action_io_clock_id') || meta.containsKey('action_io_monotonic_deadline_ms')) {
+      final clockId = meta['action_io_clock_id'];
+      final ticks = meta['action_io_monotonic_deadline_ms'];
+      if (clockId is! String ||
+          clockId.isEmpty ||
+          clockId.length > 128 ||
+          ticks is! int ||
+          ticks < 0 ||
+          ticks > 9007199254740991 ||
+          !meta.containsKey('action_io_remaining_ms')) {
+        return invalidRequest('Action I/O monotonic deadline requires a connection clock and bounded integer budget');
+      }
+    }
     if (meta.containsKey('action_io_remaining_ms') || meta.containsKey('action_io_deadline_unix_ms')) {
       final remaining = meta['action_io_remaining_ms'];
       final deadline = meta['action_io_deadline_unix_ms'];

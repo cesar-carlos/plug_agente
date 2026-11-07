@@ -102,6 +102,7 @@ void main() {
     String execution = 'e',
     Duration wait = Duration.zero,
     DateTime? deadline,
+    Duration Function()? remainingBudget,
     bool Function()? cancelled,
     void Function()? onWait,
     String connection = 'connection',
@@ -115,9 +116,20 @@ void main() {
     maxBytes: 65536,
     wait: wait,
     deadline: deadline ?? DateTime.now().add(const Duration(seconds: 30)),
+    remainingBudget: remainingBudget,
     isCancelled: cancelled,
     onReadWait: onWait,
   );
+
+  test('monotonic read budget tolerates wall skew but refuses exhausted budget', () async {
+    final page = await read(deadline: DateTime.utc(2000), remainingBudget: () => const Duration(seconds: 10));
+    expect(page.isSuccess(), isTrue);
+    expect(reads, 1);
+    final expired = await read(deadline: DateTime.utc(2100), remainingBudget: () => Duration.zero);
+    expect(expired.isError(), isTrue);
+    expect(reads, 1);
+    expect(metrics.getSnapshot()['action_io_readers_active'], 0);
+  });
 
   test('abandoned wait permits immediate replacement before its poll timer wakes', () async {
     var cancelled = false;

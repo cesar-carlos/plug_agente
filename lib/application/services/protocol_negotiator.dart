@@ -68,7 +68,13 @@ class ProtocolNegotiator implements IProtocolNegotiator {
         effectiveLimits.maxDecodedPayloadBytes >= ActionIoLimits.jsonBytes &&
         effectiveLimits.maxCompressedPayloadBytes >= ActionIoLimits.jsonBytes) {
       final io = ActionIoCapability.negotiate(agentActions['io'], serverActions['io']);
-      if (io != null) negotiatedExtensions['agentActions'] = {'io': io, if (agentActions['catalogVersion'] == 1 && serverActions['catalogVersion'] == 1) 'catalogVersion': 1};
+      if (io != null) {
+        negotiatedExtensions['agentActions'] = {
+          'io': io,
+          if (agentActions['catalogVersion'] == 1 && serverActions['catalogVersion'] == 1) 'catalogVersion': 1,
+          if (agentActions['deadlineClock'] == 1 && serverActions['deadlineClock'] == 1) 'deadlineClock': 1,
+        };
+      }
     }
     final compressionThreshold = _negotiateCompressionThreshold(
       agentCapabilities.extensions,

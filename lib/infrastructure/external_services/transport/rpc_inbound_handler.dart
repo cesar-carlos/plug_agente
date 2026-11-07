@@ -7,6 +7,7 @@ import 'package:plug_agente/core/logger/app_logger.dart';
 import 'package:plug_agente/domain/actions/action_io.dart';
 import 'package:plug_agente/domain/errors/failures.dart' as domain;
 import 'package:plug_agente/domain/protocol/action_io_capability.dart';
+import 'package:plug_agente/domain/protocol/action_io_monotonic_clock.dart';
 import 'package:plug_agente/domain/protocol/action_io_rpc_call_context.dart';
 import 'package:plug_agente/domain/protocol/protocol.dart';
 import 'package:plug_agente/domain/protocol/rpc_wire_ack_id.dart';
@@ -478,8 +479,10 @@ class RpcInboundHandler {
           readLease = lease;
           currentIo = currentIo?.withCancellation(() => lease.isCancelled);
         }
-        final remainingMs = request.meta?.actionIoRemainingMs;
-        final deadlineUnixMs = request.meta?.actionIoDeadlineUnixMs;
+        currentIo = currentIo?.withRequestBudget(
+          request.meta,
+          clockNegotiated: (protocol.negotiatedExtensions['agentActions'] as Map?)?['deadlineClock'] == 1,
+        );
         final response = await runZoned(
           () => _dispatcher.dispatch(
             request,
@@ -490,13 +493,7 @@ class RpcInboundHandler {
             negotiatedExtensions: protocol.negotiatedExtensions,
           ),
           zoneValues: {
-            if (currentIo != null)
-              ActionIoRpcCallContext.zoneKey: remainingMs != null && deadlineUnixMs != null
-                  ? currentIo.withTransportBudget(
-                      remainingMs: remainingMs,
-                      deadlineUnixMs: deadlineUnixMs,
-                    )
-                  : currentIo,
+            ActionIoRpcCallContext.zoneKey: ?currentIo,
           },
         );
         latencyTrace?.markDispatchComplete(isSqlMethod: request.method.startsWith('sql.'));
@@ -586,6 +583,26 @@ class RpcInboundHandler {
     );
   }
 
+  /// Socket.IO control acknowledgement; no action, credential or process mutation.
+  void handleClockProbe(dynamic data) {
+    if (!_hasReceivedCapabilities() ||
+        !_isCurrentTransportSession() ||
+        (_protocolProvider().negotiatedExtensions['agentActions'] as Map?)?['deadlineClock'] != 1 ||
+        data is! List ||
+        data.length != 2 ||
+        data[0] is! Map ||
+        (data[0] as Map)['version'] != 1 ||
+        data[1] is! Function) {
+      return;
+    }
+    final context = _ioContext(isBatch: false);
+    (data[1] as Function)({
+      'version': 1,
+      'clock_id': context.connectionId,
+      'monotonic_ms': ActionIoMonotonicClock.nowMs(),
+    });
+  }
+
   ActionIoRpcCallContext _ioContext({required bool isBatch}) {
     final existing = Zone.current[ActionIoRpcCallContext.zoneKey] as ActionIoRpcCallContext?;
     final generation = Zone.current[#transportRequestGeneration] as int?;
@@ -595,6 +612,9 @@ class RpcInboundHandler {
     return ActionIoRpcCallContext(
       connectionId: '$_ioConnectionId:${generation ?? 0}',
       receivedAt: existing?.receivedAt ?? receivedAt,
+      receivedMonotonicMs: existing?.receivedMonotonicMs ?? ActionIoMonotonicClock.nowMs(),
+      monotonicNow: ActionIoMonotonicClock.nowMs,
+      monotonicDeadlineMs: existing?.monotonicDeadlineMs,
       deadline: inheritedDeadline != null && inheritedDeadline.isBefore(localDeadline)
           ? inheritedDeadline
           : localDeadline,

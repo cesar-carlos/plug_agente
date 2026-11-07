@@ -10,6 +10,8 @@ class RpcProtocolMeta {
     this.requestServerTimings,
     this.agentPhases,
     this.healthSnapshot,
+    this.actionIoClockId,
+    this.actionIoMonotonicDeadlineMs,
     this.actionIoRemainingMs,
     this.actionIoDeadlineUnixMs,
   });
@@ -25,6 +27,8 @@ class RpcProtocolMeta {
       requestServerTimings: json['requestServerTimings'] as bool?,
       agentPhases: _readPhaseMap(json['agent_phases']),
       healthSnapshot: _readObjectMap(json['health_snapshot']),
+      actionIoClockId: json['action_io_clock_id'] as String?,
+      actionIoMonotonicDeadlineMs: json['action_io_monotonic_deadline_ms'] as int?,
       actionIoRemainingMs: json['action_io_remaining_ms'] as int?,
       actionIoDeadlineUnixMs: json['action_io_deadline_unix_ms'] as int?,
     );
@@ -36,6 +40,8 @@ class RpcProtocolMeta {
   final String? requestId;
   final String? agentId;
   final String? timestamp;
+  final String? actionIoClockId;
+  final int? actionIoMonotonicDeadlineMs;
   final int? actionIoRemainingMs;
   final int? actionIoDeadlineUnixMs;
 

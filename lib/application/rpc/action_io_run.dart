@@ -40,7 +40,7 @@ final class ActionIoRun {
       validateOnly: false,
     )).getOrThrow();
     final call = context.actionIo!;
-    if (call.isCancelled() || !DateTime.now().isBefore(call.deadline)) {
+    if (!call.isActive) {
       throw ActionRuntimeFailure.withContext(
         message: 'The admission deadline expired.',
         code: 'ACTION_IO_REQUEST_EXPIRED',
@@ -50,7 +50,7 @@ final class ActionIoRun {
       intent: intent,
       io: io,
       credential: credential,
-      isRequestActive: () => !call.isCancelled() && DateTime.now().isBefore(call.deadline),
+      isRequestActive: () => call.isActive,
     )).getOrThrow();
     if (claim.created) {
       final owned = supervisor.launch(

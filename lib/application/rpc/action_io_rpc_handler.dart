@@ -76,7 +76,7 @@ final class ActionIoRpcHandler implements RpcMethodHandler {
           request.isNotification) {
         throw _invalid('ACTION_IO_INVALID_REQUEST');
       }
-      if (call.connectionId.isEmpty || call.isCancelled() || !DateTime.now().isBefore(call.deadline)) {
+      if (call.connectionId.isEmpty || !call.isActive) {
         throw _unavailable('ACTION_IO_REQUEST_EXPIRED');
       }
       _contract.validateParams(method, request.params).getOrThrow();
@@ -100,7 +100,7 @@ final class ActionIoRpcHandler implements RpcMethodHandler {
         );
       }
       ActionIoRemoteAccess getAccess() => _access();
-      bool isRequestActive() => !call.isCancelled() && DateTime.now().isBefore(call.deadline);
+      bool isRequestActive() => call.isActive;
       final executionId = params['execution_id'] as String? ?? '';
       late final Map<String, dynamic> result;
       switch (method) {
@@ -108,8 +108,12 @@ final class ActionIoRpcHandler implements RpcMethodHandler {
           if ((context.negotiatedExtensions['agentActions'] as Map?)?['catalogVersion'] != 1 || catalog == null) {
             throw _capabilityRefused('incompatible', 'A conexão não negociou o catálogo de ações.');
           }
-          result = await catalog!().page(agentId: context.agentId, credential: credential,
-            pageSize: params['page_size'] as int? ?? 20, cursor: params['cursor'] as String?);
+          result = await catalog!().page(
+            agentId: context.agentId,
+            credential: credential,
+            pageSize: params['page_size'] as int? ?? 20,
+            cursor: params['cursor'] as String?,
+          );
         case 'agent.action.run':
           result = await run!(request, context);
         case 'agent.action.cancel':
@@ -170,6 +174,7 @@ final class ActionIoRpcHandler implements RpcMethodHandler {
               maxBytes: _integer(params, 'max_bytes'),
               wait: Duration(milliseconds: _integer(params, 'wait_ms')),
               deadline: call.deadline,
+              remainingBudget: call.monotonicDeadlineMs != null ? (() => call.remaining) : null,
               isCancelled: call.isCancelled,
               onReadWait: call.onReadWait,
             )).getOrThrow(),

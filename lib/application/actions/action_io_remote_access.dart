@@ -154,6 +154,7 @@ final class ActionIoRemoteAccess {
     required int maxBytes,
     required Duration wait,
     required DateTime deadline,
+    Duration Function()? remainingBudget,
     bool Function()? isCancelled,
     void Function()? onReadWait,
   }) => _guard(() async {
@@ -187,25 +188,27 @@ final class ActionIoRemoteAccess {
         ? (journal as IActionIoJournalChanges).observeChanges(executionId)
         : null;
     try {
-      final available = deadline.difference(_now()) - ActionIoLimits.responseReserve;
+      Duration budget() => remainingBudget?.call() ?? deadline.difference(_now());
+      final available = budget() - ActionIoLimits.responseReserve;
       final effective = available <= Duration.zero ? Duration.zero : (wait < available ? wait : available);
       final until = _now().add(effective);
+      final elapsed = remainingBudget != null ? (Stopwatch()..start()) : null;
       var waitingNotified = false;
       while (true) {
         if (isCancelled?.call() ?? false) throw _failure('ACTION_IO_READ_CANCELLED');
-        if (!_now().isBefore(deadline)) throw _failure('ACTION_TIMEOUT');
+        if (budget() <= Duration.zero) throw _failure('ACTION_TIMEOUT');
         final page = (await _output.read(
           executionId: executionId,
           clientId: session.clientId,
           afterSequence: afterSequence,
           maxBytes: maxBytes,
         )).getOrThrow();
-        final remaining = until.difference(_now());
+        final remaining = elapsed != null ? effective - elapsed.elapsed : until.difference(_now());
         if (page.events.isNotEmpty || page.terminal || remaining <= Duration.zero) {
           // Never return data using authority captured before a long poll.
           await _authorize(executionId, agentId, credential, ActionIoOperation.readIo);
           if (isCancelled?.call() ?? false) throw _failure('ACTION_IO_READ_CANCELLED');
-          if (!_now().isBefore(deadline)) throw _failure('ACTION_TIMEOUT');
+          if (budget() <= Duration.zero) throw _failure('ACTION_TIMEOUT');
           _metrics?.recordReadBytes(
             page.events.whereType<ActionIoOutputEvent>().fold(0, (sum, event) => sum + event.bytes.length),
           );

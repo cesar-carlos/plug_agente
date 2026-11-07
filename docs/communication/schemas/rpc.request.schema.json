@@ -4,12 +4,23 @@
   "title": "RPC Request",
   "description": "JSON-RPC 2.0 request used inside rpc:request PayloadFrame messages. api_version and meta are recommended for Plug profile v2.1+ callers, but remain optional at runtime for backward compatibility with implicit v2.0 requests.",
   "type": "object",
-  "required": ["jsonrpc", "method"],
+  "required": [
+    "jsonrpc",
+    "method"
+  ],
   "properties": {
-    "jsonrpc": { "const": "2.0" },
-    "method": { "type": "string" },
+    "jsonrpc": {
+      "const": "2.0"
+    },
+    "method": {
+      "type": "string"
+    },
     "id": {
-      "type": ["string", "number", "null"],
+      "type": [
+        "string",
+        "number",
+        "null"
+      ],
       "description": "Request identifier. Omit or set to null only for notifications when negotiated compatibility allows it."
     },
     "params": {},
@@ -21,19 +32,64 @@
       "type": "object",
       "description": "Optional protocol metadata. Only the published fields below are part of the contract.",
       "properties": {
-        "trace_id": { "type": "string" },
-        "traceparent": { "type": "string" },
-        "tracestate": { "type": "string" },
-        "request_id": { "type": "string" },
-        "agent_id": { "type": "string" },
-        "timestamp": { "type": "string", "format": "date-time" },
-        "requestServerTimings": { "type": "boolean" },
-        "action_io_remaining_ms": { "type": "integer", "minimum": 0, "maximum": 30000 },
-        "action_io_deadline_unix_ms": { "type": "integer", "minimum": 0, "maximum": 8640000000000000 }
+        "trace_id": {
+          "type": "string"
+        },
+        "traceparent": {
+          "type": "string"
+        },
+        "tracestate": {
+          "type": "string"
+        },
+        "request_id": {
+          "type": "string"
+        },
+        "agent_id": {
+          "type": "string"
+        },
+        "timestamp": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "requestServerTimings": {
+          "type": "boolean"
+        },
+        "action_io_remaining_ms": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 30000
+        },
+        "action_io_deadline_unix_ms": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 8640000000000000
+        },
+        "action_io_clock_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "action_io_monotonic_deadline_ms": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        }
       },
       "dependentRequired": {
-        "action_io_remaining_ms": ["action_io_deadline_unix_ms"],
-        "action_io_deadline_unix_ms": ["action_io_remaining_ms"]
+        "action_io_remaining_ms": [
+          "action_io_deadline_unix_ms"
+        ],
+        "action_io_deadline_unix_ms": [
+          "action_io_remaining_ms"
+        ],
+        "action_io_clock_id": [
+          "action_io_monotonic_deadline_ms",
+          "action_io_remaining_ms"
+        ],
+        "action_io_monotonic_deadline_ms": [
+          "action_io_clock_id",
+          "action_io_remaining_ms"
+        ]
       },
       "additionalProperties": false
     }
