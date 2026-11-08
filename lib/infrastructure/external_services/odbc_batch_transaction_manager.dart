@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:odbc_fast/odbc_fast.dart';
 import 'package:plug_agente/core/constants/odbc_context_constants.dart';
+import 'package:plug_agente/domain/entities/cancellation_token.dart';
 import 'package:plug_agente/domain/errors/failures.dart' as domain;
 import 'package:plug_agente/infrastructure/errors/odbc_error_inspector.dart';
 import 'package:plug_agente/infrastructure/errors/odbc_failure_mapper.dart';
@@ -159,6 +160,7 @@ final class OdbcBatchTransactionManager {
     required String connectionId,
     required BatchTransactionGuard guard,
     DateTime? deadline,
+    CancellationToken? cancellationToken,
   }) async {
     final transactionId = guard.transactionId;
     if (transactionId == null) return const Success(unit);
@@ -166,16 +168,28 @@ final class OdbcBatchTransactionManager {
       return Failure(domain.QueryExecutionFailure('Transaction finalization already started'));
     }
     final budget = _executionBudget(deadline, _defaultCommitTimeout);
-    if (budget <= Duration.zero) {
+    final refusal = cancellationToken?.isCancelled ?? false
+        ? domain.QueryExecutionFailure.withContext(
+            message: 'Transaction aborted because the batch was cancelled before commit',
+            context: const {
+              'operation': 'transaction_commit',
+              'cooperative_cancel': true,
+              'execution_not_started': true,
+              'retryable': false,
+            },
+          )
+        : budget <= Duration.zero
+        ? _budgetExhausted('transaction_commit')
+        : null;
+    if (refusal != null) {
       // Commit was never dispatched. Finish cleanup before callers release the connection.
       final rollback = await guard.rollback((id) => rollbackIfNeeded(connectionId, id));
-      final expired = _budgetExhausted('transaction_commit');
       return Failure(
         domain.QueryExecutionFailure.withContext(
-          message: expired.message,
-          cause: expired,
+          message: refusal.message,
+          cause: refusal,
           context: {
-            ...expired.context,
+            ...refusal.context,
             'rollback_confirmed': guard.rollbackConfirmed,
             'outcome_unknown': !guard.rollbackConfirmed,
             if (rollback.isError())

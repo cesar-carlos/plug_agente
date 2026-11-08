@@ -18,6 +18,7 @@ class SqlOperationExecutor {
     required ISqlOperationTransactionFactory transactions,
     IUpdateMaintenanceGate? maintenanceGate,
     DateTime Function()? now,
+    Stopwatch Function()? stopwatchFactory,
     Uuid uuid = const Uuid(),
     void Function(String operationId, Object failure)? onCleanupFailure,
   }) : _maintenanceGate = maintenanceGate,
@@ -25,6 +26,7 @@ class SqlOperationExecutor {
        _authorizer = authorizer,
        _transactions = transactions,
        _now = now ?? DateTime.now,
+       _stopwatchFactory = stopwatchFactory ?? Stopwatch.new,
        _uuid = uuid,
        _onCleanupFailure = onCleanupFailure;
   final IUpdateMaintenanceGate? _maintenanceGate;
@@ -32,6 +34,7 @@ class SqlOperationExecutor {
   final ISqlOperationAuthorizer _authorizer;
   final ISqlOperationTransactionFactory _transactions;
   final DateTime Function() _now;
+  final Stopwatch Function() _stopwatchFactory;
   final Uuid _uuid;
   final void Function(String, Object)? _onCleanupFailure;
 
@@ -39,10 +42,16 @@ class SqlOperationExecutor {
       _maintenanceGate?.run(() => _execute(plan, token, agentId)) ?? _execute(plan, token, agentId);
 
   Future<Result<SqlOperationJournalEntry>> _execute(SqlOperationPlan plan, String token, String agentId) async {
-    final watch = Stopwatch()..start();
+    final watch = _stopwatchFactory()..start();
     Duration budget() {
       final remaining = plan.timeout - watch.elapsed;
-      if (remaining <= Duration.zero) throw TimeoutException('SQL operation budget exhausted');
+      if (remaining <= Duration.zero) {
+        throw SqlOperationFailure(
+          code: 'SQL_OPERATION_TIMEOUT',
+          message: 'SQL operation budget exhausted before dispatch.',
+          context: const {'execution_not_started': true, 'outcome_unknown': false, 'retryable': false},
+        );
+      }
       return remaining;
     }
 
@@ -108,8 +117,9 @@ class SqlOperationExecutor {
         }
       }
       await _assertCurrent(plan, token, agentId, target, budget());
+      final commitBudget = budget();
       commitAttempted = true;
-      (await transaction.commit(budget())).getOrThrow();
+      (await transaction.commit(commitBudget)).getOrThrow();
       return await _journal.finish(
         plan.operationId,
         target.scopeHash,

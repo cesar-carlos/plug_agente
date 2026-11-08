@@ -78,7 +78,8 @@ final class NativeCompatibleAcquirePolicy {
     if (request.expectMultipleResults) {
       return false;
     }
-    if (_hasNamedParameters(preparedExecution) && !_isSafeParameterizedNativeSelect(databaseType, preparedExecution)) {
+    late final normalizedSql = normalizeSql(preparedExecution.sql);
+    if (_hasNamedParameters(preparedExecution) && !_isSafeParameterizedNativeSelect(databaseType, normalizedSql)) {
       return false;
     }
     if (timeout != null &&
@@ -91,13 +92,13 @@ final class NativeCompatibleAcquirePolicy {
     }
     final isSafeResultShape =
         request.pagination != null ||
-        isProbeQuery(preparedExecution.sql) ||
-        isExplicitlyLimitedSelect(preparedExecution.sql) ||
-        isBoundedAggregateQuery(preparedExecution.sql) ||
-        isExistsQuery(preparedExecution.sql) ||
-        _isBalancedServerBoundedSelect(databaseType, preparedExecution.sql) ||
-        _isHighThroughputSqlServerSelect(databaseType, preparedExecution.sql) ||
-        _isAllowlistedSql(preparedExecution.sql);
+        _probeQuery.hasMatch(normalizedSql) ||
+        _isExplicitlyLimitedNormalizedSelect(normalizedSql) ||
+        _countAggregate.hasMatch(normalizedSql) ||
+        _existsPredicate.hasMatch(normalizedSql) ||
+        _isBalancedServerBoundedSelect(databaseType, normalizedSql) ||
+        _isHighThroughputSqlServerSelect(databaseType, normalizedSql) ||
+        _isAllowlistedSql(normalizedSql);
     if (!isSafeResultShape) {
       return false;
     }
@@ -126,7 +127,7 @@ final class NativeCompatibleAcquirePolicy {
           command.params!.isNotEmpty &&
           !_isSafeParameterizedNativeSelect(
             databaseType,
-            OdbcPreparedQueryExecution(sql: command.sql, parameters: command.params),
+            normalizeSql(command.sql),
           )) {
         return false;
       }
@@ -169,24 +170,22 @@ final class NativeCompatibleAcquirePolicy {
 
   static bool _isSafeParameterizedNativeSelect(
     DatabaseType databaseType,
-    OdbcPreparedQueryExecution preparedExecution,
+    String normalizedSql,
   ) {
     if (!_isNativeEligibleDialect(databaseType)) {
       return false;
     }
-    final sql = preparedExecution.sql;
-    return isProbeQuery(sql) ||
-        isExplicitlyLimitedSelect(sql) ||
-        isBoundedAggregateQuery(sql) ||
-        isExistsQuery(sql) ||
-        _isBalancedServerBoundedSelect(databaseType, sql);
+    return _probeQuery.hasMatch(normalizedSql) ||
+        _isExplicitlyLimitedNormalizedSelect(normalizedSql) ||
+        _countAggregate.hasMatch(normalizedSql) ||
+        _existsPredicate.hasMatch(normalizedSql) ||
+        _isBalancedServerBoundedSelect(databaseType, normalizedSql);
   }
 
-  static bool _isBalancedServerBoundedSelect(DatabaseType databaseType, String sql) {
+  static bool _isBalancedServerBoundedSelect(DatabaseType databaseType, String normalized) {
     if (!_isNativeEligibleDialect(databaseType)) {
       return false;
     }
-    final normalized = normalizeSql(sql);
     if (!normalized.startsWith('select ') && !normalized.startsWith('with ')) {
       return false;
     }
@@ -212,14 +211,13 @@ final class NativeCompatibleAcquirePolicy {
     return !padded.contains(' output ') && !padded.contains(' returning ');
   }
 
-  bool _isHighThroughputSqlServerSelect(DatabaseType databaseType, String sql) {
+  bool _isHighThroughputSqlServerSelect(DatabaseType databaseType, String normalized) {
     if (databaseType != DatabaseType.sqlServer) {
       return false;
     }
     if (resolveOdbcUsageProfile() != OdbcUsageProfile.highThroughput) {
       return false;
     }
-    final normalized = normalizeSql(sql);
     if (!normalized.startsWith('select ') && !normalized.startsWith('with ')) {
       return false;
     }
@@ -268,7 +266,10 @@ final class NativeCompatibleAcquirePolicy {
   }
 
   static bool isExplicitlyLimitedSelect(String sql) {
-    final normalized = normalizeSql(sql);
+    return _isExplicitlyLimitedNormalizedSelect(normalizeSql(sql));
+  }
+
+  static bool _isExplicitlyLimitedNormalizedSelect(String normalized) {
     if (!normalized.startsWith('select ') && !normalized.startsWith('with ')) {
       return false;
     }
@@ -297,12 +298,11 @@ final class NativeCompatibleAcquirePolicy {
     return null;
   }
 
-  bool _isAllowlistedSql(String sql) {
+  bool _isAllowlistedSql(String normalizedSql) {
     final allowlist = _resolveAllowlist();
     if (allowlist.isEmpty) {
       return false;
     }
-    final normalizedSql = normalizeSql(sql);
     if (hasWildcardProjection(normalizedSql)) {
       return false;
     }

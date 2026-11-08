@@ -53,6 +53,53 @@ void main() {
   });
 
   group('NativeCompatibleAcquirePolicy.shouldUseAcquire', () {
+    for (final databaseType in DatabaseType.values) {
+      test('preserves commented parameterized classifications for ${databaseType.name}', () async {
+        dotenv.loadFromString(envString: 'ODBC_USAGE_PROFILE=balanced\nODBC_NATIVE_COMPATIBLE_SQL_ALLOWLIST=');
+        final policy = NativeCompatibleAcquirePolicy(featureFlags: await _flags(enabled: true));
+        final eligible = databaseType != DatabaseType.sybaseAnywhere;
+        final cases = <String, bool>{
+          '/* lead */ SELECT 1;; -- end': eligible,
+          'SELECT /* projection */ TOP 50 id FROM items WHERE id = :id;': eligible,
+          'SELECT count(*) FROM items WHERE id = :id': eligible,
+          'SELECT exists (SELECT id FROM items WHERE id = :id)': eligible,
+          'WITH c AS (SELECT id FROM items) SELECT TOP 500 id FROM c': eligible,
+          'SELECT TOP 1001 id FROM items WHERE id = :id': false,
+          'SELECT TOP 50 * FROM items WHERE id = :id': false,
+          'SELECT id FROM items WHERE id = :id': false,
+        };
+        for (final entry in cases.entries) {
+          expect(
+            policy.shouldUseAcquire(
+              databaseType: databaseType,
+              request: _request(entry.key),
+              preparedExecution: _prepared(entry.key, parameters: const {'id': 1}),
+              timeout: null,
+            ),
+            entry.value,
+            reason: entry.key,
+          );
+        }
+      });
+    }
+
+    test('rechecks profile changes between calls for the same SQL', () async {
+      final policy = NativeCompatibleAcquirePolicy(featureFlags: await _flags(enabled: true));
+      const sql = 'SELECT id FROM items';
+      for (final profile in ['balanced', 'highThroughput', 'balanced']) {
+        dotenv.loadFromString(envString: 'ODBC_USAGE_PROFILE=$profile\nODBC_NATIVE_COMPATIBLE_SQL_ALLOWLIST=');
+        expect(
+          policy.shouldUseAcquire(
+            databaseType: DatabaseType.sqlServer,
+            request: _request(sql),
+            preparedExecution: _prepared(sql),
+            timeout: null,
+          ),
+          profile == 'highThroughput',
+        );
+      }
+    });
+
     test('returns false when adaptive pooling is disabled', () async {
       final policy = NativeCompatibleAcquirePolicy(featureFlags: await _flags(enabled: false));
       expect(

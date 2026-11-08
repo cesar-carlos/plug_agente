@@ -4,6 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
 import 'package:odbc_fast/odbc_fast.dart';
 import 'package:plug_agente/core/constants/odbc_context_constants.dart';
+import 'package:plug_agente/domain/entities/cancellation_token.dart';
 import 'package:plug_agente/domain/errors/failures.dart' as domain;
 import 'package:plug_agente/infrastructure/external_services/batch_transaction.dart';
 import 'package:plug_agente/infrastructure/external_services/odbc_batch_transaction_manager.dart';
@@ -224,6 +225,34 @@ void main() {
   });
 
   group('commit', () {
+    test('cancellation retains an unconfirmed rollback and discards the connection', () async {
+      final discarded = <String>[];
+      manager = OdbcBatchTransactionManager(service: service, metrics: metrics, onRollbackUnconfirmed: discarded.add);
+      final guard = BatchTransactionGuard(9);
+      final token = CancellationToken()..cancel();
+      when(() => service.rollbackTransaction('c1', 9)).thenAnswer((_) async => Failure(Exception('lost')));
+      final result = await manager.commit(connectionId: 'c1', guard: guard, cancellationToken: token);
+      final failure = result.exceptionOrNull()! as domain.Failure;
+      expect(failure.context['cooperative_cancel'], isTrue);
+      expect(failure.context['outcome_unknown'], isTrue);
+      expect(failure.context['rollback_confirmed'], isFalse);
+      expect(failure.context['retryable'], isFalse);
+      expect(discarded, ['c1']);
+      expect(guard.state, BatchTransactionState.unconfirmed);
+      verifyNever(() => service.commitTransaction(any(), any()));
+    });
+    test('cancellation after commit dispatch never reverses the commit decision', () async {
+      final pending = Completer<Result<void>>();
+      final token = CancellationToken();
+      final guard = BatchTransactionGuard(9);
+      when(() => service.commitTransaction('c1', 9)).thenAnswer((_) => pending.future);
+      final committing = manager.commit(connectionId: 'c1', guard: guard, cancellationToken: token);
+      token.cancel();
+      pending.complete(const Success(unit));
+      expect((await committing).isSuccess(), isTrue);
+      expect(guard.state, BatchTransactionState.committed);
+      verifyNever(() => service.rollbackTransaction(any(), any()));
+    });
     test('expired deadline rolls back before returning without dispatching commit', () async {
       final guard = BatchTransactionGuard(9);
       when(() => service.rollbackTransaction('c1', 9)).thenAnswer((_) async => const Success(unit));

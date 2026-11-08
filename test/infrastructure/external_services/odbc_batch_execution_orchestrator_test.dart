@@ -8,6 +8,7 @@ import 'package:plug_agente/core/config/feature_flags.dart';
 import 'package:plug_agente/core/constants/connection_constants.dart';
 import 'package:plug_agente/core/settings/app_settings_store.dart';
 import 'package:plug_agente/core/utils/pool_semaphore.dart';
+import 'package:plug_agente/domain/entities/cancellation_token.dart';
 import 'package:plug_agente/domain/entities/config.dart';
 import 'package:plug_agente/domain/entities/sql_command.dart';
 import 'package:plug_agente/domain/errors/failures.dart' as domain;
@@ -371,7 +372,10 @@ void main() {
 
       final result = await orchestrator.execute(
         agentId: config.agentId,
-        commands: const [SqlCommand(sql: 'SELECT 1'), SqlCommand(sql: 'SELECT 2')],
+        commands: const [
+          SqlCommand(sql: 'SELECT 1'),
+          SqlCommand(sql: 'SELECT 2'),
+        ],
         options: const SqlExecutionOptions(transaction: true),
         timeout: const Duration(milliseconds: 15),
       );
@@ -450,6 +454,119 @@ void main() {
       },
     );
 
+    for (final (unknownCleanup, rollbackFails) in [(false, false), (true, false), (false, true)]) {
+      test('statement cleanup failure finalizes the batch safely ($unknownCleanup, $rollbackFails)', () async {
+        const connectionId = 'cleanup-transaction';
+        final config = _buildConfig('DSN=test');
+        resolveActiveConfigFn = () async => Success(config);
+        when(() => mockService.connect(any(), options: any(named: 'options'))).thenAnswer(
+          (_) async => Success(
+            Connection(id: connectionId, connectionString: 'DSN=test', createdAt: DateTime(2024), isActive: true),
+          ),
+        );
+        when(
+          () => mockService.beginTransaction(
+            connectionId,
+            savepointDialect: any(named: 'savepointDialect'),
+            accessMode: any(named: 'accessMode'),
+            lockTimeout: any(named: 'lockTimeout'),
+          ),
+        ).thenAnswer((_) async => const Success(11));
+        when(() => mockService.disconnect(connectionId)).thenAnswer((_) async => const Success(unit));
+        if (rollbackFails) {
+          when(
+            () => mockService.rollbackTransaction(connectionId, 11),
+          ).thenAnswer((_) async => Failure(Exception('Rollback confirmation lost')));
+        }
+        when(() => mockService.closeStatement(any(), any())).thenAnswer(
+          (_) async => Failure(
+            domain.QueryExecutionFailure.withContext(
+              message: 'Statement cleanup failed',
+              context: {'outcome_unknown': unknownCleanup},
+            ),
+          ),
+        );
+        final result = await orchestrator.execute(
+          agentId: config.agentId,
+          commands: const [
+            SqlCommand(sql: 'UPDATE customers SET id = 1'),
+            SqlCommand(sql: 'UPDATE customers SET id = 1'),
+          ],
+          options: const SqlExecutionOptions(transaction: true),
+        );
+        final failure = result.exceptionOrNull()! as domain.Failure;
+        expect(failure.message, 'Prepared statement cleanup failed');
+        expect(failure.context['rollback_confirmed'], !unknownCleanup && !rollbackFails);
+        expect(failure.context['outcome_unknown'], unknownCleanup || rollbackFails);
+        if (rollbackFails) {
+          expect(failure.context['secondary_errors'], hasLength(2));
+        }
+        verifyNever(() => mockService.commitTransaction(any(), any()));
+        if (unknownCleanup) {
+          verifyNever(() => mockService.rollbackTransaction(any(), any()));
+        } else {
+          verifyInOrder([
+            () => mockService.rollbackTransaction(connectionId, 11),
+            () => mockService.disconnect(connectionId),
+          ]);
+        }
+      });
+    }
+
+    for (final bulk in [false, true]) {
+      test('cancellation after the last native result prevents commit (bulk: $bulk)', () async {
+        const connectionString = 'Driver={ODBC Driver};Server=localhost;';
+        const connectionId = 'cancel-before-commit';
+        final config = _buildConfig(connectionString);
+        resolveActiveConfigFn = () async => Success(config);
+        final token = CancellationToken();
+        final commands = bulk
+            ? List.generate(50, (index) => SqlCommand(sql: 'INSERT INTO customers (id) VALUES ($index)'))
+            : const [SqlCommand(sql: 'UPDATE customers SET id = 1'), SqlCommand(sql: 'UPDATE customers SET id = 1')];
+        when(() => mockService.connect(any(), options: any(named: 'options'))).thenAnswer(
+          (_) async => Success(
+            Connection(id: connectionId, connectionString: connectionString, createdAt: DateTime(2024), isActive: true),
+          ),
+        );
+        when(
+          () => mockService.beginTransaction(
+            connectionId,
+            savepointDialect: any(named: 'savepointDialect'),
+            accessMode: any(named: 'accessMode'),
+            lockTimeout: any(named: 'lockTimeout'),
+          ),
+        ).thenAnswer((_) async => const Success(11));
+        when(() => mockService.commitTransaction(connectionId, 11)).thenAnswer((_) async => const Success(unit));
+        when(() => mockService.disconnect(connectionId)).thenAnswer((_) async => const Success(unit));
+        if (bulk) {
+          when(() => mockService.bulkInsert(any(), any(), any(), any(), any())).thenAnswer((_) async {
+            token.cancel();
+            return const Success(50);
+          });
+        } else {
+          when(() => mockService.closeStatement(any(), any())).thenAnswer((_) async {
+            token.cancel();
+            return const Success(unit);
+          });
+        }
+        final result = await orchestrator.execute(
+          agentId: config.agentId,
+          commands: commands,
+          options: const SqlExecutionOptions(transaction: true),
+          cancellationToken: token,
+        );
+        expect(result.isError(), isTrue);
+        final failure = result.exceptionOrNull()! as domain.Failure;
+        expect(failure.context['cooperative_cancel'], isTrue);
+        expect(failure.context['rollback_confirmed'], isTrue);
+        verifyNever(() => mockService.commitTransaction(any(), any()));
+        verifyInOrder([
+          () => mockService.rollbackTransaction(connectionId, 11),
+          () => mockService.disconnect(connectionId),
+        ]);
+      });
+    }
+
     test(
       'should route large homogeneous insert batches to native bulk insert',
       () async {
@@ -522,9 +639,13 @@ void main() {
             lockTimeout: any(named: 'lockTimeout'),
           ),
         ).thenAnswer((_) async => const Success(11));
+        final bulkFailure = domain.QueryExecutionFailure('Bulk insert failed');
         when(() => mockService.bulkInsert(any(), any(), any(), any(), any())).thenAnswer((_) async {
-          return Failure(Exception('bulk failed'));
+          return Failure(bulkFailure);
         });
+        when(
+          () => mockService.rollbackTransaction(directConnectionId, 11),
+        ).thenAnswer((_) async => Failure(Exception('Rollback confirmation lost')));
         when(() => mockService.disconnect(directConnectionId)).thenAnswer((_) async {
           return const Success(unit);
         });
@@ -536,6 +657,11 @@ void main() {
         );
 
         expect(result.isError(), isTrue);
+        final failure = result.exceptionOrNull()! as domain.Failure;
+        expect(failure.context['rollback_confirmed'], isFalse);
+        expect(failure.context['outcome_unknown'], isTrue);
+        expect(failure.context['retryable'], isFalse);
+        expect(failure.context['secondary_errors'], isNotEmpty);
         verify(() => mockService.rollbackTransaction(directConnectionId, 11)).called(1);
         verifyNever(() => mockService.commitTransaction(any(), any()));
       },

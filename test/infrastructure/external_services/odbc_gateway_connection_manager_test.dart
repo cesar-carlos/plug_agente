@@ -6,6 +6,7 @@ import 'package:odbc_fast/odbc_fast.dart';
 import 'package:plug_agente/domain/errors/failures.dart' as domain;
 import 'package:plug_agente/domain/repositories/i_connection_pool.dart';
 import 'package:plug_agente/infrastructure/external_services/odbc_gateway_connection_manager.dart';
+import 'package:plug_agente/infrastructure/external_services/odbc_statement_executor.dart';
 import 'package:plug_agente/infrastructure/metrics/metrics_collector.dart';
 import 'package:plug_agente/infrastructure/pool/direct_odbc_connection_limiter.dart';
 import 'package:result_dart/result_dart.dart';
@@ -38,6 +39,41 @@ void main() {
         ),
         metrics: metrics,
       );
+    });
+
+    test('statement close timeout retains the direct lease without disconnecting a pending handle', () async {
+      final limiter = DirectOdbcConnectionLimiter(maxConcurrent: 1, acquireTimeout: const Duration(seconds: 1));
+      manager = OdbcGatewayConnectionManager(
+        service: service,
+        connectionPool: pool,
+        directConnectionLimiter: limiter,
+        metrics: metrics,
+      );
+      final executor = OdbcStatementExecutor(
+        service: service,
+        metrics: metrics,
+        markConnectionForDiscard: manager.markConnectionOutcomeUnknown,
+        statementCleanupTimeout: const Duration(milliseconds: 10),
+      );
+      final lease = (await manager.acquireDirectLease(operation: 'test', deadline: null)).getOrThrow();
+      final closing = Completer<Result<void>>();
+      when(() => service.closeStatement('c1', 1)).thenAnswer((_) => closing.future);
+      expect((await executor.closePreparedStatements('c1', [1, 2])).isError(), isTrue);
+      expect(
+        (await manager.disconnectOwnedConnectionAndReleaseLease(
+          connectionId: 'c1',
+          directLease: lease,
+          operation: 'test',
+        )).isError(),
+        isTrue,
+      );
+      expect(limiter.activeCount, 1);
+      verifyNever(() => service.disconnect(any()));
+      closing.complete(const Success(unit));
+      await Future<void>.delayed(Duration.zero);
+      expect(limiter.activeCount, 1);
+      verifyNever(() => service.disconnect(any()));
+      verifyNever(() => service.closeStatement('c1', 2));
     });
 
     test('waits for pending discard and does not return it twice', () async {

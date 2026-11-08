@@ -1,0 +1,8 @@
+{
+  "scope": "ODBC transaction, cleanup, payload and acquire-policy review",
+  "baseline_commit": "e7df18c22b9c07adafb0b515c18678dcc7cfe64b",
+  "bulk_perf": "AOT experiments rejected; only final v3 source retained; earlier results are historical",
+  "serialization_perf": "AOT row-oriented alternative rejected; baseline and candidate retained",
+  "policy_perf": "Applied per-call SQL normalization reuse; two Flutter JIT rounds, not an end-to-end database or release-AOT benchmark",
+  "archive_sha256": "95920C2FA44AC1CD3A42B426FD16BAB88FD3C1719FEF98CB4AE8FA2D9A0B4396"
+}

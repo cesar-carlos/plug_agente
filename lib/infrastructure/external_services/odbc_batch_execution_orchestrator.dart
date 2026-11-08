@@ -362,6 +362,7 @@ final class OdbcBatchExecutionOrchestrator {
               connectionId: connectionState.connectionId!,
               guard: transaction,
               deadline: context.deadline,
+              cancellationToken: cancellationToken,
             );
             if (commitResult.isError()) {
               return Failure(commitResult.exceptionOrNull()!);

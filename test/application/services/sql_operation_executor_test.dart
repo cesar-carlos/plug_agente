@@ -84,6 +84,7 @@ class Authorizer implements ISqlOperationAuthorizer {
   int calls = 0;
   int? denyAt;
   String revision = 'revision';
+  void Function()? onAuthorize;
   @override
   Future<Result<SqlOperationTarget>> authorize(
     SqlOperationReference ref,
@@ -92,6 +93,7 @@ class Authorizer implements ISqlOperationAuthorizer {
     List<SqlOperationStep> steps,
   ) async {
     calls++;
+    onAuthorize?.call();
     if (calls == denyAt) return Failure(SqlOperationFailure(code: 'DENIED', message: 'revoked'));
     return Success(
       SqlOperationTarget(
@@ -102,6 +104,12 @@ class Authorizer implements ISqlOperationAuthorizer {
       ),
     );
   }
+}
+
+class OperationStopwatch extends Stopwatch {
+  Duration time = Duration.zero;
+  @override
+  Duration get elapsed => time;
 }
 
 class Transactions implements ISqlOperationTransactionFactory, ISqlOperationTransaction {
@@ -314,6 +322,34 @@ void main() {
     expect((await run()).state, SqlOperationJournalState.rolledBack);
     expect(transactions.commits, 0);
   });
+  for (final failRollback in [false, true]) {
+    test('deadline before commit dispatch preserves rollback result ($failRollback)', () async {
+      final watch = OperationStopwatch();
+      executor = SqlOperationExecutor(
+        journal: journal,
+        authorizer: authorizer,
+        transactions: transactions,
+        stopwatchFactory: () => watch,
+      );
+      authorizer.onAuthorize = () {
+        if (authorizer.calls == 4) watch.time = plan.timeout;
+      };
+      transactions.failRollback = failRollback;
+      final receipt = await run();
+      expect(
+        receipt.state,
+        failRollback ? SqlOperationJournalState.outcomeUnknown : SqlOperationJournalState.rolledBack,
+      );
+      expect(receipt.failureCode, SqlOperationFailureCode.timeout);
+      expect(transactions.commits, 0);
+      expect(transactions.rollbacks, 1);
+      expect(transactions.closes, 1);
+      watch.time = Duration.zero;
+      await run();
+      expect(transactions.opened, 1);
+      expect(transactions.executed, hasLength(2));
+    });
+  }
   test('changed live source or policy during SQL prevents commit', () async {
     transactions.afterStep = () async {
       authorizer.revision = 'changed';

@@ -5,6 +5,7 @@ import 'package:odbc_fast/odbc_fast.dart' hide DatabaseType;
 import 'package:plug_agente/core/constants/connection_constants.dart';
 import 'package:plug_agente/core/constants/odbc_context_constants.dart';
 import 'package:plug_agente/domain/entities/bulk_insert_request.dart';
+import 'package:plug_agente/domain/entities/cancellation_token.dart';
 import 'package:plug_agente/domain/errors/failures.dart' as domain;
 import 'package:plug_agente/domain/repositories/i_connection_pool.dart';
 import 'package:plug_agente/domain/repositories/i_odbc_native_bulk_insert_pool.dart';
@@ -188,6 +189,38 @@ void main() {
       verify(() => service.commitTransaction('c1', 7)).called(1);
       expect(metrics.bulkInsertChunkedCount, 1);
       dotenv.clean();
+    });
+
+    test('cancellation in the final chunk rolls back before disconnecting', () async {
+      dotenv.loadFromString(envString: 'ODBC_BULK_INSERT_CHUNK_ROWS=2');
+      addTearDown(dotenv.clean);
+      final token = CancellationToken();
+      when(() => service.connect(any(), options: any(named: 'options'))).thenAnswer(
+        (_) async =>
+            Success(Connection(id: 'c1', connectionString: 'DSN=x', createdAt: DateTime(2024), isActive: true)),
+      );
+      var calls = 0;
+      when(() => service.bulkInsert(any(), any(), any(), any(), any())).thenAnswer((invocation) async {
+        if (++calls == 3) token.cancel();
+        return Success(invocation.positionalArguments[4] as int);
+      });
+      when(() => service.disconnect('c1')).thenAnswer((_) async => const Success(unit));
+      final request = BulkInsertRequest(
+        table: 'users',
+        columns: const [BulkInsertColumn(name: 'id', type: BulkInsertColumnType.i32)],
+        rows: List<List<dynamic>>.generate(5, (index) => [index]),
+      );
+      final result = await executor.executeDirect(request, 'DSN=x', cancellationToken: token);
+      expect(result.isError(), isTrue);
+      final failure = result.exceptionOrNull()! as domain.Failure;
+      expect(failure.context['cooperative_cancel'], isTrue);
+      expect(failure.context['rollback_confirmed'], isTrue);
+      expect(calls, 3);
+      verifyNever(() => service.commitTransaction(any(), any()));
+      verifyInOrder([
+        () => service.rollbackTransaction('c1', 7),
+        () => service.disconnect('c1'),
+      ]);
     });
 
     test('rolls back chunked bulk insert when a later chunk fails', () async {

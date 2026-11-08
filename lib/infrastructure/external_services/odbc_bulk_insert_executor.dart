@@ -518,7 +518,12 @@ final class OdbcBulkInsertExecutor {
         cancellationToken: cancellationToken,
       );
       if (inserted.isError()) return await abort(inserted.exceptionOrNull()!);
-      final commit = await manager.commit(connectionId: connectionId, guard: guard, deadline: deadline);
+      final commit = await manager.commit(
+        connectionId: connectionId,
+        guard: guard,
+        deadline: deadline,
+        cancellationToken: cancellationToken,
+      );
       if (commit.isError()) return Failure(commit.exceptionOrNull()!);
       return inserted;
     } on Object catch (error) {

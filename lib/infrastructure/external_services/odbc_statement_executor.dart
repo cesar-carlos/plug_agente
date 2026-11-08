@@ -26,15 +26,20 @@ final class OdbcStatementExecutor {
     required MetricsCollector metrics,
     required void Function(String connectionId) markConnectionForDiscard,
     Stopwatch Function()? pollingStopwatchFactory,
+    Duration statementCleanupTimeout = const Duration(seconds: 15),
   }) : _service = service,
        _metrics = metrics,
        _markConnectionForDiscard = markConnectionForDiscard,
+       _statementCleanupTimeout = statementCleanupTimeout,
        _pollingStopwatchFactory = pollingStopwatchFactory ?? Stopwatch.new;
 
   final Stopwatch Function() _pollingStopwatchFactory;
   final OdbcService _service;
   final MetricsCollector _metrics;
   final void Function(String connectionId) _markConnectionForDiscard;
+  final Duration _statementCleanupTimeout;
+  final Set<String> _closingConnections = {};
+  final Set<String> _quarantinedCleanupConnections = {};
   final Set<(String, int)> _pendingStatements = {};
   final Set<(String, int)> _deferredCloses = {};
   int _generation = 0;
@@ -44,6 +49,8 @@ final class OdbcStatementExecutor {
     _generation++;
     _pendingStatements.clear();
     _deferredCloses.clear();
+    _closingConnections.clear();
+    _quarantinedCleanupConnections.clear();
   }
 
   static const int maxPreparedStatementsPerConnection = 64;
@@ -70,6 +77,9 @@ final class OdbcStatementExecutor {
     Duration? timeout,
     OdbcPreparedStatementCachePolicy cachePolicy = OdbcPreparedStatementCachePolicy.leasePool,
   }) async {
+    if (_closingConnections.contains(connectionId) || _quarantinedCleanupConnections.contains(connectionId)) {
+      return Failure(_cleanupUnconfirmed(connectionId));
+    }
     if (cachePolicy.dartLruEnabled) {
       final existingStmtId = preparedStatements[statementKey];
       if (existingStmtId != null) {
@@ -166,6 +176,9 @@ final class OdbcStatementExecutor {
     String? inFlightRequestId,
     String? inFlightExecutionId,
   }) async {
+    if (_closingConnections.contains(connectionId) || _quarantinedCleanupConnections.contains(connectionId)) {
+      return Failure(_cleanupUnconfirmed(connectionId));
+    }
     if (inFlightRegistry != null && inFlightRequestId != null && inFlightRequestId.isNotEmpty) {
       inFlightRegistry.bindStatement(
         inFlightRequestId,
@@ -241,29 +254,70 @@ final class OdbcStatementExecutor {
     String connectionId,
     Iterable<int> stmtIds,
   ) async {
+    if (_closingConnections.contains(connectionId) || _quarantinedCleanupConnections.contains(connectionId)) {
+      return Failure(_cleanupUnconfirmed(connectionId));
+    }
+    final generation = _generation;
+    final watch = Stopwatch()..start();
+    _closingConnections.add(connectionId);
     final errors = <domain.Failure>[];
-    for (final stmtId in stmtIds) {
-      final handle = (connectionId, stmtId);
-      if (_pendingStatements.contains(handle)) {
-        _deferredCloses.add(handle);
-        continue;
-      }
-      try {
-        final closed = await _service.closeStatement(connectionId, stmtId);
-        if (closed.isError()) {
-          errors.add(OdbcFailureMapper.mapQueryError(closed.exceptionOrNull()!, operation: 'closeStatement'));
-          _markConnectionForDiscard(connectionId);
+    try {
+      for (final stmtId in stmtIds) {
+        if (generation != _generation) {
+          errors.add(_obsoleteCleanup());
+          break;
         }
-      } on Object catch (error) {
-        errors.add(OdbcFailureMapper.mapQueryError(error, operation: 'closeStatement'));
-        _markConnectionForDiscard(connectionId);
-        developer.log(
-          'Failed to close prepared statement after execution',
-          name: 'database_gateway',
-          level: 900,
-          error: error,
-        );
+        if (_quarantinedCleanupConnections.contains(connectionId)) {
+          errors.add(_cleanupUnconfirmed(connectionId));
+          break;
+        }
+        final handle = (connectionId, stmtId);
+        if (_pendingStatements.contains(handle)) {
+          _deferredCloses.add(handle);
+          continue;
+        }
+        try {
+          final remaining = _statementCleanupTimeout - watch.elapsed;
+          if (remaining <= Duration.zero) throw TimeoutException('Statement cleanup budget exhausted');
+          final closed = await _service.closeStatement(connectionId, stmtId).timeout(remaining);
+          if (generation != _generation) {
+            errors.add(_obsoleteCleanup());
+            break;
+          }
+          if (closed.isError()) {
+            final error = closed.exceptionOrNull()!;
+            if (OdbcErrorInspector.outcomeUnknown(error) || error is TimeoutException) {
+              errors.add(_cleanupUnconfirmed(connectionId, cause: error, timeout: error is TimeoutException));
+              break;
+            }
+            errors.add(OdbcFailureMapper.mapQueryError(error, operation: 'closeStatement'));
+            _markConnectionForDiscard(connectionId);
+          }
+        } on Object catch (error) {
+          if (generation != _generation) {
+            errors.add(_obsoleteCleanup(error));
+            break;
+          }
+          if (error is TimeoutException || OdbcErrorInspector.outcomeUnknown(error)) {
+            errors.add(_cleanupUnconfirmed(connectionId, cause: error, timeout: error is TimeoutException));
+            break;
+          }
+          errors.add(OdbcFailureMapper.mapQueryError(error, operation: 'closeStatement'));
+          _markConnectionForDiscard(connectionId);
+          developer.log(
+            'Failed to close prepared statement after execution',
+            name: 'database_gateway',
+            level: 900,
+            error: error,
+          );
+        }
       }
+    } finally {
+      watch.stop();
+      if (generation == _generation) _closingConnections.remove(connectionId);
+    }
+    if (errors.isEmpty && generation == _generation && _quarantinedCleanupConnections.contains(connectionId)) {
+      errors.add(_cleanupUnconfirmed(connectionId));
     }
     if (errors.isEmpty) return const Success(unit);
     _metrics.recordPoolReleaseFailure();
@@ -273,9 +327,33 @@ final class OdbcStatementExecutor {
         cause: errors.first,
         context: {
           'operation': 'closeStatement',
+          'outcome_unknown': errors.any(OdbcErrorInspector.outcomeUnknown),
+          if (errors.any((error) => error.context['timeout'] == true)) 'timeout': true,
+          'retryable': false,
           'secondary_errors': [for (final error in errors) error.context],
         },
       ),
+    );
+  }
+
+  domain.QueryExecutionFailure _obsoleteCleanup([Object? cause]) => domain.QueryExecutionFailure.withContext(
+    message: 'Statement cleanup belongs to an obsolete runtime generation',
+    cause: cause,
+    context: const {'reason': 'odbc_generation_changed', 'outcome_unknown': true, 'retryable': false},
+  );
+
+  domain.QueryExecutionFailure _cleanupUnconfirmed(String connectionId, {Object? cause, bool timeout = false}) {
+    _quarantinedCleanupConnections.add(connectionId);
+    _markConnectionForDiscard(connectionId);
+    return domain.QueryExecutionFailure.withContext(
+      message: 'Statement cleanup requires explicit runtime recovery',
+      cause: cause,
+      context: {
+        'operation': 'closeStatement',
+        'outcome_unknown': true,
+        'retryable': false,
+        if (timeout) 'timeout': true,
+      },
     );
   }
 
@@ -290,6 +368,9 @@ final class OdbcStatementExecutor {
     String? inFlightRequestId,
     String? inFlightExecutionId,
   }) async {
+    if (_closingConnections.contains(connectionId) || _quarantinedCleanupConnections.contains(connectionId)) {
+      return Failure(_cleanupUnconfirmed(connectionId));
+    }
     final generation = _generation;
     final deadline = DateTime.now().add(timeout);
     final startResult = await _service

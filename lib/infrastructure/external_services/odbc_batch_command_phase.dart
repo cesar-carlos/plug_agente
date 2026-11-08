@@ -218,10 +218,6 @@ final class OdbcBatchCommandPhase {
                       ...failure.context,
                       'operation': 'transaction_execute',
                       'rollback_confirmed': transaction.rollbackConfirmed,
-                      if (transaction.rollbackError != null)
-                        'secondary_errors': [
-                          OdbcFailureMapper.mapQueryError(transaction.rollbackError!).context,
-                        ],
                       if (transaction.state == BatchTransactionState.unconfirmed) ...{
                         'outcome_unknown': true,
                         'retryable': false,
@@ -380,30 +376,58 @@ final class OdbcBatchCommandPhase {
           context: {
             if (transaction.state == BatchTransactionState.unconfirmed) 'outcome_unknown': true,
             'retryable': false,
-            if (transaction.rollbackError != null)
-              'secondary_errors': [
-                OdbcFailureMapper.mapQueryError(transaction.rollbackError!).context,
-              ],
           },
         ),
       );
     }
     if (cleanup.isError()) {
       final cleanupError = cleanup.exceptionOrNull()!;
-      if (OdbcErrorInspector.outcomeUnknown(cleanupError)) transaction.markUnconfirmed();
-      if (primary.isSuccess()) return Failure(cleanupError);
-      final mapped = OdbcFailureMapper.mapQueryError(primary.exceptionOrNull()!);
+      if (OdbcErrorInspector.outcomeUnknown(cleanupError)) {
+        transaction.markUnconfirmed();
+        final id = connectionState.connectionId;
+        if (id != null) _connectionManager.markConnectionOutcomeUnknown(id);
+      } else {
+        await transaction.rollback((id) => _txManager.rollbackIfNeeded(context.connectionId, id));
+      }
+      if (primary.isSuccess()) {
+        primary = Failure(cleanupError);
+      } else {
+        final error = primary.exceptionOrNull()!;
+        final mapped = error is domain.Failure ? error : OdbcFailureMapper.mapQueryError(error);
+        primary = Failure(
+          domain.QueryExecutionFailure.withContext(
+            message: mapped.message,
+            cause: mapped.cause ?? primary.exceptionOrNull(),
+            context: {
+              ...mapped.context,
+              'retryable': false,
+              'secondary_errors': [
+                ...?(mapped.context['secondary_errors'] as List<Object?>?),
+                OdbcFailureMapper.mapQueryError(cleanupError).context,
+              ],
+            },
+          ),
+        );
+      }
+    }
+    if (options.transaction && primary.isError()) {
+      final error = primary.exceptionOrNull()!;
+      final mapped = error is domain.Failure ? error : OdbcFailureMapper.mapQueryError(error);
       return Failure(
         domain.QueryExecutionFailure.withContext(
           message: mapped.message,
-          cause: mapped.cause ?? primary.exceptionOrNull(),
+          cause: error,
           context: {
             ...mapped.context,
+            'rollback_confirmed': transaction.rollbackConfirmed,
+            'outcome_unknown':
+                transaction.state == BatchTransactionState.unconfirmed || OdbcErrorInspector.outcomeUnknown(error),
             'retryable': false,
-            'secondary_errors': [
-              ...?(mapped.context['secondary_errors'] as List<Object?>?),
-              OdbcFailureMapper.mapQueryError(cleanupError).context,
-            ],
+            if (transaction.rollbackError != null)
+              'secondary_errors': [
+                ...?(mapped.context['secondary_errors'] as List<Object?>?),
+                OdbcFailureMapper.mapQueryError(transaction.rollbackError!).context,
+              ],
           },
         ),
       );

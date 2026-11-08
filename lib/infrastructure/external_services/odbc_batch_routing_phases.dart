@@ -12,6 +12,7 @@ import 'package:plug_agente/domain/entities/sql_command.dart';
 import 'package:plug_agente/domain/errors/failures.dart' as domain;
 import 'package:plug_agente/domain/validation/sql_validator.dart';
 import 'package:plug_agente/infrastructure/errors/odbc_error_inspector.dart';
+import 'package:plug_agente/infrastructure/errors/odbc_failure_mapper.dart';
 import 'package:plug_agente/infrastructure/external_services/batch_transaction.dart';
 import 'package:plug_agente/infrastructure/external_services/homogeneous_insert_batch_planner.dart';
 import 'package:plug_agente/infrastructure/external_services/native_compatible_acquire_policy.dart';
@@ -256,7 +257,26 @@ final class OdbcBatchRoutingPhases {
               recycleAfterRelease = true;
               continue;
             }
-            return Failure(bulkFailure);
+            final mapped = bulkFailure is domain.Failure ? bulkFailure : OdbcFailureMapper.mapQueryError(bulkFailure);
+            return Failure(
+              domain.QueryExecutionFailure.withContext(
+                message: mapped.message,
+                cause: bulkFailure,
+                context: {
+                  ...mapped.context,
+                  'rollback_confirmed': transaction.rollbackConfirmed,
+                  'outcome_unknown':
+                      transaction.state == BatchTransactionState.unconfirmed ||
+                      OdbcErrorInspector.outcomeUnknown(bulkFailure),
+                  'retryable': false,
+                  if (transaction.rollbackError != null)
+                    'secondary_errors': [
+                      ...?(mapped.context['secondary_errors'] as List<Object?>?),
+                      OdbcFailureMapper.mapQueryError(transaction.rollbackError!).context,
+                    ],
+                },
+              ),
+            );
           }
 
           if (transaction.isActive) {
@@ -264,6 +284,7 @@ final class OdbcBatchRoutingPhases {
               connectionId: connectionState.connectionId!,
               guard: transaction,
               deadline: context.deadline,
+              cancellationToken: cancellationToken,
             );
             if (commitResult.isError()) {
               return Failure(commitResult.exceptionOrNull()!);
@@ -338,6 +359,12 @@ final class OdbcBatchRoutingPhases {
               'reason': OdbcContextConstants.transactionFailedReason,
               'operation': 'bulk_insert_batch_unexpected_error',
               'transaction': true,
+              'rollback_confirmed': transaction?.rollbackConfirmed ?? false,
+              'outcome_unknown':
+                  transaction?.state == BatchTransactionState.unconfirmed || OdbcErrorInspector.outcomeUnknown(error),
+              'retryable': false,
+              if (transaction?.rollbackError case final rollbackError?)
+                'secondary_errors': [OdbcFailureMapper.mapQueryError(rollbackError).context],
             },
           ),
         );
