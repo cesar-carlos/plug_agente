@@ -1,7 +1,8 @@
 # ODBC Pool, Transactions and Runtime Tuning
 
 This document is the source of truth for how `plug_agente` uses
-[`odbc_fast`](https://pub.dev/packages/odbc_fast) **5.0.1** from pub.dev at runtime. It
+`odbc_fast` **5.0.2** from pub.dev, as resolved in
+[`pubspec.lock`](../../pubspec.lock) (`^5.0.2` in `pubspec.yaml`). It
 covers pool sizing and lifecycle, transaction control, async backpressure,
 lock-safety, streaming session reuse, bulk insert atomicity, and
 observability hooks. Defaults, decisions and trade-offs are documented
@@ -239,6 +240,31 @@ confirmed completion of SQL work, and is itself confirmed before reuse.
 `outcome_unknown=true` takes precedence over retry hints. The internal rollback
 result carries confirmation/failure instead of silently completing `Future<void>`.
 Primary failures retain secondary cleanup diagnostics.
+
+Cancellation and deadline checks happen before batch commit dispatch. A refused
+dispatch can still take the bounded rollback path; an in-flight commit cannot.
+`SqlOperationExecutor` likewise computes its remaining commit budget before
+marking commit as attempted. A locally exhausted budget is distinct from an
+unknown native outcome and does not by itself prevent pre-dispatch rollback.
+
+### Prepared statement cleanup deadline
+
+`OdbcStatementExecutor.closePreparedStatements` shares one monotonic cleanup
+budget across the close loop (15 seconds by default), rather than granting each
+statement another full timeout. Pending statements retain deferred-close
+ownership until terminal execution is confirmed.
+
+New prepare/execute work is refused while cleanup is running or quarantined.
+Concurrent cleanup, a close timeout or an unknown close outcome quarantines the
+connection and marks it for discard; remaining closes stop. A late completion
+does not automatically make that connection reusable. Runtime generation checks
+prevent old cleanup from closing handles belonging to a recovered worker.
+Known close failures remain visible and mark the connection for discard.
+
+Regression coverage includes the
+[`statement executor`](../../test/infrastructure/external_services/odbc_statement_executor_test.dart),
+[`transaction manager`](../../test/infrastructure/external_services/odbc_batch_transaction_manager_test.dart)
+and [`SQL operation executor`](../../test/application/services/sql_operation_executor_test.dart).
 
 ### Deadline near-stall warning
 
@@ -545,7 +571,40 @@ python tool/benchmarks/run_benchmark_suite.py
   (`odbc_async_benchmark.py`, `odbc_streaming_benchmark.py`,
   `odbc_driver_matrix_benchmark.py`) remain valid for a single axis.
 
-## 5.0.0 migration implementation and validation
+### ODBC flow review evidence
+
+The review delivered in commit `716b4dfa` retains synthetic benchmark sources
+and samples in [measurements.zip](../../artifacts/odbc_flow_review/measurements.zip).
+The [manifest](../../artifacts/odbc_flow_review/manifest.json) records the baseline
+commit, archive SHA-256 and experiment limitations. Extract the archive to inspect
+the `policy_perf`, `serialization_perf` and `bulk_perf` directories.
+
+| Experiment | Decision and measured scope |
+| --- | --- |
+| Reuse normalized SQL within one acquire-policy call | Applied. Two Flutter JIT rounds showed approximately 41–84% lower classification time in repeated-normalization cases. The simple unparameterized probe cost approximately 0.13–0.16 microsecond more per call (4.7–6.4%). This localized cost was accepted for the larger reductions in the other measured classification paths. |
+| Replace column-oriented bulk serialization with the row-oriented alternative | Rejected. The AOT comparisons did not show an overall benefit; text, decimal and binary paths regressed. Coercion differences also prevent treating the APIs as interchangeable. |
+| Change bulk null-mask construction | Rejected. Gains did not remain consistent across full serialization and null patterns. Only the final v3 candidate source was retained; earlier measurements are historical, not fully reproducible source snapshots. |
+
+The applied change shares normalization only within a call. It introduces no
+cross-call SQL cache and continues to read policy configuration for each decision.
+Public SQL/RPC contracts and native routing criteria remain unchanged. See the
+[`policy tests`](../../test/infrastructure/external_services/native_compatible_acquire_policy_test.dart).
+
+The policy measurements used five warmups, fifteen alternating paired samples
+and two fresh processes with fixed CPU affinity. They measure classification in
+Flutter JIT, not release AOT or end-to-end ODBC. These experiments do not compare
+package 5.0.1 against 5.0.2 and cannot establish a package-upgrade speedup.
+The commit passed the repository pre-push checks, including static analysis,
+the non-live/non-slow/non-perf Flutter suite, architecture and Python tooling
+checks. No benchmark or isolated regression suite closes live-engine acceptance.
+
+## Historical 5.0.0 migration implementation and validation
+
+This section records the original migration evidence. The current resolved
+package is 5.0.2; historical test counts and driver results below are not a fresh
+qualification of that version. Current release constraints remain owned by the
+[SQL operations acceptance scope](../communication/sql_operations.md#mandatory-real-engine-matrix)
+and the [release manifest](../../contracts/persona-v2-release.json).
 
 Connection builders explicitly set `replayQueriesAfterReconnect: false`.
 The existing `waitForSlot`, worker/pending limits and conservative per-driver

@@ -1,5 +1,26 @@
 # Testing
 
+## Evidence for reviews and improvements
+
+The canonical requirements live in
+[`testing.mdc`](../../.cursor/rules/testing.mdc): consult its regression,
+review evidence and performance sections for every code review or improvement.
+Use [`testing_dart_flutter.mdc`](../../.cursor/rules/testing_dart_flutter.mdc)
+for framework conventions and
+[`project_specifics.mdc`](../../.cursor/rules/project_specifics.mdc)
+for local integration requirements.
+
+Report the affected contract, commands, results and remaining limitations.
+For fixes, retain the test that reproduces the defect and record its failure
+before the fix and success afterward. For performance work, link the baseline,
+candidate and repeated measurements as well as correctness tests. Existing
+tests may supply adequate coverage; a documentation-only update needs reference
+and consistency checks rather than artificial runtime tests.
+
+The latest ODBC review evidence and rejected experiments are documented in the
+[runtime guide](../runtime/odbc_pool_and_transactions.md#odbc-flow-review-evidence).
+Its microbenchmarks do not establish database throughput or production latency.
+
 ## Instalação manifest e encerramento cooperativo — 2026-10-25
 
 Regressões novas cobrem preparação concorrente, fechamento único, cancelamento,

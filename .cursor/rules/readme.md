@@ -34,6 +34,11 @@ evitar duplicacao entre rules.
 2. Leia `project_specifics.mdc` antes de mudar codigo real do repositorio
 3. Leia apenas as rules tematicas que a tarefa tocar
 
+For code reviews, fixes, refactors and improvements, also read
+[`testing.mdc`](testing.mdc), as required by the
+[`index`](rules_index.mdc). It owns regression evidence and performance
+verification, including the limits of unexecuted tests and benchmarks.
+
 Exemplo:
 
 - arquitetura/imports: `clean_architecture.mdc`
@@ -116,8 +121,9 @@ Para manter baixo acoplamento, nem toda rule fica ativa o tempo todo:
 - Sempre ativas (`alwaysApply: true`), por serem transversais:
   `rules_index.mdc`, `general_rules.mdc` e `project_specifics.mdc`. Essas tres
   nao declaram `globs`: com `alwaysApply: true` o glob e ignorado
-- Escopadas por `globs` (`alwaysApply: false`): as demais rules tematicas, que
-  so entram em contexto quando a tarefa toca os arquivos correspondentes
+- Escopadas por `globs` (`alwaysApply: false`): as demais rules tematicas.
+  Globs provide automatic matching; explicit routing in `rules_index.mdc`
+  still requires reading the relevant owner even outside those file patterns.
 
 Assim, editar um teste nao carrega regra de UX desktop, e mexer em `domain` nao
 carrega regra de widget.

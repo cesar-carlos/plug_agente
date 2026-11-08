@@ -103,14 +103,11 @@ Prefira:
 
 ### Como refatorar com seguranca
 
-- Primeiro preserve ou caracterize o comportamento observavel quando houver
-  risco real de regressao
+- Siga `testing.mdc` para caracterizacao previa, evidencia de revisao/melhoria,
+  testes de regressao e comprovacao de desempenho
 - Refatore em passos pequenos: renomear, extrair, mover, simplificar e so entao
   alterar comportamento quando a tarefa exigir
 - Nao misture limpeza estrutural com mudanca de regra no mesmo passo
-- Rode analyzer e testes existentes apos alteracoes estruturais relevantes
-- Se a area nao tiver cobertura suficiente, adicione testes minimos antes da
-  refatoracao quando isso reduzir risco real
 
 ### O que evitar
 

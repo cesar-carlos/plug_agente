@@ -15,6 +15,7 @@ Este arquivo e a fonte de verdade para estrategia universal de testes:
 - estilo de validacao por comportamento
 - cobertura de caminhos de sucesso e falha
 - teste de regressao obrigatorio em correcao de bug
+- evidencias para revisoes, refatoracoes e melhorias de desempenho
 
 Para convencoes especificas de Dart/Flutter, use `testing_dart_flutter.mdc`.
 
@@ -83,10 +84,14 @@ Para convencoes especificas de Dart/Flutter, use `testing_dart_flutter.mdc`.
 ## Regressao
 
 - Toda correcao de bug inclui um teste de regressao antes de considerar a
-  correcao completa
+  correcao completa, inclusive bugs encontrados durante revisoes ou otimizacoes
 - Escolha o nivel mais simples que reproduza o defeito observado: unit,
   component, integration ou widget
 - O teste deve falhar por esse defeito antes da correcao e passar depois dela
+- Confirme que a falha anterior vem do defeito, nao de erro no teste ou no
+  ambiente. Registre as execucoes antes/depois e mantenha o teste na suite
+- Se nao for possivel reproduzir ou executar o teste, informe o impedimento e
+  o que permanece sem verificacao; nao apresente a correcao como comprovada
 - Nao substitua o defeito observado por um assert generico de ausencia de
   excecao
 - Depois de refatorar, o teste continua expressivo: ele protege o comportamento,
@@ -94,14 +99,52 @@ Para convencoes especificas de Dart/Flutter, use `testing_dart_flutter.mdc`.
 
 ## Testes Como Contrato de Design
 
-- Em refatoracoes, proteja comportamento observavel antes de reorganizar codigo
-  quando houver risco real
+- Em refatoracoes, caracterize o comportamento observavel com testes antes de
+  reorganizar codigo; reutilize os existentes quando cobrirem o contrato afetado
 - Teste contratos de dominio, use cases, protocolo, mapeamento de failures e
   bordas externas pelo que eles prometem, nao pelo detalhe interno atual
 - Evite asserts acopladas a ordem, classe concreta ou metodo privado quando isso
   nao fizer parte do contrato
 - Quando uma mudanca altera fronteira entre camadas, adicione ou atualize teste
   no nivel mais simples que capture essa fronteira
+
+## Evidencia de Revisoes e Melhorias
+
+- Toda revisao deve identificar o comportamento/contrato examinado e os testes
+  que sustentam suas conclusoes. Diferencie achado reproduzido de suspeita
+- Toda melhoria de codigo deve ter testes pertinentes executados que comprovem
+  o comportamento esperado e a preservacao dos contratos afetados. Adicione ou
+  amplie testes quando a cobertura existente nao demonstrar isso
+- Nao crie testes redundantes ou que apenas repitam a implementacao para
+  cumprir uma contagem. Uma revisao sem alteracao nao exige inventar um teste
+  novo, mas deve indicar quais evidencias foram verificadas e suas limitacoes
+- Rode a suite afetada e os checks obrigatorios do projeto. Analyzer, compilacao
+  e ausencia de excecao nao substituem testes do comportamento
+- Relate comandos/cenarios executados, resultados e testes nao executados ou
+  ignorados. Nao trate skip como aprovacao nem extrapole mocks para integracao real
+- Mudancas apenas de rules, documentacao ou formatacao exigem verificacao
+  pertinente de consistencia, referencias ou diff; nao testes artificiais de runtime
+
+## Comprovacao de Desempenho
+
+- Defina o gargalo, a metrica e os cenarios representativos antes de otimizar.
+  Compare baseline e candidato com entradas, dependencias e ambiente equivalentes
+- Use aquecimento, repeticoes e ordem alternada quando aplicaveis; controle ou
+  registre interferencia de carga. Repita a rodada para confirmar o resultado
+- Preserve amostras, versoes/fontes e comandos suficientes para reproduzir a
+  comparacao em artefatos sem segredos. Informe runtime (JIT/AOT, debug/release),
+  tamanho dos dados, valores absolutos, variacao e percentual
+- Teste equivalencia de resultados e falhas, inclusive casos extremos relevantes.
+  Benchmark nao substitui testes funcionais ou de regressao
+- Mantenha a otimizacao apenas quando o ganho se repetir alem do ruido e nao
+  houver regressao relevante nos cenarios afetados. Exponha perdas localizadas
+  e o criterio usado para avaliar sua relevancia; nao esconda perdas na media
+- Sem evidencia conclusiva, descarte o candidato ou relate a investigacao como
+  inconclusiva. Menos alocacoes ou codigo menor nao comprovam menor latencia
+- Separe ganho no trecho medido de ganho no fluxo completo. Nao apresente
+  microbenchmark/JIT como prova de desempenho em producao ou em banco real
+- Preserve contratos publicos e garantias de validacao, autorizacao, transacao,
+  timeout e cancelamento; otimizar nao autoriza reduzir essas garantias
 
 ## Referencias Cruzadas
 
@@ -117,5 +160,7 @@ Para convencoes especificas de Dart/Flutter, use `testing_dart_flutter.mdc`.
 - [ ] Caminhos de falha relevantes estao cobertos
 - [ ] Casos criticos de dominio e integracao estao cobertos
 - [ ] Correcao de bug inclui teste de regressao que reproduz o defeito observado
-- [ ] Refatoracoes relevantes preservaram comportamento por testes ou analise
-      explicita de risco
+- [ ] Revisoes e melhorias indicam testes executados, resultados e limitacoes
+- [ ] Refatoracoes preservaram os contratos afetados por testes de comportamento
+- [ ] Ganhos de desempenho foram confirmados por comparacao repetivel, com
+      regressoes avaliadas e escopo da conclusao explicito

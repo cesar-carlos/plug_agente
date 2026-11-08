@@ -12,8 +12,9 @@ alwaysApply: true
 - Prefira codigo autoexplicativo por nome, estrutura e abstracoes focadas
 - Nunca engula erro em silencio
 - Prefira falha clara e acionavel a mensagem generica
-- Toda correcao de bug inclui teste de regressao; o contrato esta em
-  `testing.mdc`
+- Leia `testing.mdc` em toda revisao, correcao, refatoracao ou melhoria de
+  codigo, mesmo que a tarefa ainda nao toque arquivos de teste. Ela define
+  a evidencia exigida, os testes de regressao e a comprovacao de desempenho
 - Nao duplique a mesma regra em varios arquivos; um tema tem um dono e os
   demais fazem referencia curta
 
@@ -31,7 +32,7 @@ Rules de Dart e Flutter valem so para codigo Dart/Flutter.
 - `clean_architecture.mdc`: fronteira de camadas e direcao de dependencia
 - `solid_principles.mdc`: SRP/OCP/LSP/ISP/DIP e heuristicas de code smell
 - `testing.mdc`: estrategia universal de teste, isolamento, mock, caminho de
-  falha e teste como contrato de comportamento
+  falha, evidencia de revisoes/melhorias, regressao e benchmarks de desempenho
 - `coding_style.mdc`: sintaxe Dart, nomes, imports, formatacao, async, logging,
   tooling e recursos modernos da linguagem
 - `null_safety.mdc`: modelagem de nulabilidade e acesso seguro
