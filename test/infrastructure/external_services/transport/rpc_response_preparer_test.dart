@@ -1,16 +1,20 @@
 import 'dart:io';
-
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
+import 'package:plug_agente/application/services/health_service.dart';
 import 'package:plug_agente/core/config/feature_flags.dart';
 import 'package:plug_agente/core/constants/connection_constants.dart';
 import 'package:plug_agente/core/utils/rpc_wire_map.dart';
 import 'package:plug_agente/domain/protocol/protocol.dart';
+import 'package:plug_agente/domain/repositories/i_database_gateway.dart';
 import 'package:plug_agente/infrastructure/external_services/transport/payload_log_summarizer.dart';
 import 'package:plug_agente/infrastructure/external_services/transport/rpc_response_preparer.dart';
+import 'package:plug_agente/infrastructure/metrics/metrics_collector.dart';
 import 'package:plug_agente/infrastructure/validation/json_schema_validator.dart';
 import 'package:plug_agente/infrastructure/validation/rpc_contract_validator.dart';
 import 'package:plug_agente/infrastructure/validation/schema_loader.dart';
+
+class _MockHealthGateway extends Mock implements IDatabaseGateway {}
 
 class _MockFeatureFlags extends Mock implements FeatureFlags {}
 
@@ -46,6 +50,41 @@ void main() {
       jsonSchemaValidator: JsonSchemaContractValidator(loader: schemaLoader),
     );
   });
+
+  for (final batch in [false, true]) {
+    test('preserves nullable health diagnostics through outgoing validation (batch: $batch)', () async {
+      final health = await HealthService(
+        metricsCollector: MetricsCollector(),
+        gateway: _MockHealthGateway(),
+      ).getHealthStatusAsync();
+      final wire = preparer.prepareForSend(RpcResponse.success(id: 'health', result: health));
+      final validated = preparer.validateOutgoing(
+        batch ? [wire] : wire,
+        methodsById: {'health': 'agent.getHealth'},
+      );
+      expect(validated.isSuccess(), isTrue);
+      final payload = validated.getOrNull();
+      final response = (batch ? (payload as List).single : payload) as Map;
+      expect(response.containsKey('error'), isFalse, reason: '${response['error']}');
+      expect(response['result'], health);
+      final streaming = (response['result'] as Map)['streaming'] as Map;
+      expect(streaming.containsKey('native_path_inference'), isTrue);
+      expect(streaming['native_path_inference'], isNull);
+      final invalidHealth = <String, Object?>{
+        ...health,
+        'pool': {'size': -1},
+      };
+      final invalidWire = preparer.prepareForSend(RpcResponse.success(id: 'health', result: invalidHealth));
+      final rejected = preparer
+          .validateOutgoing(
+            batch ? [invalidWire] : invalidWire,
+            methodsById: {'health': 'agent.getHealth'},
+          )
+          .getOrNull();
+      final invalidResponse = (batch ? (rejected as List).single : rejected) as Map;
+      expect((invalidResponse['error'] as Map)['code'], -32603);
+    });
+  }
 
   group('RpcResponsePreparer.prepareForSend', () {
     test('serialises a success response into JSON-RPC envelope', () {

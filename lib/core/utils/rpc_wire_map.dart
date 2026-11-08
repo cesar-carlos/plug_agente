@@ -67,6 +67,16 @@ abstract final class RpcWireMap {
 
   /// Preserve required nullable journal fields; null means indeterminate, never zero.
   static Map<String, dynamic> _sanitizeResult(Map<String, dynamic> result) {
+    // Health diagnostics require nullable observations; null is not absence.
+    if ((result['status'] == 'healthy' || result['status'] == 'degraded') &&
+        result['timestamp'] is String &&
+        result['version'] is String &&
+        result['pool'] is Map &&
+        result['sql_queue'] is Map &&
+        result['queries'] is Map &&
+        result['uptime_seconds'] is int) {
+      return Map<String, dynamic>.from(result);
+    }
     if (result['actions'] is List && result.containsKey('next_cursor')) {
       // Catalog descriptions and the terminal cursor are explicitly nullable.
       return Map<String, dynamic>.from(result);
