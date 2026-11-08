@@ -1,0 +1,33 @@
+{
+  "baseline_commit": "89c00611da4dfce09babbd72b644065cfa266eb4",
+  "experiment": "odbc_materialization_review",
+  "applied": false,
+  "decision": "rejected",
+  "reason": "Primitive-first checks repeatedly slowed plain/text scans; text batches regressed 25.7%-27.4% across two rounds.",
+  "runtime": "Dart AOT",
+  "method": {
+    "processes": 2,
+    "affinity_mask": 4,
+    "warmup_pairs": 6,
+    "measured_alternating_pairs": 21,
+    "columns": 8,
+    "row_sizes": [
+      1,
+      1000,
+      10000
+    ],
+    "input": "Synthetic, no credentials or database access",
+    "interference": "Runs sequential; no agent tests/builds ran concurrently with measurement. Affinity inherited from parent shell. External machine load was not measured or excluded; this limits inference."
+  },
+  "reproduction": "Extract sources.zip into this directory, and run run.ps1 from PowerShell at repository baseline. For cache summarization also extract sibling materialization sources (directory name: odbc_materialization_review). Requires existing project dependency resolution and installed Flutter/Dart SDK.",
+  "validation": {
+    "command": "flutter test test/core/utils/odbc_wire_cell_normalizer_test.dart test/application/services/query_normalizer_service_test.dart test/application/validation/query_normalizer_test.dart test/infrastructure/external_services/odbc_streaming_chunk_mapper_test.dart --reporter compact",
+    "passed": 49,
+    "failures": 0,
+    "scope": "Existing production behavior; candidates additionally check baseline equivalence in each benchmark",
+    "live_database_tested": false
+  },
+  "archive_sha256": "282D0155302692DF445176DB248FA79CC82F6482E18905DB3665544655EADC88",
+  "source_scope": "Baseline snapshot plus isolated candidate; no lib/test/public contract changes",
+  "production_or_end_to_end_claim": false
+}

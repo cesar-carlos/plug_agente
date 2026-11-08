@@ -1,0 +1,33 @@
+{
+  "baseline_commit": "89c00611da4dfce09babbd72b644065cfa266eb4",
+  "experiment": "odbc_normalizer_cache_review",
+  "applied": false,
+  "decision": "inconclusive_not_applied",
+  "reason": "Repeated-column scenarios improved 13%-51% in Flutter JIT, but distinct-key 10000-row scenario changed from +6.0% latency to -4.7%; no release/AOT service evidence. Retain baseline pending a more conclusive cost comparison.",
+  "runtime": "Flutter test JIT; standalone Dart AOT failed because transitive dependencies require dart:ui",
+  "method": {
+    "processes": 2,
+    "affinity_mask": 4,
+    "warmup_pairs": 6,
+    "measured_alternating_pairs": 21,
+    "columns": 8,
+    "row_sizes": [
+      1,
+      1000,
+      10000
+    ],
+    "input": "Synthetic, no credentials or database access",
+    "interference": "Runs sequential; no agent tests/builds ran concurrently with measurement. Affinity inherited from parent shell. External machine load was not measured or excluded; this limits inference."
+  },
+  "reproduction": "Extract sources.zip into this directory, and run run.ps1 from PowerShell at repository baseline. For cache summarization also extract sibling materialization sources (directory name: odbc_materialization_review). Requires existing project dependency resolution and installed Flutter/Dart SDK.",
+  "validation": {
+    "command": "flutter test test/core/utils/odbc_wire_cell_normalizer_test.dart test/application/services/query_normalizer_service_test.dart test/application/validation/query_normalizer_test.dart test/infrastructure/external_services/odbc_streaming_chunk_mapper_test.dart --reporter compact",
+    "passed": 49,
+    "failures": 0,
+    "scope": "Existing production behavior; candidates additionally check baseline equivalence in each benchmark",
+    "live_database_tested": false
+  },
+  "archive_sha256": "584E4A6B380A1B83D27635206DA8CFE7EC43E58863D90E648411D186B5672926",
+  "source_scope": "Baseline snapshot plus isolated candidate; no lib/test/public contract changes",
+  "production_or_end_to_end_claim": false
+}
