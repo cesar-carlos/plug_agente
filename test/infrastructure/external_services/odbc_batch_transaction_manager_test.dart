@@ -224,8 +224,9 @@ void main() {
   });
 
   group('commit', () {
-    test('expired deadline prevents commit and leaves rollback available', () async {
+    test('expired deadline rolls back before returning without dispatching commit', () async {
       final guard = BatchTransactionGuard(9);
+      when(() => service.rollbackTransaction('c1', 9)).thenAnswer((_) async => const Success(unit));
       final result = await manager.commit(
         connectionId: 'c1',
         guard: guard,
@@ -233,13 +234,26 @@ void main() {
       );
       expect((result.exceptionOrNull()! as domain.Failure).context['execution_not_started'], isTrue);
       verifyNever(() => service.commitTransaction(any(), any()));
-      var rollbacks = 0;
-      await guard.rollback((_) async {
-        rollbacks++;
-        return const Success(unit);
-      });
-      expect(rollbacks, 1);
       expect(guard.rollbackConfirmed, isTrue);
+      expect((result.exceptionOrNull()! as domain.Failure).context['rollback_confirmed'], isTrue);
+      verify(() => service.rollbackTransaction('c1', 9)).called(1);
+    });
+    test('expired commit budget preserves an unconfirmed rollback and discards connection', () async {
+      final discarded = <String>[];
+      manager = OdbcBatchTransactionManager(service: service, metrics: metrics, onRollbackUnconfirmed: discarded.add);
+      final guard = BatchTransactionGuard(9);
+      when(() => service.rollbackTransaction('c1', 9)).thenAnswer((_) async => Failure(Exception('lost')));
+      final result = await manager.commit(
+        connectionId: 'c1',
+        guard: guard,
+        deadline: DateTime.now().subtract(const Duration(seconds: 1)),
+      );
+      final failure = result.exceptionOrNull()! as domain.Failure;
+      expect(failure.context['outcome_unknown'], isTrue);
+      expect(failure.context['rollback_confirmed'], isFalse);
+      expect(guard.state, BatchTransactionState.unconfirmed);
+      expect(discarded, ['c1']);
+      verifyNever(() => service.commitTransaction(any(), any()));
     });
     test('concurrent finalization dispatches commit once and never rolls back', () async {
       final completion = Completer<Result<void>>();

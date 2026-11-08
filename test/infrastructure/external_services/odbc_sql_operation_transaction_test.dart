@@ -244,6 +244,53 @@ void main() {
     });
   }
   for (final engine in ['sqlserver', 'sybase_asa']) {
+    test('$engine does not trust incomplete or ambiguous affected-row evidence', () async {
+      when(() => native.getConnectionDbmsInfo('dedicated')).thenAnswer((_) async => Success(info(engine)));
+      final session = await open();
+      final step = write('UPDATE parent SET name = :name WHERE id = :id');
+      when(() => native.executeQueryNamed('dedicated', step.sql, any())).thenAnswer(
+        (_) async => const Success(odbc.QueryResult(columns: [], rows: [], rowCount: -1)),
+      );
+      for (final count in [
+        const odbc.QueryResult(
+          columns: ['operation_affected_rows'],
+          rows: [
+            [1],
+          ],
+          rowCount: 2,
+        ),
+        const odbc.QueryResult(
+          columns: ['operation_affected_rows', 'extra'],
+          rows: [
+            [1],
+          ],
+          rowCount: 1,
+        ),
+        const odbc.QueryResult(
+          columns: ['unexpected'],
+          rows: [
+            [1],
+          ],
+          rowCount: 1,
+        ),
+        const odbc.QueryResult(
+          columns: ['operation_affected_rows'],
+          rows: [
+            [1],
+          ],
+          rowCount: 1,
+          additionalResults: [odbc.DirectedRowCountItem(0)],
+        ),
+      ]) {
+        when(
+          () => native.executeQueryNamed('dedicated', 'SELECT @@ROWCOUNT AS operation_affected_rows', any()),
+        ).thenAnswer((_) async => Success(count));
+        final result = (await session.execute(step, const {}, const Duration(seconds: 1))).getOrThrow();
+        expect(result.directlyAffectedRows, isNull);
+      }
+      await session.rollback(const Duration(seconds: 1));
+      await session.close();
+    });
     test('$engine reads direct row count immediately on the same connection, never infers zero', () async {
       when(() => native.getConnectionDbmsInfo('dedicated')).thenAnswer((_) async => Success(info(engine)));
       final session = await open();
@@ -530,5 +577,25 @@ void main() {
     verify(() => native.disconnect('dedicated')).called(1);
     expect(limiter.activeCount, 0);
     verifyNever(() => native.rollbackTransaction(any(), any()));
+  });
+  test('concurrent close waits for the same disconnect and preserves its failure', () async {
+    final pending = Completer<Result<void>>();
+    when(() => native.disconnect('dedicated')).thenAnswer((_) => pending.future);
+    final session = await open();
+    final firstClose = session.close();
+    var secondSettled = false;
+    final secondClose = session.close().then((result) {
+      secondSettled = true;
+      return result;
+    });
+    await Future<void>.delayed(Duration.zero);
+    final settledBeforeDisconnect = secondSettled;
+    pending.complete(Failure(Exception('Disconnect failed')));
+    expect((await firstClose).isError(), isTrue);
+    expect((await secondClose).isError(), isTrue);
+    expect(settledBeforeDisconnect, isFalse);
+    expect((await session.close()).isError(), isTrue);
+    verify(() => native.disconnect('dedicated')).called(1);
+    expect(limiter.activeCount, 0);
   });
 }

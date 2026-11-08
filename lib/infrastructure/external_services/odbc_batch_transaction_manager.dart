@@ -162,8 +162,28 @@ final class OdbcBatchTransactionManager {
   }) async {
     final transactionId = guard.transactionId;
     if (transactionId == null) return const Success(unit);
+    if (!guard.isActive) {
+      return Failure(domain.QueryExecutionFailure('Transaction finalization already started'));
+    }
     final budget = _executionBudget(deadline, _defaultCommitTimeout);
-    if (budget <= Duration.zero) return Failure(_budgetExhausted('transaction_commit'));
+    if (budget <= Duration.zero) {
+      // Commit was never dispatched. Finish cleanup before callers release the connection.
+      final rollback = await guard.rollback((id) => rollbackIfNeeded(connectionId, id));
+      final expired = _budgetExhausted('transaction_commit');
+      return Failure(
+        domain.QueryExecutionFailure.withContext(
+          message: expired.message,
+          cause: expired,
+          context: {
+            ...expired.context,
+            'rollback_confirmed': guard.rollbackConfirmed,
+            'outcome_unknown': !guard.rollbackConfirmed,
+            if (rollback.isError())
+              'secondary_errors': [OdbcFailureMapper.mapQueryError(rollback.exceptionOrNull()!).context],
+          },
+        ),
+      );
+    }
     if (!guard.beginCompletion()) {
       return Failure(domain.QueryExecutionFailure('Transaction finalization already started'));
     }

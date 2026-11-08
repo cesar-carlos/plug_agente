@@ -195,6 +195,7 @@ class _OdbcSqlOperationTransaction implements ISqlOperationTransaction {
   final String _engine;
   final DirectOdbcConnectionLease _lease;
   bool _closed = false;
+  Future<Result<void>>? _closeResult;
   bool _completionStarted = false;
   Future<Object?>? _pendingNative;
   Future<T> _call<T>(Future<T> Function() start, Duration timeout) async {
@@ -285,7 +286,13 @@ class _OdbcSqlOperationTransaction implements ISqlOperationTransaction {
             () => _service.executeQueryNamed(_connectionId, 'SELECT @@ROWCOUNT AS operation_affected_rows', const {}),
             remaining,
           )).getOrThrow();
-          if (count.rows.length == 1 && count.rows.single.length == 1) {
+          if (count.columns.length == 1 &&
+              count.columns.single.toLowerCase() == 'operation_affected_rows' &&
+              count.rowCount == 1 &&
+              count.rows.length == 1 &&
+              count.rows.single.length == 1 &&
+              count.additionalResults.isEmpty &&
+              count.refCursorResults.isEmpty) {
             final value = count.rows.single.single;
             affected = value is int
                 ? value
@@ -336,8 +343,9 @@ class _OdbcSqlOperationTransaction implements ISqlOperationTransaction {
   }
 
   @override
-  Future<Result<void>> close() async {
-    if (_closed) return const Success(unit);
+  Future<Result<void>> close() => _closeResult ??= _close();
+
+  Future<Result<void>> _close() async {
     _closed = true;
     final waiting = _pendingNative;
     final closing = waiting == null

@@ -279,8 +279,10 @@ void main() {
     );
     expect(start.isError(), isTrue);
     final guard = BatchTransactionGuard(9);
+    when(() => service.rollbackTransaction('7', 9)).thenAnswer((_) async => const Success(unit));
     expect((await manager.commit(connectionId: '7', guard: guard, deadline: deadline)).isError(), isTrue);
-    expect(guard.state, BatchTransactionState.active);
+    expect(guard.state, BatchTransactionState.rolledBack);
+    verify(() => service.rollbackTransaction('7', 9)).called(1);
     verifyNever(() => service.commitTransaction(any(), any()));
   });
 
