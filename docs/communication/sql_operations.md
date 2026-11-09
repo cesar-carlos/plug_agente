@@ -286,6 +286,14 @@ queries/operations through the production hub/agent and compares complete result
 It supports the three current engines; it does not authorize arbitrary operational
 databases, consumer DDL, approval reports supplied by clients or retries after an
 uncertain result. Restarted companions refuse generic fixture mutation.
+For the Campo SQL Server profiles, a closed table-name allowlist also permits
+`dbo.orcamentobalcao`, `dbo.tipooperacaosaida`, `dbo.contareceber`,
+`dbo.contapagar` and `dbo.fornecedor` only in an explicitly named disposable
+`se7e_persona_<12 hex digits>_test` database. The supplier declaration supports
+payables cases; it does not authorize operational databases, arbitrary schemas,
+other table names or the same names on other engines. Constructor regressions
+in `test/tool/persona_publication_fixture_test.dart` cover the accepted supplier
+and rejected scope before any ODBC access. Native runner acceptance is separate.
 SQL result sanitation preserves null cells (including multi-result envelopes),
 while optional protocol fields remain omitted. A fixture-only
 factory loses confirmation after actual native commit to test unknown outcome

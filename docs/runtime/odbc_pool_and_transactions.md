@@ -1,13 +1,24 @@
 # ODBC Pool, Transactions and Runtime Tuning
 
 This document is the source of truth for how `plug_agente` uses
-`odbc_fast` **5.0.2** from pub.dev, as resolved in
-[`pubspec.lock`](../../pubspec.lock) (`^5.0.2` in `pubspec.yaml`). It
+`odbc_fast` **5.0.4** from pub.dev, as resolved in
+[`pubspec.lock`](../../pubspec.lock) (`^5.0.4` in `pubspec.yaml`). It
 covers pool sizing and lifecycle, transaction control, async backpressure,
 lock-safety, streaming session reuse, bulk insert atomicity, and
 observability hooks. Defaults, decisions and trade-offs are documented
 here so the runtime behavior of the agent stays consistent across
 releases.
+
+The 5.0.4 upgrade includes the 5.0.3 pool validation, transaction exception
+handling and worker percentile-cache fixes. Its metadata cleanup, indexed
+reader, typed-column materialization and native text/bulk optimizations are
+internal to the dependency. The agent retains its direct columnar mapping,
+bounded cleanup and prohibition on replay/rollback after uncertain commit;
+it does not add a row-major intermediate to use the optimized converter.
+Upstream component benchmarks do not establish an agent/database throughput
+gain. The columnar mapper contract test compares nullable numeric columns,
+large integers, lazy Unicode text, binary data and textual timestamps with
+the package's materialized path. Real-engine acceptance remains separate.
 
 Cross-references:
 

@@ -15,7 +15,17 @@ class PublicationFixture {
       // Dedicated namespace prevents collision with identity and chain fixtures.
       final campoTable =
           engine == 'mssql' &&
-          const {'dbo.orcamentobalcao', 'dbo.tipooperacaosaida', 'dbo.contareceber', 'dbo.contapagar'}.contains(name);
+          const {
+            'dbo.orcamentobalcao',
+            'dbo.tipooperacaosaida',
+            'dbo.contareceber',
+            'dbo.contapagar',
+            'dbo.fornecedor',
+            'dbo.produtovendido',
+            'dbo.vendedor',
+            'dbo.municipio',
+            'dbo.cliente',
+          }.contains(name);
       if ((!campoTable && !RegExp(r'^publication_[a-z0-9_]{1,48}$').hasMatch(name)) || !names.add(name)) {
         throw StateError('Invalid or duplicate fixture table.');
       }
