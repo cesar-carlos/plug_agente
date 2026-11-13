@@ -13,6 +13,45 @@ def workflow(name):
 
 
 class WorkflowRegressionTests(unittest.TestCase):
+    def test_release_prepares_in_parallel_and_requires_both_gates(self):
+        jobs = workflow('release.yml')['jobs']
+        for name in ('quality', 'build'):
+            self.assertEqual(jobs[name]['needs'], 'prepare')
+            self.assertNotIn('concurrency', jobs[name])
+            self.assertEqual(jobs[name]['steps'][0]['with']['ref'], '${{ needs.prepare.outputs.commit }}')
+        publish = jobs['publish']
+        self.assertEqual(set(publish['needs']), {'prepare', 'quality', 'build'})
+        self.assertNotIn('if', publish)  # default success() rejects a failed prerequisite
+        self.assertFalse(any('flutter' in step.get('uses', '') or
+                             'build_installer.py' in step.get('run', '') for step in publish['steps']))
+        names = [step['name'] for step in publish['steps']]
+        for gate in ('Require matching tested and built source', 'Verify prepared installer digest',
+                     'Reject stale preparation before publication', 'Require coordinated persona-v2 acceptance'):
+            self.assertLess(names.index(gate), names.index('Commit version bump'))
+        download = next(step for step in publish['steps'] if 'download-artifact@' in step.get('uses', ''))
+        self.assertEqual(download['with']['name'], 'prepared-installer-${{ github.run_id }}-${{ github.run_attempt }}')
+
+    def test_release_keeps_bundle_and_native_validation_before_artifact_handoff(self):
+        steps = workflow('release.yml')['jobs']['build']['steps']
+        names = [step['name'] for step in steps]
+        for gate in ('Verify installed bundle startup and data access probes', 'Validate generated installer',
+                     'Test native updater contracts', 'Check dependency and SDK generated files'):
+            self.assertLess(names.index(gate), names.index('Preserve prepared installer'))
+        upload = steps[names.index('Preserve prepared installer')]
+        self.assertNotIn('if', upload)
+        self.assertEqual(upload['with']['if-no-files-found'], 'error')
+        tag_check = steps[names.index('Verify existing release tag source')]
+        self.assertEqual(tag_check['if'], '${{ !inputs.dry_run }}')
+
+    def test_release_ci_and_preflight_use_same_flutter_version(self):
+        versions = []
+        for name in ('release.yml', 'release-preflight.yml', 'flutter_ci.yml'):
+            for job in workflow(name)['jobs'].values():
+                for step in job.get('steps', []):
+                    if 'flutter-action@' in step.get('uses', ''):
+                        versions.append(step['with'].get('flutter-version'))
+        self.assertEqual(set(versions), {'3.47.7'})
+
     def test_expensive_benchmark_runs_only_in_a_separate_manual_workflow(self):
         ci = workflow('flutter_ci.yml')
         benchmark = workflow('transport-benchmark.yml')

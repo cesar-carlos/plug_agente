@@ -43,6 +43,7 @@ jobs:
         uses: subosito/flutter-action@v2
         with:
           channel: stable
+          flutter-version: '3.47.7'
           cache: true
 
       - name: Install native build dependencies
@@ -91,6 +92,7 @@ jobs:
         uses: subosito/flutter-action@v2
         with:
           channel: stable
+          flutter-version: '3.47.7'
           cache: true
 
       - name: Install native build dependencies
@@ -108,9 +110,6 @@ jobs:
       #   python tool/odbc/run_odbc_release_gate.py --offline-only
       - name: Test
         run: flutter test --exclude-tags "live || slow || perf"
-
-      - name: Installer setup script test
-        run: flutter test test/installer/setup_script_test.dart
 
   communication-contract:
     runs-on: ubuntu-latest
@@ -140,6 +139,7 @@ jobs:
         uses: subosito/flutter-action@v2
         with:
           channel: stable
+          flutter-version: '3.47.7'
           cache: true
       - name: Install native build dependencies
         run: sudo apt-get update -qq && sudo apt-get install -y unixodbc-dev
@@ -178,6 +178,7 @@ jobs:
         uses: subosito/flutter-action@v2
         with:
           channel: stable
+          flutter-version: '3.47.7'
           cache: true
 
       - name: Install native build dependencies
@@ -211,6 +212,7 @@ jobs:
         uses: subosito/flutter-action@v2
         with:
           channel: stable
+          flutter-version: '3.47.7'
           cache: true
 
       - name: Install native build dependencies
@@ -274,7 +276,7 @@ jobs:
       - name: Validate workflow regressions and release publication
         run: |
           python3 tool/release/check_changelog.py
-          python3 -m unittest tool.tests.test_workflow_regressions tool.release.test_publish_release tool.release.test_check_changelog -v
+          python3 -m unittest tool.tests.test_workflow_regressions tool.release.test_publish_release tool.release.test_check_changelog tool.release.test_prepared_source tool.release.test_release_preflight -v
 
       - name: Set up Node for alert tests
         uses: actions/setup-node@v7
@@ -315,6 +317,7 @@ jobs:
         uses: subosito/flutter-action@v2
         with:
           channel: stable
+          flutter-version: '3.47.7'
           cache: true
 
       - name: Install native build dependencies

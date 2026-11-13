@@ -36,8 +36,14 @@ on:
         default: false
 
 permissions:
-  contents: write
-  actions: write
+  contents: read
+
+env:
+  VERSION_SHORT: ${{ inputs.version }}
+  FULL_VERSION: ${{ inputs.version }}+${{ inputs.build_number }}
+  RELEASE_TAG: v${{ inputs.version }}
+  RELEASE_CHANNEL: ${{ inputs.prerelease && 'beta' || 'stable' }}
+  OFFICIAL_FEED_URL: https://cesar-carlos.github.io/plug_agente/appcast.xml
 
 concurrency:
   group: publish-windows-release-${{ inputs.version }}
@@ -45,26 +51,21 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  publish:
-    # Pin VS 2022 toolchain: windows-latest may redirect to windows-2025-vs2026,
-    # which breaks flutter_local_notifications_windows (STL1011 coroutine).
+  prepare:
     runs-on: windows-2022
-    concurrency:
-      group: plug-main-mutation
-      queue: max
-      cancel-in-progress: false
-    env:
-      VERSION_SHORT: ${{ inputs.version }}
-      FULL_VERSION: ${{ inputs.version }}+${{ inputs.build_number }}
-      RELEASE_TAG: v${{ inputs.version }}
-      RELEASE_CHANNEL: ${{ inputs.prerelease && 'beta' || 'stable' }}
-      OFFICIAL_FEED_URL: https://cesar-carlos.github.io/plug_agente/appcast.xml
+    outputs:
+      commit: ${{ steps.revision.outputs.commit }}
     steps:
-      - name: Checkout main
+      - name: Checkout release source
         uses: actions/checkout@v7
         with:
           ref: ${{ inputs.dry_run && github.sha || 'main' }}
           fetch-depth: 0
+
+      - name: Record immutable revision
+        id: revision
+        shell: bash
+        run: echo "commit=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
 
       - name: Setup Python
         uses: actions/setup-python@v7
@@ -74,19 +75,6 @@ jobs:
       - name: Require coordinated persona-v2 acceptance
         if: ${{ !inputs.dry_run }}
         run: python tool/release/check_persona_release.py --tag "$env:RELEASE_TAG" --build "$env:FULL_VERSION" --channel "$env:RELEASE_CHANNEL"
-
-      - name: Install Inno Setup
-        shell: pwsh
-        run: choco install innosetup --yes --no-progress
-
-      - name: Install Python dependencies
-        run: python -m pip install --quiet "cryptography>=42.0.0" "jsonschema>=4.0.0"
-
-      - name: Early release preflight
-        shell: bash
-        run: |
-          ARGS=(--early --version "$VERSION_SHORT" --require-iscc --check-secrets --signing-provider "${{ inputs.signing_provider }}" --allow-existing-tag)
-          python tool/release/release_preflight.py "${ARGS[@]}"
 
       - name: Require production release gates
         if: ${{ !inputs.dry_run }}
@@ -98,6 +86,27 @@ jobs:
           if ('${{ inputs.run_tests }}' -ne 'true') { throw 'Production requires tests.' }
           if (!$env:FEED_KEY -or !$env:FEED_PUBLIC_KEY) { throw "Production requires feed signing keys." }
 
+
+  quality:
+    needs: prepare
+    runs-on: windows-2022
+    outputs:
+      source_tree: ${{ steps.source.outputs.tree }}
+    steps:
+      - name: Checkout prepared revision
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ needs.prepare.outputs.commit }}
+          fetch-depth: 0
+
+      - name: Setup Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: "3.11"
+
+      - name: Install Python dependencies
+        run: python -m pip install --quiet "cryptography>=42.0.0" "jsonschema>=4.0.0"
+
       - name: Setup Flutter
         uses: subosito/flutter-action@v2
         with:
@@ -105,56 +114,81 @@ jobs:
           flutter-version: '3.47.7'
           cache: true
 
-      - name: Install Flutter dependencies
-        run: flutter pub get
-
-      - name: Update pubspec version
-        shell: python
-        run: |
-          import os
-          import re
-          from pathlib import Path
-
-          full_version = os.environ["FULL_VERSION"]
-          if not re.fullmatch(r"\d+\.\d+\.\d+\+\d+", full_version):
-              raise SystemExit(f"Invalid FULL_VERSION: {full_version}")
-
-          pubspec = Path("pubspec.yaml")
-          content = pubspec.read_text(encoding="utf-8")
-          updated, replacements = re.subn(
-              r'^version:\s*["\']?\d+\.\d+\.\d+(?:\+\d+)?["\']?\s*(?:#|$)',
-              f"version: {full_version}",
-              content,
-              count=1,
-              flags=re.MULTILINE,
-          )
-          if replacements != 1:
-              raise SystemExit("Unable to update pubspec.yaml version.")
-          pubspec.write_text(updated, encoding="utf-8")
-
-      - name: Synchronize version files
-        run: python installer/update_version.py
-
-      - name: Verify version synchronization
-        shell: bash
-        run: |
-          ARGS=(--version "$VERSION_SHORT" --allow-dirty --allow-existing-tag)
-          python tool/release/release_preflight.py "${ARGS[@]}"
-
-      - name: Verify existing release tag source
-        if: ${{ !inputs.dry_run }}
-        run: python -m tool.release.publish_release --check-tag
-
-      - name: Check dependency and SDK generated files
-        shell: bash
-        run: git diff --exit-code -- . ':(exclude)pubspec.yaml' ':(exclude)installer/setup.iss' ':(exclude)lib/core/constants/app_version.g.dart'
+      - name: Prepare versioned source
+        id: source
+        run: python -m tool.release.prepared_source
 
       - name: Release quality gate
         if: inputs.run_tests
         run: python tool/release/release_preflight.py --gate --allow-dirty --allow-existing-tag
 
+      - name: Test installer contracts when the full gate is disabled
+        if: ${{ !inputs.run_tests }}
+        run: python -m unittest tool.updater.test_installer -v
+
       - name: Test installer recovery and warning reports
-        run: python -m unittest tool.updater.test_installer tool.updater.test_installer_recovery tool.updater.test_installer_manual_upgrade tool.updater.test_installer_preparation_guard tool.updater.test_windows_installation_validation tool.release.test_signpath_staging -v
+        run: python -m unittest tool.updater.test_installer_recovery tool.updater.test_installer_manual_upgrade tool.updater.test_installer_preparation_guard tool.updater.test_windows_installation_validation tool.release.test_signpath_staging -v
+
+      - name: Check dependency and SDK generated files
+        shell: bash
+        env:
+          EXPECTED_SOURCE_TREE: ${{ steps.source.outputs.tree }}
+        run: git diff --exit-code "$EXPECTED_SOURCE_TREE" --
+
+      - name: Preserve quality diagnostics
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: release-quality-${{ github.run_id }}-${{ github.run_attempt }}
+          path: build/release-preflight/*.log
+          if-no-files-found: warn
+          retention-days: 14
+
+  build:
+    needs: prepare
+    runs-on: windows-2022
+    outputs:
+      source_tree: ${{ steps.source.outputs.tree }}
+      installer_sha256: ${{ steps.digest.outputs.sha256 }}
+    steps:
+      - name: Checkout prepared revision
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ needs.prepare.outputs.commit }}
+          fetch-depth: 0
+
+      - name: Setup Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: "3.11"
+
+      - name: Install Inno Setup
+        shell: pwsh
+        run: choco install innosetup --yes --no-progress
+
+      - name: Install Python dependencies
+        run: python -m pip install --quiet "cryptography>=42.0.0" "jsonschema>=4.0.0"
+
+      - name: Early release preflight
+        shell: bash
+        run: |
+          ARGS=(--early --version "$VERSION_SHORT" --require-iscc --signing-provider "${{ inputs.signing_provider }}" --allow-existing-tag)
+          python tool/release/release_preflight.py "${ARGS[@]}"
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          flutter-version: '3.47.7'
+          cache: true
+
+      - name: Prepare versioned source
+        id: source
+        run: python -m tool.release.prepared_source
+
+      - name: Verify existing release tag source
+        if: ${{ !inputs.dry_run }}
+        run: python -m tool.release.publish_release --check-tag
 
       - name: Build installer without certificate
         env:
@@ -184,6 +218,104 @@ jobs:
         run: |
           ctest --test-dir build/windows/x64/updater -C Release --output-on-failure --no-tests=error --output-junit "$env:RUNNER_TEMP/updater-contracts.xml"
           if ($LASTEXITCODE -ne 0) { throw "Native updater contract tests failed." }
+
+      - name: Check dependency and SDK generated files
+        shell: bash
+        env:
+          EXPECTED_SOURCE_TREE: ${{ steps.source.outputs.tree }}
+        run: git diff --exit-code "$EXPECTED_SOURCE_TREE" --
+
+      - name: Record installer digest
+        id: digest
+        shell: pwsh
+        run: |
+          $path = "installer/dist/PlugAgente-Setup-$env:VERSION_SHORT.exe"
+          "sha256=$((Get-FileHash -LiteralPath $path -Algorithm SHA256).Hash.ToLowerInvariant())" >> $env:GITHUB_OUTPUT
+
+      - name: Preserve prepared installer
+        uses: actions/upload-artifact@v7
+        with:
+          name: prepared-installer-${{ github.run_id }}-${{ github.run_attempt }}
+          path: installer/dist/PlugAgente-Setup-${{ inputs.version }}.exe
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 14
+
+      - name: Preserve release diagnostics
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: release-build-diagnostics-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            build/release-preflight/*.log
+            build/windows/x64/updater/Testing/Temporary/LastTest.log
+            ${{ runner.temp }}/updater-contracts.xml
+          if-no-files-found: warn
+          retention-days: 14
+
+  publish:
+    needs: [prepare, quality, build]
+    runs-on: windows-2022
+    permissions:
+      contents: write
+      actions: write
+    concurrency:
+      group: plug-main-mutation
+      queue: max
+      cancel-in-progress: false
+    steps:
+      - name: Checkout prepared revision
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ needs.prepare.outputs.commit }}
+          fetch-depth: 0
+
+      - name: Setup Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: "3.11"
+
+      - name: Install signature dependencies
+        run: python -m pip install --quiet "cryptography>=42.0.0"
+
+      - name: Require matching tested and built source
+        shell: python
+        env:
+          TESTED_TREE: ${{ needs.quality.outputs.source_tree }}
+          BUILT_TREE: ${{ needs.build.outputs.source_tree }}
+        run: |
+          import os
+          if not os.environ['TESTED_TREE'] or os.environ['TESTED_TREE'] != os.environ['BUILT_TREE']:
+              raise SystemExit('Tested and built source trees differ')
+
+      - name: Prepare versioned source
+        env:
+          EXPECTED_SOURCE_TREE: ${{ needs.build.outputs.source_tree }}
+        run: python -m tool.release.prepared_source
+
+      - name: Download prepared installer from this attempt
+        uses: actions/download-artifact@v8
+        with:
+          name: prepared-installer-${{ github.run_id }}-${{ github.run_attempt }}
+          path: installer/dist
+
+      - name: Verify prepared installer digest
+        env:
+          EXPECTED_SHA256: ${{ needs.build.outputs.installer_sha256 }}
+        run: python -m tool.release.prepared_source --verify-installer
+
+      - name: Reject stale preparation before publication
+        if: ${{ !inputs.dry_run }}
+        shell: bash
+        env:
+          PREPARED_COMMIT: ${{ needs.prepare.outputs.commit }}
+        run: |
+          git fetch origin main --tags
+          test "$(git rev-parse origin/main)" = "$PREPARED_COMMIT" || { echo 'main changed during preparation; run preparation again.' >&2; exit 1; }
+
+      - name: Require coordinated persona-v2 acceptance
+        if: ${{ !inputs.dry_run }}
+        run: python tool/release/check_persona_release.py --tag "$env:RELEASE_TAG" --build "$env:FULL_VERSION" --channel "$env:RELEASE_CHANNEL"
 
       - name: Commit version bump
         if: ${{ !inputs.dry_run }}
@@ -226,17 +358,13 @@ jobs:
           echo "Installer generated at installer/dist/PlugAgente-Setup-${VERSION_SHORT}.exe."
           echo "No commit, tag, or GitHub Release was created."
 
-      - name: Preserve release installer and diagnostics
+      - name: Preserve release diagnostics
         if: always()
         uses: actions/upload-artifact@v7
         with:
           name: windows-release-${{ github.run_id }}-${{ github.run_attempt }}
           path: |
-            installer/dist/PlugAgente-Setup-*.exe
             installer/dist/PlugAgente-Manifest-*.json
-            build/release-preflight/*.log
-            build/windows/x64/updater/Testing/Temporary/LastTest.log
-            ${{ runner.temp }}/updater-contracts.xml
           if-no-files-found: warn
           retention-days: 14
 

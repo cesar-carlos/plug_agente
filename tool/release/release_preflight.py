@@ -276,7 +276,7 @@ def run_optional_checks(args: argparse.Namespace) -> None:
         check(["flutter", "test"], 'tests')
     if args.tests_ci:
         check(["flutter", "test", "--exclude-tags", "live || slow || perf"], 'tests-ci')
-    if args.architecture:
+    if args.architecture and not (args.tests or args.tests_ci):
         check(["flutter", "test", "test/architecture/layer_boundaries_test.dart"], 'architecture')
     if args.appcast_tooling:
         check(
@@ -286,7 +286,6 @@ def run_optional_checks(args: argparse.Namespace) -> None:
                 "unittest",
                 "tool.appcast.test_appcast_manager",
                 "tool.appcast.test_validate_release",
-                "tool.appcast.test_appcast_signing",
                 "tool.appcast.test_validate_launcher_status",
                 "tool.updater.test_manifest",
                 "tool.updater.test_verify_release",

@@ -13,6 +13,28 @@ from tool.release import release_preflight
 
 
 class ReleasePreflightTests(unittest.TestCase):
+    def test_full_suite_covers_architecture_without_second_invocation(self):
+        args = release_preflight.build_parser().parse_args(['--tests-ci', '--architecture'])
+        with (patch.object(release_preflight, 'run', return_value=subprocess.CompletedProcess([], 0, stdout='OK')) as run,
+              patch('tool.odbc.prepare_package_native.prepare_native_library', return_value=Path('native.dll'))):
+            release_preflight.run_optional_checks(args)
+        tests = [call.args[0] for call in run.call_args_list if call.args[0][:2] == ['flutter', 'test']]
+        self.assertEqual(tests, [['flutter', 'test', '--exclude-tags', 'live || slow || perf']])
+
+    def test_standalone_architecture_check_is_preserved(self):
+        args = release_preflight.build_parser().parse_args(['--architecture'])
+        with patch.object(release_preflight, 'run', return_value=subprocess.CompletedProcess([], 0, stdout='OK')) as run:
+            release_preflight.run_optional_checks(args)
+        self.assertEqual(run.call_args.args[0], ['flutter', 'test', 'test/architecture/layer_boundaries_test.dart'])
+
+    def test_appcast_signing_runs_once_and_rejects_skips(self):
+        args = release_preflight.build_parser().parse_args(['--appcast-tooling'])
+        with patch.object(release_preflight, 'run', return_value=subprocess.CompletedProcess([], 0, stdout='OK (skipped=1)', stderr='')) as run:
+            with self.assertRaisesRegex(RuntimeError, 'skipped tests'):
+                release_preflight.run_optional_checks(args)
+        calls = [call for call in run.call_args_list if 'tool.appcast.test_appcast_signing' in call.args[0]]
+        self.assertEqual(len(calls), 1)
+
     def test_signpath_preflight_requires_its_token_instead_of_a_pfx(self):
         configured = {"SIGNPATH_API_TOKEN", "AUTO_UPDATE_FEED_PUBLIC_KEY", "APPCAST_SIGNING_PRIVATE_KEY"}
         with patch.object(release_preflight, "list_github_actions_secrets", return_value=configured):
