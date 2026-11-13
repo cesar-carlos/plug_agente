@@ -63,7 +63,7 @@ jobs:
       - name: Checkout main
         uses: actions/checkout@v7
         with:
-          ref: main
+          ref: ${{ inputs.dry_run && github.sha || 'main' }}
           fetch-depth: 0
 
       - name: Setup Python
@@ -142,6 +142,7 @@ jobs:
           python tool/release/release_preflight.py "${ARGS[@]}"
 
       - name: Verify existing release tag source
+        if: ${{ !inputs.dry_run }}
         run: python -m tool.release.publish_release --check-tag
 
       - name: Check dependency and SDK generated files
