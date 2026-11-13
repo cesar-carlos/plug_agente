@@ -8,6 +8,7 @@ import 'package:path/path.dart' as p;
 import 'package:plug_agente/application/use_cases/list_agent_action_executions.dart';
 import 'package:plug_agente/domain/actions/action_io.dart';
 import 'package:plug_agente/domain/actions/action_io_journal.dart';
+import 'package:plug_agente/domain/actions/action_io_lifecycle.dart';
 import 'package:plug_agente/domain/actions/actions.dart';
 import 'package:plug_agente/domain/repositories/i_action_io_local_history.dart';
 import 'package:plug_agente/domain/repositories/i_agent_action_history_page.dart';
@@ -51,6 +52,34 @@ void main() {
     );
   });
   tearDown(() => db.close());
+
+  test('lifecycle preserves first milestone and queue blocker in local history', () async {
+    (await journal.claim(intent())).getOrThrow();
+    (await journal.recordMilestone('execution', ActionIoMilestone.processCreated, pid: 123)).getOrThrow();
+    final first = (await journal.getExecutionSnapshot('execution')).getOrThrow().lifecycle;
+    (await journal.recordMilestone('execution', ActionIoMilestone.processCreated, pid: 456)).getOrThrow();
+    (await journal.recordQueueBlockers('execution', [
+      const ActionQueueBlocker(executionId: 'blocking', elapsedMs: 12345),
+    ])).getOrThrow();
+    final snapshot = (await journal.listExecutionSnapshots(limit: 1)).getOrThrow().single;
+    expect(snapshot.lifecycle.times[ActionIoMilestone.queued], isNotNull);
+    expect(snapshot.lifecycle.times[ActionIoMilestone.processCreated], first.times[ActionIoMilestone.processCreated]);
+    expect(snapshot.lifecycle.pid, 123);
+    expect(snapshot.lifecycle.blockers.single.executionId, 'blocking');
+    expect(snapshot.lifecycle.blockers.single.elapsedMs, 12345);
+  });
+
+  test('lifecycle commit failure remains explicit and preserves previous evidence', () async {
+    (await journal.claim(intent())).getOrThrow();
+    await db.customStatement('''
+      CREATE TRIGGER reject_lifecycle BEFORE UPDATE OF lifecycle_json ON action_io_sessions
+      BEGIN SELECT RAISE(ABORT, 'private fixture failure'); END''');
+    final result = await journal.recordMilestone('execution', ActionIoMilestone.processCreated, pid: 123);
+    expect(result.exceptionOrNull(), isA<ActionFailure>());
+    final snapshot = (await journal.getExecutionSnapshot('execution')).getOrThrow();
+    expect(snapshot.lifecycle.pid, isNull);
+    expect(snapshot.lifecycle.times, isNot(contains(ActionIoMilestone.processCreated)));
+  });
 
   for (final corruption in ['ciphertext', 'authenticated_context', 'input_bytes']) {
     test('corrupt persisted stdin $corruption refuses delivery and cannot replay after restart', () async {

@@ -26,6 +26,7 @@ class ActionIoSessions extends Table {
   IntColumn get exitCode => integer().nullable()();
   TextColumn get failureCode => text().nullable()();
   TextColumn get diagnosticId => text().nullable()();
+  TextColumn get lifecycleJson => text().nullable()();
   DateTimeColumn get createdAt => dateTime()();
   DateTimeColumn get terminalAt => dateTime().nullable()();
   DateTimeColumn get outputExpiresAt => dateTime().nullable()();
@@ -104,12 +105,13 @@ class ActionIoJournalDatabase extends _$ActionIoJournalDatabase {
   ActionIoJournalDatabase(super.e);
 
   @override
-  int get schemaVersion => 2;
+  int get schemaVersion => 3;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
     onUpgrade: (migrator, from, to) async {
       if (from < 2) await migrator.addColumn(actionIoSessions, actionIoSessions.actionType);
+      if (from < 3) await migrator.addColumn(actionIoSessions, actionIoSessions.lifecycleJson);
     },
     beforeOpen: (_) async {
       await customStatement('PRAGMA foreign_keys = ON');

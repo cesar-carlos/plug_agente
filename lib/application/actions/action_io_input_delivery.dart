@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:plug_agente/core/logger/app_logger.dart';
 import 'package:plug_agente/domain/actions/action_failure.dart';
 import 'package:plug_agente/domain/actions/action_io.dart';
 import 'package:plug_agente/domain/actions/action_io_journal.dart';
@@ -66,6 +67,7 @@ final class ActionIoInputDelivery {
       if (remaining <= Duration.zero) return await _fail(input, _failure('ACTION_TIMEOUT'), started: false);
       final timeout = remaining < ActionIoLimits.writeTimeout ? remaining : ActionIoLimits.writeTimeout;
       nativeStarted = true;
+      _log(input.close ? 'input_close_started' : 'input_write_started', input);
       // Do not clear this future on timeout: the native worker still owns its pipe.
       final operation = _invoke(input);
       _native = operation;
@@ -75,6 +77,7 @@ final class ActionIoInputDelivery {
         }),
       );
       final written = await operation.timeout(timeout, onTimeout: () => Failure(ActionIoPipeFailure.timedOut()));
+      _log(written.isSuccess() ? 'input_native_completed' : 'input_native_failed', input);
       if (written.isError()) return await _fail(input, written.exceptionOrNull()!, started: true);
       final receipt = await _journal.finishInput(
         executionId,
@@ -89,6 +92,7 @@ final class ActionIoInputDelivery {
         return Failure(receipt.exceptionOrNull()!);
       }
       if (input.close) _stopped = true;
+      _log(input.close ? 'input_closed' : 'input_write_confirmed', input);
       return Success(ActionIoDeliveryAttempt(receipt.getOrThrow()));
     } on Object catch (error) {
       final failure = error is Exception ? error : _failure('ACTION_OUTCOME_UNKNOWN');
@@ -106,6 +110,16 @@ final class ActionIoInputDelivery {
       return Failure(ActionIoPipeFailure());
     }
   }
+
+  void _log(String stage, ActionIoPendingInput input) => AppLogger.operational(
+    'Action IO input lifecycle',
+    context: {
+      'execution_id': executionId,
+      'stage': stage,
+      'at_utc': _now().toUtc().toIso8601String(),
+      'input_bytes': input.bytes.length,
+    },
+  );
 
   Future<Result<ActionIoDeliveryAttempt>> _fail(
     ActionIoPendingInput input,

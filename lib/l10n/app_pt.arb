@@ -2297,5 +2297,12 @@
   "catalogCheckTrigger": "Verifique se existe um gatilho remoto ativo para esta ação.",
   "catalogNegotiated": "A conexão atual negociou entrada e saída remota.",
   "catalogIncompatible": "Esta conexão não negociou entrada e saída. Verifique a versão e a configuração do hub e reconecte o agente.",
-  "catalogAwaiting": "Negociação de entrada e saída ainda não confirmada."
+  "catalogAwaiting": "Negociação de entrada e saída ainda não confirmada.",
+  "agentActionsDiagnosticsCorrectiveCleanup": "Não foi possível confirmar o encerramento do processo ou a liberação dos fluxos. Verifique a árvore de processos antes de tentar novamente; a vaga ocupada permanece protegida.",
+  "agentActionsIoPid": "ID do processo: {pid}",
+  "@agentActionsIoPid": {"placeholders": {"pid": {"type": "int"}}},
+  "agentActionsIoBlocker": "Ao expirar a espera na fila, a execução {id} ocupava uma vaga havia {seconds} segundos.",
+  "@agentActionsIoBlocker": {"placeholders": {"id": {"type": "String"}, "seconds": {"type": "int"}}},
+  "agentActionsIoMilestone": "{stage, select, queued{Entrada na fila} queueReleased{Saída da fila} processCreated{Processo criado} processResumed{Processo liberado para executar} inputWritten{Primeira escrita de entrada confirmada} inputClosed{Entrada fechada} timeoutRequested{Timeout de execução solicitado} processExited{Saída do processo observada} captureDrained{Captura de saída drenada} cleanupConfirmed{Liberação nativa confirmada} other{Evento da execução}}: {time}",
+  "@agentActionsIoMilestone": {"placeholders": {"stage": {"type": "String"}, "time": {"type": "String"}}}
 }

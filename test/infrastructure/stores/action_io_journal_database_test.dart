@@ -48,6 +48,7 @@ void main() {
     var db = ActionIoJournalDatabase(NativeDatabase(file));
     await db.into(db.actionIoSessions).insert(session('old'));
     await db.customStatement('ALTER TABLE action_io_sessions DROP COLUMN action_type');
+    await db.customStatement('ALTER TABLE action_io_sessions DROP COLUMN lifecycle_json');
     await db.customStatement('PRAGMA user_version = 1');
     await db.close();
     db = ActionIoJournalDatabase(NativeDatabase(file));
@@ -55,7 +56,8 @@ void main() {
     final row = await db.customSelect('SELECT execution_id, action_type FROM action_io_sessions').getSingle();
     expect(row.data['execution_id'], 'old');
     expect(row.data['action_type'], isNull);
-    expect((await db.customSelect('PRAGMA user_version').getSingle()).data.values.single, 2);
+    expect((await db.customSelect('PRAGMA user_version').getSingle()).data.values.single, 3);
+    expect((await db.select(db.actionIoSessions).getSingle()).lifecycleJson, isNull);
   });
 
   test('transaction failure leaves no admitted session', () async {
@@ -69,6 +71,24 @@ void main() {
       throwsStateError,
     );
     expect(await db.select(db.actionIoSessions).get(), isEmpty);
+  });
+
+  test('version two sessions retain identity without invented lifecycle after migration', () async {
+    final directory = await Directory.systemTemp.createTemp('action-io-migration-v2-');
+    addTearDown(() => directory.delete(recursive: true));
+    final file = File('${directory.path}/journal.sqlite');
+    var db = ActionIoJournalDatabase(NativeDatabase(file));
+    await db.into(db.actionIoSessions).insert(session('old-v2'));
+    await db.customStatement('ALTER TABLE action_io_sessions DROP COLUMN lifecycle_json');
+    await db.customStatement('PRAGMA user_version = 2');
+    await db.close();
+    db = ActionIoJournalDatabase(NativeDatabase(file));
+    addTearDown(db.close);
+    final row = await db.select(db.actionIoSessions).getSingle();
+    expect(row.executionId, 'old-v2');
+    expect(row.processState, 'queued');
+    expect(row.lifecycleJson, isNull);
+    expect((await db.customSelect('PRAGMA user_version').getSingle()).data.values.single, 3);
   });
 
   test('input IDs and sequences cannot be reused within an execution', () async {

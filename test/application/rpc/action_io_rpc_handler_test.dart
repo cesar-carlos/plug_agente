@@ -116,6 +116,7 @@ void main() {
     Object? id = 1,
     String? credential = 'credential',
     bool Function()? isCancelled,
+    ActionIoRpcCallContext? transportContext,
     TransportLimits limits = const TransportLimits(),
   }) {
     final method = 'agent.action.$suffix';
@@ -131,15 +132,104 @@ void main() {
                 'agentActions': {'io': ActionIoCapability.advertisement},
               }
             : {},
-        actionIo: ActionIoRpcCallContext(
-          connectionId: 'connection',
-          deadline: DateTime.now().add(const Duration(seconds: 30)),
-          isBatch: batch,
-          isCancelled: isCancelled ?? () => false,
-        ),
+        actionIo:
+            transportContext ??
+            ActionIoRpcCallContext(
+              connectionId: 'connection',
+              deadline: DateTime.now().add(const Duration(seconds: 30)),
+              isBatch: batch,
+              isCancelled: isCancelled ?? () => false,
+            ),
       ),
     );
   }
+
+  group('execution reference deadline contract', () {
+    ActionIoRpcCallContext budget({RpcProtocolMeta? meta, bool negotiated = true, bool cancelled = false}) =>
+        ActionIoRpcCallContext(
+          connectionId: 'current-session',
+          deadline: DateTime.now().add(const Duration(seconds: 30)),
+          receivedMonotonicMs: 1000,
+          monotonicNow: () => 1100,
+          isBatch: false,
+          isCancelled: () => cancelled,
+        ).withRequestBudget(meta, clockNegotiated: negotiated);
+
+    const valid = RpcProtocolMeta(
+      actionIoClockId: 'current-session',
+      actionIoMonotonicDeadlineMs: 5000,
+      actionIoRemainingMs: 4000,
+      actionIoDeadlineUnixMs: 0,
+    );
+
+    for (final suffix in ['getExecution', 'cancel']) {
+      for (final scenario in ['missing', 'wall-clock-only', 'previous-session', 'expired', 'cancelled']) {
+        test('$suffix refuses $scenario budget without authorization or journal mutation', () async {
+          final meta = switch (scenario) {
+            'missing' => null,
+            'wall-clock-only' => RpcProtocolMeta(
+              actionIoRemainingMs: 30000,
+              actionIoDeadlineUnixMs: DateTime.now().add(const Duration(seconds: 30)).millisecondsSinceEpoch,
+            ),
+            'previous-session' => const RpcProtocolMeta(
+              actionIoClockId: 'previous-session',
+              actionIoMonotonicDeadlineMs: 5000,
+              actionIoRemainingMs: 4000,
+            ),
+            'expired' => const RpcProtocolMeta(
+              actionIoClockId: 'current-session',
+              actionIoMonotonicDeadlineMs: 1100,
+              actionIoRemainingMs: 4000,
+            ),
+            _ => valid,
+          };
+          final response = await call(
+            suffix,
+            {'execution_id': 'e'},
+            transportContext: budget(meta: meta, cancelled: scenario == 'cancelled'),
+          );
+          expect((response.error!.data as Map)['failure_code'], 'ACTION_IO_REQUEST_EXPIRED');
+          verifyNever(() => tokens.getTokenPolicySummaryByHash(any()));
+          expect((await db.select(db.actionIoSessions).getSingle()).processState, 'queued');
+          expect(await db.select(db.actionIoMessages).get(), isEmpty);
+        });
+      }
+
+      test('$suffix accepts the current monotonic deadline despite an expired civil clock field', () async {
+        final response = await call(suffix, {'execution_id': 'e'}, transportContext: budget(meta: valid));
+        expect(response.error, isNull);
+        expect((response.result as Map)['status'], suffix == 'cancel' ? 'cancelled' : 'queued');
+      });
+
+      test('$suffix preserves the unnegotiated wall-clock transport', () async {
+        final response = await call(
+          suffix,
+          {'execution_id': 'e'},
+          transportContext: budget(
+            negotiated: false,
+            meta: RpcProtocolMeta(
+              actionIoRemainingMs: 10000,
+              actionIoDeadlineUnixMs: DateTime.now().add(const Duration(seconds: 10)).millisecondsSinceEpoch,
+            ),
+          ),
+        );
+        expect(response.error, isNull);
+        expect((response.result as Map)['status'], suffix == 'cancel' ? 'cancelled' : 'queued');
+      });
+    }
+
+    test('completed output remains queryable with a fresh request deadline', () async {
+      (await output.append('e', ActionIoStream.stdout, utf8.encode('complete'))).getOrThrow();
+      (await output.finish('e', exitCode: 0, complete: true)).getOrThrow();
+      final expired = await call('getExecution', {'execution_id': 'e'}, transportContext: budget());
+      expect((expired.error!.data as Map)['failure_code'], 'ACTION_IO_REQUEST_EXPIRED');
+      final response = await call('getExecution', {'execution_id': 'e'}, transportContext: budget(meta: valid));
+      expect(response.error, isNull);
+      expect((response.result as Map)['status'], 'succeeded');
+      expect(((response.result as Map)['process'] as Map)['exit_code'], 0);
+      expect((await db.select(db.actionIoSessions).getSingle()).processState, 'finished');
+    });
+  });
 
   for (final suffix in ['sendInput', 'closeInput', 'cancel']) {
     test('$suffix abandoned during authorization does not mutate the journal', () async {

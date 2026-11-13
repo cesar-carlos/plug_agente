@@ -5472,4 +5472,39 @@ class AppLocalizationsPt extends AppLocalizations {
 
   @override
   String get catalogAwaiting => 'Negociação de entrada e saída ainda não confirmada.';
+
+  @override
+  String get agentActionsDiagnosticsCorrectiveCleanup =>
+      'Não foi possível confirmar o encerramento do processo ou a liberação dos fluxos. Verifique a árvore de processos antes de tentar novamente; a vaga ocupada permanece protegida.';
+
+  @override
+  String agentActionsIoPid(int pid) {
+    return 'ID do processo: $pid';
+  }
+
+  @override
+  String agentActionsIoBlocker(String id, int seconds) {
+    return 'Ao expirar a espera na fila, a execução $id ocupava uma vaga havia $seconds segundos.';
+  }
+
+  @override
+  String agentActionsIoMilestone(String stage, String time) {
+    String _temp0 = intl.Intl.selectLogic(
+      stage,
+      {
+        'queued': 'Entrada na fila',
+        'queueReleased': 'Saída da fila',
+        'processCreated': 'Processo criado',
+        'processResumed': 'Processo liberado para executar',
+        'inputWritten': 'Primeira escrita de entrada confirmada',
+        'inputClosed': 'Entrada fechada',
+        'timeoutRequested': 'Timeout de execução solicitado',
+        'processExited': 'Saída do processo observada',
+        'captureDrained': 'Captura de saída drenada',
+        'cleanupConfirmed': 'Liberação nativa confirmada',
+        'other': 'Evento da execução',
+      },
+    );
+    return '$_temp0: $time';
+  }
 }

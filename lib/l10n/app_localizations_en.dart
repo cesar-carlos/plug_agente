@@ -5458,4 +5458,39 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get catalogAwaiting => 'Remote I/O negotiation has not been confirmed yet.';
+
+  @override
+  String get agentActionsDiagnosticsCorrectiveCleanup =>
+      'Process termination or stream cleanup could not be confirmed. Inspect the process tree before retrying; the occupied slot remains protected.';
+
+  @override
+  String agentActionsIoPid(int pid) {
+    return 'Process ID: $pid';
+  }
+
+  @override
+  String agentActionsIoBlocker(String id, int seconds) {
+    return 'At queue timeout, execution $id had occupied a slot for $seconds seconds.';
+  }
+
+  @override
+  String agentActionsIoMilestone(String stage, String time) {
+    String _temp0 = intl.Intl.selectLogic(
+      stage,
+      {
+        'queued': 'Entered queue',
+        'queueReleased': 'Left queue',
+        'processCreated': 'Process created',
+        'processResumed': 'Process resumed',
+        'inputWritten': 'First input write confirmed',
+        'inputClosed': 'Input closed',
+        'timeoutRequested': 'Execution timeout requested',
+        'processExited': 'Process exit observed',
+        'captureDrained': 'Output capture drained',
+        'cleanupConfirmed': 'Native cleanup confirmed',
+        'other': 'Execution event',
+      },
+    );
+    return '$_temp0: $time';
+  }
 }

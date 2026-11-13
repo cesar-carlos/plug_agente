@@ -2297,5 +2297,12 @@
   "catalogCheckTrigger": "Check for an enabled remote trigger for this action.",
   "catalogNegotiated": "Remote I/O is negotiated on this connection.",
   "catalogIncompatible": "Remote I/O was not negotiated. Check the hub version and configuration, then reconnect.",
-  "catalogAwaiting": "Remote I/O negotiation has not been confirmed yet."
+  "catalogAwaiting": "Remote I/O negotiation has not been confirmed yet.",
+  "agentActionsDiagnosticsCorrectiveCleanup": "Process termination or stream cleanup could not be confirmed. Inspect the process tree before retrying; the occupied slot remains protected.",
+  "agentActionsIoPid": "Process ID: {pid}",
+  "@agentActionsIoPid": {"placeholders": {"pid": {"type": "int"}}},
+  "agentActionsIoBlocker": "At queue timeout, execution {id} had occupied a slot for {seconds} seconds.",
+  "@agentActionsIoBlocker": {"placeholders": {"id": {"type": "String"}, "seconds": {"type": "int"}}},
+  "agentActionsIoMilestone": "{stage, select, queued{Entered queue} queueReleased{Left queue} processCreated{Process created} processResumed{Process resumed} inputWritten{First input write confirmed} inputClosed{Input closed} timeoutRequested{Execution timeout requested} processExited{Process exit observed} captureDrained{Output capture drained} cleanupConfirmed{Native cleanup confirmed} other{Execution event}}: {time}",
+  "@agentActionsIoMilestone": {"placeholders": {"stage": {"type": "String"}, "time": {"type": "String"}}}
 }

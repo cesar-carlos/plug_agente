@@ -4,11 +4,14 @@ import 'package:cryptography/cryptography.dart';
 import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:plug_agente/application/actions/action_io_running_session.dart';
+import 'package:plug_agente/core/logger/app_logger.dart';
 import 'package:plug_agente/domain/actions/action_failure.dart';
 import 'package:plug_agente/domain/actions/action_io.dart';
 import 'package:plug_agente/domain/actions/action_io_journal.dart';
+import 'package:plug_agente/domain/actions/action_io_lifecycle.dart';
 import 'package:plug_agente/domain/actions/action_io_output.dart';
 import 'package:plug_agente/domain/actions/action_policies.dart';
+import 'package:plug_agente/domain/logging/i_structured_log_sink.dart';
 import 'package:plug_agente/infrastructure/actions/agent_action_process_tree_controller.dart';
 import 'package:plug_agente/infrastructure/actions/windows_action_io_process.dart';
 import 'package:plug_agente/infrastructure/actions/windows_action_job_api.dart';
@@ -17,6 +20,20 @@ import 'package:plug_agente/infrastructure/stores/action_io_output_journal.dart'
 import 'package:plug_agente/infrastructure/stores/action_io_payload_cipher.dart';
 import 'package:plug_agente/infrastructure/stores/drift_action_io_journal.dart';
 import 'package:result_dart/result_dart.dart';
+
+class _LogSink implements IStructuredLogSink {
+  final contexts = <Map<String, dynamic>>[];
+  @override
+  void logStructured({
+    required String level,
+    required String message,
+    Object? error,
+    StackTrace? stackTrace,
+    Map<String, dynamic>? context,
+  }) {
+    if (context != null) contexts.add(context);
+  }
+}
 
 void main() {
   final powershell = '${Platform.environment['SystemRoot']}\\System32\\WindowsPowerShell\\v1.0\\powershell.exe';
@@ -35,6 +52,9 @@ void main() {
     'sqlite_capacity_failure',
   ]) {
     test('running session $mode coordinates durable input output and native cleanup', () async {
+      final logs = _LogSink();
+      AppLogger.attachStructuredSink(logs);
+      addTearDown(AppLogger.detachStructuredSink);
       final directory = await Directory.systemTemp.createTemp('action-io-session-');
       final db = ActionIoJournalDatabase(NativeDatabase(File('${directory.path}/journal.sqlite')));
       final cipher = ActionIoPayloadCipher(keyId: 'fixture', key: SecretKey(List.filled(32, 2)));
@@ -146,6 +166,56 @@ void main() {
         expect(identical(session.run(), session.run()), isTrue);
         final row = await db.select(db.actionIoSessions).getSingle();
         expect(row.processState, 'finished');
+        final stages = logs.contexts.map((entry) => entry['stage']).toList();
+        expect(
+          stages,
+          containsAllInOrder([
+            'session_started',
+            'processCreated',
+            'processExited',
+            'waiting_for_input_completion',
+            'capture_drain_started',
+            'process_cleanup_started',
+            'cleanupConfirmed',
+            'session_finished',
+          ]),
+        );
+        expect(logs.contexts.every((entry) => entry['execution_id'] == 'execution'), isTrue);
+        expect(
+          logs.contexts.expand((entry) => entry.keys).toSet(),
+          everyElement(
+            isIn([
+              'execution_id',
+              'stage',
+              'at_utc',
+              'elapsed_ms',
+              'pid',
+              'failure_code',
+              'input_bytes',
+              'stream',
+              'received_bytes',
+              'persisted_bytes',
+              'last_received_at_utc',
+            ]),
+          ),
+        );
+        final lifecycle = (await input.getExecutionSnapshot('execution')).getOrThrow().lifecycle;
+        expect(lifecycle.pid, process.pid);
+        expect(lifecycle.times, contains(ActionIoMilestone.processCreated));
+        expect(lifecycle.times, contains(ActionIoMilestone.processExited));
+        expect(lifecycle.times, contains(ActionIoMilestone.cleanupConfirmed));
+        if (mode == 'timeout') {
+          expect(
+            stages,
+            containsAllInOrder([
+              'timeoutRequested',
+              'process_tree_termination_started',
+              'waiting_for_exit_after_termination',
+              'processExited',
+            ]),
+          );
+          expect(lifecycle.times, contains(ActionIoMilestone.timeoutRequested));
+        }
         final page = (await output.read(
           executionId: 'execution',
           clientId: 'client',
@@ -154,6 +224,20 @@ void main() {
         )).getOrThrow();
         final actual = page.events.whereType<ActionIoOutputEvent>().expand((e) => e.bytes).toList();
         if (mode == 'echo' || mode == 'exit_accepted') {
+          expect(
+            stages,
+            containsAllInOrder([
+              'input_write_started',
+              'input_native_completed',
+              'input_write_confirmed',
+              'input_close_started',
+              'input_closed',
+            ]),
+          );
+          expect(lifecycle.times, contains(ActionIoMilestone.processResumed));
+          expect(lifecycle.times, contains(ActionIoMilestone.inputWritten));
+          expect(lifecycle.times, contains(ActionIoMilestone.inputClosed));
+          expect(lifecycle.times, contains(ActionIoMilestone.captureDrained));
           expect(result.getOrThrow().exitCode, mode == 'exit_accepted' ? 7 : 0);
           expect(result.getOrThrow().outputComplete, isTrue);
           expect(actual, bytes);

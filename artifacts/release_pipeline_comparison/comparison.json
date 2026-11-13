@@ -1,0 +1,239 @@
+{
+  "scope": "GitHub-hosted windows-2022 dry runs, same application revision; excludes release signing/publication and appcast. Hosted load/cache may vary.",
+  "samples": [
+    {
+      "file": "43495278123-attempt1.json",
+      "url": "https://github.com/cesar-carlos/plug_agente/actions/runs/43495278123",
+      "source": "a280b51bd109d1c690525020ccc222c40215aad4",
+      "success": true,
+      "elapsedExcludingWorkflowQueueSeconds": 1036.0,
+      "summedRunnerSeconds": 1036.0,
+      "jobsSeconds": {
+        "publish": 1036.0
+      },
+      "stepsSeconds": {
+        "publish": {
+          "Set up job": 2.0,
+          "Checkout main": 6.0,
+          "Setup Python": 0.0,
+          "Install Inno Setup": 5.0,
+          "Install Python dependencies": 6.0,
+          "Early release preflight": 4.0,
+          "Setup Flutter": 82.0,
+          "Install Flutter dependencies": 58.0,
+          "Update pubspec version": 1.0,
+          "Synchronize version files": 0.0,
+          "Verify version synchronization": 0.0,
+          "Check dependency and SDK generated files": 0.0,
+          "Release quality gate": 558.0,
+          "Test installer recovery and warning reports": 18.0,
+          "Build installer without certificate": 234.0,
+          "Verify installed bundle startup and data access probes": 2.0,
+          "Validate generated installer": 0.0,
+          "Test native updater contracts": 10.0,
+          "Dry run summary": 0.0,
+          "Preserve release installer and diagnostics": 2.0,
+          "Post Setup Flutter": 44.0,
+          "Post Setup Python": 0.0,
+          "Post Checkout main": 2.0,
+          "Complete job": 0.0
+        }
+      }
+    },
+    {
+      "file": "43495278123-attempt2.json",
+      "url": "https://github.com/cesar-carlos/plug_agente/actions/runs/43495278123",
+      "source": "a280b51bd109d1c690525020ccc222c40215aad4",
+      "success": true,
+      "elapsedExcludingWorkflowQueueSeconds": 1303.0,
+      "summedRunnerSeconds": 1303.0,
+      "jobsSeconds": {
+        "publish": 1303.0
+      },
+      "stepsSeconds": {
+        "publish": {
+          "Set up job": 1.0,
+          "Checkout main": 8.0,
+          "Setup Python": 0.0,
+          "Install Inno Setup": 7.0,
+          "Install Python dependencies": 9.0,
+          "Early release preflight": 4.0,
+          "Setup Flutter": 120.0,
+          "Install Flutter dependencies": 3.0,
+          "Update pubspec version": 1.0,
+          "Synchronize version files": 0.0,
+          "Verify version synchronization": 0.0,
+          "Check dependency and SDK generated files": 1.0,
+          "Release quality gate": 757.0,
+          "Test installer recovery and warning reports": 20.0,
+          "Build installer without certificate": 349.0,
+          "Verify installed bundle startup and data access probes": 3.0,
+          "Validate generated installer": 0.0,
+          "Test native updater contracts": 10.0,
+          "Dry run summary": 0.0,
+          "Preserve release installer and diagnostics": 4.0,
+          "Post Setup Flutter": 1.0,
+          "Post Setup Python": 0.0,
+          "Post Checkout main": 2.0,
+          "Complete job": 0.0
+        }
+      }
+    },
+    {
+      "file": "43495395574-attempt1.json",
+      "url": "https://github.com/cesar-carlos/plug_agente/actions/runs/43495395574",
+      "source": "556e6f19286b13301bb54165212bcfeb05bef121",
+      "success": true,
+      "elapsedExcludingWorkflowQueueSeconds": 1048.0,
+      "summedRunnerSeconds": 1593.0,
+      "jobsSeconds": {
+        "prepare": 12.0,
+        "build": 552.0,
+        "quality": 987.0,
+        "publish": 42.0
+      },
+      "stepsSeconds": {
+        "prepare": {
+          "Set up job": 1.0,
+          "Checkout release source": 6.0,
+          "Record immutable revision": 0.0,
+          "Setup Python": 0.0,
+          "Post Setup Python": 0.0,
+          "Post Checkout release source": 2.0,
+          "Complete job": 0.0
+        },
+        "build": {
+          "Set up job": 3.0,
+          "Checkout prepared revision": 9.0,
+          "Setup Python": 0.0,
+          "Install Inno Setup": 7.0,
+          "Install Python dependencies": 9.0,
+          "Early release preflight": 5.0,
+          "Setup Flutter": 150.0,
+          "Prepare versioned source": 1.0,
+          "Build installer without certificate": 347.0,
+          "Verify installed bundle startup and data access probes": 3.0,
+          "Validate generated installer": 0.0,
+          "Test native updater contracts": 10.0,
+          "Check dependency and SDK generated files": 0.0,
+          "Record installer digest": 0.0,
+          "Preserve prepared installer": 1.0,
+          "Preserve release diagnostics": 1.0,
+          "Post Setup Flutter": 2.0,
+          "Post Setup Python": 0.0,
+          "Post Checkout prepared revision": 2.0,
+          "Complete job": 0.0
+        },
+        "quality": {
+          "Set up job": 1.0,
+          "Checkout prepared revision": 8.0,
+          "Setup Python": 0.0,
+          "Install Python dependencies": 8.0,
+          "Setup Flutter": 223.0,
+          "Prepare versioned source": 0.0,
+          "Release quality gate": 721.0,
+          "Test installer recovery and warning reports": 17.0,
+          "Check dependency and SDK generated files": 0.0,
+          "Preserve quality diagnostics": 2.0,
+          "Post Setup Flutter": 1.0,
+          "Post Setup Python": 0.0,
+          "Post Checkout prepared revision": 2.0,
+          "Complete job": 0.0
+        },
+        "publish": {
+          "Set up job": 5.0,
+          "Checkout prepared revision": 11.0,
+          "Setup Python": 0.0,
+          "Install signature dependencies": 19.0,
+          "Require matching tested and built source": 0.0,
+          "Prepare versioned source": 1.0,
+          "Download prepared installer from this attempt": 1.0,
+          "Verify prepared installer digest": 0.0,
+          "Dry run summary": 0.0,
+          "Preserve release diagnostics": 1.0,
+          "Post Setup Python": 0.0,
+          "Post Checkout prepared revision": 2.0,
+          "Complete job": 0.0
+        }
+      }
+    },
+    {
+      "file": "43495395574-attempt2.json",
+      "url": "https://github.com/cesar-carlos/plug_agente/actions/runs/43495395574",
+      "source": "556e6f19286b13301bb54165212bcfeb05bef121",
+      "success": true,
+      "elapsedExcludingWorkflowQueueSeconds": 988.0,
+      "summedRunnerSeconds": 1599.0,
+      "jobsSeconds": {
+        "prepare": 14.0,
+        "quality": 942.0,
+        "build": 618.0,
+        "publish": 25.0
+      },
+      "stepsSeconds": {
+        "prepare": {
+          "Set up job": 1.0,
+          "Checkout release source": 6.0,
+          "Record immutable revision": 1.0,
+          "Setup Python": 0.0,
+          "Post Setup Python": 0.0,
+          "Post Checkout release source": 2.0,
+          "Complete job": 0.0
+        },
+        "quality": {
+          "Set up job": 2.0,
+          "Checkout prepared revision": 6.0,
+          "Setup Python": 0.0,
+          "Install Python dependencies": 8.0,
+          "Setup Flutter": 137.0,
+          "Prepare versioned source": 1.0,
+          "Release quality gate": 756.0,
+          "Test installer recovery and warning reports": 24.0,
+          "Check dependency and SDK generated files": 0.0,
+          "Preserve quality diagnostics": 2.0,
+          "Post Setup Flutter": 1.0,
+          "Post Setup Python": 0.0,
+          "Post Checkout prepared revision": 2.0,
+          "Complete job": 0.0
+        },
+        "build": {
+          "Set up job": 3.0,
+          "Checkout prepared revision": 12.0,
+          "Setup Python": 0.0,
+          "Install Inno Setup": 15.0,
+          "Install Python dependencies": 18.0,
+          "Early release preflight": 11.0,
+          "Setup Flutter": 138.0,
+          "Prepare versioned source": 2.0,
+          "Build installer without certificate": 394.0,
+          "Verify installed bundle startup and data access probes": 3.0,
+          "Validate generated installer": 0.0,
+          "Test native updater contracts": 11.0,
+          "Check dependency and SDK generated files": 0.0,
+          "Record installer digest": 1.0,
+          "Preserve prepared installer": 2.0,
+          "Preserve release diagnostics": 2.0,
+          "Post Setup Flutter": 1.0,
+          "Post Setup Python": 0.0,
+          "Post Checkout prepared revision": 3.0,
+          "Complete job": 0.0
+        },
+        "publish": {
+          "Set up job": 2.0,
+          "Checkout prepared revision": 9.0,
+          "Setup Python": 0.0,
+          "Install signature dependencies": 7.0,
+          "Require matching tested and built source": 0.0,
+          "Prepare versioned source": 1.0,
+          "Download prepared installer from this attempt": 1.0,
+          "Verify prepared installer digest": 0.0,
+          "Dry run summary": 0.0,
+          "Preserve release diagnostics": 0.0,
+          "Post Setup Python": 0.0,
+          "Post Checkout prepared revision": 3.0,
+          "Complete job": 0.0
+        }
+      }
+    }
+  ]
+}

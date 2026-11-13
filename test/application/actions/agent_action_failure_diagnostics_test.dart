@@ -4,6 +4,12 @@ import 'package:plug_agente/domain/actions/actions.dart';
 import 'package:test/test.dart';
 
 void main() {
+  test('queue timeout directs the operator to queue occupancy, not process runtime', () {
+    final diagnostics = const AgentActionFailureDiagnosticsResolver().resolveFailure(
+      ActionQueueFailure.withContext(message: 'Queue expired', code: AgentActionFailureCode.queueTimeout),
+    );
+    expect(diagnostics.correctiveAction, AgentActionCorrectiveActionKind.reviewQueue);
+  });
   group('AgentActionFailureDiagnosticsResolver.userMessage', () {
     test('should prefer user_message when present on ActionFailure', () {
       final failure = ActionValidationFailure.withContext(

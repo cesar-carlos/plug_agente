@@ -13,14 +13,13 @@ import 'package:plug_agente/application/use_cases/authorize_sql_operation.dart';
 import 'package:plug_agente/application/use_cases/get_client_token_policy.dart';
 import 'package:plug_agente/core/config/feature_flags.dart';
 import 'package:plug_agente/domain/actions/action_failure.dart';
+import 'package:plug_agente/domain/protocol/action_io_rpc_call_context.dart';
 import 'package:plug_agente/domain/protocol/protocol.dart';
 import 'package:plug_agente/domain/repositories/i_database_gateway.dart';
 import 'package:result_dart/result_dart.dart';
 import 'package:uuid/uuid.dart';
 
 import '../../helpers/rpc_method_dispatcher_test_support.dart';
-
-
 
 class _MockDatabaseGateway extends Mock implements IDatabaseGateway {}
 
@@ -95,6 +94,40 @@ RpcMethodDispatcher _buildDispatcher({
 
 void main() {
   group('RpcMethodDispatcher handler registry', () {
+    for (final method in ['agent.action.getExecution', 'agent.action.cancel']) {
+      test('$method preserves legacy routing with an expired I/O context', () async {
+        final dispatcher = _buildDispatcher(
+          handlers: [_StubRpcMethodHandler(method)],
+          routeActionIoExecution: (legacy) => ActionIoExecutionRouter(
+            legacy: legacy,
+            faithful: const _StubRpcMethodHandler('faithful'),
+            ownsExecution: (id) async => Success(id == 'io'),
+          ),
+        );
+        final expired = ActionIoRpcCallContext(
+          connectionId: 'current-session',
+          deadline: DateTime.now().add(const Duration(seconds: 30)),
+          receivedMonotonicMs: 1000,
+          monotonicNow: () => 1000,
+          isBatch: false,
+          isCancelled: () => false,
+        ).withRequestBudget(null, clockNegotiated: true);
+        expect(expired.isActive, isFalse);
+        for (final id in ['legacy', 'io']) {
+          final response = await runZoned(
+            () => dispatcher.dispatch(
+              RpcRequest(jsonrpc: '2.0', method: method, id: id, params: {'execution_id': id}),
+              'agent',
+              clientToken: 'token',
+            ),
+            zoneValues: {ActionIoRpcCallContext.zoneKey: expired},
+          );
+          expect(response.error, isNull);
+          expect((response.result as Map)['method'], id == 'io' ? 'faithful' : method);
+        }
+      });
+    }
+
     test('routes durable I/O ownership without fallback on lookup failure', () async {
       var failLookup = false;
       final dispatcher = _buildDispatcher(

@@ -46,6 +46,7 @@ abstract final class ActionIoExecutionProjection {
         exitCode: snapshot.exitCode,
         failureCode: failure,
         ioStatus: ActionIoExecutionStatus(
+          lifecycle: snapshot.lifecycle,
           processState: snapshot.processState,
           stdinState: snapshot.stdinState,
           captureState: snapshot.captureState,

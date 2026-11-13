@@ -338,6 +338,11 @@ void main() {
       final pendingResult = await pending;
       check(pendingResult.isError()).isTrue();
       check((pendingResult.exceptionOrNull()! as ActionQueueFailure).code).equals(AgentActionFailureCode.queueTimeout);
+      final failure = pendingResult.exceptionOrNull()! as ActionQueueFailure;
+      expect(failure.context['phase'], 'queue');
+      final blockers = failure.context['blocking_executions']! as List;
+      expect((blockers.single as Map)['execution_id'], 'running');
+      expect((blockers.single as Map)['elapsed_ms'], greaterThanOrEqualTo(0));
       check(pendingTaskStarted).isFalse();
 
       blocker.complete(const Success('done'));

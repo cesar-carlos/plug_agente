@@ -1,3 +1,5 @@
+import 'package:plug_agente/domain/actions/action_io_lifecycle.dart';
+
 /// Metadata-only view of faithful execution; never contains stream payloads.
 final class ActionIoExecutionStatus {
   const ActionIoExecutionStatus({
@@ -9,6 +11,7 @@ final class ActionIoExecutionStatus {
     this.confirmedInputBytes = 0,
     this.stdoutBytes = 0,
     this.stderrBytes = 0,
+    this.lifecycle = const ActionIoLifecycle(),
   });
 
   final String processState;
@@ -19,4 +22,5 @@ final class ActionIoExecutionStatus {
   final int confirmedInputBytes;
   final int stdoutBytes;
   final int stderrBytes;
+  final ActionIoLifecycle lifecycle;
 }

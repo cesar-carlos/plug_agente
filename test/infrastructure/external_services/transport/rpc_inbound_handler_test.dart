@@ -280,6 +280,97 @@ void main() {
   });
 
   group('transport session generation', () {
+    for (final scenario in [
+      (method: 'agent.action.getExecution', batch: false),
+      (method: 'agent.action.getExecution', batch: true),
+      (method: 'agent.action.cancel', batch: false),
+    ]) {
+      test('${scenario.method} batch=${scenario.batch} requires a deadline from the current login', () async {
+        protocol = const ProtocolConfig(
+          protocol: 'jsonrpc-v2',
+          encoding: 'json',
+          compression: 'none',
+          negotiatedExtensions: {
+            'agentActions': {'io': ActionIoCapability.advertisement, 'deadlineClock': 1},
+          },
+        );
+        Map<String, dynamic> probe() {
+          Map<String, dynamic>? sample;
+          runZoned(
+            () => handler.handleClockProbe([
+              {'version': 1},
+              (dynamic value) => sample = Map<String, dynamic>.from(value as Map),
+            ]),
+            zoneValues: {#transportRequestGeneration: activeTransportSessionGeneration},
+          );
+          return sample!;
+        }
+
+        final calls = <ActionIoRpcCallContext>[];
+        final activeAtDispatch = <bool>[];
+        when(
+          () => dispatcher.dispatch(
+            any(),
+            any(),
+            clientToken: any(named: 'clientToken'),
+            streamEmitter: any(named: 'streamEmitter'),
+            limits: any(named: 'limits'),
+            negotiatedExtensions: any(named: 'negotiatedExtensions'),
+          ),
+        ).thenAnswer((invocation) async {
+          final call = Zone.current[ActionIoRpcCallContext.zoneKey]! as ActionIoRpcCallContext;
+          calls.add(call);
+          activeAtDispatch.add(call.isActive);
+          return RpcResponse.success(
+            id: (invocation.positionalArguments[0] as RpcRequest).id,
+            result: <String, Object>{},
+          );
+        });
+        Future<void> send(Map<String, dynamic>? sample) async {
+          final request = {
+            'jsonrpc': '2.0',
+            'id': 'reference-${calls.length}',
+            'method': scenario.method,
+            'params': {'execution_id': 'e'},
+            if (sample != null)
+              'meta': {
+                'action_io_clock_id': sample['clock_id'],
+                'action_io_monotonic_deadline_ms': (sample['monotonic_ms'] as int) + 10000,
+                'action_io_remaining_ms': 10000,
+                'action_io_deadline_unix_ms': 0,
+              },
+          };
+          final bytes = Uint8List.fromList(utf8.encode(jsonEncode(scenario.batch ? [request] : request)));
+          final frame = PayloadFrame(
+            schemaVersion: '1.0',
+            enc: 'json',
+            cmp: 'none',
+            contentType: 'application/json',
+            originalSize: bytes.length,
+            compressedSize: bytes.length,
+            payload: bytes,
+          ).toJson();
+          await runZoned(
+            () => handler.handleRequest(frame),
+            zoneValues: {#transportRequestGeneration: activeTransportSessionGeneration},
+          );
+        }
+
+        final firstLogin = probe();
+        await send(null);
+        await send(firstLogin);
+        activeTransportSessionGeneration++;
+        expect(calls.every((call) => !call.isActive), isTrue);
+        await send(firstLogin);
+        final secondLogin = probe();
+        expect(secondLogin['clock_id'], isNot(firstLogin['clock_id']));
+        await send(secondLogin);
+        expect(activeAtDispatch, [false, true, false, true]);
+        expect(calls.every((call) => call.isBatch == scenario.batch), isTrue);
+        handler.resetAckBuffer();
+      });
+    }
+
     test('propagates trusted connection deadline batch and cancellation state across dispatch', () async {
       final calls = <ActionIoRpcCallContext>[];
       when(

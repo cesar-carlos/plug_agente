@@ -2,11 +2,45 @@ import 'dart:convert';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:plug_agente/application/actions/agent_action_execution_support_export.dart';
+import 'package:plug_agente/domain/actions/action_io_execution_status.dart';
+import 'package:plug_agente/domain/actions/action_io_lifecycle.dart';
 import 'package:plug_agente/domain/actions/actions.dart';
 
 void main() {
   group('AgentActionExecutionSupportExport', () {
     const export = AgentActionExecutionSupportExport();
+
+    test('exports local lifecycle and queue blocker without inventing legacy process fields', () {
+      final at = DateTime.utc(2026, 11, 9);
+      final execution = AgentActionExecution(
+        id: 'waiting',
+        actionId: 'action',
+        actionType: AgentActionType.script,
+        status: AgentActionExecutionStatus.failed,
+        requestedAt: at,
+        source: AgentActionRequestSource.remoteHub,
+        failureCode: AgentActionFailureCode.queueTimeout,
+        ioStatus: ActionIoExecutionStatus(
+          processState: 'finished',
+          stdinState: 'failed',
+          captureState: 'complete',
+          outputExpired: false,
+          lifecycle: ActionIoLifecycle(
+            times: {ActionIoMilestone.queued: at},
+            blockers: const [ActionQueueBlocker(executionId: 'blocking', elapsedMs: 300000)],
+          ),
+        ),
+      );
+      final decoded = jsonDecode(export.buildJson(execution)) as Map<String, dynamic>;
+      expect(decoded['pid'], isNull);
+      expect(decoded['corrective_action'], 'review_queue');
+      final lifecycle = decoded['io_lifecycle'] as Map<String, dynamic>;
+      final times = lifecycle['times'] as Map<String, dynamic>;
+      expect(times['queued'], at.toIso8601String());
+      expect(lifecycle['blocking_executions'], [
+        {'execution_id': 'blocking', 'elapsed_ms': 300000},
+      ]);
+    });
 
     test('should emit redacted support json with diagnostics metadata when execution failed', () {
       final execution = AgentActionExecution(

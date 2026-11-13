@@ -58,6 +58,8 @@ class AgentActionExecutionSupportExport {
           SupportDiagnosticsField(key: 'redaction_applied', value: execution.redactionApplied),
           SupportDiagnosticsField(key: 'failure_code', value: diagnostics.failureCode ?? execution.failureCode),
           SupportDiagnosticsField(key: 'failure_phase', value: diagnostics.failurePhase ?? execution.failurePhase),
+          if (execution.ioStatus != null)
+            SupportDiagnosticsField(key: 'io_lifecycle', value: execution.ioStatus!.lifecycle.toJson()),
           if (diagnostics.correctiveAction != null)
             SupportDiagnosticsField(
               key: 'corrective_action',

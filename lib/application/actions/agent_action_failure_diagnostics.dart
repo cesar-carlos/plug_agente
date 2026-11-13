@@ -7,6 +7,7 @@ enum AgentActionCorrectiveActionKind {
   reviewExitCode('review_exit_code'),
   reviewQueue('review_queue'),
   reviewTimeout('review_timeout'),
+  reviewCleanup('review_cleanup'),
   retryKill('retry_kill'),
   reviewDefinitionValidation('review_definition_validation'),
   reviewPreflight('review_preflight'),
@@ -138,7 +139,12 @@ class AgentActionFailureDiagnosticsResolver {
       case AgentActionFailureCode.queueItemNotFound:
         return AgentActionCorrectiveActionKind.reviewQueue;
       case AgentActionFailureCode.queueTimeout:
-        return AgentActionCorrectiveActionKind.reviewTimeout;
+        return AgentActionCorrectiveActionKind.reviewQueue;
+      case 'ACTION_IO_DRAIN_TIMEOUT':
+      case 'ACTION_IO_CLEANUP_FAILED':
+      case 'ACTION_IO_CLEANUP_UNKNOWN':
+      case 'ACTION_IO_PROCESS_TERMINATION_FAILED':
+        return AgentActionCorrectiveActionKind.reviewCleanup;
       case AgentActionFailureCode.executionTimedOut:
         return AgentActionCorrectiveActionKind.reviewTimeout;
       case AgentActionFailureCode.killFailed:

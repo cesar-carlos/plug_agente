@@ -1,0 +1,44 @@
+{
+  "status": "inconclusive",
+  "reason": "No two-second idle window below 15% CPU within 20 seconds",
+  "cross_version_measurements_completed": 0,
+  "same_code_controls": [
+    {
+      "scenario": "workerCount=4",
+      "same_version": "5.0.2",
+      "first_median_ms": 158.966,
+      "second_median_ms": 175.944,
+      "change_pct": 10.680271252972329,
+      "cpu_filter_passed": true
+    },
+    {
+      "scenario": "workerCount=4 columnar",
+      "same_version": "5.0.2",
+      "first_median_ms": 146.277,
+      "second_median_ms": 185.172,
+      "change_pct": 26.589962878648056,
+      "cpu_filter_passed": false
+    }
+  ],
+  "cleanup": {
+    "SQL Server 5.0.4": "passed",
+    "SQL Server 5.0.2": "passed"
+  },
+  "source_unchanged": true,
+  "production_changes": false,
+  "limitations": [
+    "Other machine tasks could not be paused.",
+    "Same-version controls were unstable before A/B began.",
+    "No gain or regression of 5.0.4 can be inferred.",
+    "SQL Anywhere matrix did not start.",
+    "CPU monitoring cannot rule out database, disk, network or thermal interference."
+  ],
+  "sources_sha256": "5be84358cb8e6fafaa50d572c477ed2a2b8edeb061ee083444d15d3c070c5a63",
+  "reproduction": [
+    "Extract sources.zip into build/odbc-502-504-review.",
+    "Verify native packages 5.0.2 and 5.0.4 under build/odbc-native/packages; paths use this Windows workspace.",
+    "python build/odbc-502-504-review/rebuild.py",
+    "When other tasks are paused: python build/odbc-502-504-review/run.py"
+  ],
+  "notes": "run.py uses ODBC_TEST_DSN_SQL_SERVER and ODBC_TEST_DSN locally from .env; no DSN or credentials are retained in these artifacts. A repeated run overwrites raw.json; preserve previous results first."
+}

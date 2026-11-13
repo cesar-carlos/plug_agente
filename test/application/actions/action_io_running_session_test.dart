@@ -22,6 +22,7 @@ void main() {
   for (final throwsOnClose in [false, true]) {
     test('authorization failure survives termination, close and commit failures (throws=$throwsOnClose)', () async {
       final process = _Process();
+      when(() => process.pid).thenReturn(1234);
       final pipe = _Pipe();
       final input = _InputJournal();
       final output = _OutputJournal();

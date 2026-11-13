@@ -7,9 +7,11 @@ import 'package:plug_agente/domain/actions/action_io.dart';
 import 'package:plug_agente/domain/actions/action_io_execution_snapshot.dart';
 import 'package:plug_agente/domain/actions/action_io_journal.dart';
 import 'package:plug_agente/domain/actions/action_io_journal_changes.dart';
+import 'package:plug_agente/domain/actions/action_io_lifecycle.dart';
 import 'package:plug_agente/domain/actions/action_io_session_reference.dart';
 import 'package:plug_agente/domain/repositories/i_action_io_execution_ownership.dart';
 import 'package:plug_agente/domain/repositories/i_action_io_journal.dart';
+import 'package:plug_agente/domain/repositories/i_action_io_lifecycle_journal.dart';
 import 'package:plug_agente/domain/repositories/i_action_io_local_history.dart';
 import 'package:plug_agente/domain/repositories/i_action_io_metrics.dart';
 import 'package:plug_agente/domain/repositories/i_action_io_session_lookup.dart';
@@ -21,7 +23,12 @@ import 'package:uuid/uuid.dart';
 
 final class DriftActionIoJournal
     with ActionIoJournalChanges
-    implements IActionIoJournal, IActionIoSessionLookup, IActionIoLocalHistory, IActionIoExecutionOwnership {
+    implements
+        IActionIoJournal,
+        IActionIoSessionLookup,
+        IActionIoLocalHistory,
+        IActionIoExecutionOwnership,
+        IActionIoLifecycleJournal {
   DriftActionIoJournal(
     this._db,
     this._cipher, {
@@ -39,6 +46,35 @@ final class DriftActionIoJournal
   final ActionIoPayloadCipher _cipher;
   final DateTime Function() _now;
   final int Function() _concurrencyLimit;
+
+  ActionIoLifecycle _lifecycle(ActionIoSession row) => row.lifecycleJson == null
+      ? const ActionIoLifecycle()
+      : ActionIoLifecycle.fromJson(jsonDecode(row.lifecycleJson!) as Map<String, dynamic>);
+
+  @override
+  Future<Result<Unit>> recordMilestone(String executionId, ActionIoMilestone milestone, {int? pid}) => _guard(
+    () => _db.transaction(() async {
+      final row = await _session(executionId);
+      final value = _lifecycle(row).record(milestone, _now(), processId: pid);
+      await (_db.update(_db.actionIoSessions)..where((s) => s.executionId.equals(executionId))).write(
+        ActionIoSessionsCompanion(lifecycleJson: Value(jsonEncode(value.toJson()))),
+      );
+      return unit;
+    }),
+  );
+
+  @override
+  Future<Result<Unit>> recordQueueBlockers(String executionId, List<ActionQueueBlocker> blockers) => _guard(
+    () => _db.transaction(() async {
+      final row = await _session(executionId);
+      final previous = _lifecycle(row);
+      final value = ActionIoLifecycle(times: previous.times, pid: previous.pid, blockers: blockers);
+      await (_db.update(_db.actionIoSessions)..where((s) => s.executionId.equals(executionId))).write(
+        ActionIoSessionsCompanion(lifecycleJson: Value(jsonEncode(value.toJson()))),
+      );
+      return unit;
+    }),
+  );
 
   @override
   Future<Result<bool>> ownsExecution(String executionId) => _guard(() async {
@@ -110,6 +146,7 @@ final class DriftActionIoJournal
     terminalAt: row.terminalAt,
     exitCode: row.exitCode,
     failureCode: row.failureCode,
+    lifecycle: _lifecycle(row),
   );
 
   @override
@@ -242,6 +279,9 @@ final class DriftActionIoJournal
               stdinState: 'pending',
               captureState: 'capturing',
               createdAt: _now(),
+              lifecycleJson: Value(
+                jsonEncode(const ActionIoLifecycle().record(ActionIoMilestone.queued, _now()).toJson()),
+              ),
             ),
           );
       var sequence = 0;
@@ -454,6 +494,9 @@ final class DriftActionIoJournal
       await (_db.update(_db.actionIoSessions)..where((s) => s.executionId.equals(executionId))).write(
         ActionIoSessionsCompanion(
           processState: Value(to),
+          lifecycleJson: to == 'starting'
+              ? Value(jsonEncode(_lifecycle(session).record(ActionIoMilestone.queueReleased, _now()).toJson()))
+              : const Value.absent(),
           stdinState: Value(to == 'running' && session.stdinState == 'pending' ? 'open' : session.stdinState),
         ),
       );
@@ -547,6 +590,11 @@ final class DriftActionIoJournal
         final stdinState = state != ActionIoDeliveryState.written
             ? 'failed'
             : (message.closesInput ? 'closed' : session.stdinState);
+        var lifecycle = _lifecycle(session);
+        if (state == ActionIoDeliveryState.written) {
+          if (message.inputBytes > 0) lifecycle = lifecycle.record(ActionIoMilestone.inputWritten, _now());
+          if (message.closesInput) lifecycle = lifecycle.record(ActionIoMilestone.inputClosed, _now());
+        }
         await (_db.update(
           _db.actionIoMessages,
         )..where((m) => m.executionId.equals(executionId) & m.messageId.equals(messageId))).write(
@@ -560,6 +608,7 @@ final class DriftActionIoJournal
           ActionIoSessionsCompanion(
             stdinState: Value(stdinState),
             queuedInputBytes: Value(session.queuedInputBytes - message.inputBytes),
+            lifecycleJson: Value(jsonEncode(lifecycle.toJson())),
             queuedInputMessages: Value(session.queuedInputMessages - 1),
           ),
         );

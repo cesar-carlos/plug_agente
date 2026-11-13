@@ -1,3 +1,4 @@
+import 'package:plug_agente/domain/actions/action_io_lifecycle.dart';
 import 'package:plug_agente/domain/actions/action_io_session_reference.dart';
 
 /// Durable metadata only; binary output is read separately through its journal.
@@ -18,6 +19,7 @@ final class ActionIoExecutionSnapshot {
     this.terminalAt,
     this.exitCode,
     this.failureCode,
+    this.lifecycle = const ActionIoLifecycle(),
   });
 
   final ActionIoSessionReference session;
@@ -35,4 +37,5 @@ final class ActionIoExecutionSnapshot {
   final DateTime? terminalAt;
   final int? exitCode;
   final String? failureCode;
+  final ActionIoLifecycle lifecycle;
 }

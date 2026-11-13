@@ -37,6 +37,7 @@ class ActionExecutionQueue {
   final Map<String, int> _runningByActionId = <String, int>{};
   final Map<String, Set<String>> _runningExecutionIdsByActionId = <String, Set<String>>{};
   final Set<String> _unconfirmedCleanup = {};
+  final Map<String, Stopwatch> _runningElapsed = {};
 
   /// Keeps ownership after a native cleanup failure. Only process restart and
   /// durable reconciliation can resolve this uncertainty; maintenance cannot.
@@ -323,6 +324,10 @@ class ActionExecutionQueue {
       request: request,
       metrics: _metrics,
       onTimeout: () => _removeTimedOutPending(request.actionId),
+      blockers: () => [
+        for (final id in runningExecutionIdsFor(request.actionId))
+          {'execution_id': id, 'elapsed_ms': _runningElapsed[id]?.elapsedMilliseconds ?? 0},
+      ],
     );
     queue.add(pending as _PendingActionTask<Object>);
     _metrics?.recordPendingEnqueued();
@@ -408,12 +413,14 @@ class ActionExecutionQueue {
   }
 
   void _beginRunning(String actionId, String executionId) {
+    _runningElapsed[executionId] = Stopwatch()..start();
     _runningByActionId[actionId] = (_runningByActionId[actionId] ?? 0) + 1;
     (_runningExecutionIdsByActionId[actionId] ??= <String>{}).add(executionId);
   }
 
   void _endRunning(String actionId, String executionId) {
     if (_unconfirmedCleanup.contains(executionId)) return;
+    _runningElapsed.remove(executionId)?.stop();
     final executionIds = _runningExecutionIdsByActionId[actionId];
     executionIds?.remove(executionId);
     if (executionIds != null && executionIds.isEmpty) {
@@ -614,6 +621,7 @@ class _PendingActionTask<T extends Object> {
     required this.request,
     required this.metrics,
     required void Function() onTimeout,
+    required this.blockers,
   }) : _enqueuedAt = DateTime.now(),
        _onTimeout = onTimeout {
     _timeoutTimer = Timer(request.policies.queue.queueTimeout, _completeTimeout);
@@ -622,6 +630,7 @@ class _PendingActionTask<T extends Object> {
   final AgentActionQueueRequest<T> request;
   final ActionExecutionQueueMetricsCollector? metrics;
   final DateTime _enqueuedAt;
+  final List<Map<String, Object>> Function() blockers;
   final void Function() _onTimeout;
   final Completer<Result<T>> _completer = Completer<Result<T>>();
   late final Timer _timeoutTimer;
@@ -666,6 +675,8 @@ class _PendingActionTask<T extends Object> {
           context: {
             'action_id': request.actionId,
             'queue_timeout_ms': request.policies.queue.queueTimeout.inMilliseconds,
+            'phase': 'queue',
+            'blocking_executions': blockers(),
             'reason': AgentActionQueueConstants.queueTimeoutReason,
             'user_message': 'The action waited too long in the queue and was not started.',
           },

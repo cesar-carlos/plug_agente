@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:plug_agente/core/logger/app_logger.dart';
 import 'package:plug_agente/domain/actions/action_failure.dart';
 import 'package:plug_agente/domain/actions/action_io.dart';
 import 'package:plug_agente/domain/repositories/i_action_io_output_journal.dart';
@@ -97,19 +98,47 @@ final class ActionIoOutputCapture {
   }
 
   Future<void> _capture(Stream<List<int>> source, ActionIoStream stream) async {
+    var receivedBytes = 0;
+    var persistedBytes = 0;
+    DateTime? lastReceivedAt;
     try {
       await for (final block in source) {
         if (_primaryFailure != null) break;
         // Empty stream notifications carry no output and do not imply EOF.
         if (block.isEmpty) continue;
+        lastReceivedAt = DateTime.now().toUtc();
+        if (receivedBytes == 0) {
+          AppLogger.operational(
+            'Action IO first output received',
+            context: {
+              'execution_id': executionId,
+              'stream': stream.name,
+              'at_utc': lastReceivedAt.toIso8601String(),
+            },
+          );
+        }
+        receivedBytes += block.length;
         final result = await _journal.append(executionId, stream, block);
         if (result.isError()) {
           await _fail(result.exceptionOrNull()!);
           break;
         }
+        persistedBytes += block.length;
       }
     } on Object catch (error) {
       await _fail(error);
+    } finally {
+      AppLogger.operational(
+        'Action IO output capture stopped',
+        context: {
+          'execution_id': executionId,
+          'stream': stream.name,
+          'received_bytes': receivedBytes,
+          'persisted_bytes': persistedBytes,
+          if (lastReceivedAt != null) 'last_received_at_utc': lastReceivedAt.toIso8601String(),
+          if (_primaryFailure != null) 'failure_code': _primaryFailure!.code,
+        },
+      );
     }
   }
 

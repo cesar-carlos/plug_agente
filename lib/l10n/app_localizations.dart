@@ -10093,6 +10093,30 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Remote I/O negotiation has not been confirmed yet.'**
   String get catalogAwaiting;
+
+  /// No description provided for @agentActionsDiagnosticsCorrectiveCleanup.
+  ///
+  /// In en, this message translates to:
+  /// **'Process termination or stream cleanup could not be confirmed. Inspect the process tree before retrying; the occupied slot remains protected.'**
+  String get agentActionsDiagnosticsCorrectiveCleanup;
+
+  /// No description provided for @agentActionsIoPid.
+  ///
+  /// In en, this message translates to:
+  /// **'Process ID: {pid}'**
+  String agentActionsIoPid(int pid);
+
+  /// No description provided for @agentActionsIoBlocker.
+  ///
+  /// In en, this message translates to:
+  /// **'At queue timeout, execution {id} had occupied a slot for {seconds} seconds.'**
+  String agentActionsIoBlocker(String id, int seconds);
+
+  /// No description provided for @agentActionsIoMilestone.
+  ///
+  /// In en, this message translates to:
+  /// **'{stage, select, queued{Entered queue} queueReleased{Left queue} processCreated{Process created} processResumed{Process resumed} inputWritten{First input write confirmed} inputClosed{Input closed} timeoutRequested{Execution timeout requested} processExited{Process exit observed} captureDrained{Output capture drained} cleanupConfirmed{Native cleanup confirmed} other{Execution event}}: {time}'**
+  String agentActionsIoMilestone(String stage, String time);
 }
 
 class _AppLocalizationsDelegate extends LocalizationsDelegate<AppLocalizations> {

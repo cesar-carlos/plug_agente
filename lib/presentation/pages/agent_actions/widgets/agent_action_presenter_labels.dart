@@ -207,6 +207,7 @@ String? agentActionCorrectiveActionLabel(
     AgentActionCorrectiveActionKind.reviewExitCode => l10n.agentActionsDiagnosticsCorrectiveExitCode,
     AgentActionCorrectiveActionKind.reviewQueue => l10n.agentActionsDiagnosticsCorrectiveQueue,
     AgentActionCorrectiveActionKind.reviewTimeout => l10n.agentActionsDiagnosticsCorrectiveTimeout,
+    AgentActionCorrectiveActionKind.reviewCleanup => l10n.agentActionsDiagnosticsCorrectiveCleanup,
     AgentActionCorrectiveActionKind.retryKill => l10n.agentActionsDiagnosticsCorrectiveKill,
     AgentActionCorrectiveActionKind.reviewDefinitionValidation =>
       l10n.agentActionsDiagnosticsCorrectiveDefinitionValidation,

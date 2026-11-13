@@ -3,10 +3,13 @@ import 'package:plug_agente/application/actions/action_io_execution_queue.dart';
 import 'package:plug_agente/application/actions/action_io_local_intent_validator.dart';
 import 'package:plug_agente/application/actions/action_io_running_session.dart';
 import 'package:plug_agente/application/actions/agent_action_definition_snapshotter.dart';
+import 'package:plug_agente/core/logger/app_logger.dart';
 import 'package:plug_agente/domain/actions/action_io_journal.dart';
+import 'package:plug_agente/domain/actions/action_io_lifecycle.dart';
 import 'package:plug_agente/domain/actions/actions.dart';
 import 'package:plug_agente/domain/repositories/i_action_io_invocation_resolver.dart';
 import 'package:plug_agente/domain/repositories/i_action_io_journal.dart';
+import 'package:plug_agente/domain/repositories/i_action_io_lifecycle_journal.dart';
 import 'package:plug_agente/domain/repositories/i_action_io_output_journal.dart';
 import 'package:plug_agente/domain/repositories/i_action_io_process_factory.dart';
 import 'package:plug_agente/domain/repositories/i_agent_action_repository.dart';
@@ -64,11 +67,27 @@ final class ActionIoSessionLauncher {
     ActionIoInvocation? invocation;
     var creationAttempted = false;
     var startingRefused = false;
+    final diagnostics = input is IActionIoLifecycleJournal ? input as IActionIoLifecycleJournal : null;
+    void log(String stage) => AppLogger.operational(
+      'Action IO launch lifecycle',
+      context: {
+        'execution_id': intent.executionId,
+        'action_id': intent.actionId,
+        'stage': stage,
+        'at_utc': DateTime.now().toUtc().toIso8601String(),
+      },
+    );
+    log('queue_admitted');
     final result = await queue.enqueue(
       actionId: intent.actionId,
       executionId: intent.executionId,
       policies: saved.getOrThrow().policies,
       prepare: () async {
+        log('queue_released');
+        if (diagnostics != null) {
+          final recorded = await diagnostics.recordMilestone(intent.executionId, ActionIoMilestone.queueReleased);
+          if (recorded.isError()) return recorded;
+        }
         final permitted = await authorize();
         if (permitted.isError()) return permitted;
         final valid = await validator.validate(intent, checkQueue: false);
@@ -107,7 +126,9 @@ final class ActionIoSessionLauncher {
       },
       create: () async {
         creationAttempted = true;
+        log('process_creation_started');
         final process = await processes.start(invocation!);
+        log(process.isSuccess() ? 'process_creation_completed' : 'process_creation_failed');
         if (process.isError()) return Failure(process.exceptionOrNull()!);
         return Success(
           ActionIoRunningSession(
@@ -122,8 +143,28 @@ final class ActionIoSessionLauncher {
         );
       },
     );
+    if (result.isError()) {
+      final failure = result.exceptionOrNull();
+      AppLogger.operational(
+        'Action IO launch failed',
+        context: {
+          'execution_id': intent.executionId,
+          'action_id': intent.actionId,
+          if (failure is ActionFailure) 'failure_code': failure.code,
+          if (failure is ActionFailure && failure.code == AgentActionFailureCode.queueTimeout)
+            'blocking_executions': failure.context['blocking_executions'],
+        },
+      );
+    }
     if (result.isError() && !creationAttempted && !startingRefused) {
       final failure = result.exceptionOrNull()!;
+      Result<Unit>? blockerRecording;
+      if (diagnostics != null && failure is ActionFailure && failure.code == AgentActionFailureCode.queueTimeout) {
+        final blockers = failure.context['blocking_executions'] as List? ?? [];
+        blockerRecording = await diagnostics.recordQueueBlockers(intent.executionId, [
+          for (final value in blockers) ActionQueueBlocker.fromJson(Map<String, dynamic>.from(value as Map)),
+        ]);
+      }
       final recorded = await output.finish(
         intent.executionId,
         exitCode: null,
@@ -131,6 +172,7 @@ final class ActionIoSessionLauncher {
         failureCode: failure is ActionFailure ? failure.code : 'ACTION_IO_PREPARATION_FAILED',
       );
       if (recorded.isError()) return Failure(recorded.exceptionOrNull()!);
+      if (blockerRecording?.isError() ?? false) return Failure(blockerRecording!.exceptionOrNull()!);
     }
     return result;
   }

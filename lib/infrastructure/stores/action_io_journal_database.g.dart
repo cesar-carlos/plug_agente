@@ -3,8 +3,7 @@
 part of 'action_io_journal_database.dart';
 
 // ignore_for_file: type=lint
-class $ActionIoSessionsTable extends ActionIoSessions
-    with TableInfo<$ActionIoSessionsTable, ActionIoSession> {
+class $ActionIoSessionsTable extends ActionIoSessions with TableInfo<$ActionIoSessionsTable, ActionIoSession> {
   @override
   final GeneratedDatabase attachedDatabase;
   final String? _alias;
@@ -176,8 +175,7 @@ class $ActionIoSessionsTable extends ActionIoSessions
     requiredDuringInsert: false,
     defaultValue: const Constant(1),
   );
-  static const VerificationMeta _admittedInputBytesMeta =
-      const VerificationMeta('admittedInputBytes');
+  static const VerificationMeta _admittedInputBytesMeta = const VerificationMeta('admittedInputBytes');
   @override
   late final GeneratedColumn<int> admittedInputBytes = GeneratedColumn<int>(
     'admitted_input_bytes',
@@ -223,8 +221,7 @@ class $ActionIoSessionsTable extends ActionIoSessions
     requiredDuringInsert: false,
     defaultValue: const Constant(0),
   );
-  static const VerificationMeta _queuedInputMessagesMeta =
-      const VerificationMeta('queuedInputMessages');
+  static const VerificationMeta _queuedInputMessagesMeta = const VerificationMeta('queuedInputMessages');
   @override
   late final GeneratedColumn<int> queuedInputMessages = GeneratedColumn<int>(
     'queued_input_messages',
@@ -267,6 +264,17 @@ class $ActionIoSessionsTable extends ActionIoSessions
     type: DriftSqlType.string,
     requiredDuringInsert: false,
   );
+  static const VerificationMeta _lifecycleJsonMeta = const VerificationMeta(
+    'lifecycleJson',
+  );
+  @override
+  late final GeneratedColumn<String> lifecycleJson = GeneratedColumn<String>(
+    'lifecycle_json',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
   static const VerificationMeta _createdAtMeta = const VerificationMeta(
     'createdAt',
   );
@@ -293,26 +301,24 @@ class $ActionIoSessionsTable extends ActionIoSessions
     'outputExpiresAt',
   );
   @override
-  late final GeneratedColumn<DateTime> outputExpiresAt =
-      GeneratedColumn<DateTime>(
-        'output_expires_at',
-        aliasedName,
-        true,
-        type: DriftSqlType.dateTime,
-        requiredDuringInsert: false,
-      );
+  late final GeneratedColumn<DateTime> outputExpiresAt = GeneratedColumn<DateTime>(
+    'output_expires_at',
+    aliasedName,
+    true,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: false,
+  );
   static const VerificationMeta _dedupeExpiresAtMeta = const VerificationMeta(
     'dedupeExpiresAt',
   );
   @override
-  late final GeneratedColumn<DateTime> dedupeExpiresAt =
-      GeneratedColumn<DateTime>(
-        'dedupe_expires_at',
-        aliasedName,
-        true,
-        type: DriftSqlType.dateTime,
-        requiredDuringInsert: false,
-      );
+  late final GeneratedColumn<DateTime> dedupeExpiresAt = GeneratedColumn<DateTime>(
+    'dedupe_expires_at',
+    aliasedName,
+    true,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: false,
+  );
   static const VerificationMeta _outputExpiredMeta = const VerificationMeta(
     'outputExpired',
   );
@@ -353,6 +359,7 @@ class $ActionIoSessionsTable extends ActionIoSessions
     exitCode,
     failureCode,
     diagnosticId,
+    lifecycleJson,
     createdAt,
     terminalAt,
     outputExpiresAt,
@@ -581,6 +588,15 @@ class $ActionIoSessionsTable extends ActionIoSessions
         ),
       );
     }
+    if (data.containsKey('lifecycle_json')) {
+      context.handle(
+        _lifecycleJsonMeta,
+        lifecycleJson.isAcceptableOrUnknown(
+          data['lifecycle_json']!,
+          _lifecycleJsonMeta,
+        ),
+      );
+    }
     if (data.containsKey('created_at')) {
       context.handle(
         _createdAtMeta,
@@ -727,6 +743,10 @@ class $ActionIoSessionsTable extends ActionIoSessions
         DriftSqlType.string,
         data['${effectivePrefix}diagnostic_id'],
       ),
+      lifecycleJson: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}lifecycle_json'],
+      ),
       createdAt: attachedDatabase.typeMapping.read(
         DriftSqlType.dateTime,
         data['${effectivePrefix}created_at'],
@@ -780,6 +800,7 @@ class ActionIoSession extends DataClass implements Insertable<ActionIoSession> {
   final int? exitCode;
   final String? failureCode;
   final String? diagnosticId;
+  final String? lifecycleJson;
   final DateTime createdAt;
   final DateTime? terminalAt;
   final DateTime? outputExpiresAt;
@@ -809,6 +830,7 @@ class ActionIoSession extends DataClass implements Insertable<ActionIoSession> {
     this.exitCode,
     this.failureCode,
     this.diagnosticId,
+    this.lifecycleJson,
     required this.createdAt,
     this.terminalAt,
     this.outputExpiresAt,
@@ -849,6 +871,9 @@ class ActionIoSession extends DataClass implements Insertable<ActionIoSession> {
     if (!nullToAbsent || diagnosticId != null) {
       map['diagnostic_id'] = Variable<String>(diagnosticId);
     }
+    if (!nullToAbsent || lifecycleJson != null) {
+      map['lifecycle_json'] = Variable<String>(lifecycleJson);
+    }
     map['created_at'] = Variable<DateTime>(createdAt);
     if (!nullToAbsent || terminalAt != null) {
       map['terminal_at'] = Variable<DateTime>(terminalAt);
@@ -873,9 +898,7 @@ class ActionIoSession extends DataClass implements Insertable<ActionIoSession> {
       idempotencyKey: Value(idempotencyKey),
       fingerprint: Value(fingerprint),
       triggerId: Value(triggerId),
-      actionType: actionType == null && nullToAbsent
-          ? const Value.absent()
-          : Value(actionType),
+      actionType: actionType == null && nullToAbsent ? const Value.absent() : Value(actionType),
       definitionHash: Value(definitionHash),
       processState: Value(processState),
       stdinState: Value(stdinState),
@@ -887,25 +910,14 @@ class ActionIoSession extends DataClass implements Insertable<ActionIoSession> {
       stderrBytes: Value(stderrBytes),
       queuedInputBytes: Value(queuedInputBytes),
       queuedInputMessages: Value(queuedInputMessages),
-      exitCode: exitCode == null && nullToAbsent
-          ? const Value.absent()
-          : Value(exitCode),
-      failureCode: failureCode == null && nullToAbsent
-          ? const Value.absent()
-          : Value(failureCode),
-      diagnosticId: diagnosticId == null && nullToAbsent
-          ? const Value.absent()
-          : Value(diagnosticId),
+      exitCode: exitCode == null && nullToAbsent ? const Value.absent() : Value(exitCode),
+      failureCode: failureCode == null && nullToAbsent ? const Value.absent() : Value(failureCode),
+      diagnosticId: diagnosticId == null && nullToAbsent ? const Value.absent() : Value(diagnosticId),
+      lifecycleJson: lifecycleJson == null && nullToAbsent ? const Value.absent() : Value(lifecycleJson),
       createdAt: Value(createdAt),
-      terminalAt: terminalAt == null && nullToAbsent
-          ? const Value.absent()
-          : Value(terminalAt),
-      outputExpiresAt: outputExpiresAt == null && nullToAbsent
-          ? const Value.absent()
-          : Value(outputExpiresAt),
-      dedupeExpiresAt: dedupeExpiresAt == null && nullToAbsent
-          ? const Value.absent()
-          : Value(dedupeExpiresAt),
+      terminalAt: terminalAt == null && nullToAbsent ? const Value.absent() : Value(terminalAt),
+      outputExpiresAt: outputExpiresAt == null && nullToAbsent ? const Value.absent() : Value(outputExpiresAt),
+      dedupeExpiresAt: dedupeExpiresAt == null && nullToAbsent ? const Value.absent() : Value(dedupeExpiresAt),
       outputExpired: Value(outputExpired),
     );
   }
@@ -941,6 +953,7 @@ class ActionIoSession extends DataClass implements Insertable<ActionIoSession> {
       exitCode: serializer.fromJson<int?>(json['exitCode']),
       failureCode: serializer.fromJson<String?>(json['failureCode']),
       diagnosticId: serializer.fromJson<String?>(json['diagnosticId']),
+      lifecycleJson: serializer.fromJson<String?>(json['lifecycleJson']),
       createdAt: serializer.fromJson<DateTime>(json['createdAt']),
       terminalAt: serializer.fromJson<DateTime?>(json['terminalAt']),
       outputExpiresAt: serializer.fromJson<DateTime?>(json['outputExpiresAt']),
@@ -975,6 +988,7 @@ class ActionIoSession extends DataClass implements Insertable<ActionIoSession> {
       'exitCode': serializer.toJson<int?>(exitCode),
       'failureCode': serializer.toJson<String?>(failureCode),
       'diagnosticId': serializer.toJson<String?>(diagnosticId),
+      'lifecycleJson': serializer.toJson<String?>(lifecycleJson),
       'createdAt': serializer.toJson<DateTime>(createdAt),
       'terminalAt': serializer.toJson<DateTime?>(terminalAt),
       'outputExpiresAt': serializer.toJson<DateTime?>(outputExpiresAt),
@@ -1007,6 +1021,7 @@ class ActionIoSession extends DataClass implements Insertable<ActionIoSession> {
     Value<int?> exitCode = const Value.absent(),
     Value<String?> failureCode = const Value.absent(),
     Value<String?> diagnosticId = const Value.absent(),
+    Value<String?> lifecycleJson = const Value.absent(),
     DateTime? createdAt,
     Value<DateTime?> terminalAt = const Value.absent(),
     Value<DateTime?> outputExpiresAt = const Value.absent(),
@@ -1036,90 +1051,44 @@ class ActionIoSession extends DataClass implements Insertable<ActionIoSession> {
     exitCode: exitCode.present ? exitCode.value : this.exitCode,
     failureCode: failureCode.present ? failureCode.value : this.failureCode,
     diagnosticId: diagnosticId.present ? diagnosticId.value : this.diagnosticId,
+    lifecycleJson: lifecycleJson.present ? lifecycleJson.value : this.lifecycleJson,
     createdAt: createdAt ?? this.createdAt,
     terminalAt: terminalAt.present ? terminalAt.value : this.terminalAt,
-    outputExpiresAt: outputExpiresAt.present
-        ? outputExpiresAt.value
-        : this.outputExpiresAt,
-    dedupeExpiresAt: dedupeExpiresAt.present
-        ? dedupeExpiresAt.value
-        : this.dedupeExpiresAt,
+    outputExpiresAt: outputExpiresAt.present ? outputExpiresAt.value : this.outputExpiresAt,
+    dedupeExpiresAt: dedupeExpiresAt.present ? dedupeExpiresAt.value : this.dedupeExpiresAt,
     outputExpired: outputExpired ?? this.outputExpired,
   );
   ActionIoSession copyWithCompanion(ActionIoSessionsCompanion data) {
     return ActionIoSession(
-      executionId: data.executionId.present
-          ? data.executionId.value
-          : this.executionId,
-      installationId: data.installationId.present
-          ? data.installationId.value
-          : this.installationId,
+      executionId: data.executionId.present ? data.executionId.value : this.executionId,
+      installationId: data.installationId.present ? data.installationId.value : this.installationId,
       agentId: data.agentId.present ? data.agentId.value : this.agentId,
       clientId: data.clientId.present ? data.clientId.value : this.clientId,
       actionId: data.actionId.present ? data.actionId.value : this.actionId,
-      idempotencyKey: data.idempotencyKey.present
-          ? data.idempotencyKey.value
-          : this.idempotencyKey,
-      fingerprint: data.fingerprint.present
-          ? data.fingerprint.value
-          : this.fingerprint,
+      idempotencyKey: data.idempotencyKey.present ? data.idempotencyKey.value : this.idempotencyKey,
+      fingerprint: data.fingerprint.present ? data.fingerprint.value : this.fingerprint,
       triggerId: data.triggerId.present ? data.triggerId.value : this.triggerId,
-      actionType: data.actionType.present
-          ? data.actionType.value
-          : this.actionType,
-      definitionHash: data.definitionHash.present
-          ? data.definitionHash.value
-          : this.definitionHash,
-      processState: data.processState.present
-          ? data.processState.value
-          : this.processState,
-      stdinState: data.stdinState.present
-          ? data.stdinState.value
-          : this.stdinState,
-      captureState: data.captureState.present
-          ? data.captureState.value
-          : this.captureState,
-      nextInputSequence: data.nextInputSequence.present
-          ? data.nextInputSequence.value
-          : this.nextInputSequence,
-      nextEventSequence: data.nextEventSequence.present
-          ? data.nextEventSequence.value
-          : this.nextEventSequence,
-      admittedInputBytes: data.admittedInputBytes.present
-          ? data.admittedInputBytes.value
-          : this.admittedInputBytes,
-      stdoutBytes: data.stdoutBytes.present
-          ? data.stdoutBytes.value
-          : this.stdoutBytes,
-      stderrBytes: data.stderrBytes.present
-          ? data.stderrBytes.value
-          : this.stderrBytes,
-      queuedInputBytes: data.queuedInputBytes.present
-          ? data.queuedInputBytes.value
-          : this.queuedInputBytes,
-      queuedInputMessages: data.queuedInputMessages.present
-          ? data.queuedInputMessages.value
-          : this.queuedInputMessages,
+      actionType: data.actionType.present ? data.actionType.value : this.actionType,
+      definitionHash: data.definitionHash.present ? data.definitionHash.value : this.definitionHash,
+      processState: data.processState.present ? data.processState.value : this.processState,
+      stdinState: data.stdinState.present ? data.stdinState.value : this.stdinState,
+      captureState: data.captureState.present ? data.captureState.value : this.captureState,
+      nextInputSequence: data.nextInputSequence.present ? data.nextInputSequence.value : this.nextInputSequence,
+      nextEventSequence: data.nextEventSequence.present ? data.nextEventSequence.value : this.nextEventSequence,
+      admittedInputBytes: data.admittedInputBytes.present ? data.admittedInputBytes.value : this.admittedInputBytes,
+      stdoutBytes: data.stdoutBytes.present ? data.stdoutBytes.value : this.stdoutBytes,
+      stderrBytes: data.stderrBytes.present ? data.stderrBytes.value : this.stderrBytes,
+      queuedInputBytes: data.queuedInputBytes.present ? data.queuedInputBytes.value : this.queuedInputBytes,
+      queuedInputMessages: data.queuedInputMessages.present ? data.queuedInputMessages.value : this.queuedInputMessages,
       exitCode: data.exitCode.present ? data.exitCode.value : this.exitCode,
-      failureCode: data.failureCode.present
-          ? data.failureCode.value
-          : this.failureCode,
-      diagnosticId: data.diagnosticId.present
-          ? data.diagnosticId.value
-          : this.diagnosticId,
+      failureCode: data.failureCode.present ? data.failureCode.value : this.failureCode,
+      diagnosticId: data.diagnosticId.present ? data.diagnosticId.value : this.diagnosticId,
+      lifecycleJson: data.lifecycleJson.present ? data.lifecycleJson.value : this.lifecycleJson,
       createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
-      terminalAt: data.terminalAt.present
-          ? data.terminalAt.value
-          : this.terminalAt,
-      outputExpiresAt: data.outputExpiresAt.present
-          ? data.outputExpiresAt.value
-          : this.outputExpiresAt,
-      dedupeExpiresAt: data.dedupeExpiresAt.present
-          ? data.dedupeExpiresAt.value
-          : this.dedupeExpiresAt,
-      outputExpired: data.outputExpired.present
-          ? data.outputExpired.value
-          : this.outputExpired,
+      terminalAt: data.terminalAt.present ? data.terminalAt.value : this.terminalAt,
+      outputExpiresAt: data.outputExpiresAt.present ? data.outputExpiresAt.value : this.outputExpiresAt,
+      dedupeExpiresAt: data.dedupeExpiresAt.present ? data.dedupeExpiresAt.value : this.dedupeExpiresAt,
+      outputExpired: data.outputExpired.present ? data.outputExpired.value : this.outputExpired,
     );
   }
 
@@ -1149,6 +1118,7 @@ class ActionIoSession extends DataClass implements Insertable<ActionIoSession> {
           ..write('exitCode: $exitCode, ')
           ..write('failureCode: $failureCode, ')
           ..write('diagnosticId: $diagnosticId, ')
+          ..write('lifecycleJson: $lifecycleJson, ')
           ..write('createdAt: $createdAt, ')
           ..write('terminalAt: $terminalAt, ')
           ..write('outputExpiresAt: $outputExpiresAt, ')
@@ -1183,6 +1153,7 @@ class ActionIoSession extends DataClass implements Insertable<ActionIoSession> {
     exitCode,
     failureCode,
     diagnosticId,
+    lifecycleJson,
     createdAt,
     terminalAt,
     outputExpiresAt,
@@ -1216,6 +1187,7 @@ class ActionIoSession extends DataClass implements Insertable<ActionIoSession> {
           other.exitCode == this.exitCode &&
           other.failureCode == this.failureCode &&
           other.diagnosticId == this.diagnosticId &&
+          other.lifecycleJson == this.lifecycleJson &&
           other.createdAt == this.createdAt &&
           other.terminalAt == this.terminalAt &&
           other.outputExpiresAt == this.outputExpiresAt &&
@@ -1247,6 +1219,7 @@ class ActionIoSessionsCompanion extends UpdateCompanion<ActionIoSession> {
   final Value<int?> exitCode;
   final Value<String?> failureCode;
   final Value<String?> diagnosticId;
+  final Value<String?> lifecycleJson;
   final Value<DateTime> createdAt;
   final Value<DateTime?> terminalAt;
   final Value<DateTime?> outputExpiresAt;
@@ -1277,6 +1250,7 @@ class ActionIoSessionsCompanion extends UpdateCompanion<ActionIoSession> {
     this.exitCode = const Value.absent(),
     this.failureCode = const Value.absent(),
     this.diagnosticId = const Value.absent(),
+    this.lifecycleJson = const Value.absent(),
     this.createdAt = const Value.absent(),
     this.terminalAt = const Value.absent(),
     this.outputExpiresAt = const Value.absent(),
@@ -1308,6 +1282,7 @@ class ActionIoSessionsCompanion extends UpdateCompanion<ActionIoSession> {
     this.exitCode = const Value.absent(),
     this.failureCode = const Value.absent(),
     this.diagnosticId = const Value.absent(),
+    this.lifecycleJson = const Value.absent(),
     required DateTime createdAt,
     this.terminalAt = const Value.absent(),
     this.outputExpiresAt = const Value.absent(),
@@ -1351,6 +1326,7 @@ class ActionIoSessionsCompanion extends UpdateCompanion<ActionIoSession> {
     Expression<int>? exitCode,
     Expression<String>? failureCode,
     Expression<String>? diagnosticId,
+    Expression<String>? lifecycleJson,
     Expression<DateTime>? createdAt,
     Expression<DateTime>? terminalAt,
     Expression<DateTime>? outputExpiresAt,
@@ -1374,16 +1350,15 @@ class ActionIoSessionsCompanion extends UpdateCompanion<ActionIoSession> {
       if (captureState != null) 'capture_state': captureState,
       if (nextInputSequence != null) 'next_input_sequence': nextInputSequence,
       if (nextEventSequence != null) 'next_event_sequence': nextEventSequence,
-      if (admittedInputBytes != null)
-        'admitted_input_bytes': admittedInputBytes,
+      if (admittedInputBytes != null) 'admitted_input_bytes': admittedInputBytes,
       if (stdoutBytes != null) 'stdout_bytes': stdoutBytes,
       if (stderrBytes != null) 'stderr_bytes': stderrBytes,
       if (queuedInputBytes != null) 'queued_input_bytes': queuedInputBytes,
-      if (queuedInputMessages != null)
-        'queued_input_messages': queuedInputMessages,
+      if (queuedInputMessages != null) 'queued_input_messages': queuedInputMessages,
       if (exitCode != null) 'exit_code': exitCode,
       if (failureCode != null) 'failure_code': failureCode,
       if (diagnosticId != null) 'diagnostic_id': diagnosticId,
+      if (lifecycleJson != null) 'lifecycle_json': lifecycleJson,
       if (createdAt != null) 'created_at': createdAt,
       if (terminalAt != null) 'terminal_at': terminalAt,
       if (outputExpiresAt != null) 'output_expires_at': outputExpiresAt,
@@ -1417,6 +1392,7 @@ class ActionIoSessionsCompanion extends UpdateCompanion<ActionIoSession> {
     Value<int?>? exitCode,
     Value<String?>? failureCode,
     Value<String?>? diagnosticId,
+    Value<String?>? lifecycleJson,
     Value<DateTime>? createdAt,
     Value<DateTime?>? terminalAt,
     Value<DateTime?>? outputExpiresAt,
@@ -1448,6 +1424,7 @@ class ActionIoSessionsCompanion extends UpdateCompanion<ActionIoSession> {
       exitCode: exitCode ?? this.exitCode,
       failureCode: failureCode ?? this.failureCode,
       diagnosticId: diagnosticId ?? this.diagnosticId,
+      lifecycleJson: lifecycleJson ?? this.lifecycleJson,
       createdAt: createdAt ?? this.createdAt,
       terminalAt: terminalAt ?? this.terminalAt,
       outputExpiresAt: outputExpiresAt ?? this.outputExpiresAt,
@@ -1529,6 +1506,9 @@ class ActionIoSessionsCompanion extends UpdateCompanion<ActionIoSession> {
     if (diagnosticId.present) {
       map['diagnostic_id'] = Variable<String>(diagnosticId.value);
     }
+    if (lifecycleJson.present) {
+      map['lifecycle_json'] = Variable<String>(lifecycleJson.value);
+    }
     if (createdAt.present) {
       map['created_at'] = Variable<DateTime>(createdAt.value);
     }
@@ -1576,6 +1556,7 @@ class ActionIoSessionsCompanion extends UpdateCompanion<ActionIoSession> {
           ..write('exitCode: $exitCode, ')
           ..write('failureCode: $failureCode, ')
           ..write('diagnosticId: $diagnosticId, ')
+          ..write('lifecycleJson: $lifecycleJson, ')
           ..write('createdAt: $createdAt, ')
           ..write('terminalAt: $terminalAt, ')
           ..write('outputExpiresAt: $outputExpiresAt, ')
@@ -1587,8 +1568,7 @@ class ActionIoSessionsCompanion extends UpdateCompanion<ActionIoSession> {
   }
 }
 
-class $ActionIoPayloadsTable extends ActionIoPayloads
-    with TableInfo<$ActionIoPayloadsTable, ActionIoPayload> {
+class $ActionIoPayloadsTable extends ActionIoPayloads with TableInfo<$ActionIoPayloadsTable, ActionIoPayload> {
   @override
   final GeneratedDatabase attachedDatabase;
   final String? _alias;
@@ -1651,25 +1631,22 @@ class $ActionIoPayloadsTable extends ActionIoPayloads
     'authenticationTag',
   );
   @override
-  late final GeneratedColumn<Uint8List> authenticationTag =
-      GeneratedColumn<Uint8List>(
-        'authentication_tag',
-        aliasedName,
-        false,
-        type: DriftSqlType.blob,
-        requiredDuringInsert: true,
-      );
-  static const VerificationMeta _authenticatedContextMeta =
-      const VerificationMeta('authenticatedContext');
+  late final GeneratedColumn<Uint8List> authenticationTag = GeneratedColumn<Uint8List>(
+    'authentication_tag',
+    aliasedName,
+    false,
+    type: DriftSqlType.blob,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _authenticatedContextMeta = const VerificationMeta('authenticatedContext');
   @override
-  late final GeneratedColumn<Uint8List> authenticatedContext =
-      GeneratedColumn<Uint8List>(
-        'authenticated_context',
-        aliasedName,
-        false,
-        type: DriftSqlType.blob,
-        requiredDuringInsert: true,
-      );
+  late final GeneratedColumn<Uint8List> authenticatedContext = GeneratedColumn<Uint8List>(
+    'authenticated_context',
+    aliasedName,
+    false,
+    type: DriftSqlType.blob,
+    requiredDuringInsert: true,
+  );
   static const VerificationMeta _plaintextBytesMeta = const VerificationMeta(
     'plaintextBytes',
   );
@@ -1939,23 +1916,15 @@ class ActionIoPayload extends DataClass implements Insertable<ActionIoPayload> {
   ActionIoPayload copyWithCompanion(ActionIoPayloadsCompanion data) {
     return ActionIoPayload(
       payloadId: data.payloadId.present ? data.payloadId.value : this.payloadId,
-      executionId: data.executionId.present
-          ? data.executionId.value
-          : this.executionId,
+      executionId: data.executionId.present ? data.executionId.value : this.executionId,
       keyId: data.keyId.present ? data.keyId.value : this.keyId,
       nonce: data.nonce.present ? data.nonce.value : this.nonce,
-      ciphertext: data.ciphertext.present
-          ? data.ciphertext.value
-          : this.ciphertext,
-      authenticationTag: data.authenticationTag.present
-          ? data.authenticationTag.value
-          : this.authenticationTag,
+      ciphertext: data.ciphertext.present ? data.ciphertext.value : this.ciphertext,
+      authenticationTag: data.authenticationTag.present ? data.authenticationTag.value : this.authenticationTag,
       authenticatedContext: data.authenticatedContext.present
           ? data.authenticatedContext.value
           : this.authenticatedContext,
-      plaintextBytes: data.plaintextBytes.present
-          ? data.plaintextBytes.value
-          : this.plaintextBytes,
+      plaintextBytes: data.plaintextBytes.present ? data.plaintextBytes.value : this.plaintextBytes,
     );
   }
 
@@ -2062,8 +2031,7 @@ class ActionIoPayloadsCompanion extends UpdateCompanion<ActionIoPayload> {
       if (nonce != null) 'nonce': nonce,
       if (ciphertext != null) 'ciphertext': ciphertext,
       if (authenticationTag != null) 'authentication_tag': authenticationTag,
-      if (authenticatedContext != null)
-        'authenticated_context': authenticatedContext,
+      if (authenticatedContext != null) 'authenticated_context': authenticatedContext,
       if (plaintextBytes != null) 'plaintext_bytes': plaintextBytes,
       if (rowid != null) 'rowid': rowid,
     });
@@ -2145,8 +2113,7 @@ class ActionIoPayloadsCompanion extends UpdateCompanion<ActionIoPayload> {
   }
 }
 
-class $ActionIoMessagesTable extends ActionIoMessages
-    with TableInfo<$ActionIoMessagesTable, ActionIoMessage> {
+class $ActionIoMessagesTable extends ActionIoMessages with TableInfo<$ActionIoMessagesTable, ActionIoMessage> {
   @override
   final GeneratedDatabase attachedDatabase;
   final String? _alias;
@@ -2529,16 +2496,10 @@ class ActionIoMessage extends DataClass implements Insertable<ActionIoMessage> {
       fingerprint: Value(fingerprint),
       closesInput: Value(closesInput),
       deliveryState: Value(deliveryState),
-      confirmedBytes: confirmedBytes == null && nullToAbsent
-          ? const Value.absent()
-          : Value(confirmedBytes),
+      confirmedBytes: confirmedBytes == null && nullToAbsent ? const Value.absent() : Value(confirmedBytes),
       inputBytes: Value(inputBytes),
-      payloadId: payloadId == null && nullToAbsent
-          ? const Value.absent()
-          : Value(payloadId),
-      failureCode: failureCode == null && nullToAbsent
-          ? const Value.absent()
-          : Value(failureCode),
+      payloadId: payloadId == null && nullToAbsent ? const Value.absent() : Value(payloadId),
+      failureCode: failureCode == null && nullToAbsent ? const Value.absent() : Value(failureCode),
       admittedAt: Value(admittedAt),
     );
   }
@@ -2599,9 +2560,7 @@ class ActionIoMessage extends DataClass implements Insertable<ActionIoMessage> {
     fingerprint: fingerprint ?? this.fingerprint,
     closesInput: closesInput ?? this.closesInput,
     deliveryState: deliveryState ?? this.deliveryState,
-    confirmedBytes: confirmedBytes.present
-        ? confirmedBytes.value
-        : this.confirmedBytes,
+    confirmedBytes: confirmedBytes.present ? confirmedBytes.value : this.confirmedBytes,
     inputBytes: inputBytes ?? this.inputBytes,
     payloadId: payloadId.present ? payloadId.value : this.payloadId,
     failureCode: failureCode.present ? failureCode.value : this.failureCode,
@@ -2609,33 +2568,17 @@ class ActionIoMessage extends DataClass implements Insertable<ActionIoMessage> {
   );
   ActionIoMessage copyWithCompanion(ActionIoMessagesCompanion data) {
     return ActionIoMessage(
-      executionId: data.executionId.present
-          ? data.executionId.value
-          : this.executionId,
+      executionId: data.executionId.present ? data.executionId.value : this.executionId,
       messageId: data.messageId.present ? data.messageId.value : this.messageId,
       sequence: data.sequence.present ? data.sequence.value : this.sequence,
-      fingerprint: data.fingerprint.present
-          ? data.fingerprint.value
-          : this.fingerprint,
-      closesInput: data.closesInput.present
-          ? data.closesInput.value
-          : this.closesInput,
-      deliveryState: data.deliveryState.present
-          ? data.deliveryState.value
-          : this.deliveryState,
-      confirmedBytes: data.confirmedBytes.present
-          ? data.confirmedBytes.value
-          : this.confirmedBytes,
-      inputBytes: data.inputBytes.present
-          ? data.inputBytes.value
-          : this.inputBytes,
+      fingerprint: data.fingerprint.present ? data.fingerprint.value : this.fingerprint,
+      closesInput: data.closesInput.present ? data.closesInput.value : this.closesInput,
+      deliveryState: data.deliveryState.present ? data.deliveryState.value : this.deliveryState,
+      confirmedBytes: data.confirmedBytes.present ? data.confirmedBytes.value : this.confirmedBytes,
+      inputBytes: data.inputBytes.present ? data.inputBytes.value : this.inputBytes,
       payloadId: data.payloadId.present ? data.payloadId.value : this.payloadId,
-      failureCode: data.failureCode.present
-          ? data.failureCode.value
-          : this.failureCode,
-      admittedAt: data.admittedAt.present
-          ? data.admittedAt.value
-          : this.admittedAt,
+      failureCode: data.failureCode.present ? data.failureCode.value : this.failureCode,
+      admittedAt: data.admittedAt.present ? data.admittedAt.value : this.admittedAt,
     );
   }
 
@@ -2858,8 +2801,7 @@ class ActionIoMessagesCompanion extends UpdateCompanion<ActionIoMessage> {
   }
 }
 
-class $ActionIoEventsTable extends ActionIoEvents
-    with TableInfo<$ActionIoEventsTable, ActionIoEvent> {
+class $ActionIoEventsTable extends ActionIoEvents with TableInfo<$ActionIoEventsTable, ActionIoEvent> {
   @override
   final GeneratedDatabase attachedDatabase;
   final String? _alias;
@@ -3197,24 +3139,12 @@ class ActionIoEvent extends DataClass implements Insertable<ActionIoEvent> {
       executionId: Value(executionId),
       sequence: Value(sequence),
       eventType: Value(eventType),
-      stream: stream == null && nullToAbsent
-          ? const Value.absent()
-          : Value(stream),
-      byteOffset: byteOffset == null && nullToAbsent
-          ? const Value.absent()
-          : Value(byteOffset),
-      payloadId: payloadId == null && nullToAbsent
-          ? const Value.absent()
-          : Value(payloadId),
-      exitCode: exitCode == null && nullToAbsent
-          ? const Value.absent()
-          : Value(exitCode),
-      outputComplete: outputComplete == null && nullToAbsent
-          ? const Value.absent()
-          : Value(outputComplete),
-      failureCode: failureCode == null && nullToAbsent
-          ? const Value.absent()
-          : Value(failureCode),
+      stream: stream == null && nullToAbsent ? const Value.absent() : Value(stream),
+      byteOffset: byteOffset == null && nullToAbsent ? const Value.absent() : Value(byteOffset),
+      payloadId: payloadId == null && nullToAbsent ? const Value.absent() : Value(payloadId),
+      exitCode: exitCode == null && nullToAbsent ? const Value.absent() : Value(exitCode),
+      outputComplete: outputComplete == null && nullToAbsent ? const Value.absent() : Value(outputComplete),
+      failureCode: failureCode == null && nullToAbsent ? const Value.absent() : Value(failureCode),
       createdAt: Value(createdAt),
     );
   }
@@ -3273,31 +3203,21 @@ class ActionIoEvent extends DataClass implements Insertable<ActionIoEvent> {
     byteOffset: byteOffset.present ? byteOffset.value : this.byteOffset,
     payloadId: payloadId.present ? payloadId.value : this.payloadId,
     exitCode: exitCode.present ? exitCode.value : this.exitCode,
-    outputComplete: outputComplete.present
-        ? outputComplete.value
-        : this.outputComplete,
+    outputComplete: outputComplete.present ? outputComplete.value : this.outputComplete,
     failureCode: failureCode.present ? failureCode.value : this.failureCode,
     createdAt: createdAt ?? this.createdAt,
   );
   ActionIoEvent copyWithCompanion(ActionIoEventsCompanion data) {
     return ActionIoEvent(
-      executionId: data.executionId.present
-          ? data.executionId.value
-          : this.executionId,
+      executionId: data.executionId.present ? data.executionId.value : this.executionId,
       sequence: data.sequence.present ? data.sequence.value : this.sequence,
       eventType: data.eventType.present ? data.eventType.value : this.eventType,
       stream: data.stream.present ? data.stream.value : this.stream,
-      byteOffset: data.byteOffset.present
-          ? data.byteOffset.value
-          : this.byteOffset,
+      byteOffset: data.byteOffset.present ? data.byteOffset.value : this.byteOffset,
       payloadId: data.payloadId.present ? data.payloadId.value : this.payloadId,
       exitCode: data.exitCode.present ? data.exitCode.value : this.exitCode,
-      outputComplete: data.outputComplete.present
-          ? data.outputComplete.value
-          : this.outputComplete,
-      failureCode: data.failureCode.present
-          ? data.failureCode.value
-          : this.failureCode,
+      outputComplete: data.outputComplete.present ? data.outputComplete.value : this.outputComplete,
+      failureCode: data.failureCode.present ? data.failureCode.value : this.failureCode,
       createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
     );
   }
@@ -3505,8 +3425,7 @@ class ActionIoEventsCompanion extends UpdateCompanion<ActionIoEvent> {
 
 abstract class _$ActionIoJournalDatabase extends GeneratedDatabase {
   _$ActionIoJournalDatabase(QueryExecutor e) : super(e);
-  $ActionIoJournalDatabaseManager get managers =>
-      $ActionIoJournalDatabaseManager(this);
+  $ActionIoJournalDatabaseManager get managers => $ActionIoJournalDatabaseManager(this);
   late final $ActionIoSessionsTable actionIoSessions = $ActionIoSessionsTable(
     this,
   );
@@ -3518,8 +3437,7 @@ abstract class _$ActionIoJournalDatabase extends GeneratedDatabase {
   );
   late final $ActionIoEventsTable actionIoEvents = $ActionIoEventsTable(this);
   @override
-  Iterable<TableInfo<Table, Object?>> get allTables =>
-      allSchemaEntities.whereType<TableInfo<Table, Object?>>();
+  Iterable<TableInfo<Table, Object?>> get allTables => allSchemaEntities.whereType<TableInfo<Table, Object?>>();
   @override
   List<DatabaseSchemaEntity> get allSchemaEntities => [
     actionIoSessions,
@@ -3554,6 +3472,7 @@ typedef $$ActionIoSessionsTableCreateCompanionBuilder =
       Value<int?> exitCode,
       Value<String?> failureCode,
       Value<String?> diagnosticId,
+      Value<String?> lifecycleJson,
       required DateTime createdAt,
       Value<DateTime?> terminalAt,
       Value<DateTime?> outputExpiresAt,
@@ -3586,6 +3505,7 @@ typedef $$ActionIoSessionsTableUpdateCompanionBuilder =
       Value<int?> exitCode,
       Value<String?> failureCode,
       Value<String?> diagnosticId,
+      Value<String?> lifecycleJson,
       Value<DateTime> createdAt,
       Value<DateTime?> terminalAt,
       Value<DateTime?> outputExpiresAt,
@@ -3595,34 +3515,26 @@ typedef $$ActionIoSessionsTableUpdateCompanionBuilder =
     });
 
 final class $$ActionIoSessionsTableReferences
-    extends
-        BaseReferences<
-          _$ActionIoJournalDatabase,
-          $ActionIoSessionsTable,
-          ActionIoSession
-        > {
+    extends BaseReferences<_$ActionIoJournalDatabase, $ActionIoSessionsTable, ActionIoSession> {
   $$ActionIoSessionsTableReferences(
     super.$_db,
     super.$_table,
     super.$_typedResult,
   );
 
-  static MultiTypedResultKey<$ActionIoPayloadsTable, List<ActionIoPayload>>
-  _actionIoPayloadsRefsTable(
+  static MultiTypedResultKey<$ActionIoPayloadsTable, List<ActionIoPayload>> _actionIoPayloadsRefsTable(
     _$ActionIoJournalDatabase db,
   ) => MultiTypedResultKey.fromTable(
     db.actionIoPayloads,
-    aliasName:
-        'action_io_sessions__execution_id__action_io_payloads__execution_id',
+    aliasName: 'action_io_sessions__execution_id__action_io_payloads__execution_id',
   );
 
   $$ActionIoPayloadsTableProcessedTableManager get actionIoPayloadsRefs {
-    final manager =
-        $$ActionIoPayloadsTableTableManager($_db, $_db.actionIoPayloads).filter(
-          (f) => f.executionId.executionId.sqlEquals(
-            $_itemColumn<String>('execution_id')!,
-          ),
-        );
+    final manager = $$ActionIoPayloadsTableTableManager($_db, $_db.actionIoPayloads).filter(
+      (f) => f.executionId.executionId.sqlEquals(
+        $_itemColumn<String>('execution_id')!,
+      ),
+    );
 
     final cache = $_typedResult.readTableOrNull(
       _actionIoPayloadsRefsTable($_db),
@@ -3632,22 +3544,19 @@ final class $$ActionIoSessionsTableReferences
     );
   }
 
-  static MultiTypedResultKey<$ActionIoMessagesTable, List<ActionIoMessage>>
-  _actionIoMessagesRefsTable(
+  static MultiTypedResultKey<$ActionIoMessagesTable, List<ActionIoMessage>> _actionIoMessagesRefsTable(
     _$ActionIoJournalDatabase db,
   ) => MultiTypedResultKey.fromTable(
     db.actionIoMessages,
-    aliasName:
-        'action_io_sessions__execution_id__action_io_messages__execution_id',
+    aliasName: 'action_io_sessions__execution_id__action_io_messages__execution_id',
   );
 
   $$ActionIoMessagesTableProcessedTableManager get actionIoMessagesRefs {
-    final manager =
-        $$ActionIoMessagesTableTableManager($_db, $_db.actionIoMessages).filter(
-          (f) => f.executionId.executionId.sqlEquals(
-            $_itemColumn<String>('execution_id')!,
-          ),
-        );
+    final manager = $$ActionIoMessagesTableTableManager($_db, $_db.actionIoMessages).filter(
+      (f) => f.executionId.executionId.sqlEquals(
+        $_itemColumn<String>('execution_id')!,
+      ),
+    );
 
     final cache = $_typedResult.readTableOrNull(
       _actionIoMessagesRefsTable($_db),
@@ -3657,21 +3566,19 @@ final class $$ActionIoSessionsTableReferences
     );
   }
 
-  static MultiTypedResultKey<$ActionIoEventsTable, List<ActionIoEvent>>
-  _actionIoEventsRefsTable(_$ActionIoJournalDatabase db) =>
-      MultiTypedResultKey.fromTable(
-        db.actionIoEvents,
-        aliasName:
-            'action_io_sessions__execution_id__action_io_events__execution_id',
-      );
+  static MultiTypedResultKey<$ActionIoEventsTable, List<ActionIoEvent>> _actionIoEventsRefsTable(
+    _$ActionIoJournalDatabase db,
+  ) => MultiTypedResultKey.fromTable(
+    db.actionIoEvents,
+    aliasName: 'action_io_sessions__execution_id__action_io_events__execution_id',
+  );
 
   $$ActionIoEventsTableProcessedTableManager get actionIoEventsRefs {
-    final manager = $$ActionIoEventsTableTableManager($_db, $_db.actionIoEvents)
-        .filter(
-          (f) => f.executionId.executionId.sqlEquals(
-            $_itemColumn<String>('execution_id')!,
-          ),
-        );
+    final manager = $$ActionIoEventsTableTableManager($_db, $_db.actionIoEvents).filter(
+      (f) => f.executionId.executionId.sqlEquals(
+        $_itemColumn<String>('execution_id')!,
+      ),
+    );
 
     final cache = $_typedResult.readTableOrNull(_actionIoEventsRefsTable($_db));
     return ProcessedTableManager(
@@ -3680,8 +3587,7 @@ final class $$ActionIoSessionsTableReferences
   }
 }
 
-class $$ActionIoSessionsTableFilterComposer
-    extends Composer<_$ActionIoJournalDatabase, $ActionIoSessionsTable> {
+class $$ActionIoSessionsTableFilterComposer extends Composer<_$ActionIoJournalDatabase, $ActionIoSessionsTable> {
   $$ActionIoSessionsTableFilterComposer({
     required super.$db,
     required super.$table,
@@ -3804,6 +3710,11 @@ class $$ActionIoSessionsTableFilterComposer
     builder: (column) => ColumnFilters(column),
   );
 
+  ColumnFilters<String> get lifecycleJson => $composableBuilder(
+    column: $table.lifecycleJson,
+    builder: (column) => ColumnFilters(column),
+  );
+
   ColumnFilters<DateTime> get createdAt => $composableBuilder(
     column: $table.createdAt,
     builder: (column) => ColumnFilters(column),
@@ -3847,8 +3758,7 @@ class $$ActionIoSessionsTableFilterComposer
             $table: $db.actionIoPayloads,
             $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
             joinBuilder: joinBuilder,
-            $removeJoinBuilderFromRootComposer:
-                $removeJoinBuilderFromRootComposer,
+            $removeJoinBuilderFromRootComposer: $removeJoinBuilderFromRootComposer,
           ),
     );
     return f(composer);
@@ -3872,8 +3782,7 @@ class $$ActionIoSessionsTableFilterComposer
             $table: $db.actionIoMessages,
             $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
             joinBuilder: joinBuilder,
-            $removeJoinBuilderFromRootComposer:
-                $removeJoinBuilderFromRootComposer,
+            $removeJoinBuilderFromRootComposer: $removeJoinBuilderFromRootComposer,
           ),
     );
     return f(composer);
@@ -3897,16 +3806,14 @@ class $$ActionIoSessionsTableFilterComposer
             $table: $db.actionIoEvents,
             $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
             joinBuilder: joinBuilder,
-            $removeJoinBuilderFromRootComposer:
-                $removeJoinBuilderFromRootComposer,
+            $removeJoinBuilderFromRootComposer: $removeJoinBuilderFromRootComposer,
           ),
     );
     return f(composer);
   }
 }
 
-class $$ActionIoSessionsTableOrderingComposer
-    extends Composer<_$ActionIoJournalDatabase, $ActionIoSessionsTable> {
+class $$ActionIoSessionsTableOrderingComposer extends Composer<_$ActionIoJournalDatabase, $ActionIoSessionsTable> {
   $$ActionIoSessionsTableOrderingComposer({
     required super.$db,
     required super.$table,
@@ -4029,6 +3936,11 @@ class $$ActionIoSessionsTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<String> get lifecycleJson => $composableBuilder(
+    column: $table.lifecycleJson,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<DateTime> get createdAt => $composableBuilder(
     column: $table.createdAt,
     builder: (column) => ColumnOrderings(column),
@@ -4055,8 +3967,7 @@ class $$ActionIoSessionsTableOrderingComposer
   );
 }
 
-class $$ActionIoSessionsTableAnnotationComposer
-    extends Composer<_$ActionIoJournalDatabase, $ActionIoSessionsTable> {
+class $$ActionIoSessionsTableAnnotationComposer extends Composer<_$ActionIoJournalDatabase, $ActionIoSessionsTable> {
   $$ActionIoSessionsTableAnnotationComposer({
     required super.$db,
     required super.$table,
@@ -4074,14 +3985,11 @@ class $$ActionIoSessionsTableAnnotationComposer
     builder: (column) => column,
   );
 
-  GeneratedColumn<String> get agentId =>
-      $composableBuilder(column: $table.agentId, builder: (column) => column);
+  GeneratedColumn<String> get agentId => $composableBuilder(column: $table.agentId, builder: (column) => column);
 
-  GeneratedColumn<String> get clientId =>
-      $composableBuilder(column: $table.clientId, builder: (column) => column);
+  GeneratedColumn<String> get clientId => $composableBuilder(column: $table.clientId, builder: (column) => column);
 
-  GeneratedColumn<String> get actionId =>
-      $composableBuilder(column: $table.actionId, builder: (column) => column);
+  GeneratedColumn<String> get actionId => $composableBuilder(column: $table.actionId, builder: (column) => column);
 
   GeneratedColumn<String> get idempotencyKey => $composableBuilder(
     column: $table.idempotencyKey,
@@ -4093,8 +4001,7 @@ class $$ActionIoSessionsTableAnnotationComposer
     builder: (column) => column,
   );
 
-  GeneratedColumn<String> get triggerId =>
-      $composableBuilder(column: $table.triggerId, builder: (column) => column);
+  GeneratedColumn<String> get triggerId => $composableBuilder(column: $table.triggerId, builder: (column) => column);
 
   GeneratedColumn<String> get actionType => $composableBuilder(
     column: $table.actionType,
@@ -4156,8 +4063,7 @@ class $$ActionIoSessionsTableAnnotationComposer
     builder: (column) => column,
   );
 
-  GeneratedColumn<int> get exitCode =>
-      $composableBuilder(column: $table.exitCode, builder: (column) => column);
+  GeneratedColumn<int> get exitCode => $composableBuilder(column: $table.exitCode, builder: (column) => column);
 
   GeneratedColumn<String> get failureCode => $composableBuilder(
     column: $table.failureCode,
@@ -4169,8 +4075,12 @@ class $$ActionIoSessionsTableAnnotationComposer
     builder: (column) => column,
   );
 
-  GeneratedColumn<DateTime> get createdAt =>
-      $composableBuilder(column: $table.createdAt, builder: (column) => column);
+  GeneratedColumn<String> get lifecycleJson => $composableBuilder(
+    column: $table.lifecycleJson,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<DateTime> get createdAt => $composableBuilder(column: $table.createdAt, builder: (column) => column);
 
   GeneratedColumn<DateTime> get terminalAt => $composableBuilder(
     column: $table.terminalAt,
@@ -4210,8 +4120,7 @@ class $$ActionIoSessionsTableAnnotationComposer
             $table: $db.actionIoPayloads,
             $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
             joinBuilder: joinBuilder,
-            $removeJoinBuilderFromRootComposer:
-                $removeJoinBuilderFromRootComposer,
+            $removeJoinBuilderFromRootComposer: $removeJoinBuilderFromRootComposer,
           ),
     );
     return f(composer);
@@ -4235,8 +4144,7 @@ class $$ActionIoSessionsTableAnnotationComposer
             $table: $db.actionIoMessages,
             $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
             joinBuilder: joinBuilder,
-            $removeJoinBuilderFromRootComposer:
-                $removeJoinBuilderFromRootComposer,
+            $removeJoinBuilderFromRootComposer: $removeJoinBuilderFromRootComposer,
           ),
     );
     return f(composer);
@@ -4260,8 +4168,7 @@ class $$ActionIoSessionsTableAnnotationComposer
             $table: $db.actionIoEvents,
             $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
             joinBuilder: joinBuilder,
-            $removeJoinBuilderFromRootComposer:
-                $removeJoinBuilderFromRootComposer,
+            $removeJoinBuilderFromRootComposer: $removeJoinBuilderFromRootComposer,
           ),
     );
     return f(composer);
@@ -4294,12 +4201,9 @@ class $$ActionIoSessionsTableTableManager
         TableManagerState(
           db: db,
           table: table,
-          createFilteringComposer: () =>
-              $$ActionIoSessionsTableFilterComposer($db: db, $table: table),
-          createOrderingComposer: () =>
-              $$ActionIoSessionsTableOrderingComposer($db: db, $table: table),
-          createComputedFieldComposer: () =>
-              $$ActionIoSessionsTableAnnotationComposer($db: db, $table: table),
+          createFilteringComposer: () => $$ActionIoSessionsTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () => $$ActionIoSessionsTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () => $$ActionIoSessionsTableAnnotationComposer($db: db, $table: table),
           updateCompanionCallback:
               ({
                 Value<String> executionId = const Value.absent(),
@@ -4325,6 +4229,7 @@ class $$ActionIoSessionsTableTableManager
                 Value<int?> exitCode = const Value.absent(),
                 Value<String?> failureCode = const Value.absent(),
                 Value<String?> diagnosticId = const Value.absent(),
+                Value<String?> lifecycleJson = const Value.absent(),
                 Value<DateTime> createdAt = const Value.absent(),
                 Value<DateTime?> terminalAt = const Value.absent(),
                 Value<DateTime?> outputExpiresAt = const Value.absent(),
@@ -4355,6 +4260,7 @@ class $$ActionIoSessionsTableTableManager
                 exitCode: exitCode,
                 failureCode: failureCode,
                 diagnosticId: diagnosticId,
+                lifecycleJson: lifecycleJson,
                 createdAt: createdAt,
                 terminalAt: terminalAt,
                 outputExpiresAt: outputExpiresAt,
@@ -4387,6 +4293,7 @@ class $$ActionIoSessionsTableTableManager
                 Value<int?> exitCode = const Value.absent(),
                 Value<String?> failureCode = const Value.absent(),
                 Value<String?> diagnosticId = const Value.absent(),
+                Value<String?> lifecycleJson = const Value.absent(),
                 required DateTime createdAt,
                 Value<DateTime?> terminalAt = const Value.absent(),
                 Value<DateTime?> outputExpiresAt = const Value.absent(),
@@ -4417,6 +4324,7 @@ class $$ActionIoSessionsTableTableManager
                 exitCode: exitCode,
                 failureCode: failureCode,
                 diagnosticId: diagnosticId,
+                lifecycleJson: lifecycleJson,
                 createdAt: createdAt,
                 terminalAt: terminalAt,
                 outputExpiresAt: outputExpiresAt,
@@ -4449,66 +4357,45 @@ class $$ActionIoSessionsTableTableManager
                   getPrefetchedDataCallback: (items) async {
                     return [
                       if (actionIoPayloadsRefs)
-                        await $_getPrefetchedData<
-                          ActionIoSession,
-                          $ActionIoSessionsTable,
-                          ActionIoPayload
-                        >(
+                        await $_getPrefetchedData<ActionIoSession, $ActionIoSessionsTable, ActionIoPayload>(
                           currentTable: table,
-                          referencedTable: $$ActionIoSessionsTableReferences
-                              ._actionIoPayloadsRefsTable(db),
-                          managerFromTypedResult: (p0) =>
-                              $$ActionIoSessionsTableReferences(
-                                db,
-                                table,
-                                p0,
-                              ).actionIoPayloadsRefs,
-                          referencedItemsForCurrentItem:
-                              (item, referencedItems) => referencedItems.where(
-                                (e) => e.executionId == item.executionId,
-                              ),
+                          referencedTable: $$ActionIoSessionsTableReferences._actionIoPayloadsRefsTable(db),
+                          managerFromTypedResult: (p0) => $$ActionIoSessionsTableReferences(
+                            db,
+                            table,
+                            p0,
+                          ).actionIoPayloadsRefs,
+                          referencedItemsForCurrentItem: (item, referencedItems) => referencedItems.where(
+                            (e) => e.executionId == item.executionId,
+                          ),
                           typedResults: items,
                         ),
                       if (actionIoMessagesRefs)
-                        await $_getPrefetchedData<
-                          ActionIoSession,
-                          $ActionIoSessionsTable,
-                          ActionIoMessage
-                        >(
+                        await $_getPrefetchedData<ActionIoSession, $ActionIoSessionsTable, ActionIoMessage>(
                           currentTable: table,
-                          referencedTable: $$ActionIoSessionsTableReferences
-                              ._actionIoMessagesRefsTable(db),
-                          managerFromTypedResult: (p0) =>
-                              $$ActionIoSessionsTableReferences(
-                                db,
-                                table,
-                                p0,
-                              ).actionIoMessagesRefs,
-                          referencedItemsForCurrentItem:
-                              (item, referencedItems) => referencedItems.where(
-                                (e) => e.executionId == item.executionId,
-                              ),
+                          referencedTable: $$ActionIoSessionsTableReferences._actionIoMessagesRefsTable(db),
+                          managerFromTypedResult: (p0) => $$ActionIoSessionsTableReferences(
+                            db,
+                            table,
+                            p0,
+                          ).actionIoMessagesRefs,
+                          referencedItemsForCurrentItem: (item, referencedItems) => referencedItems.where(
+                            (e) => e.executionId == item.executionId,
+                          ),
                           typedResults: items,
                         ),
                       if (actionIoEventsRefs)
-                        await $_getPrefetchedData<
-                          ActionIoSession,
-                          $ActionIoSessionsTable,
-                          ActionIoEvent
-                        >(
+                        await $_getPrefetchedData<ActionIoSession, $ActionIoSessionsTable, ActionIoEvent>(
                           currentTable: table,
-                          referencedTable: $$ActionIoSessionsTableReferences
-                              ._actionIoEventsRefsTable(db),
-                          managerFromTypedResult: (p0) =>
-                              $$ActionIoSessionsTableReferences(
-                                db,
-                                table,
-                                p0,
-                              ).actionIoEventsRefs,
-                          referencedItemsForCurrentItem:
-                              (item, referencedItems) => referencedItems.where(
-                                (e) => e.executionId == item.executionId,
-                              ),
+                          referencedTable: $$ActionIoSessionsTableReferences._actionIoEventsRefsTable(db),
+                          managerFromTypedResult: (p0) => $$ActionIoSessionsTableReferences(
+                            db,
+                            table,
+                            p0,
+                          ).actionIoEventsRefs,
+                          referencedItemsForCurrentItem: (item, referencedItems) => referencedItems.where(
+                            (e) => e.executionId == item.executionId,
+                          ),
                           typedResults: items,
                         ),
                     ];
@@ -4563,12 +4450,7 @@ typedef $$ActionIoPayloadsTableUpdateCompanionBuilder =
     });
 
 final class $$ActionIoPayloadsTableReferences
-    extends
-        BaseReferences<
-          _$ActionIoJournalDatabase,
-          $ActionIoPayloadsTable,
-          ActionIoPayload
-        > {
+    extends BaseReferences<_$ActionIoJournalDatabase, $ActionIoPayloadsTable, ActionIoPayload> {
   $$ActionIoPayloadsTableReferences(
     super.$_db,
     super.$_table,
@@ -4595,21 +4477,19 @@ final class $$ActionIoPayloadsTableReferences
     );
   }
 
-  static MultiTypedResultKey<$ActionIoMessagesTable, List<ActionIoMessage>>
-  _actionIoMessagesRefsTable(_$ActionIoJournalDatabase db) =>
-      MultiTypedResultKey.fromTable(
-        db.actionIoMessages,
-        aliasName:
-            'action_io_payloads__payload_id__action_io_messages__payload_id',
-      );
+  static MultiTypedResultKey<$ActionIoMessagesTable, List<ActionIoMessage>> _actionIoMessagesRefsTable(
+    _$ActionIoJournalDatabase db,
+  ) => MultiTypedResultKey.fromTable(
+    db.actionIoMessages,
+    aliasName: 'action_io_payloads__payload_id__action_io_messages__payload_id',
+  );
 
   $$ActionIoMessagesTableProcessedTableManager get actionIoMessagesRefs {
-    final manager =
-        $$ActionIoMessagesTableTableManager($_db, $_db.actionIoMessages).filter(
-          (f) => f.payloadId.payloadId.sqlEquals(
-            $_itemColumn<String>('payload_id')!,
-          ),
-        );
+    final manager = $$ActionIoMessagesTableTableManager($_db, $_db.actionIoMessages).filter(
+      (f) => f.payloadId.payloadId.sqlEquals(
+        $_itemColumn<String>('payload_id')!,
+      ),
+    );
 
     final cache = $_typedResult.readTableOrNull(
       _actionIoMessagesRefsTable($_db),
@@ -4619,21 +4499,19 @@ final class $$ActionIoPayloadsTableReferences
     );
   }
 
-  static MultiTypedResultKey<$ActionIoEventsTable, List<ActionIoEvent>>
-  _actionIoEventsRefsTable(_$ActionIoJournalDatabase db) =>
-      MultiTypedResultKey.fromTable(
-        db.actionIoEvents,
-        aliasName:
-            'action_io_payloads__payload_id__action_io_events__payload_id',
-      );
+  static MultiTypedResultKey<$ActionIoEventsTable, List<ActionIoEvent>> _actionIoEventsRefsTable(
+    _$ActionIoJournalDatabase db,
+  ) => MultiTypedResultKey.fromTable(
+    db.actionIoEvents,
+    aliasName: 'action_io_payloads__payload_id__action_io_events__payload_id',
+  );
 
   $$ActionIoEventsTableProcessedTableManager get actionIoEventsRefs {
-    final manager = $$ActionIoEventsTableTableManager($_db, $_db.actionIoEvents)
-        .filter(
-          (f) => f.payloadId.payloadId.sqlEquals(
-            $_itemColumn<String>('payload_id')!,
-          ),
-        );
+    final manager = $$ActionIoEventsTableTableManager($_db, $_db.actionIoEvents).filter(
+      (f) => f.payloadId.payloadId.sqlEquals(
+        $_itemColumn<String>('payload_id')!,
+      ),
+    );
 
     final cache = $_typedResult.readTableOrNull(_actionIoEventsRefsTable($_db));
     return ProcessedTableManager(
@@ -4642,8 +4520,7 @@ final class $$ActionIoPayloadsTableReferences
   }
 }
 
-class $$ActionIoPayloadsTableFilterComposer
-    extends Composer<_$ActionIoJournalDatabase, $ActionIoPayloadsTable> {
+class $$ActionIoPayloadsTableFilterComposer extends Composer<_$ActionIoJournalDatabase, $ActionIoPayloadsTable> {
   $$ActionIoPayloadsTableFilterComposer({
     required super.$db,
     required super.$table,
@@ -4702,8 +4579,7 @@ class $$ActionIoPayloadsTableFilterComposer
             $table: $db.actionIoSessions,
             $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
             joinBuilder: joinBuilder,
-            $removeJoinBuilderFromRootComposer:
-                $removeJoinBuilderFromRootComposer,
+            $removeJoinBuilderFromRootComposer: $removeJoinBuilderFromRootComposer,
           ),
     );
     return composer;
@@ -4727,8 +4603,7 @@ class $$ActionIoPayloadsTableFilterComposer
             $table: $db.actionIoMessages,
             $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
             joinBuilder: joinBuilder,
-            $removeJoinBuilderFromRootComposer:
-                $removeJoinBuilderFromRootComposer,
+            $removeJoinBuilderFromRootComposer: $removeJoinBuilderFromRootComposer,
           ),
     );
     return f(composer);
@@ -4752,16 +4627,14 @@ class $$ActionIoPayloadsTableFilterComposer
             $table: $db.actionIoEvents,
             $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
             joinBuilder: joinBuilder,
-            $removeJoinBuilderFromRootComposer:
-                $removeJoinBuilderFromRootComposer,
+            $removeJoinBuilderFromRootComposer: $removeJoinBuilderFromRootComposer,
           ),
     );
     return f(composer);
   }
 }
 
-class $$ActionIoPayloadsTableOrderingComposer
-    extends Composer<_$ActionIoJournalDatabase, $ActionIoPayloadsTable> {
+class $$ActionIoPayloadsTableOrderingComposer extends Composer<_$ActionIoJournalDatabase, $ActionIoPayloadsTable> {
   $$ActionIoPayloadsTableOrderingComposer({
     required super.$db,
     required super.$table,
@@ -4820,16 +4693,14 @@ class $$ActionIoPayloadsTableOrderingComposer
             $table: $db.actionIoSessions,
             $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
             joinBuilder: joinBuilder,
-            $removeJoinBuilderFromRootComposer:
-                $removeJoinBuilderFromRootComposer,
+            $removeJoinBuilderFromRootComposer: $removeJoinBuilderFromRootComposer,
           ),
     );
     return composer;
   }
 }
 
-class $$ActionIoPayloadsTableAnnotationComposer
-    extends Composer<_$ActionIoJournalDatabase, $ActionIoPayloadsTable> {
+class $$ActionIoPayloadsTableAnnotationComposer extends Composer<_$ActionIoJournalDatabase, $ActionIoPayloadsTable> {
   $$ActionIoPayloadsTableAnnotationComposer({
     required super.$db,
     required super.$table,
@@ -4837,14 +4708,11 @@ class $$ActionIoPayloadsTableAnnotationComposer
     super.$addJoinBuilderToRootComposer,
     super.$removeJoinBuilderFromRootComposer,
   });
-  GeneratedColumn<String> get payloadId =>
-      $composableBuilder(column: $table.payloadId, builder: (column) => column);
+  GeneratedColumn<String> get payloadId => $composableBuilder(column: $table.payloadId, builder: (column) => column);
 
-  GeneratedColumn<String> get keyId =>
-      $composableBuilder(column: $table.keyId, builder: (column) => column);
+  GeneratedColumn<String> get keyId => $composableBuilder(column: $table.keyId, builder: (column) => column);
 
-  GeneratedColumn<Uint8List> get nonce =>
-      $composableBuilder(column: $table.nonce, builder: (column) => column);
+  GeneratedColumn<Uint8List> get nonce => $composableBuilder(column: $table.nonce, builder: (column) => column);
 
   GeneratedColumn<Uint8List> get ciphertext => $composableBuilder(
     column: $table.ciphertext,
@@ -4882,8 +4750,7 @@ class $$ActionIoPayloadsTableAnnotationComposer
             $table: $db.actionIoSessions,
             $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
             joinBuilder: joinBuilder,
-            $removeJoinBuilderFromRootComposer:
-                $removeJoinBuilderFromRootComposer,
+            $removeJoinBuilderFromRootComposer: $removeJoinBuilderFromRootComposer,
           ),
     );
     return composer;
@@ -4907,8 +4774,7 @@ class $$ActionIoPayloadsTableAnnotationComposer
             $table: $db.actionIoMessages,
             $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
             joinBuilder: joinBuilder,
-            $removeJoinBuilderFromRootComposer:
-                $removeJoinBuilderFromRootComposer,
+            $removeJoinBuilderFromRootComposer: $removeJoinBuilderFromRootComposer,
           ),
     );
     return f(composer);
@@ -4932,8 +4798,7 @@ class $$ActionIoPayloadsTableAnnotationComposer
             $table: $db.actionIoEvents,
             $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
             joinBuilder: joinBuilder,
-            $removeJoinBuilderFromRootComposer:
-                $removeJoinBuilderFromRootComposer,
+            $removeJoinBuilderFromRootComposer: $removeJoinBuilderFromRootComposer,
           ),
     );
     return f(composer);
@@ -4966,12 +4831,9 @@ class $$ActionIoPayloadsTableTableManager
         TableManagerState(
           db: db,
           table: table,
-          createFilteringComposer: () =>
-              $$ActionIoPayloadsTableFilterComposer($db: db, $table: table),
-          createOrderingComposer: () =>
-              $$ActionIoPayloadsTableOrderingComposer($db: db, $table: table),
-          createComputedFieldComposer: () =>
-              $$ActionIoPayloadsTableAnnotationComposer($db: db, $table: table),
+          createFilteringComposer: () => $$ActionIoPayloadsTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () => $$ActionIoPayloadsTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () => $$ActionIoPayloadsTableAnnotationComposer($db: db, $table: table),
           updateCompanionCallback:
               ({
                 Value<String> payloadId = const Value.absent(),
@@ -5057,13 +4919,10 @@ class $$ActionIoPayloadsTableTableManager
                               state.withJoin(
                                     currentTable: table,
                                     currentColumn: table.executionId,
-                                    referencedTable:
-                                        $$ActionIoPayloadsTableReferences
-                                            ._executionIdTable(db),
-                                    referencedColumn:
-                                        $$ActionIoPayloadsTableReferences
-                                            ._executionIdTable(db)
-                                            .executionId,
+                                    referencedTable: $$ActionIoPayloadsTableReferences._executionIdTable(db),
+                                    referencedColumn: $$ActionIoPayloadsTableReferences
+                                        ._executionIdTable(db)
+                                        .executionId,
                                   )
                                   as T;
                         }
@@ -5073,45 +4932,31 @@ class $$ActionIoPayloadsTableTableManager
                   getPrefetchedDataCallback: (items) async {
                     return [
                       if (actionIoMessagesRefs)
-                        await $_getPrefetchedData<
-                          ActionIoPayload,
-                          $ActionIoPayloadsTable,
-                          ActionIoMessage
-                        >(
+                        await $_getPrefetchedData<ActionIoPayload, $ActionIoPayloadsTable, ActionIoMessage>(
                           currentTable: table,
-                          referencedTable: $$ActionIoPayloadsTableReferences
-                              ._actionIoMessagesRefsTable(db),
-                          managerFromTypedResult: (p0) =>
-                              $$ActionIoPayloadsTableReferences(
-                                db,
-                                table,
-                                p0,
-                              ).actionIoMessagesRefs,
-                          referencedItemsForCurrentItem:
-                              (item, referencedItems) => referencedItems.where(
-                                (e) => e.payloadId == item.payloadId,
-                              ),
+                          referencedTable: $$ActionIoPayloadsTableReferences._actionIoMessagesRefsTable(db),
+                          managerFromTypedResult: (p0) => $$ActionIoPayloadsTableReferences(
+                            db,
+                            table,
+                            p0,
+                          ).actionIoMessagesRefs,
+                          referencedItemsForCurrentItem: (item, referencedItems) => referencedItems.where(
+                            (e) => e.payloadId == item.payloadId,
+                          ),
                           typedResults: items,
                         ),
                       if (actionIoEventsRefs)
-                        await $_getPrefetchedData<
-                          ActionIoPayload,
-                          $ActionIoPayloadsTable,
-                          ActionIoEvent
-                        >(
+                        await $_getPrefetchedData<ActionIoPayload, $ActionIoPayloadsTable, ActionIoEvent>(
                           currentTable: table,
-                          referencedTable: $$ActionIoPayloadsTableReferences
-                              ._actionIoEventsRefsTable(db),
-                          managerFromTypedResult: (p0) =>
-                              $$ActionIoPayloadsTableReferences(
-                                db,
-                                table,
-                                p0,
-                              ).actionIoEventsRefs,
-                          referencedItemsForCurrentItem:
-                              (item, referencedItems) => referencedItems.where(
-                                (e) => e.payloadId == item.payloadId,
-                              ),
+                          referencedTable: $$ActionIoPayloadsTableReferences._actionIoEventsRefsTable(db),
+                          managerFromTypedResult: (p0) => $$ActionIoPayloadsTableReferences(
+                            db,
+                            table,
+                            p0,
+                          ).actionIoEventsRefs,
+                          referencedItemsForCurrentItem: (item, referencedItems) => referencedItems.where(
+                            (e) => e.payloadId == item.payloadId,
+                          ),
                           typedResults: items,
                         ),
                     ];
@@ -5172,12 +5017,7 @@ typedef $$ActionIoMessagesTableUpdateCompanionBuilder =
     });
 
 final class $$ActionIoMessagesTableReferences
-    extends
-        BaseReferences<
-          _$ActionIoJournalDatabase,
-          $ActionIoMessagesTable,
-          ActionIoMessage
-        > {
+    extends BaseReferences<_$ActionIoJournalDatabase, $ActionIoMessagesTable, ActionIoMessage> {
   $$ActionIoMessagesTableReferences(
     super.$_db,
     super.$_table,
@@ -5204,10 +5044,9 @@ final class $$ActionIoMessagesTableReferences
     );
   }
 
-  static $ActionIoPayloadsTable _payloadIdTable(_$ActionIoJournalDatabase db) =>
-      db.actionIoPayloads.createAlias(
-        'action_io_messages__payload_id__action_io_payloads__payload_id',
-      );
+  static $ActionIoPayloadsTable _payloadIdTable(_$ActionIoJournalDatabase db) => db.actionIoPayloads.createAlias(
+    'action_io_messages__payload_id__action_io_payloads__payload_id',
+  );
 
   $$ActionIoPayloadsTableProcessedTableManager? get payloadId {
     final $_column = $_itemColumn<String>('payload_id');
@@ -5224,8 +5063,7 @@ final class $$ActionIoMessagesTableReferences
   }
 }
 
-class $$ActionIoMessagesTableFilterComposer
-    extends Composer<_$ActionIoJournalDatabase, $ActionIoMessagesTable> {
+class $$ActionIoMessagesTableFilterComposer extends Composer<_$ActionIoJournalDatabase, $ActionIoMessagesTable> {
   $$ActionIoMessagesTableFilterComposer({
     required super.$db,
     required super.$table,
@@ -5294,8 +5132,7 @@ class $$ActionIoMessagesTableFilterComposer
             $table: $db.actionIoSessions,
             $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
             joinBuilder: joinBuilder,
-            $removeJoinBuilderFromRootComposer:
-                $removeJoinBuilderFromRootComposer,
+            $removeJoinBuilderFromRootComposer: $removeJoinBuilderFromRootComposer,
           ),
     );
     return composer;
@@ -5317,16 +5154,14 @@ class $$ActionIoMessagesTableFilterComposer
             $table: $db.actionIoPayloads,
             $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
             joinBuilder: joinBuilder,
-            $removeJoinBuilderFromRootComposer:
-                $removeJoinBuilderFromRootComposer,
+            $removeJoinBuilderFromRootComposer: $removeJoinBuilderFromRootComposer,
           ),
     );
     return composer;
   }
 }
 
-class $$ActionIoMessagesTableOrderingComposer
-    extends Composer<_$ActionIoJournalDatabase, $ActionIoMessagesTable> {
+class $$ActionIoMessagesTableOrderingComposer extends Composer<_$ActionIoJournalDatabase, $ActionIoMessagesTable> {
   $$ActionIoMessagesTableOrderingComposer({
     required super.$db,
     required super.$table,
@@ -5395,8 +5230,7 @@ class $$ActionIoMessagesTableOrderingComposer
             $table: $db.actionIoSessions,
             $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
             joinBuilder: joinBuilder,
-            $removeJoinBuilderFromRootComposer:
-                $removeJoinBuilderFromRootComposer,
+            $removeJoinBuilderFromRootComposer: $removeJoinBuilderFromRootComposer,
           ),
     );
     return composer;
@@ -5418,16 +5252,14 @@ class $$ActionIoMessagesTableOrderingComposer
             $table: $db.actionIoPayloads,
             $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
             joinBuilder: joinBuilder,
-            $removeJoinBuilderFromRootComposer:
-                $removeJoinBuilderFromRootComposer,
+            $removeJoinBuilderFromRootComposer: $removeJoinBuilderFromRootComposer,
           ),
     );
     return composer;
   }
 }
 
-class $$ActionIoMessagesTableAnnotationComposer
-    extends Composer<_$ActionIoJournalDatabase, $ActionIoMessagesTable> {
+class $$ActionIoMessagesTableAnnotationComposer extends Composer<_$ActionIoJournalDatabase, $ActionIoMessagesTable> {
   $$ActionIoMessagesTableAnnotationComposer({
     required super.$db,
     required super.$table,
@@ -5435,11 +5267,9 @@ class $$ActionIoMessagesTableAnnotationComposer
     super.$addJoinBuilderToRootComposer,
     super.$removeJoinBuilderFromRootComposer,
   });
-  GeneratedColumn<String> get messageId =>
-      $composableBuilder(column: $table.messageId, builder: (column) => column);
+  GeneratedColumn<String> get messageId => $composableBuilder(column: $table.messageId, builder: (column) => column);
 
-  GeneratedColumn<int> get sequence =>
-      $composableBuilder(column: $table.sequence, builder: (column) => column);
+  GeneratedColumn<int> get sequence => $composableBuilder(column: $table.sequence, builder: (column) => column);
 
   GeneratedColumn<String> get fingerprint => $composableBuilder(
     column: $table.fingerprint,
@@ -5492,8 +5322,7 @@ class $$ActionIoMessagesTableAnnotationComposer
             $table: $db.actionIoSessions,
             $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
             joinBuilder: joinBuilder,
-            $removeJoinBuilderFromRootComposer:
-                $removeJoinBuilderFromRootComposer,
+            $removeJoinBuilderFromRootComposer: $removeJoinBuilderFromRootComposer,
           ),
     );
     return composer;
@@ -5515,8 +5344,7 @@ class $$ActionIoMessagesTableAnnotationComposer
             $table: $db.actionIoPayloads,
             $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
             joinBuilder: joinBuilder,
-            $removeJoinBuilderFromRootComposer:
-                $removeJoinBuilderFromRootComposer,
+            $removeJoinBuilderFromRootComposer: $removeJoinBuilderFromRootComposer,
           ),
     );
     return composer;
@@ -5545,12 +5373,9 @@ class $$ActionIoMessagesTableTableManager
         TableManagerState(
           db: db,
           table: table,
-          createFilteringComposer: () =>
-              $$ActionIoMessagesTableFilterComposer($db: db, $table: table),
-          createOrderingComposer: () =>
-              $$ActionIoMessagesTableOrderingComposer($db: db, $table: table),
-          createComputedFieldComposer: () =>
-              $$ActionIoMessagesTableAnnotationComposer($db: db, $table: table),
+          createFilteringComposer: () => $$ActionIoMessagesTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () => $$ActionIoMessagesTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () => $$ActionIoMessagesTableAnnotationComposer($db: db, $table: table),
           updateCompanionCallback:
               ({
                 Value<String> executionId = const Value.absent(),
@@ -5640,13 +5465,8 @@ class $$ActionIoMessagesTableTableManager
                           state.withJoin(
                                 currentTable: table,
                                 currentColumn: table.executionId,
-                                referencedTable:
-                                    $$ActionIoMessagesTableReferences
-                                        ._executionIdTable(db),
-                                referencedColumn:
-                                    $$ActionIoMessagesTableReferences
-                                        ._executionIdTable(db)
-                                        .executionId,
+                                referencedTable: $$ActionIoMessagesTableReferences._executionIdTable(db),
+                                referencedColumn: $$ActionIoMessagesTableReferences._executionIdTable(db).executionId,
                               )
                               as T;
                     }
@@ -5655,13 +5475,8 @@ class $$ActionIoMessagesTableTableManager
                           state.withJoin(
                                 currentTable: table,
                                 currentColumn: table.payloadId,
-                                referencedTable:
-                                    $$ActionIoMessagesTableReferences
-                                        ._payloadIdTable(db),
-                                referencedColumn:
-                                    $$ActionIoMessagesTableReferences
-                                        ._payloadIdTable(db)
-                                        .payloadId,
+                                referencedTable: $$ActionIoMessagesTableReferences._payloadIdTable(db),
+                                referencedColumn: $$ActionIoMessagesTableReferences._payloadIdTable(db).payloadId,
                               )
                               as T;
                     }
@@ -5721,12 +5536,7 @@ typedef $$ActionIoEventsTableUpdateCompanionBuilder =
     });
 
 final class $$ActionIoEventsTableReferences
-    extends
-        BaseReferences<
-          _$ActionIoJournalDatabase,
-          $ActionIoEventsTable,
-          ActionIoEvent
-        > {
+    extends BaseReferences<_$ActionIoJournalDatabase, $ActionIoEventsTable, ActionIoEvent> {
   $$ActionIoEventsTableReferences(
     super.$_db,
     super.$_table,
@@ -5753,10 +5563,9 @@ final class $$ActionIoEventsTableReferences
     );
   }
 
-  static $ActionIoPayloadsTable _payloadIdTable(_$ActionIoJournalDatabase db) =>
-      db.actionIoPayloads.createAlias(
-        'action_io_events__payload_id__action_io_payloads__payload_id',
-      );
+  static $ActionIoPayloadsTable _payloadIdTable(_$ActionIoJournalDatabase db) => db.actionIoPayloads.createAlias(
+    'action_io_events__payload_id__action_io_payloads__payload_id',
+  );
 
   $$ActionIoPayloadsTableProcessedTableManager? get payloadId {
     final $_column = $_itemColumn<String>('payload_id');
@@ -5773,8 +5582,7 @@ final class $$ActionIoEventsTableReferences
   }
 }
 
-class $$ActionIoEventsTableFilterComposer
-    extends Composer<_$ActionIoJournalDatabase, $ActionIoEventsTable> {
+class $$ActionIoEventsTableFilterComposer extends Composer<_$ActionIoJournalDatabase, $ActionIoEventsTable> {
   $$ActionIoEventsTableFilterComposer({
     required super.$db,
     required super.$table,
@@ -5838,8 +5646,7 @@ class $$ActionIoEventsTableFilterComposer
             $table: $db.actionIoSessions,
             $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
             joinBuilder: joinBuilder,
-            $removeJoinBuilderFromRootComposer:
-                $removeJoinBuilderFromRootComposer,
+            $removeJoinBuilderFromRootComposer: $removeJoinBuilderFromRootComposer,
           ),
     );
     return composer;
@@ -5861,16 +5668,14 @@ class $$ActionIoEventsTableFilterComposer
             $table: $db.actionIoPayloads,
             $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
             joinBuilder: joinBuilder,
-            $removeJoinBuilderFromRootComposer:
-                $removeJoinBuilderFromRootComposer,
+            $removeJoinBuilderFromRootComposer: $removeJoinBuilderFromRootComposer,
           ),
     );
     return composer;
   }
 }
 
-class $$ActionIoEventsTableOrderingComposer
-    extends Composer<_$ActionIoJournalDatabase, $ActionIoEventsTable> {
+class $$ActionIoEventsTableOrderingComposer extends Composer<_$ActionIoJournalDatabase, $ActionIoEventsTable> {
   $$ActionIoEventsTableOrderingComposer({
     required super.$db,
     required super.$table,
@@ -5934,8 +5739,7 @@ class $$ActionIoEventsTableOrderingComposer
             $table: $db.actionIoSessions,
             $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
             joinBuilder: joinBuilder,
-            $removeJoinBuilderFromRootComposer:
-                $removeJoinBuilderFromRootComposer,
+            $removeJoinBuilderFromRootComposer: $removeJoinBuilderFromRootComposer,
           ),
     );
     return composer;
@@ -5957,16 +5761,14 @@ class $$ActionIoEventsTableOrderingComposer
             $table: $db.actionIoPayloads,
             $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
             joinBuilder: joinBuilder,
-            $removeJoinBuilderFromRootComposer:
-                $removeJoinBuilderFromRootComposer,
+            $removeJoinBuilderFromRootComposer: $removeJoinBuilderFromRootComposer,
           ),
     );
     return composer;
   }
 }
 
-class $$ActionIoEventsTableAnnotationComposer
-    extends Composer<_$ActionIoJournalDatabase, $ActionIoEventsTable> {
+class $$ActionIoEventsTableAnnotationComposer extends Composer<_$ActionIoJournalDatabase, $ActionIoEventsTable> {
   $$ActionIoEventsTableAnnotationComposer({
     required super.$db,
     required super.$table,
@@ -5974,22 +5776,18 @@ class $$ActionIoEventsTableAnnotationComposer
     super.$addJoinBuilderToRootComposer,
     super.$removeJoinBuilderFromRootComposer,
   });
-  GeneratedColumn<int> get sequence =>
-      $composableBuilder(column: $table.sequence, builder: (column) => column);
+  GeneratedColumn<int> get sequence => $composableBuilder(column: $table.sequence, builder: (column) => column);
 
-  GeneratedColumn<String> get eventType =>
-      $composableBuilder(column: $table.eventType, builder: (column) => column);
+  GeneratedColumn<String> get eventType => $composableBuilder(column: $table.eventType, builder: (column) => column);
 
-  GeneratedColumn<String> get stream =>
-      $composableBuilder(column: $table.stream, builder: (column) => column);
+  GeneratedColumn<String> get stream => $composableBuilder(column: $table.stream, builder: (column) => column);
 
   GeneratedColumn<int> get byteOffset => $composableBuilder(
     column: $table.byteOffset,
     builder: (column) => column,
   );
 
-  GeneratedColumn<int> get exitCode =>
-      $composableBuilder(column: $table.exitCode, builder: (column) => column);
+  GeneratedColumn<int> get exitCode => $composableBuilder(column: $table.exitCode, builder: (column) => column);
 
   GeneratedColumn<bool> get outputComplete => $composableBuilder(
     column: $table.outputComplete,
@@ -6001,8 +5799,7 @@ class $$ActionIoEventsTableAnnotationComposer
     builder: (column) => column,
   );
 
-  GeneratedColumn<DateTime> get createdAt =>
-      $composableBuilder(column: $table.createdAt, builder: (column) => column);
+  GeneratedColumn<DateTime> get createdAt => $composableBuilder(column: $table.createdAt, builder: (column) => column);
 
   $$ActionIoSessionsTableAnnotationComposer get executionId {
     final $$ActionIoSessionsTableAnnotationComposer composer = $composerBuilder(
@@ -6020,8 +5817,7 @@ class $$ActionIoEventsTableAnnotationComposer
             $table: $db.actionIoSessions,
             $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
             joinBuilder: joinBuilder,
-            $removeJoinBuilderFromRootComposer:
-                $removeJoinBuilderFromRootComposer,
+            $removeJoinBuilderFromRootComposer: $removeJoinBuilderFromRootComposer,
           ),
     );
     return composer;
@@ -6043,8 +5839,7 @@ class $$ActionIoEventsTableAnnotationComposer
             $table: $db.actionIoPayloads,
             $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
             joinBuilder: joinBuilder,
-            $removeJoinBuilderFromRootComposer:
-                $removeJoinBuilderFromRootComposer,
+            $removeJoinBuilderFromRootComposer: $removeJoinBuilderFromRootComposer,
           ),
     );
     return composer;
@@ -6073,12 +5868,9 @@ class $$ActionIoEventsTableTableManager
         TableManagerState(
           db: db,
           table: table,
-          createFilteringComposer: () =>
-              $$ActionIoEventsTableFilterComposer($db: db, $table: table),
-          createOrderingComposer: () =>
-              $$ActionIoEventsTableOrderingComposer($db: db, $table: table),
-          createComputedFieldComposer: () =>
-              $$ActionIoEventsTableAnnotationComposer($db: db, $table: table),
+          createFilteringComposer: () => $$ActionIoEventsTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () => $$ActionIoEventsTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () => $$ActionIoEventsTableAnnotationComposer($db: db, $table: table),
           updateCompanionCallback:
               ({
                 Value<String> executionId = const Value.absent(),
@@ -6164,12 +5956,8 @@ class $$ActionIoEventsTableTableManager
                           state.withJoin(
                                 currentTable: table,
                                 currentColumn: table.executionId,
-                                referencedTable: $$ActionIoEventsTableReferences
-                                    ._executionIdTable(db),
-                                referencedColumn:
-                                    $$ActionIoEventsTableReferences
-                                        ._executionIdTable(db)
-                                        .executionId,
+                                referencedTable: $$ActionIoEventsTableReferences._executionIdTable(db),
+                                referencedColumn: $$ActionIoEventsTableReferences._executionIdTable(db).executionId,
                               )
                               as T;
                     }
@@ -6178,12 +5966,8 @@ class $$ActionIoEventsTableTableManager
                           state.withJoin(
                                 currentTable: table,
                                 currentColumn: table.payloadId,
-                                referencedTable: $$ActionIoEventsTableReferences
-                                    ._payloadIdTable(db),
-                                referencedColumn:
-                                    $$ActionIoEventsTableReferences
-                                        ._payloadIdTable(db)
-                                        .payloadId,
+                                referencedTable: $$ActionIoEventsTableReferences._payloadIdTable(db),
+                                referencedColumn: $$ActionIoEventsTableReferences._payloadIdTable(db).payloadId,
                               )
                               as T;
                     }
@@ -6223,6 +6007,5 @@ class $ActionIoJournalDatabaseManager {
       $$ActionIoPayloadsTableTableManager(_db, _db.actionIoPayloads);
   $$ActionIoMessagesTableTableManager get actionIoMessages =>
       $$ActionIoMessagesTableTableManager(_db, _db.actionIoMessages);
-  $$ActionIoEventsTableTableManager get actionIoEvents =>
-      $$ActionIoEventsTableTableManager(_db, _db.actionIoEvents);
+  $$ActionIoEventsTableTableManager get actionIoEvents => $$ActionIoEventsTableTableManager(_db, _db.actionIoEvents);
 }
