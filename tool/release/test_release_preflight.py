@@ -258,7 +258,8 @@ class ReleasePreflightTests(unittest.TestCase):
 
     def test_early_checks_validates_tag_without_version_sync(self) -> None:
         with (
-            patch.object(release_preflight, "ensure_tools"),
+            patch.object(release_preflight, "find_iscc", return_value=None),
+            patch.object(release_preflight, "ensure_early_tools") as tool_check,
             patch.object(release_preflight, "ensure_tag_available") as tag_check,
         ):
             release_preflight.run_early_checks(
@@ -268,6 +269,16 @@ class ReleasePreflightTests(unittest.TestCase):
                 "1.6.7",
             )
         tag_check.assert_called_once_with("v1.6.7")
+        tool_check.assert_called_once_with(require_iscc=True)
+
+    def test_early_tool_check_rejects_missing_required_iscc(self) -> None:
+        with (
+            patch.object(release_preflight, "command_exists", return_value=True),
+            patch.object(release_preflight, "find_iscc", return_value=None),
+        ):
+            with self.assertRaisesRegex(RuntimeError, "Missing required command.*ISCC"):
+                release_preflight.ensure_early_tools(require_iscc=True)
+            release_preflight.ensure_early_tools(require_iscc=False)
 
     def test_collect_publish_secret_warnings_lists_missing_secrets(self) -> None:
         with patch.object(release_preflight, "list_github_actions_secrets", return_value=set()):
