@@ -1,5 +1,7 @@
 # SQL operations: journal and transaction integration
 
+Private publication fixture columns may opt into MSSQL `temporalStorage: datetime2_3` with scalar `date`. It creates DATETIME2(3), preserves UTC seconds/milliseconds and nullability, and rejects offsets, missing zones, invalid calendars or excess precision instead of truncating. Without it DATE stays date-only. FK and audit columns must match storage. Existing cases/publications are unchanged; use a new session and compatible remote runner. `test/tool/persona_publication_temporal_native_test.dart` requires explicit disposable loopback MSSQL variables and never reads operational DSNs.
+
 Current scope: PostgreSQL, SQL Server and SQL Anywhere. Firebird cases and
 four-engine matrices in dated sections are retained as historical evidence;
 Firebird is no longer supported. Current acceptance requires the three-engine
@@ -577,3 +579,6 @@ or its agents-stop file. Without the option the twelve-minute automated watchdog
 and fourteen-minute test timeout remain unchanged. SQL budgets, journal semantics,
 authentication and approval lifetimes are not extended. This is a disposable
 Flutter companion with native ODBC/vault, not proof of the installed desktop app.
+
+
+Temporal regression (2026-11-14): 58 Dart tests plus a disposable SQL Server 2022/ODBC 5.0.4 native test passed. DATEPART verified 997/0 milliseconds, next-day exclusion and NULL. Native BIGINT-bound NULL requires conversion through text before DATETIME2(3); values remain bound parameters. No operational database or installer changed.

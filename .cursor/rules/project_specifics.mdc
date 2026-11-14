@@ -330,6 +330,8 @@ Coordinated persona-v2 acceptance includes shared-knowledge-and-compatibility in
 
 ## Persona SQL homologation exception
 
+Private publication timestamps require explicit MSSQL temporalStorage datetime2_3. Date scalars retain their transport shape; DATE without that declaration accepts only calendar dates. Accept UTC Z at seconds/milliseconds without timezone conversion, refuse invalid calendars or lossy precision, and compare storage for FK/audit compatibility. Native boundary tests are required; mock success does not certify an engine.
+
 The explicitly invoked three-engine matrix under tool/homologation requires
 all three private fixtures and fails on missing environment; it must never skip
 or fall back to .env, configured sources or existing DSNs. This requirement

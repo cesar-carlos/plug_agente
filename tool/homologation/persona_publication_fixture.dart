@@ -35,6 +35,10 @@ class PublicationFixture {
       for (final column in columns) {
         if (!columnNames.add(column['name'] as String)) throw StateError('Duplicate fixture column.');
         _quote(column['name'] as String);
+        if (column.containsKey('temporalStorage') &&
+            (column['temporalStorage'] != 'datetime2_3' || column['type'] != 'date' || engine != 'mssql')) {
+          throw StateError('Temporal storage requires an explicit MSSQL date fixture.');
+        }
         _type(column);
         if (column['nullable'] is! bool || column['generated'] is! bool) {
           throw StateError('Explicit column flags required.');
@@ -79,7 +83,9 @@ class PublicationFixture {
             !local.asMap().entries.every(
               (e) =>
                   columns.singleWhere((c) => c['name'] == e.value)['type'] ==
-                  _columns(target).singleWhere((c) => c['name'] == remote[e.key])['type'],
+                      _columns(target).singleWhere((c) => c['name'] == remote[e.key])['type'] &&
+                  columns.singleWhere((c) => c['name'] == e.value)['temporalStorage'] ==
+                      _columns(target).singleWhere((c) => c['name'] == remote[e.key])['temporalStorage'],
             )) {
           throw StateError('Invalid private fixture FK.');
         }
@@ -99,7 +105,13 @@ class PublicationFixture {
               columns.any((c) => c['generated'] == true) ||
               remote.length != columns.length ||
               !columns.asMap().entries.every(
-                (e) => ['name', 'type', 'nullable', 'generated'].every((key) => e.value[key] == remote[e.key][key]),
+                (e) => [
+                  'name',
+                  'type',
+                  'nullable',
+                  'generated',
+                  'temporalStorage',
+                ].every((key) => e.value[key] == remote[e.key][key]),
               )) {
             throw StateError('Invalid private fixture audit trigger.');
           }
@@ -133,6 +145,7 @@ class PublicationFixture {
     },
     'integer' => 'BIGINT',
     'decimal' => 'DECIMAL(28,8)',
+    'date' when column['temporalStorage'] == 'datetime2_3' => 'DATETIME2(3)',
     'date' => 'DATE',
     'boolean' => engine == 'postgres' ? 'BOOLEAN' : 'BIT',
     'uuid' => engine == 'postgres' ? 'UUID' : 'UNIQUEIDENTIFIER',
@@ -239,6 +252,28 @@ class PublicationFixture {
     await _triggers(id);
   });
 
+  // UTC fixture timestamps preserve fields and milliseconds; no timezone inference.
+  Object _temporalValue(String value, Map<String, dynamic> column) {
+    final dateOnly = RegExp(r'^\d{4}-\d{2}-\d{2}$').hasMatch(value);
+    final timestamp =
+        column['temporalStorage'] == 'datetime2_3' &&
+        RegExp(r'^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{3})?Z$').hasMatch(value);
+    if (!dateOnly && !timestamp) {
+      throw StateError('Fixture date requires a calendar date or explicit UTC millisecond storage.');
+    }
+    final parsed = DateTime.tryParse(dateOnly ? '${value}T00:00:00Z' : value);
+    final canonical = parsed?.toIso8601String();
+    final expected = dateOnly
+        ? '${value}T00:00:00.000Z'
+        : value.length == 20
+        ? value.replaceFirst('Z', '.000Z')
+        : value;
+    if (parsed == null || parsed.year < 1 || canonical != expected) {
+      throw StateError('Invalid or inexact fixture calendar value.');
+    }
+    return odbc.ParamValueString(timestamp ? value.substring(0, value.length - 1) : value);
+  }
+
   Object _value(Map<String, dynamic> scalar, Map<String, dynamic> column) {
     final value = scalar['value'];
     if (scalar['type'] == 'null' && value == null && column['nullable'] == true) return const odbc.ParamValueNull();
@@ -250,12 +285,21 @@ class PublicationFixture {
       ),
       'boolean' when value is bool => value,
       'string' when value is String && value.length <= 2000 => odbc.ParamValueString(value),
-      'date' when value is String && RegExp(r'^\d{4}-\d{2}-\d{2}$').hasMatch(value) => odbc.ParamValueString(value),
+      'date' when value is String => _temporalValue(value, column),
       'uuid'
           when value is String && RegExp(r'^[a-fA-F0-9]{8}(?:-[a-fA-F0-9]{4}){3}-[a-fA-F0-9]{12}$').hasMatch(value) =>
         odbc.ParamValueString(value),
       _ => throw StateError('Invalid or inexact fixture scalar.'),
     };
+  }
+
+  String _placeholder(Map<String, dynamic> column) {
+    final parameter = ':${column['name']}';
+    // The native null parameter is bound as BIGINT. Convert through text so
+    // NULL stays NULL without a forbidden BIGINT-to-DATETIME2 conversion.
+    return column['temporalStorage'] == 'datetime2_3'
+        ? 'CONVERT(datetime2(3), CONVERT(nvarchar(27), $parameter), 126)'
+        : parameter;
   }
 
   Future<void> prepare(List<dynamic> seeds) => _connected((id) async {
@@ -284,7 +328,7 @@ class PublicationFixture {
         };
         (await service.executeQueryNamed(
           id,
-          'INSERT INTO ${_quoteTable(name)} (${columns.map((c) => _quote(c['name'] as String)).join(',')}) VALUES (${columns.map((c) => ':${c['name']}').join(',')})',
+          'INSERT INTO ${_quoteTable(name)} (${columns.map((c) => _quote(c['name'] as String)).join(',')}) VALUES (${columns.map(_placeholder).join(',')})',
           params,
         )).getOrThrow();
       }

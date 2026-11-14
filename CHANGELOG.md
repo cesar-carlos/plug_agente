@@ -10,6 +10,8 @@ Changes after a recorded snapshot stay in Unreleased.
 
 ## Unreleased
 
+- Private publication fixtures support explicit MSSQL `temporalStorage: datetime2_3` while preserving the `date` scalar contract. UTC timestamps retain milliseconds, legacy DATE rejects times, invalid calendar/precision/zone values fail closed, and FK/trigger storage must match.
+
 ## 1.9.1 - 2026-11-04
 
 Status: prepared
