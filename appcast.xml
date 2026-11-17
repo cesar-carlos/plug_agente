@@ -5,6 +5,12 @@
   <link>https://github.com/cesar-carlos/plug_agente/releases</link>
   <description>Atualizações do Plug Agente</description>
   <item>
+   <title>Version 1.9.2+1</title>
+   <pubDate>Tue, 17 Nov 2026 14:48:02 +0000</pubDate>
+   <description>**Full Changelog**: https://github.com/cesar-carlos/plug_agente/compare/v1.9.1...v1.9.2</description>
+   <enclosure url="https://github.com/cesar-carlos/plug_agente/releases/download/v1.9.2/PlugAgente-Setup-1.9.2.exe" sparkle:version="1.9.2+1" sparkle:os="windows" plug:sha256="0f43df73b486abe7a5aaef9358fe80db59a6a573b9865a38879861c705dcc65c" plug:channel="stable" plug:rolloutPercentage="5" length="21915968" type="application/octet-stream" plug:manifestUrl="https://github.com/cesar-carlos/plug_agente/releases/download/v1.9.2/PlugAgente-Manifest-1.9.2.json" plug:manifestSha256="4da878eba54a1ad8c50dc4f3aa2edc259cd84e31ddae16b6ceb2f8f1d0ec427a" plug:edSignature="iWzZ0B7jt1GNWcRIBAcSfp5gU1TzkQw1U+YAtHe7+pXpiAsjtI9aDcv0EaJQWeEXF0xfqBZ+x57gGRuqhWouCA==" plug:manifestSignature="yOBfmZP/PnJvaLmtAM+tuu6/z5pyezrMNgPyinFhWJjZ705zcjFBxm7Q+x1ipaNijPO/+5uaJVUvfNURUg5/Dw==" />
+  </item>
+  <item>
    <title>Version 1.9.1+1</title>
    <pubDate>Wed, 04 Nov 2026 18:07:28 +0000</pubDate>
    <description>**Full Changelog**: https://github.com/cesar-carlos/plug_agente/compare/v1.9.0...v1.9.1</description>
@@ -72,12 +78,6 @@
    <pubDate>Thu, 28 May 2026 18:57:30 +0000</pubDate>
    <description>**Full Changelog**: https://github.com/cesar-carlos/plug_agente/compare/v1.7.2...v1.8.0</description>
    <enclosure url="https://github.com/cesar-carlos/plug_agente/releases/download/v1.8.0/PlugAgente-Setup-1.8.0.exe" sparkle:version="1.8.0+1" sparkle:os="windows" plug:sha256="3a987c9e60c93edeab0b9f6098a415359be32870143156ee1baca1ba221708ee" plug:channel="stable" plug:rolloutPercentage="100" length="21254920" type="application/octet-stream" />
-  </item>
-  <item>
-   <title>Version 1.7.2+1</title>
-   <pubDate>Thu, 28 May 2026 14:46:28 +0000</pubDate>
-   <description>**Full Changelog**: https://github.com/cesar-carlos/plug_agente/compare/v1.7.1...v1.7.2</description>
-   <enclosure url="https://github.com/cesar-carlos/plug_agente/releases/download/v1.7.2/PlugAgente-Setup-1.7.2.exe" sparkle:version="1.7.2+1" sparkle:os="windows" plug:sha256="b84e7a323ffac305f069dc8ddb11b415627292c75ccb4088521b043b7741496b" plug:channel="stable" plug:rolloutPercentage="100" length="21242699" type="application/octet-stream" />
   </item>
  </channel>
 </rss>
