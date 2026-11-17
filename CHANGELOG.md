@@ -10,6 +10,13 @@ Changes after a recorded snapshot stay in Unreleased.
 
 ## Unreleased
 
+## 1.9.2 - 2026-11-17
+
+Status: prepared
+Build: 1.9.2+1
+
+- The owner explicitly accepted the outstanding coordinated risks for stable `1.9.2+1` only. All 13 gates remain open; official signed release and initial 5% rollout remain required.
+
 - Fix temporal pagination response serialization: non-JSON cursor keys use offset
   continuation without changing returned values, timezone or precision. Unexpected
   response materialization failures retain `QUERY_RESPONSE_UNAVAILABLE` rather than

@@ -19,6 +19,7 @@ def ready(manifest):
 ACCEPTED_RISK = {
     ("v1.9.0", "1.9.0+1", "stable"),
     ("v1.9.1", "1.9.1+1", "stable"),
+    ("v1.9.2", "1.9.2+1", "stable"),
 }
 
 def accepted_risk(tag, build, channel, pubspec):
