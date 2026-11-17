@@ -29,6 +29,10 @@ Em 17 de novembro de 2026, o responsável respondeu explicitamente "Aceitar para
 
 O instalador anterior de homologação tem SHA-256 `26fdd6cca09e3b8e326ae054bf79e216e7d6c725215db45a0982145468d5fb0f`. Use o hash correspondente à distribuição que foi baixada. [Pré-release de homologação](https://github.com/cesar-carlos/plug_agente/releases/tag/homologation/1.9.0)
 
+### Autorização da v1.9.3+1
+
+Em 17 de novembro de 2026, após a preparação validada do instalador e aprovação do Flutter CI, o responsável respondeu explicitamente "Aceitar para 1.9.3+1 e publicar". A exceção cobre somente `v1.9.3` / `1.9.3+1` no canal estável, incluindo seu appcast, mantendo assinaturas, testes técnicos e rollout inicial de 5%. Foram aceitos os riscos pendentes de avaliação com consumidor/dataset real, upgrade/rollback instalados e evidências coordenadas dos 13 gates. Nenhum gate é considerado concluído por esta autorização. A causa específica do acesso negado no servidor ainda requer validação no cliente com os novos diagnósticos.
+
 ## Versao e Tags
 
 - A versao nasce em `pubspec.yaml`, no formato `MAJOR.MINOR.PATCH+BUILD`.
@@ -280,7 +284,7 @@ python tool/release/release_preflight.py --compile-iss
 - Production releases and appcast updates require coordinated acceptance, with
   owner-authorized exceptions for stable `v1.9.0` / `1.9.0+1` on 2026-10-31 and
   stable `v1.9.1` / `1.9.1+1` on 2026-11-04, and stable
-  `v1.9.2` / `1.9.2+1` on 2026-11-17. Each exception covers only that
+  `v1.9.2` / `1.9.2+1` and `v1.9.3` / `1.9.3+1` on 2026-11-17. Each exception covers only that
   build and its stable appcast. The owner accepted the outstanding risks of an
   unevaluated real consumer/dataset, untested installed upgrade and rollback,
   and incomplete coordinated image and per-gate evidence. All 13 persona-v2

@@ -15,6 +15,10 @@ Changes after a recorded snapshot stay in Unreleased.
 Status: prepared
 Build: 1.9.3+1
 
+- The owner explicitly accepted the outstanding coordinated risks for stable
+  `1.9.3+1` only. All 13 gates remain open; official signatures, technical checks
+  and initial 5% rollout remain required.
+
 - Distinguish installation shutdown-channel access denial from process identity
   failures; retain operation, process ID, Windows error, target directory and
   available session metadata in installer diagnostics.
