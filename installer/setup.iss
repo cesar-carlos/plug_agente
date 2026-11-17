@@ -5,7 +5,7 @@
 
 #include "constants.iss"
 #define MyAppName "Plug Agente"
-#define MyAppVersion "1.9.2"
+#define MyAppVersion "1.9.3"
 #ifndef MyAppWorkerVersion
   #if defined(SIGN_INSTALLER) || defined(ExternalSignedUninstallerDir)
     #error Signed installers require the exact MyAppWorkerVersion including build number
@@ -90,8 +90,10 @@ english.InstallationCheckFailed=The installer could not verify application shutd
 brazilianportuguese.InstallationCheckFailed=O instalador não conseguiu verificar o encerramento. Isso não significa que o aplicativo ainda esteja aberto. Cancele e envie o log da instalação ao suporte. Nenhum arquivo foi substituído.
 english.InstallationChannelMismatch=The application and installer could not confirm a compatible preparation protocol. Cancel, close the application manually and use the installer intended for this installation.
 brazilianportuguese.InstallationChannelMismatch=O aplicativo e o instalador não confirmaram um protocolo de preparação compatível. Cancele, feche o aplicativo manualmente e use o instalador destinado a esta instalação.
-english.InstallationPermissionRequired=The identity of a running process could not be verified. Close the target application manually or run the global installer as administrator. No process will be terminated.
-brazilianportuguese.InstallationPermissionRequired=Não foi possível verificar a identidade de um processo ativo. Feche o aplicativo alvo manualmente ou execute o instalador global como administrador. Nenhum processo será terminado.
+english.InstallationPermissionRequired=The identity of a running process could not be verified. Close the target application using its tray menu, including in other user sessions. See the log for the failing operation and process ID. No process will be terminated.
+brazilianportuguese.InstallationPermissionRequired=Não foi possível verificar a identidade de um processo ativo. Feche o aplicativo alvo pelo menu da bandeja, inclusive em outras sessões de usuário. Consulte no log a operação que falhou e o identificador do processo. Nenhum processo será terminado.
+english.InstallationChannelDenied=Access to the application's shutdown channel was denied. Close the target application using its tray menu in the session where it is running, then check again. The log identifies the process and Windows error. No process will be terminated.
+brazilianportuguese.InstallationChannelDenied=O acesso ao canal de encerramento do aplicativo foi negado. Feche o aplicativo alvo pelo menu da bandeja na sessão em que está aberto e verifique novamente. O log identifica o processo e o erro do Windows. Nenhum processo será terminado.
 english.InstallationCancelled=Preparation was cancelled. Cancel this installer session. A new verification will not repeat shutdown actions; close the application manually if necessary.
 brazilianportuguese.InstallationCancelled=A preparação foi cancelada. Cancele esta sessão do instalador. Uma nova verificação não repetirá ações de encerramento; feche o aplicativo manualmente se necessário.
 english.InstallationLegacyClose=The shutdown channel is unavailable. Use Exit in the application's tray menu, then check again. Closing the window may only hide it. Files will only be replaced after all processes of this installation exit.
@@ -660,7 +662,10 @@ begin
       Log('Cooperative installation preparation: ' + Details);
       if Pos('installation_response_rejected', Details) > 0 then
         Result := CustomMessage('InstallationChannelMismatch')
-      else if Pos('process_identity_unconfirmed', Details) > 0 then
+      else if Pos('installation_channel_access_denied', Details) > 0 then
+        Result := CustomMessage('InstallationChannelDenied')
+      else if (Pos('process_identity_unconfirmed', Details) > 0) or
+              (Pos('process_path_unconfirmed', Details) > 0) then
         Result := CustomMessage('InstallationPermissionRequired')
       else if Pos('installation_cancelled', Details) > 0 then
         Result := CustomMessage('InstallationCancelled')
@@ -682,6 +687,8 @@ begin
          (Pos('installation_waiting_for_exit', Details) = 0) and
          (Pos('installation_operations_active', Details) = 0) and
          (Pos('installation_channel_busy', Details) = 0) and
+         (Pos('installation_channel_access_denied', Details) = 0) and
+         (Pos('process_path_unconfirmed', Details) = 0) and
          (Pos('process_identity_unconfirmed', Details) = 0)) then Exit;
       Choice := TaskDialogMsgBox(CustomMessage('InstallationCheckTitle'), Result,
         mbError, MB_RETRYCANCEL, [CustomMessage('InstallationCheckAgain')], 0);

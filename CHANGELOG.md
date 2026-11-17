@@ -10,6 +10,24 @@ Changes after a recorded snapshot stay in Unreleased.
 
 ## Unreleased
 
+## 1.9.3 - 2026-11-17
+
+Status: prepared
+Build: 1.9.3+1
+
+- Distinguish installation shutdown-channel access denial from process identity
+  failures; retain operation, process ID, Windows error, target directory and
+  available session metadata in installer diagnostics.
+- Treat acknowledged cancellation separately from confirmed shutdown or recovery.
+  Preserve recovery-required failures and ignore racing exits only when the
+  original process handle confirms termination. Keep process identity checks and
+  channel authentication enforced; cross-session customer validation is pending.
+- Extend native regressions for denied channels, other installation directories,
+  cancellation acknowledgement and recovery-required cancellation.
+- Include the pending private MSSQL publication-fixture allowlist for curated
+  item, cost, product, unit, group, brand, branch, storage and stock tables, with
+  existing disposable-database isolation and negative cases retained.
+
 ## 1.9.2 - 2026-11-17
 
 Status: prepared

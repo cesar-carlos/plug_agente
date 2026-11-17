@@ -274,7 +274,7 @@ int wmain(int argc, wchar_t** argv) {
       const bool cancel = std::wstring(argv[4]) == L"cancel";
       if (!request && !cancel && std::wstring(argv[4]) != L"status") throw std::runtime_error("invalid_client_arguments");
       plug::installation::prepare_installation(fs::path(argv[2]), utf8(argv[3]), request, cancel);
-      std::cout << Json{{"ok", true}, {"state", "completed"}}.dump() << '\n'; return 0;
+      std::cout << Json{{"ok", true}, {"state", cancel ? "cancellation_requested" : "completed"}}.dump() << '\n'; return 0;
     }
     if (argc == 2 && std::wstring(argv[1]) == L"--prepare-control") { prepare_control(); return 0; }
     if (argc == 3 && std::wstring(argv[1]) == L"--prepare-control") { prepare_control(utf8(argv[2])); return 0; }
@@ -312,6 +312,14 @@ int wmain(int argc, wchar_t** argv) {
     }
     const auto response = pipe_call(request);
     std::cout << response.dump() << '\n'; return response.value("ok", false) ? 0 : 1;
+  } catch (const plug::installation::DiagnosticError& error) {
+    Json diagnostic{{"ok", false}, {"code", error.what()}, {"operation", error.operation},
+                    {"pid", error.pid}, {"win32_error", error.win32_error}};
+    if (argc == 5 && std::wstring(argv[1]) == L"--prepare-install")
+      diagnostic["target_directory"] = utf8(argv[2]);
+    DWORD session = 0;
+    if (ProcessIdToSessionId(error.pid, &session)) diagnostic["session_id"] = session;
+    std::cout << diagnostic.dump() << '\n'; return 1;
   } catch (const std::exception& error) {
     const bool secrets = argc > 1 && (std::wstring(argv[1]) == L"--protect-secrets" || std::wstring(argv[1]) == L"--unprotect-secrets");
     const std::string reason(error.what());

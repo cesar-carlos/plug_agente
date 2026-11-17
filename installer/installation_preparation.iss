@@ -21,7 +21,7 @@ var
 begin
   if InstallationRequested and not InstallationCommandUnknown and not RunInstallationCommand(ExpandConstant('{tmp}\plug_update_client.exe'),
     '--prepare-install ' + AddQuotes(ExpandConstant('{app}')) + ' ' + InstallationOperation + ' cancel', 5000, Details) then
-    Log('Cancellation does not confirm restoration: ' + Details);
+    Log('Cancellation request could not be confirmed; application state is unknown: ' + Details);
   if InstallationGuardOwned then
   begin
     if not CloseInstallationGuard(InstallationGuardHandle) then

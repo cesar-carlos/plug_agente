@@ -6,8 +6,17 @@
 #include <thread>
 #include <string>
 #include <filesystem>
+#include <stdexcept>
 
 namespace plug::installation {
+class DiagnosticError : public std::runtime_error {
+ public:
+  DiagnosticError(const char* code, const char* operation, DWORD pid, DWORD error)
+      : std::runtime_error(code), operation(operation), pid(pid), win32_error(error) {}
+  const std::string operation;
+  const DWORD pid;
+  const DWORD win32_error;
+};
 std::wstring canonical_executable(const std::filesystem::path& path);
 std::wstring current_executable();
 std::wstring endpoint(const std::wstring& image, DWORD pid);

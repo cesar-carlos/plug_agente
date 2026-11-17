@@ -17,12 +17,18 @@ struct Handle {
 };
 uint64_t created(HANDLE process) {
   FILETIME a{}, b{}, c{}, d{};
-  if (!GetProcessTimes(process, &a, &b, &c, &d)) throw std::runtime_error("process_identity_unconfirmed");
+  if (!GetProcessTimes(process, &a, &b, &c, &d)) {
+    const auto error = GetLastError();
+    throw DiagnosticError("process_identity_unconfirmed", "GetProcessTimes", GetProcessId(process), error);
+  }
   return (uint64_t(a.dwHighDateTime) << 32) | a.dwLowDateTime;
 }
 std::wstring image(HANDLE process) {
   wchar_t text[32768]; DWORD length = 32768;
-  if (!QueryFullProcessImageNameW(process, 0, text, &length)) throw std::runtime_error("process_path_unconfirmed");
+  if (!QueryFullProcessImageNameW(process, 0, text, &length)) {
+    const auto error = GetLastError();
+    throw DiagnosticError("process_path_unconfirmed", "QueryFullProcessImageNameW", GetProcessId(process), error);
+  }
   return canonical_executable(std::wstring(text, length));
 }
 std::vector<uint8_t> token_user(HANDLE token) {
@@ -205,15 +211,21 @@ void prepare_installation(const std::filesystem::path& directory, const std::str
   if (!snapshot.valid()) throw std::runtime_error("process_enumeration_failed");
   PROCESSENTRY32W entry{}; entry.dwSize = sizeof(entry);
   bool active = false;
-  std::string failure;
+  std::exception_ptr failure;
   if (!Process32FirstW(snapshot.value, &entry)) throw std::runtime_error("process_enumeration_failed");
   do {
     if (_wcsicmp(entry.szExeFile, L"plug_agente.exe") != 0) continue;
     Handle process(OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION | SYNCHRONIZE, FALSE, entry.th32ProcessID));
-    if (!process.valid()) { if (GetLastError() == ERROR_INVALID_PARAMETER) continue; throw std::runtime_error("process_identity_unconfirmed"); }
-    if (WaitForSingleObject(process.value, 0) == WAIT_OBJECT_0 || image(process.value) != expected) continue;
-    active = true;
+    if (!process.valid()) {
+      const auto error = GetLastError();
+      if (error == ERROR_INVALID_PARAMETER) continue;
+      throw DiagnosticError("process_identity_unconfirmed", "OpenProcess", entry.th32ProcessID, error);
+    }
     try {
+    const auto wait = WaitForSingleObject(process.value, 0);
+    if (wait == WAIT_OBJECT_0) continue;
+    if (wait != WAIT_TIMEOUT) throw DiagnosticError("process_identity_unconfirmed", "WaitForSingleObject", entry.th32ProcessID, GetLastError());
+    if (image(process.value) != expected) continue;
     const auto birth = created(process.value);
     Handle pipe(CreateFileW(endpoint(expected, entry.th32ProcessID).c_str(), GENERIC_READ | GENERIC_WRITE, 0, nullptr,
                             OPEN_EXISTING, FILE_FLAG_OVERLAPPED | SECURITY_SQOS_PRESENT | SECURITY_IDENTIFICATION, nullptr));
@@ -221,9 +233,9 @@ void prepare_installation(const std::filesystem::path& directory, const std::str
       const auto error = GetLastError();
       if (error == ERROR_FILE_NOT_FOUND || error == ERROR_PATH_NOT_FOUND)
         throw std::runtime_error("close_previous_application_manually");
-      if (error == ERROR_ACCESS_DENIED) throw std::runtime_error("process_identity_unconfirmed");
+      if (error == ERROR_ACCESS_DENIED) throw DiagnosticError("installation_channel_access_denied", "CreateFileW", entry.th32ProcessID, error);
       if (error == ERROR_PIPE_BUSY) throw std::runtime_error("installation_channel_busy");
-      throw std::runtime_error("installation_channel_open_failed:" + std::to_string(error));
+      throw DiagnosticError("installation_channel_open_failed", "CreateFileW", entry.th32ProcessID, error);
     }
     ULONG server = 0;
     if (!GetNamedPipeServerProcessId(pipe.value, &server) || server != entry.th32ProcessID ||
@@ -235,15 +247,19 @@ void prepare_installation(const std::filesystem::path& directory, const std::str
     if (result.at("protocol") != 1 || result.at("operation") != operation) throw std::runtime_error("installation_response_rejected");
     const auto state = result.at("state").get<std::string>();
     if (state == "recoveryRequired") throw std::runtime_error("installation_recovery_required");
+    if (cancel && (state == "waiting" || state == "closing" || state == "blocked" || state == "cancelled")) continue;
     if (state == "blocked") throw std::runtime_error("installation_operations_active");
     if (state == "cancelled") throw std::runtime_error("installation_cancelled");
     if (state != "waiting" && state != "closing") throw std::runtime_error("installation_response_rejected");
-    } catch (const std::exception& error) {
-      if (failure.empty()) failure = error.what();
+    active = true;
+    } catch (const std::exception&) {
+      // Ignore a racing exit only when the original process handle proves it.
+      if (WaitForSingleObject(process.value, 0) == WAIT_OBJECT_0) continue;
+      if (!failure) failure = std::current_exception();
     }
   } while (Process32NextW(snapshot.value, &entry));
   if (GetLastError() != ERROR_NO_MORE_FILES) throw std::runtime_error("process_enumeration_failed");
-  if (!failure.empty()) throw std::runtime_error(failure);
+  if (failure) std::rethrow_exception(failure);
   if (active) throw std::runtime_error("installation_waiting_for_exit");
 }
 }

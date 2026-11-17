@@ -65,7 +65,22 @@ void main() {
     );
     verifyZeroInteractions(service);
   });
-  for (final table in ['dbo.produtovendido', 'dbo.vendedor', 'dbo.municipio', 'dbo.cliente']) {
+  for (final table in [
+    'dbo.produtovendido',
+    'dbo.itemprodutovendido',
+    'dbo.custoproduto',
+    'dbo.produto',
+    'dbo.unidademedida',
+    'dbo.grupoproduto',
+    'dbo.marca',
+    'dbo.vendedor',
+    'dbo.municipio',
+    'dbo.filial',
+    'dbo.localarmazenagem',
+    'dbo.localarmazenagemfilial',
+    'dbo.saldoestoque',
+    'dbo.cliente',
+  ]) {
     test('accepts exact sales table $table only in disposable MSSQL without database IO', () {
       final declaration = _supplier(table);
       final fixture = PublicationFixture(service, '', 'se7e_persona_123456abcdef_test', 'mssql', [declaration]);
