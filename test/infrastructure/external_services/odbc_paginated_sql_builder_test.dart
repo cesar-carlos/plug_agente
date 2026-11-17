@@ -2,9 +2,75 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:plug_agente/domain/entities/query_pagination.dart';
 import 'package:plug_agente/domain/validation/sql_validator.dart';
 import 'package:plug_agente/infrastructure/config/database_type.dart';
+import 'package:plug_agente/infrastructure/external_services/odbc_gateway_query_result_mapper.dart';
 import 'package:plug_agente/infrastructure/external_services/odbc_paginated_sql_builder.dart';
 
 void main() {
+  for (final value in [
+    DateTime.utc(2026, 11, 17, 23, 59, 58, 123, 456),
+    double.nan,
+    double.infinity,
+    <int>[1],
+  ]) {
+    test('non-JSON key ${value.runtimeType} continues from explicit offset without changing rows', () {
+      const pagination = QueryPaginationRequest(
+        page: 3,
+        pageSize: 2,
+        offset: 4,
+        queryHash: 'synthetic',
+        orderBy: [QueryPaginationOrderTerm(expression: 'id', lookupKey: 'id')],
+      );
+      final rows = [
+        {'id': value},
+        {'id': value},
+        {'id': value},
+      ];
+      final result = OdbcGatewayQueryResultMapper.materializePagination(pagination, rows);
+      final cursor = QueryPaginationCursor.fromToken(result.pagination!.nextCursor!);
+      expect(cursor.offset, 6);
+      expect(cursor.page, 4);
+      expect(cursor.isLegacyOffsetCursor, isTrue);
+      expect(identical(result.data.last['id'], value), isTrue);
+      final last = OdbcGatewayQueryResultMapper.materializePagination(pagination, [rows.first]);
+      expect(last.pagination!.hasNextPage, isFalse);
+      expect(last.pagination!.nextCursor, isNull);
+    });
+  }
+
+  test('temporal sort returns page unchanged and a usable offset continuation', () {
+    final date = DateTime(2026, 11, 17, 23, 59, 58, 123, 456);
+    final plan = SqlValidator.validatePaginationQuery(
+      'SELECT due, id FROM fixture ORDER BY due, id',
+    ).getOrThrow();
+    final request = QueryPaginationRequest(
+      page: 1,
+      pageSize: 1,
+      queryHash: plan.queryFingerprint,
+      orderBy: plan.orderBy,
+    );
+    final page = OdbcGatewayQueryResultMapper.materializePagination(request, [
+      {'due': date, 'id': 7},
+      {'due': date.add(const Duration(days: 1)), 'id': 8},
+    ]);
+    expect(page.data, [
+      {'due': date, 'id': 7},
+    ]);
+    expect(identical(page.data.single['due'], date), isTrue);
+    expect(page.pagination!.hasNextPage, isTrue);
+    final cursor = QueryPaginationCursor.fromToken(page.pagination!.nextCursor!);
+    expect(cursor.isLegacyOffsetCursor, isTrue);
+    expect(cursor.offset, 1);
+    expect(cursor.page, 2);
+    expect(cursor.pageSize, 1);
+    final sql = OdbcPaginatedSqlBuilder.buildOffsetPaginatedSql(
+      'SELECT due, id FROM fixture ORDER BY due, id',
+      DatabaseType.sqlServer,
+      QueryPaginationRequest(page: cursor.page, pageSize: cursor.pageSize, offset: cursor.offset),
+    );
+    expect(sql, contains('OFFSET 1 ROWS'));
+    expect(sql, contains('FETCH NEXT 2 ROWS ONLY'));
+  });
+
   group('OdbcPaginatedSqlBuilder', () {
     for (final type in DatabaseType.values) {
       test('qualified sort uses projected alias for $type and cursor lookup', () {

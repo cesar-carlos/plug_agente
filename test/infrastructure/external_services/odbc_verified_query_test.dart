@@ -7,9 +7,11 @@ import 'package:odbc_fast/odbc_fast.dart' as odbc;
 import 'package:plug_agente/core/utils/rpc_wire_map.dart';
 import 'package:plug_agente/domain/entities/expected_source.dart';
 import 'package:plug_agente/domain/entities/expected_structure.dart';
+import 'package:plug_agente/domain/entities/query_pagination.dart';
 import 'package:plug_agente/domain/entities/query_request.dart';
 import 'package:plug_agente/domain/entities/source_schema.dart';
 import 'package:plug_agente/domain/errors/failures.dart' as domain;
+import 'package:plug_agente/domain/validation/sql_validator.dart';
 import 'package:plug_agente/infrastructure/external_services/odbc_source_discovery.dart';
 import 'package:plug_agente/infrastructure/external_services/odbc_verified_query.dart';
 import 'package:plug_agente/infrastructure/external_services/source_schema_sql.dart';
@@ -20,6 +22,8 @@ import 'package:result_dart/result_dart.dart';
 
 import '../../application/services/sql_operation_executor_test.dart' show fixtureConfig;
 import 'odbc_sql_operation_transaction_test.dart' show Native, Strings, info;
+
+class BrokenResponseResult extends Mock implements odbc.QueryResult {}
 
 void main() {
   setUpAll(() => registerFallbackValue(const odbc.ConnectionOptions()));
@@ -309,6 +313,64 @@ void main() {
             as odbc.ConnectionOptions;
     expect(options.autoReconnectOnConnectionLost, isFalse);
     expect(options.replayQueriesAfterReconnect, isFalse);
+    await Future<void>.delayed(Duration.zero);
+    expect(limiter.activeCount, 0);
+  });
+  test('verified temporal page returns continuation only after both identity checks', () async {
+    final identity = await expected();
+    final date = DateTime.utc(2026, 11, 17, 23, 59, 58, 123, 456);
+    const sql = 'SELECT id FROM fixture ORDER BY id';
+    final plan = SqlValidator.validatePaginationQuery(sql).getOrThrow();
+    when(() => native.executeQueryNamed('dedicated', any(that: contains('FROM fixture')), any())).thenAnswer(
+      (_) async => Success(
+        odbc.QueryResult(
+          columns: ['id'],
+          rows: [
+            [date],
+            [date.add(const Duration(days: 1))],
+          ],
+          rowCount: 2,
+        ),
+      ),
+    );
+    final input = QueryRequest(
+      id: 'temporal',
+      agentId: 'agent',
+      query: sql,
+      timestamp: DateTime.utc(2026),
+      expectedSource: identity,
+      pagination: QueryPaginationRequest(page: 1, pageSize: 1, queryHash: plan.queryFingerprint, orderBy: plan.orderBy),
+    );
+    final result = (await query.execute(input, fixtureConfig, 'test_db', const Duration(seconds: 1))).getOrThrow();
+    expect(result.data, [
+      {'id': date},
+    ]);
+    expect(QueryPaginationCursor.fromToken(result.pagination!.nextCursor!).offset, 1);
+    verify(() => native.executeQueryNamed('dedicated', metadataSql, const {})).called(2);
+    verify(() => native.executeQueryNamed('dedicated', any(that: contains('FROM fixture')), any())).called(1);
+  });
+  test('response materialization failure keeps final guards and never repeats SELECT', () async {
+    final identity = await expected();
+    final broken = BrokenResponseResult();
+    when(() => broken.additionalResults).thenReturn([]);
+    when(() => broken.refCursorResults).thenReturn([]);
+    var rowReads = 0;
+    when(() => broken.rows).thenAnswer((_) {
+      if (++rowReads > 1) throw StateError('synthetic response failure');
+      return [
+        [7],
+      ];
+    });
+    when(() => broken.rowCount).thenReturn(1);
+    when(
+      () => native.executeQueryNamed('dedicated', 'SELECT id FROM fixture', any()),
+    ).thenAnswer((_) async => Success(broken));
+    final result = await query.execute(request(identity), fixtureConfig, 'test_db', const Duration(seconds: 1));
+    final failure = result.exceptionOrNull()! as domain.Failure;
+    expect(failure.code, 'QUERY_RESPONSE_UNAVAILABLE', reason: failure.cause.toString());
+    expect(failure.context['retryable'], isFalse);
+    verify(() => native.executeQueryNamed('dedicated', metadataSql, const {})).called(2);
+    verify(() => native.executeQueryNamed('dedicated', 'SELECT id FROM fixture', any())).called(1);
     await Future<void>.delayed(Duration.zero);
     expect(limiter.activeCount, 0);
   });

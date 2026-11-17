@@ -10,6 +10,13 @@ Changes after a recorded snapshot stay in Unreleased.
 
 ## Unreleased
 
+- Fix temporal pagination response serialization: non-JSON cursor keys use offset
+  continuation without changing returned values, timezone or precision. Unexpected
+  response materialization failures retain `QUERY_RESPONSE_UNAVAILABLE` rather than
+  source discovery failure, preserving guards and prohibiting replay. Isolated
+  regressions only; not deployed.
+
+
 - Private publication fixtures support explicit MSSQL `temporalStorage: datetime2_3` while preserving the `date` scalar contract. UTC timestamps retain milliseconds, legacy DATE rejects times, invalid calendar/precision/zone values fail closed, and FK/trigger storage must match.
 
 ## 1.9.1 - 2026-11-04

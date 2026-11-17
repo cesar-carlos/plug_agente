@@ -480,3 +480,10 @@ Fixture native derivations must isolate the update-helper global mutex as well
 as the runner/service identities. Require the derivation even when unchanged
 source still matches its Git blob. Fixture installers disable Restart Manager
 application closing; never rebuild or modify operational payloads for this test.
+
+
+Pagination response cursor keys must be JSON scalars accepted by cursor decoding.
+Unsupported keys (including DateTime) use existing offset continuation without
+converting the returned values or timezone. Response materialization failures
+preserve QUERY_RESPONSE_UNAVAILABLE, non-retryable, after final source guards;
+never infer that SELECT was not executed or classify them as SQL syntax.

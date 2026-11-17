@@ -178,9 +178,9 @@ ORDER BY $orderByClause
       }
 
       final value = lastRow[term.lookupKey];
-      if (value == null) {
+      if (!(value is String || value is bool || (value is num && value.isFinite))) {
         developer.log(
-          'Falling back to offset cursor because "${term.lookupKey}" is null',
+          'Falling back to offset cursor because an ordering value is not JSON scalar',
           name: 'odbc_paginated_sql_builder',
           level: 800,
         );

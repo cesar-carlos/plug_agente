@@ -68,7 +68,17 @@ class OdbcVerifiedQuery {
           await OdbcSourceSchema(sessions).verifyColumns(id, structure, proof.dialect, remaining);
           remaining();
         }
-        return OdbcQueryResponseFactory.fromSingleResult(request, result, startedAt: started);
+        try {
+          return OdbcQueryResponseFactory.fromSingleResult(request, result, startedAt: started);
+        } on Object catch (error) {
+          // SQL and final guards already ran; a response failure is not SQL syntax.
+          throw DatabaseFailure.withContext(
+            code: 'QUERY_RESPONSE_UNAVAILABLE',
+            message: 'The verified query response could not be materialized.',
+            cause: error,
+            context: const {'retryable': false},
+          );
+        }
       },
       timeout: timeout,
       maxResultBufferBytes: 16 * 1024 * 1024,

@@ -223,3 +223,18 @@ change from MAX to a bounded size still refuses the previous expectation.
 Other negative values are not normalized into valid evidence. The wire schema
 continues to reject negative sizes. Local regression does not prove the deployed
 agent version or the cause of a particular remote inspection failure.
+
+
+## Verified query response failures
+
+Response materialization runs after the final identity/structure checks. Unexpected
+failures there return `QUERY_RESPONSE_UNAVAILABLE`, with `retryable: false`;
+they do not mean invalid SQL or a failure before SELECT. No reconnect or replay.
+Older agents may wrap this phase as `SOURCE_DISCOVERY_UNAVAILABLE`.
+
+Pagination cursor keys must round-trip through the existing JSON scalar contract.
+Temporal (`DateTime`), binary, non-finite and other non-scalar ordering values use
+the existing offset continuation, like null keys. Page values remain unchanged:
+no timezone conversion, stringification or loss of subsecond precision. This is
+not a snapshot guarantee; offset paging retains its existing concurrency limits.
+Regression tests cover temporal page materialization and verified read guards.
