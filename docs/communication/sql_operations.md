@@ -535,6 +535,24 @@ The wrapper orders by that alias. The MCP/hub do not
 rewrite business SQL. Existing query fingerprints still identify the original
 query; incompatible old cursor terms are rejected, never silently reused.
 
+For example, a supplier lookup with a leading CTE can select
+`f.CodFornecedor AS codfornecedor` and order by `f.CodFornecedor`.
+The agent uses `codfornecedor` in the outer pagination query. Ordering by
+the join partner's key requires its own projected output, even when the join
+condition equates the two keys. The
+[pagination builder tests](../../test/infrastructure/external_services/odbc_paginated_sql_builder_test.dart)
+cover both cases.
+
+On 2026-11-20, agent 1.9.4+2 with odbc_fast 5.0.6 ran this supplier CTE
+through `sql.execute` against a disposable local SQL Server database. With
+synthetic suppliers, `FINGER%` returned 30 IDs on page 1 and one distinct ID
+on page 2. Returning to page 1 reproduced the original IDs in order. Starting
+again on page 1 returned two IDs for `BETA%`, zero for `EMPTY%`, and the
+original 30 after restoring `FINGER%`. The test checked the page number,
+page size and both navigation flags on every response. The MCP validator
+regression ran separately. This run used numbered pages and synthetic data
+throughout.
+
 The 2026-10-15 MCP limits round passed 41/41 persistent chain scenarios across
 PostgreSQL, SQL Server and SQL Anywhere after fixing out-of-scope qualified sorting.
 Agent pagination/validation regressions passed 74/74; analysis of changed files

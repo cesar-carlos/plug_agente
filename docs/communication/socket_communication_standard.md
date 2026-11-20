@@ -771,6 +771,14 @@ streaming direto do banco mesmo quando `enableSocketStreamingFromDb` estiver ati
 `page` ou `page_size`, e carrega fingerprint da query + chave(s) do
 `ORDER BY` para continuacao keyset.
 
+Na navegação por número de página, mantenha o SQL, os parâmetros e o tamanho
+efetivo retornado em `result.pagination.page_size`. Avance quando
+`has_next_page` for verdadeiro. Para voltar, use a página anterior quando
+`has_previous_page` for verdadeiro. Ao trocar o filtro, envie os novos
+parâmetros com `options.page: 1` e `options.page_size`, sem reaproveitar o
+cursor anterior. Para consultas com CTE, veja as
+[regras de ordenação por alias](sql_operations.md#managed-pagination-output-aliases).
+
 Cursor decoding accepts legacy v1 offset tokens and complete v2 keyset tokens.
 Malformed field types, unsupported versions, nonpositive page sizes/pages,
 negative offsets and incomplete v2 ordering/key values are rejected before SQL
