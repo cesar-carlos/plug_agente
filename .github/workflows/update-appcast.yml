@@ -431,8 +431,35 @@ jobs:
           git push origin main
           echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
 
-  deploy-pages:
+  package-pages:
     needs: update-appcast
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    outputs:
+      artifact_name: ${{ steps.archive.outputs.name }}
+    steps:
+      - name: Checkout published appcast
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ needs.update-appcast.outputs.commit_sha }}
+          fetch-depth: 1
+
+      - name: Prepare Pages artifact
+        id: archive
+        run: |
+          mkdir -p pages-artifact
+          cp appcast.xml pages-artifact/appcast.xml
+          echo "name=github-pages-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}" >> "$GITHUB_OUTPUT"
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v5
+        with:
+          name: ${{ steps.archive.outputs.name }}
+          path: pages-artifact
+
+  deploy-pages:
+    needs: package-pages
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -442,28 +469,14 @@ jobs:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
-      - name: Checkout published appcast
-        uses: actions/checkout@v7
-        with:
-          ref: ${{ needs.update-appcast.outputs.commit_sha }}
-          fetch-depth: 1
-
       - name: Configure Pages
         uses: actions/configure-pages@v6
-
-      - name: Prepare Pages artifact
-        run: |
-          mkdir -p pages-artifact
-          cp appcast.xml pages-artifact/appcast.xml
-
-      - name: Upload Pages artifact
-        uses: actions/upload-pages-artifact@v5
-        with:
-          path: pages-artifact
 
       - name: Deploy Pages
         id: deployment
         uses: actions/deploy-pages@v5
+        with:
+          artifact_name: ${{ needs.package-pages.outputs.artifact_name }}
 
   smoke-validate-appcast:
     needs:
