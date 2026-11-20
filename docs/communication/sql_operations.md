@@ -481,14 +481,57 @@ updater migration/application/recovery and signing/distribution gates. Preservat
 of existing registry values does not certify every Windows shell activation flow.
 Production installer/appcast remain blocked; no release gate was promoted.
 
+## Managed pagination CTE placement
+
+SQL Server managed offset and cursor pagination keep the leading WITH definitions
+at statement level and wrap only their main SELECT. The existing clause scanner
+finds the boundary; parameters retain their original order and number. Read-only
+validation and the output mapping rules below apply to the main SELECT. Other
+engines retain their existing composition. Unit regressions cover multiple CTEs,
+comments, nested SELECT, placeholders, lookahead and rejection of malformed or
+non-SELECT bodies. Native engine and installed-agent acceptance remain separate.
+
+On 2026-11-20, the patched agent (base 04a52b228d6e390f83a9680fc197728cb4507f91)
+passed 91 unit tests and static analysis. A fresh isolated checkout compiled the
+companion with Flutter 3.50.0 / Dart 3.14.0, with dependencies regenerated only
+there. The official manual fixture se7e_persona_98702dae5288_test passed seven
+native SQL Server SELECT cases through REST, Socket and the real ODBC gateway:
+CTE first/next pages and ordinary SELECT first/next/previous/filter/reset. Thirty-one
+synthetic rows returned pages of 30 and 1 with exact identities and completeness
+flags. Tests included qualified ordering, null name/date parameters, CAST and
+DATEADD. Fixture setup used typed declarations; publication-clear passed, the
+launcher exited 0, source inventories were unchanged, and official cleanup removed
+only that fixture. Initial diagnostic calls were rejected before SQL because the
+fixture requires declared resources and its explicit database; no grants changed.
+This does not establish the cause of the separate operational non-CTE failure,
+certify other engines, publish an installer or prove installation on Campo.
+
+The related scanner audit also covers spaces, line breaks, tabs and comments
+between ORDER and BY. These keep the original ordering instead of falling back
+to unordered paging. Duplicate output names in simple SELECT projections are
+rejected before dispatch even when ORDER BY uses an unqualified name; complex
+projection support is not widened by this check. The same collision check applies
+to the outer simple SELECT of a CTE and to DISTINCT projections. A quoted alias
+such as `[page.id]` supplies one cursor key, including the dot.
+
+Final audit on 2026-11-20 used Flutter 3.47.7 / Dart 3.13.5. The complete
+candidate gate passed 6,305 Flutter tests (eight skipped by the official suite)
+and 49 Python tests, with clean static analysis. A new official isolated session
+(se7e_persona_9a8108a81585_test) passed 17 native checks: 14 paging scenarios and
+three extra checks for temporal cursor continuation and duplicate-output refusal
+(RPC -32602). Identity and completeness assertions passed; null date/name binds
+remained JSON null. Typed seed cleanup and official session removal succeeded.
+This is candidate evidence, not installation or coordinated-gate acceptance.
+
 ## Managed pagination output aliases
 
 The pagination wrapper orders by projected output names, not inner table aliases.
 Qualified ORDER BY terms require an exact simple column projection; explicit
 aliases are preserved for both outer ORDER BY and cursor row lookup. Missing,
 duplicate or unprovable projected names fail validation. Qualified sorting with
-complex projections, wildcard or CTE is not supported by this narrow mapping;
-use a proved simple output alias or a compatible query shape. The MCP/hub do not
+complex projections or wildcards is unsupported. For a CTE, a qualified term
+must match a simple column with an explicit, unique alias in the main SELECT.
+The wrapper orders by that alias. The MCP/hub do not
 rewrite business SQL. Existing query fingerprints still identify the original
 query; incompatible old cursor terms are rejected, never silently reused.
 

@@ -3,6 +3,7 @@ import 'package:mocktail/mocktail.dart';
 import 'package:odbc_fast/odbc_fast.dart';
 import 'package:plug_agente/core/config/feature_flags.dart';
 import 'package:plug_agente/core/constants/connection_constants.dart';
+import 'package:plug_agente/core/constants/odbc_context_constants.dart';
 import 'package:plug_agente/core/settings/app_settings_store.dart';
 import 'package:plug_agente/domain/entities/config.dart';
 import 'package:plug_agente/domain/errors/failures.dart' as domain;
@@ -43,6 +44,7 @@ void main() {
     });
 
     test('routes eligible SQL Server driver through native pool and reports diagnostics', () async {
+      settings.poolSize = 1;
       when(() => configRepository.getCurrentConfigMetadata()).thenAnswer(
         (_) async => Success(_sqlServerConfig()),
       );
@@ -78,6 +80,12 @@ void main() {
 
       final acquired = await pool.acquire('DSN=Prod');
       expect(acquired.getOrNull(), 'native-1');
+
+      final queued = await pool.acquireWithin('DSN=Prod', acquireTimeout: const Duration(milliseconds: 10));
+      final timeout = queued.exceptionOrNull()! as domain.ConnectionFailure;
+      expect(timeout.context['reason'], OdbcContextConstants.poolWaitTimeoutReason);
+      expect(timeout.context['timeout_stage'], 'pool');
+      verify(() => service.poolGetConnection(41)).called(1);
 
       final released = await pool.release('native-1');
       expect(released.isSuccess(), isTrue);

@@ -48,8 +48,7 @@ HubResilienceEnvironment _environment({
     lastAgentId: lastAgentId ?? () => null,
     syncTransportResilienceLogContext: syncTransportResilienceLogContext ?? (_) {},
     handleReconnectionNeeded: handleReconnectionNeeded ?? () async {},
-    onNegotiatingWatchdogTimeoutWithoutContext:
-        onNegotiatingWatchdogTimeoutWithoutContext ?? ({required int timeoutMs}) {},
+    onNegotiatingWatchdogTimeoutWithoutContext: onNegotiatingWatchdogTimeoutWithoutContext ?? ({required timeoutMs}) {},
     onNegotiatingWatchdogTimeoutWithContext: onNegotiatingWatchdogTimeoutWithContext ?? () {},
   );
 }

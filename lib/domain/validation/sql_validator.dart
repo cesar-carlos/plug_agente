@@ -36,6 +36,7 @@ class SqlValidator {
     'truncate ',
   ];
 
+  static final RegExp _orderByKeyword = RegExp(r'order\s+by\b', caseSensitive: false);
   static final RegExp _normalizeFingerprintWhitespace = RegExp(r'\s+');
   static final RegExp _wordBoundaryChar = RegExp(
     '[a-z0-9_]',
@@ -44,8 +45,11 @@ class SqlValidator {
 
   static final RegExp _trailingSemicolons = RegExp(r';+\s*$');
   static final RegExp _namedParameter = RegExp(r':(\w+)');
+  static const _identifierSegment = r'(?:\[[^\]]+\]|"[^"]+"|[A-Za-z_][A-Za-z0-9_$]*)';
+  static final _identifierParts = RegExp(_identifierSegment);
   static final RegExp _orderTermPattern = RegExp(
-    r'^(?<expr>(?:\[[^\]]+\]|"[^"]+"|[A-Za-z_][A-Za-z0-9_$]*)(?:\.(?:\[[^\]]+\]|"[^"]+"|[A-Za-z_][A-Za-z0-9_$]*))*)(?:\s+(?<dir>asc|desc))?$',
+    '^(?<expr>$_identifierSegment(?:\\.$_identifierSegment)*)'
+    r'(?:\s+(?<dir>asc|desc))?$',
     caseSensitive: false,
   );
   static final RegExp _selectClauseTop = RegExp(
@@ -90,8 +94,7 @@ class SqlValidator {
       return Failure(_emptySqlFailure());
     }
 
-    final normalized = prepared.stripped.toLowerCase();
-    final startsWithAllowed = _allowedPrefixes.any(normalized.startsWith);
+    final startsWithAllowed = _allowedPrefixes.any(prepared.fingerprint.startsWith);
     if (!startsWithAllowed) {
       return Failure(
         _sqlValidationFailure(
@@ -200,7 +203,9 @@ class SqlValidator {
       );
     }
 
-    final orderByClause = normalizedQuery.substring(orderByIndex + 8).trim();
+    final orderByClause = normalizedQuery
+        .substring(_orderByKeyword.matchAsPrefix(normalizedQuery, orderByIndex)!.end)
+        .trim();
     if (_containsTopLevelKeyword(orderByClause, 'offset') ||
         _containsTopLevelKeyword(orderByClause, 'fetch') ||
         _containsTopLevelKeyword(orderByClause, 'limit')) {
@@ -213,12 +218,15 @@ class SqlValidator {
       );
     }
 
+    final cteSelect = _mainStatementAfterCtes(normalizedQuery);
+    final projectionQuery = normalizedQuery.substring(cteSelect ?? 0, orderByIndex);
     final orderTerms =
         _splitTopLevelCommaSeparated(
           orderByClause,
         ).map((raw) {
           final term = _parseOrderTerm(raw);
-          return term == null ? null : _paginationOutputTerm(normalizedQuery, term);
+          if (term == null) return null;
+          return _paginationOutputTerm(projectionQuery, term, hasCte: cteSelect != null);
         }).toList();
     if (orderTerms.any((term) => term == null)) {
       return Failure(
@@ -385,10 +393,7 @@ class SqlValidator {
         depth--;
         continue;
       }
-      if (depth == 0 &&
-          lower.startsWith('order by', i) &&
-          _isWordBoundary(lower, i - 1) &&
-          _isWordBoundary(lower, i + 8)) {
+      if (depth == 0 && _orderByKeyword.matchAsPrefix(lower, i) != null && _isWordBoundary(lower, i - 1)) {
         return i;
       }
     }
@@ -396,7 +401,9 @@ class SqlValidator {
     return -1;
   }
 
-  static bool _containsTopLevelKeyword(String sql, String keyword) {
+  static bool _containsTopLevelKeyword(String sql, String keyword) => _topLevelKeywordIndex(sql, keyword) >= 0;
+
+  static int _topLevelKeywordIndex(String sql, String keyword) {
     final lower = sql.toLowerCase();
     var depth = 0;
     var inSingleQuote = false;
@@ -436,44 +443,46 @@ class SqlValidator {
           lower.startsWith(keyword, i) &&
           _isWordBoundary(lower, i - 1) &&
           _isWordBoundary(lower, i + keyword.length)) {
-        return true;
+        return i;
       }
     }
 
-    return false;
+    return -1;
   }
 
   /// The pagination wrapper can reference output names, never inner table aliases.
   /// Qualified terms require an exact simple projection; unsupported shapes fail closed.
   static QueryPaginationOrderTerm? _paginationOutputTerm(
     String query,
-    QueryPaginationOrderTerm term,
-  ) {
-    if (!term.expression.contains('.')) return term;
-    final projection = RegExp(
-      r'^\s*select\s+(.+?)\s+from\s',
-      caseSensitive: false,
-      dotAll: true,
-    ).firstMatch(query)?.group(1);
-    if (projection == null) return null;
-    const segment = r'(?:\[[^\]]+\]|"[^"]+"|[A-Za-z_][A-Za-z0-9_$]*)';
+    QueryPaginationOrderTerm term, {
+    required bool hasCte,
+  }) {
+    final qualified = _identifierParts.allMatches(term.expression).length > 1;
+    final from = _topLevelKeywordIndex(query, 'from');
+    if (from < 6) return qualified ? null : term;
+    final projection = query
+        .substring(6, from)
+        .trim()
+        .replaceFirst(RegExp(r'^(?:distinct|all)\s+', caseSensitive: false), '');
+    const segment = _identifierSegment;
     final simpleColumn = RegExp(
       '^($segment(?:\\.$segment)*)(?:\\s+(?:as\\s+)?($segment))?\$',
       caseSensitive: false,
     );
-    final projections = <({String expression, String output})>[];
+    final projections = <({String expression, String output, bool explicitAlias})>[];
     for (final item in _splitTopLevelCommaSeparated(projection)) {
       final match = simpleColumn.firstMatch(item.trim());
-      if (match == null) return null;
+      if (match == null) return qualified ? null : term;
       final expression = match.group(1)!;
-      final output = match.group(2) ?? expression.split('.').last;
-      projections.add((expression: expression, output: output));
+      final output = match.group(2) ?? _identifierParts.allMatches(expression).last.group(0)!;
+      projections.add((expression: expression, output: output, explicitAlias: match.group(2) != null));
     }
     final outputNames = projections.map((p) => _stripIdentifierQuoting(p.output).toLowerCase()).toList();
     if (outputNames.toSet().length != outputNames.length) return null;
+    if (!qualified) return outputNames.contains(term.lookupKey.toLowerCase()) ? term : null;
     if (projections.any((p) => p.output == term.expression)) return term;
     final matches = projections.where((p) => p.expression == term.expression).toList();
-    if (matches.length != 1) return null;
+    if (matches.length != 1 || (hasCte && !matches.single.explicitAlias)) return null;
     final output = matches.single.output;
     if (!_orderTermPattern.hasMatch(output)) return null;
     return QueryPaginationOrderTerm(
@@ -516,9 +525,7 @@ class SqlValidator {
     }
 
     final last = buffer.toString().trim();
-    if (last.isNotEmpty) {
-      parts.add(last);
-    }
+    parts.add(last);
     return parts;
   }
 
@@ -529,8 +536,7 @@ class SqlValidator {
     }
 
     final expression = match.namedGroup('expr')!;
-    final segments = expression.split('.');
-    final lookupKey = _stripIdentifierQuoting(segments.last);
+    final lookupKey = _stripIdentifierQuoting(_identifierParts.allMatches(expression).last.group(0)!);
     return QueryPaginationOrderTerm(
       expression: expression,
       lookupKey: lookupKey,
@@ -564,7 +570,26 @@ class SqlValidator {
     return false;
   }
 
+  /// Separates a CTE prefix without moving or duplicating bound placeholders.
+  /// The caller still must validate the complete read-only query.
+  static ({String prefix, String select}) splitCteSelect(String query) {
+    final sql = _sqlForClauseScan(query);
+    if (!_keywordAt(sql.toLowerCase(), 0, 'with')) {
+      return (prefix: '', select: sql);
+    }
+    final index = _mainStatementAfterCtes(sql);
+    if (index == null || !_keywordAt(sql.toLowerCase(), index, 'select')) {
+      throw const FormatException('Managed pagination requires a SELECT after CTEs');
+    }
+    return (prefix: '${sql.substring(0, index).trimRight()}\n', select: sql.substring(index));
+  }
+
   static String? _mainKeywordAfterCtes(String sql) {
+    final index = _mainStatementAfterCtes(sql);
+    return index == null ? null : _readSqlKeyword(sql.toLowerCase(), index);
+  }
+
+  static int? _mainStatementAfterCtes(String sql) {
     final lower = sql.toLowerCase();
     var index = _skipSqlWhitespace(lower, 0);
     if (!_keywordAt(lower, index, 'with')) {
@@ -604,8 +629,7 @@ class SqlValidator {
       break;
     }
 
-    index = _skipSqlWhitespace(lower, index);
-    return _readSqlKeyword(lower, index);
+    return _skipSqlWhitespace(lower, index);
   }
 
   static bool _keywordAt(String lower, int index, String keyword) {

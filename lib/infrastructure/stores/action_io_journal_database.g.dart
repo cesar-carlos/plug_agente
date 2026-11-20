@@ -4526,10 +4526,11 @@ class $$ActionIoSessionsTableTableManager
                   getPrefetchedDataCallback: (items) async {
                     return [
                       if (actionIoPayloadsRefs)
-                        await $_getPrefetchedData<
+                        await $_getPrefetchedDataByColumns<
                           ActionIoSession,
                           $ActionIoSessionsTable,
-                          ActionIoPayload
+                          ActionIoPayload,
+                          $ActionIoPayloadsTable
                         >(
                           currentTable: table,
                           referencedTable: $$ActionIoSessionsTableReferences
@@ -4540,17 +4541,16 @@ class $$ActionIoSessionsTableTableManager
                                 table,
                                 p0,
                               ).actionIoPayloadsRefs,
-                          referencedItemsForCurrentItem:
-                              (item, referencedItems) => referencedItems.where(
-                                (e) => e.executionId == item.executionId,
-                              ),
+                          currentColumn: 'execution_id',
+                          referencedColumn: 'execution_id',
                           typedResults: items,
                         ),
                       if (actionIoMessagesRefs)
-                        await $_getPrefetchedData<
+                        await $_getPrefetchedDataByColumns<
                           ActionIoSession,
                           $ActionIoSessionsTable,
-                          ActionIoMessage
+                          ActionIoMessage,
+                          $ActionIoMessagesTable
                         >(
                           currentTable: table,
                           referencedTable: $$ActionIoSessionsTableReferences
@@ -4561,17 +4561,16 @@ class $$ActionIoSessionsTableTableManager
                                 table,
                                 p0,
                               ).actionIoMessagesRefs,
-                          referencedItemsForCurrentItem:
-                              (item, referencedItems) => referencedItems.where(
-                                (e) => e.executionId == item.executionId,
-                              ),
+                          currentColumn: 'execution_id',
+                          referencedColumn: 'execution_id',
                           typedResults: items,
                         ),
                       if (actionIoEventsRefs)
-                        await $_getPrefetchedData<
+                        await $_getPrefetchedDataByColumns<
                           ActionIoSession,
                           $ActionIoSessionsTable,
-                          ActionIoEvent
+                          ActionIoEvent,
+                          $ActionIoEventsTable
                         >(
                           currentTable: table,
                           referencedTable: $$ActionIoSessionsTableReferences
@@ -4582,10 +4581,8 @@ class $$ActionIoSessionsTableTableManager
                                 table,
                                 p0,
                               ).actionIoEventsRefs,
-                          referencedItemsForCurrentItem:
-                              (item, referencedItems) => referencedItems.where(
-                                (e) => e.executionId == item.executionId,
-                              ),
+                          currentColumn: 'execution_id',
+                          referencedColumn: 'execution_id',
                           typedResults: items,
                         ),
                     ];
@@ -5150,10 +5147,11 @@ class $$ActionIoPayloadsTableTableManager
                   getPrefetchedDataCallback: (items) async {
                     return [
                       if (actionIoMessagesRefs)
-                        await $_getPrefetchedData<
+                        await $_getPrefetchedDataByColumns<
                           ActionIoPayload,
                           $ActionIoPayloadsTable,
-                          ActionIoMessage
+                          ActionIoMessage,
+                          $ActionIoMessagesTable
                         >(
                           currentTable: table,
                           referencedTable: $$ActionIoPayloadsTableReferences
@@ -5164,17 +5162,16 @@ class $$ActionIoPayloadsTableTableManager
                                 table,
                                 p0,
                               ).actionIoMessagesRefs,
-                          referencedItemsForCurrentItem:
-                              (item, referencedItems) => referencedItems.where(
-                                (e) => e.payloadId == item.payloadId,
-                              ),
+                          currentColumn: 'payload_id',
+                          referencedColumn: 'payload_id',
                           typedResults: items,
                         ),
                       if (actionIoEventsRefs)
-                        await $_getPrefetchedData<
+                        await $_getPrefetchedDataByColumns<
                           ActionIoPayload,
                           $ActionIoPayloadsTable,
-                          ActionIoEvent
+                          ActionIoEvent,
+                          $ActionIoEventsTable
                         >(
                           currentTable: table,
                           referencedTable: $$ActionIoPayloadsTableReferences
@@ -5185,10 +5182,8 @@ class $$ActionIoPayloadsTableTableManager
                                 table,
                                 p0,
                               ).actionIoEventsRefs,
-                          referencedItemsForCurrentItem:
-                              (item, referencedItems) => referencedItems.where(
-                                (e) => e.payloadId == item.payloadId,
-                              ),
+                          currentColumn: 'payload_id',
+                          referencedColumn: 'payload_id',
                           typedResults: items,
                         ),
                     ];

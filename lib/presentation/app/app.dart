@@ -1,8 +1,9 @@
 import 'dart:async';
+import 'package:cupertino_ui/cupertino_ui.dart' show GlobalCupertinoLocalizations;
 import 'package:fluent_ui/fluent_ui.dart';
 import 'package:flutter/services.dart';
-import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:go_router/go_router.dart';
+import 'package:material_ui/material_ui.dart' show GlobalMaterialLocalizations;
 import 'package:plug_agente/application/services/update_maintenance_admission.dart';
 import 'package:plug_agente/core/constants/app_constants.dart';
 import 'package:plug_agente/core/logger/app_logger.dart';
@@ -131,9 +132,9 @@ class _PlugAgentAppState extends State<PlugAgentApp> {
         );
       },
       localizationsDelegates: const [
-        AppLocalizations.delegate,
+        // Fluent UI and PlutoGrid still require the SDK localization types.
+        ...AppLocalizations.localizationsDelegates,
         GlobalMaterialLocalizations.delegate,
-        GlobalWidgetsLocalizations.delegate,
         GlobalCupertinoLocalizations.delegate,
         FluentLocalizations.delegate,
       ],

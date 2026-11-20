@@ -503,6 +503,7 @@ final class AdaptiveOdbcConnectionPool
       return false;
     }
     if (OdbcErrorInspector.outcomeUnknown(error)) return false;
+    if (_hasFailureReason(error, OdbcContextConstants.poolWaitTimeoutReason)) return false;
 
     return OdbcErrorInspector.isInvalidConnectionId(error) ||
         OdbcGatewayBufferExpansion.messageIndicatesBufferTooSmall(

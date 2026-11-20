@@ -42,6 +42,12 @@ check. This is coordination evidence, not a substitute for native authorization.
 No automatic retry or elevation is introduced. Procedure and scope:
 docs/implemente/plano_auto_update_evolution.md.
 
+Managed SQL Server pagination keeps CTE definitions at statement level and wraps
+only the main SELECT, preserving placeholder order. This does not authorize a
+query or widen the output-alias mapping. Offset/cursor regressions are required.
+Clause scanning accepts SQL whitespace/comments between ORDER and BY. Simple
+projection collisions must fail before dispatch for qualified or unqualified order.
+
 ## Escopo
 
 Este arquivo concentra somente decisoes especificas deste repositorio:

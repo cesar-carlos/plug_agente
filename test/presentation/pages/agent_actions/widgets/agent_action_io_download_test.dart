@@ -137,14 +137,14 @@ void main() {
 
 class _DirectoryPicker extends FilePickerPlatform {
   @override
-  Future<String?> getDirectoryPath({
+  Future<Uri?> pickDirectory({
     String? dialogTitle,
     String? initialDirectory,
     AndroidOptions androidOptions = const AndroidOptions(),
     WindowsOptions windowsOptions = const WindowsOptions(),
     LinuxOptions linuxOptions = const LinuxOptions(),
     WebOptions webOptions = const WebOptions(),
-  }) async => 'fixture';
+  }) async => Uri.directory('fixture');
 }
 
 Future<void> _tabTo(WidgetTester tester, Finder target) async {

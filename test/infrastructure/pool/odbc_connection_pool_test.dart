@@ -610,7 +610,9 @@ void main() {
       verify(() => mockService.disconnect('lease-2')).called(1);
     });
 
-    test('warmUp should discard warmed connections and return success', () async {
+    test('warmUp above capacity releases its leases without waiting on itself', () async {
+      mockSettings.poolSize = 2;
+      pool = OdbcConnectionPool(mockService, mockSettings, acquireTimeout: const Duration(milliseconds: 100));
       var counter = 0;
       when(
         () => mockService.connect(
@@ -632,7 +634,7 @@ void main() {
         (_) async => const Success(unit),
       );
 
-      final result = await pool.warmUp('DSN=Warm', warmUpCount: 2);
+      final result = await pool.warmUp('DSN=Warm', warmUpCount: 8);
 
       expect(result.isSuccess(), isTrue);
       verify(() => mockService.disconnect('warm-1')).called(1);

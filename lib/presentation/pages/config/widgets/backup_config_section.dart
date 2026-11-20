@@ -119,8 +119,6 @@ class _BackupConfigSectionState extends State<BackupConfigSection> {
         dialogTitle: l10n.configBackupButtonExport,
         fileName: 'plug_agente_backup.zip',
         bytes: bytes,
-        type: FileType.custom,
-        allowedExtensions: ['zip'],
       );
       if (saved == null || !mounted) {
         return;

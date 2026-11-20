@@ -1,4 +1,6 @@
 import 'package:fluent_ui/fluent_ui.dart';
+// Match PlutoGrid's SDK TextField type until the package migrates to material_ui.
+// ignore: deprecated_member_use
 import 'package:flutter/material.dart' as material;
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';

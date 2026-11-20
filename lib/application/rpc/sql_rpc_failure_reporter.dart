@@ -29,7 +29,11 @@ abstract final class SqlRpcFailureReporter {
       'operation': rpcMethod,
     };
     if (_isWarning(rpcError.code)) {
-      AppLogger.warning('[${failure.code}] ${failure.message}', failure.cause, null, context);
+      AppLogger.warning('[${failure.code}] ${failure.message}', failure.cause, null, {
+        ...context,
+        'odbc_sql_state': ?failure.context['odbc_sql_state'],
+        'odbc_native_code': ?failure.context['odbc_native_code'],
+      });
       return;
     }
     failure.log(operation: rpcMethod, additionalContext: context);

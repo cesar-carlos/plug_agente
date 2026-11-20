@@ -10,6 +10,15 @@ Changes after a recorded snapshot stay in Unreleased.
 
 ## Unreleased
 
+- Recognize whitespace and comments between ORDER and BY during managed pagination;
+  reject duplicate output names in simple projections even for unqualified order.
+  These defects have before/after regression coverage.
+
+- Fix SQL Server managed pagination placing WITH definitions inside a derived
+  table; preserve the CTE prefix, bind order and offset/cursor limits. Covered by
+  91 unit regressions and seven isolated native SQL Server cases; installed
+  release acceptance remains pending.
+
 ## 1.9.3 - 2026-11-17
 
 Status: prepared

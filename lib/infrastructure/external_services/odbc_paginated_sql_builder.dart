@@ -16,6 +16,9 @@ final class OdbcPaginatedSqlBuilder {
     QueryPaginationRequest pagination,
   ) {
     final trimmedSql = SqlValidator.stripTopLevelOrderBy(originalSql);
+    final source = databaseType == DatabaseType.sqlServer
+        ? SqlValidator.splitCteSelect(trimmedSql)
+        : (prefix: '', select: trimmedSql);
     final orderByClause = pagination.orderBy.isEmpty ? null : buildOrderByClause(pagination.orderBy);
     return switch (databaseType) {
       DatabaseType.postgresql =>
@@ -29,9 +32,9 @@ LIMIT ${pagination.fetchSizeWithLookAhead} OFFSET ${pagination.offset}
 ''',
       DatabaseType.sqlServer =>
         '''
-SELECT *
+${source.prefix}SELECT *
 FROM (
-  $trimmedSql
+  ${source.select}
 ) AS plug_paginated_source
 ORDER BY ${orderByClause ?? '(SELECT NULL)'}
 OFFSET ${pagination.offset} ROWS FETCH NEXT ${pagination.fetchSizeWithLookAhead} ROWS ONLY
@@ -53,6 +56,9 @@ ORDER BY ${orderByClause ?? '(SELECT NULL)'}
     QueryPaginationRequest pagination,
   ) {
     final trimmedSql = SqlValidator.stripTopLevelOrderBy(originalSql);
+    final source = databaseType == DatabaseType.sqlServer
+        ? SqlValidator.splitCteSelect(trimmedSql)
+        : (prefix: '', select: trimmedSql);
     final orderByClause = buildOrderByClause(pagination.orderBy);
     final whereClause = buildKeysetWhereClause(
       pagination.orderBy,
@@ -73,9 +79,9 @@ LIMIT ${pagination.fetchSizeWithLookAhead}
 ''',
       DatabaseType.sqlServer =>
         '''
-SELECT *
+${source.prefix}SELECT *
 FROM (
-  $trimmedSql
+  ${source.select}
 ) AS plug_paginated_source
 WHERE $whereClause
 ORDER BY $orderByClause
@@ -139,11 +145,14 @@ ORDER BY $orderByClause
         );
       }
 
-      _assertSafeOrderExpression(orderBy[i].expression);
-      final operator = orderBy[i].descending ? '<' : '>';
+      final term = orderBy[i];
+      _assertSafeOrderExpression(term.expression);
+      final operator = term.descending ? '<' : '>';
+      final comparison = '${term.expression} $operator ${toSqlLiteral(lastRowValues[i], databaseType)}';
+      // A comparison with NULL is UNKNOWN, even when ORDER BY places it after the cursor.
+      final nullsLast = databaseType == DatabaseType.postgresql ? !term.descending : term.descending;
       conjunctions.add(
-        '${orderBy[i].expression} $operator '
-        '${toSqlLiteral(lastRowValues[i], databaseType)}',
+        nullsLast ? '($comparison OR ${term.expression} IS NULL)' : comparison,
       );
       disjunctions.add('(${conjunctions.join(' AND ')})');
     }

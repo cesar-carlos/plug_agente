@@ -59,11 +59,9 @@ final class OdbcBatchTransactionManager {
     );
     if (beginResult.isError()) {
       final error = beginResult.exceptionOrNull()!;
-      if (!OdbcErrorInspector.outcomeUnknown(error) && error is UnsupportedFeatureError && !skipOptions) {
+      final usedOptions = !skipOptions && (accessMode != TransactionAccessMode.readWrite || lockTimeout != null);
+      if (usedOptions && error is UnsupportedFeatureError && !OdbcErrorInspector.outcomeUnknown(error)) {
         _metrics.recordTransactionOptionsUnsupported();
-        if (connectionString != null) {
-          _plainTransactionConnectionStrings.add(connectionString);
-        }
         final plainBegin = await _beginTransaction(
           connectionId,
           accessMode: TransactionAccessMode.readWrite,
@@ -71,6 +69,7 @@ final class OdbcBatchTransactionManager {
           deadline: deadline,
         );
         if (plainBegin.isSuccess()) {
+          if (connectionString != null) _plainTransactionConnectionStrings.add(connectionString);
           return Success(BatchTransactionStart(plainBegin.getOrNull()));
         }
         return _beginFailure(plainBegin.exceptionOrNull()!);

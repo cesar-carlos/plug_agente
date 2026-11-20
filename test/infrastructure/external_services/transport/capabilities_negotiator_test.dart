@@ -65,7 +65,7 @@ void main() {
       },
       decodeIncoming:
           decode ??
-          (payload, {String? sourceEvent}) {
+          (payload, {sourceEvent}) {
             return Success<Object, Exception>(payload as Object) as Result<dynamic>;
           },
       onTimeoutReconnect: () => reconnectCalls++,
@@ -292,8 +292,7 @@ void main() {
         localCapabilitiesProvider: ProtocolCapabilities.defaultCapabilities,
         agentIdProvider: () => 'agent-1',
         emit: (event, payload) async => false,
-        decodeIncoming: (payload, {sourceEvent}) =>
-            Success<Object, Exception>(payload as Object) as Result<dynamic>,
+        decodeIncoming: (payload, {sourceEvent}) => Success<Object, Exception>(payload as Object) as Result<dynamic>,
         onTimeoutReconnect: () => reconnectCalls++,
       );
       addTearDown(failingEmitNeg.reset);

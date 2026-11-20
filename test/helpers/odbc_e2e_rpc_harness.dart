@@ -83,10 +83,12 @@ class OdbcE2eRpcHarness {
   /// Returns null when ODBC failed to initialize.
   static Future<OdbcE2eRpcHarness?> open(
     String dsn,
-    OdbcE2eSqlDialect dialect,
-  ) async {
+    OdbcE2eSqlDialect dialect, {
+    int? poolSize,
+    bool useGatewayPoolPolicy = false,
+  }) async {
     final settings = MockOdbcConnectionSettings(
-      poolSize: E2EEnv.odbcPoolSize,
+      poolSize: poolSize ?? E2EEnv.odbcPoolSize,
     );
     final locator = createAsyncOdbcServiceLocatorForSettings(settings);
     final service = locator.asyncService;
@@ -108,11 +110,12 @@ class OdbcE2eRpcHarness {
 
     final retry = RetryManager();
     final metrics = MetricsCollector()..clear();
+    final poolFlags = FeatureFlags(InMemoryAppSettingsStore());
     final pool = createOdbcConnectionPool(
       service,
       settings,
       metrics,
-      FeatureFlags(InMemoryAppSettingsStore()),
+      poolFlags,
       configRepo,
     );
     final gateway = OdbcDatabaseGateway(
@@ -123,6 +126,7 @@ class OdbcE2eRpcHarness {
       retry,
       metrics,
       settings,
+      featureFlags: useGatewayPoolPolicy ? poolFlags : null,
     );
 
     final preflight = await gateway.testConnection(dsn.trim());

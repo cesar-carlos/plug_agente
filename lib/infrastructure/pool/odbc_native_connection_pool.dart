@@ -54,6 +54,8 @@ class OdbcNativeConnectionPool
   final PoolSemaphore _nativeReturnSemaphore;
 
   final Map<String, int> _pools = {};
+  final Map<int, PoolSemaphore> _leaseSlots = {};
+  final Map<String, PoolSemaphore> _heldSlots = {};
   final Map<String, Future<Result<int>>> _poolCreationFutures = {};
   final Map<String, int> _poolGenerations = <String, int>{};
   final Map<String, Future<Result<void>>> _returns = {};
@@ -219,10 +221,11 @@ class OdbcNativeConnectionPool
     }
 
     late Result<int> poolResult;
+    final capacity = _settings.poolSize;
     try {
       poolResult = await _service.poolCreate(
         _poolConnectionString(connectionString),
-        _settings.poolSize,
+        capacity,
         options: _poolOptions,
         connectionOptions: _defaultConnectionOptions(connectionString),
       );
@@ -256,6 +259,7 @@ class OdbcNativeConnectionPool
       );
     }
 
+    _leaseSlots[poolId] = PoolSemaphore(capacity);
     _pools[connectionString] = poolId;
     developer.log(
       'Native pool created',
@@ -297,7 +301,13 @@ class OdbcNativeConnectionPool
 
     return poolResult.fold(
       (poolId) async {
+        final slots = _leaseSlots[poolId];
+        if (slots == null) return Failure(domain.ConnectionFailure('Native pool was closed'));
+        var slotHeld = false;
         try {
+          // Queue outside the ODBC workers so checkin and SQL can always make progress.
+          await slots.acquire(timeout: effectiveAcquireTimeout - stopwatch.elapsed);
+          slotHeld = true;
           final remainingAcquireBudget = effectiveAcquireTimeout - stopwatch.elapsed;
           if (remainingAcquireBudget <= Duration.zero) {
             throw TimeoutException('Native pool acquisition budget exhausted');
@@ -306,6 +316,7 @@ class OdbcNativeConnectionPool
             timeout: remainingAcquireBudget,
           );
         } on TimeoutException catch (error) {
+          if (slotHeld) slots.release();
           return Failure(
             OdbcFailureMapper.mapPoolError(
               StateError(
@@ -315,7 +326,9 @@ class OdbcNativeConnectionPool
               context: {
                 'timeout': true,
                 'timeout_stage': 'pool',
-                'reason': OdbcContextConstants.odbcWorkerBusyConnectReason,
+                'reason': slotHeld
+                    ? OdbcContextConstants.odbcWorkerBusyConnectReason
+                    : OdbcContextConstants.poolWaitTimeoutReason,
                 'retryable': true,
               },
             ),
@@ -324,6 +337,10 @@ class OdbcNativeConnectionPool
 
         late Result<Connection> connResult;
         try {
+          if (_pools[connectionString] != poolId || _quarantinedConnectionStrings.contains(connectionString)) {
+            slots.release();
+            return Failure(domain.ConnectionFailure('Native pool changed while waiting for checkout'));
+          }
           final checkoutOptions = _checkoutConnectionOptions(
             connectionString,
             options,
@@ -334,24 +351,26 @@ class OdbcNativeConnectionPool
                   poolId,
                   options: checkoutOptions,
                 );
+        } on Object {
+          slots.release();
+          rethrow;
         } finally {
           _nativeCheckoutSemaphore.release();
         }
 
         return connResult.fold(
           (connection) {
+            _heldSlots[connection.id] = slots;
             _activeAcquireCount++;
             _poolStateCache.clear();
             _connectionOwners[connection.id] = connectionString;
             _activeByConnectionString[connectionString] = (_activeByConnectionString[connectionString] ?? 0) + 1;
             return Success(connection.id);
           },
-          (error) => Failure(
-            OdbcFailureMapper.mapPoolError(
-              error,
-              operation: 'pool_acquire',
-            ),
-          ),
+          (error) {
+            slots.release();
+            return Failure(OdbcFailureMapper.mapPoolError(error, operation: 'pool_acquire'));
+          },
         );
       },
       Failure.new,
@@ -429,6 +448,7 @@ class OdbcNativeConnectionPool
     if (result.isSuccess() ||
         (!OdbcErrorInspector.outcomeUnknown(result.exceptionOrNull()!) &&
             _messageIndicatesInvalidConnectionId(result.exceptionOrNull()!))) {
+      _heldSlots.remove(connectionId)?.release();
       if (_connectionOwners.remove(connectionId) != null) _decrementActive(owner);
       _retiredConnectionIds.add(connectionId);
       if (_retiredConnectionIds.length > 256) _retiredConnectionIds.remove(_retiredConnectionIds.first);
@@ -508,6 +528,8 @@ class OdbcNativeConnectionPool
     _unconfirmedConnections.clear();
     _retiredConnectionIds.clear();
     _pools.clear();
+    _leaseSlots.clear();
+    _heldSlots.clear();
     _poolStateCache.clear();
     _poolCreationFutures.clear();
     _connectionOwners.clear();
@@ -592,6 +614,7 @@ class OdbcNativeConnectionPool
 
     return closeResult.fold(
       (_) {
+        _leaseSlots.remove(poolId);
         if (_pools[connectionString] == poolId) _pools.remove(connectionString);
         _quarantinedConnectionStrings.remove(connectionString);
         return const Success(unit);
@@ -614,7 +637,8 @@ class OdbcNativeConnectionPool
     String connectionString, {
     int? warmUpCount,
   }) async {
-    final count = warmUpCount ?? (_settings.poolSize / 2).ceil();
+    final capacity = _settings.poolSize;
+    final count = (warmUpCount ?? (capacity / 2).ceil()).clamp(0, capacity);
     final connectionIds = <String>[];
     final errors = <String>[];
 

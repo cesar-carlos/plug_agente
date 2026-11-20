@@ -247,8 +247,6 @@ class AgentActionsToolbarCard extends StatelessWidget {
         dialogTitle: l10n.agentActionsExportBundle,
         fileName: l10n.agentActionsExportBundleDefaultFileName,
         bytes: Uint8List.fromList(utf8.encode(payload)),
-        type: FileType.custom,
-        allowedExtensions: ['json'],
       );
       if (saved == null || !context.mounted) {
         return;

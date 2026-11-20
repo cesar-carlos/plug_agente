@@ -250,7 +250,8 @@ class OdbcConnectionPool
     String connectionString, {
     int? warmUpCount,
   }) async {
-    final count = warmUpCount ?? (_settings.poolSize / 2).ceil();
+    final capacity = _semaphore.maxConcurrent;
+    final count = (warmUpCount ?? (capacity / 2).ceil()).clamp(0, capacity);
     final connectionIds = <String>[];
     final errors = <String>[];
 

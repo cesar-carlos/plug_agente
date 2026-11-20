@@ -6,6 +6,124 @@ import 'package:plug_agente/infrastructure/external_services/odbc_gateway_query_
 import 'package:plug_agente/infrastructure/external_services/odbc_paginated_sql_builder.dart';
 
 void main() {
+  for (final (table, key) in [('fornecedor', 'CodFornecedor'), ('cliente', 'codcliente')]) {
+    test('maps the explicitly projected candidate key for $table in a paginated CTE', () {
+      final sql =
+          'WITH candidatos AS (SELECT $key FROM items GROUP BY $key) '
+          'SELECT f.$key AS code, f.nome AS label FROM candidatos x '
+          'JOIN dbo.$table f ON f.$key = x.$key ORDER BY f.$key';
+      final plan = SqlValidator.validatePaginationQuery(sql).getOrThrow();
+      expect(plan.orderBy.single.expression, 'code');
+      expect(plan.orderBy.single.lookupKey, 'code');
+      expect(SqlValidator.validatePaginationQuery(sql.replaceFirst('ORDER BY f.', 'ORDER BY x.')).isError(), isTrue);
+    });
+  }
+  for (final query in [
+    'WITH q AS (SELECT id FROM fixture) SELECT id AS dup, id AS DUP FROM q ORDER BY dup',
+    'SELECT DISTINCT id AS dup, other AS dup FROM fixture ORDER BY dup',
+    'SELECT id AS projected FROM fixture ORDER BY id',
+    'SELECT id FROM fixture ORDER BY',
+    'SELECT id FROM fixture ORDER BY id,',
+  ]) {
+    test('rejects invalid managed ordering: $query', () {
+      expect(SqlValidator.validatePaginationQuery(query).isError(), isTrue);
+    });
+  }
+  test('quoted dotted alias resolves to a single result column for cursor continuation', () {
+    const sql = 'WITH q AS (SELECT id FROM fixture) SELECT id AS [page.id] FROM q ORDER BY [page.id]';
+    final plan = SqlValidator.validatePaginationQuery(sql).getOrThrow();
+    final page = OdbcGatewayQueryResultMapper.materializePagination(
+      QueryPaginationRequest(page: 1, pageSize: 1, queryHash: plan.queryFingerprint, orderBy: plan.orderBy),
+      [
+        {'page.id': 7},
+        {'page.id': 9},
+      ],
+    );
+    expect(QueryPaginationCursor.fromToken(page.pagination!.nextCursor!).lastRowValues, [7]);
+  });
+  for (final query in [
+    'SELECT p.id AS first_id, p.id AS second_id FROM fixture p ORDER BY first_id',
+    'SELECT p.id AS id, COUNT(*) AS total FROM fixture p GROUP BY p.id ORDER BY id',
+    'WITH q AS (SELECT id FROM fixture) SELECT id FROM q ORDER BY id',
+  ]) {
+    test('retains valid unqualified output ordering: $query', () {
+      expect(SqlValidator.validatePaginationQuery(query).isSuccess(), isTrue);
+    });
+  }
+  for (final order in ['id', '[id]']) {
+    test('rejects colliding projected output names for unqualified ORDER BY $order', () {
+      final result = SqlValidator.validatePaginationQuery(
+        'SELECT p.id AS id, p.other AS id FROM fixture p ORDER BY $order',
+      );
+      expect(result.isError(), isTrue);
+    });
+  }
+  for (final separator in ['  ', '\n', '\t', ' /* ordering */ ']) {
+    test('managed pagination recognizes ORDER separator ${separator.codeUnits}', () {
+      final query = 'SELECT p.id AS id FROM fixture p ORDER${separator}BY p.id';
+      final plan = SqlValidator.validatePaginationQuery(query).getOrThrow();
+      final sql = OdbcPaginatedSqlBuilder.buildOffsetPaginatedSql(
+        query,
+        DatabaseType.sqlServer,
+        QueryPaginationRequest(page: 2, pageSize: 30, orderBy: plan.orderBy),
+      );
+      expect(plan.orderBy.single.expression, 'id');
+      expect(sql, contains('ORDER BY id ASC'));
+      expect(sql, isNot(contains('BY p.id')));
+      expect(sql, contains('OFFSET 30 ROWS FETCH NEXT 31 ROWS ONLY'));
+    });
+  }
+
+  test('CTE pagination keeps comments, nested SELECT and parameter ordering safe', () {
+    const query =
+        '/* documentation */ WITH [picked](id) AS (SELECT ?), '
+        'second AS (SELECT id FROM picked WHERE id IN (SELECT ?)) '
+        'SELECT id FROM second WHERE id > ? ORDER BY id;';
+    final plan = SqlValidator.validatePaginationQuery(query).getOrThrow();
+    final sql = OdbcPaginatedSqlBuilder.buildOffsetPaginatedSql(
+      query,
+      DatabaseType.sqlServer,
+      QueryPaginationRequest(page: 2, pageSize: 30, offset: 30, orderBy: plan.orderBy),
+    );
+    expect(sql.trimLeft(), startsWith('WITH [picked](id) AS (SELECT ?), second AS'));
+    expect(sql, contains('SELECT id FROM second WHERE id > ?'));
+    expect('?'.allMatches(sql).length, 3);
+    expect(sql, contains('OFFSET 30 ROWS FETCH NEXT 31 ROWS ONLY'));
+  });
+
+  for (final query in [
+    'WITH q AS (SELECT 1) DELETE FROM fixture',
+    'WITH q AS (SELECT 1 SELECT id FROM q',
+  ]) {
+    test('CTE splitter rejects malformed or non-SELECT body: $query', () {
+      expect(() => SqlValidator.splitCteSelect(query), throwsFormatException);
+    });
+  }
+
+  for (final cursor in [false, true]) {
+    test('SQL Server keeps multiple CTEs outside managed pagination cursor=$cursor', () {
+      const prefix =
+          'WITH candidates(id) AS (SELECT ?), '
+          "named AS (SELECT id, ') SELECT hidden' AS label FROM candidates)";
+      const query = '$prefix SELECT id, label FROM named ORDER BY id';
+      const request = QueryPaginationRequest(
+        page: 1,
+        pageSize: 30,
+        offset: 0,
+        orderBy: [QueryPaginationOrderTerm(expression: 'id', lookupKey: 'id')],
+        lastRowValues: [7],
+      );
+      final sql = cursor
+          ? OdbcPaginatedSqlBuilder.buildCursorPaginatedSql(query, DatabaseType.sqlServer, request)
+          : OdbcPaginatedSqlBuilder.buildOffsetPaginatedSql(query, DatabaseType.sqlServer, request);
+      expect(sql.trimLeft(), startsWith('$prefix\nSELECT *'));
+      expect(sql, contains('  SELECT id, label FROM named'));
+      expect(sql, contains('FETCH NEXT 31 ROWS ONLY'));
+      expect('?'.allMatches(sql).length, 1);
+      if (cursor) expect(sql, contains('WHERE (id > 7)'));
+    });
+  }
+
   for (final value in [
     DateTime.utc(2026, 11, 17, 23, 59, 58, 123, 456),
     double.nan,
@@ -73,6 +191,18 @@ void main() {
 
   group('OdbcPaginatedSqlBuilder', () {
     for (final type in DatabaseType.values) {
+      test('cursor comparison follows default NULL ordering for $type', () {
+        for (final descending in [true, false]) {
+          final clause = OdbcPaginatedSqlBuilder.buildKeysetWhereClause(
+            [QueryPaginationOrderTerm(expression: 'score', lookupKey: 'score', descending: descending)],
+            [10],
+            type,
+          );
+          final nullsLast = type == DatabaseType.postgresql ? !descending : descending;
+          expect(clause.contains('OR score IS NULL'), nullsLast);
+        }
+      });
+
       test('qualified sort uses projected alias for $type and cursor lookup', () {
         const original = 'SELECT p.id AS "key", p.amount AS "amount" FROM orders p ORDER BY p.id DESC';
         final plan = SqlValidator.validatePaginationQuery(original).getOrThrow();

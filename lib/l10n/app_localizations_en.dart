@@ -1,3 +1,7 @@
+// Flutter 3.47 gen-l10n still emits the deprecated SDK localization delegates.
+// Keep this suppression in generated files only until the SDK template migrates.
+// ignore_for_file: deprecated_member_use
+
 // ignore: unused_import
 import 'package:intl/intl.dart' as intl;
 import 'app_localizations.dart';

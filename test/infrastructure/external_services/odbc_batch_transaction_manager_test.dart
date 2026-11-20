@@ -184,6 +184,28 @@ void main() {
       ).called(2);
     });
 
+    test('plain begin rejected by driver is dispatched only once', () async {
+      var calls = 0;
+      when(
+        () => service.beginTransaction(
+          'c1',
+          savepointDialect: SavepointDialect.auto,
+          accessMode: TransactionAccessMode.readWrite,
+        ),
+      ).thenAnswer((_) async {
+        calls++;
+        return const Failure(UnsupportedFeatureError(message: 'transactions unsupported'));
+      });
+      final result = await manager.beginIfNeeded(
+        connectionId: 'c1',
+        transactionEnabled: true,
+        lockTimeout: null,
+        accessMode: TransactionAccessMode.readWrite,
+      );
+      expect(result.isError(), isTrue);
+      expect(calls, 1);
+    });
+
     test('retries begin without options after UnsupportedFeatureError', () async {
       var calls = 0;
       when(

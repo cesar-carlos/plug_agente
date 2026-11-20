@@ -92,7 +92,7 @@ class SqlOperationClassifier {
       );
     }
 
-    final operation = _detectOperation(normalized);
+    final operation = _detectOperation(prepared.fingerprint);
     if (operation == null) {
       return Failure(
         _classificationFailure(

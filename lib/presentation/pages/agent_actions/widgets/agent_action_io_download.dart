@@ -88,11 +88,11 @@ class _AgentActionIoDownloadState extends State<AgentActionIoDownload> {
 
 Future<String?> _pickDestination(BuildContext context, ActionIoStream stream) async {
   final l10n = AppLocalizations.of(context)!;
-  final directory = await FilePicker.getDirectoryPath(dialogTitle: l10n.agentActionsIoDownloadStream(stream.name));
+  final directory = await FilePicker.pickDirectory(dialogTitle: l10n.agentActionsIoDownloadStream(stream.name));
   if (directory == null || !context.mounted) return null;
   return showDialog<String>(
     context: context,
-    builder: (_) => _DestinationDialog(directory: directory, stream: stream),
+    builder: (_) => _DestinationDialog(directory: directory.toFilePath(), stream: stream),
   );
 }
 

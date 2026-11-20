@@ -14,16 +14,15 @@ const _contenderTimeout = Duration(milliseconds: 1200);
 void main() async {
   await E2EEnv.load();
 
-  final dsn = E2EEnv.odbcConnectionStringAny;
-  final dsnValid = dsn != null && dsn.trim().isNotEmpty;
+  final dsns = {
+    'primary': E2EEnv.odbcConnectionString,
+    'sqlServer': E2EEnv.odbcSqlServerConnectionString,
+    'postgresql': E2EEnv.odbcPostgresqlConnectionString,
+  };
   final runLockContention = E2EEnv.odbcRunLockContentionTests;
-  final skipUnlessDsn = !dsnValid
-      ? 'Defina ODBC_TEST_DSN, ODBC_TEST_DSN_SQL_SERVER ou ODBC_TEST_DSN_POSTGRESQL no .env'
-      : false;
   final skipUnlessOptIn = !runLockContention
       ? 'Defina ODBC_RUN_LOCK_CONTENTION_TESTS=true para rodar este teste de contenção/concorrência real.'
       : false;
-  final skipLive = skipUnlessDsn != false ? skipUnlessDsn : skipUnlessOptIn;
 
   group('lock contention contract', () {
     final coverage = OdbcE2eCoverageSql(
@@ -121,201 +120,226 @@ void main() async {
     });
   });
 
-  group('ODBC lock contention live integration', () {
-    OdbcE2eRpcHarness? harness;
-    OdbcE2eCoverageSql? sql;
-    OdbcE2eSqlDialect? dialect;
-    String? harnessDsn;
-    var schemaCreated = false;
-    var isReady = false;
+  for (final entry in dsns.entries) {
+    final dsn = entry.value;
+    final dsnValid = dsn != null && dsn.trim().isNotEmpty;
+    final skipLive = dsnValid ? skipUnlessOptIn : 'Missing test DSN for ${entry.key}';
+    group('ODBC lock contention ${entry.key}', () {
+      OdbcE2eRpcHarness? harness;
+      OdbcE2eCoverageSql? sql;
+      OdbcE2eSqlDialect? dialect;
+      String? harnessDsn;
+      var schemaCreated = false;
+      var isReady = false;
 
-    Future<OdbcE2eRpcHarness?> openHarness() {
-      final localDialect = dialect;
-      final localDsn = harnessDsn;
-      if (localDialect == null || localDsn == null) {
-        return Future<OdbcE2eRpcHarness?>.value();
+      Future<OdbcE2eRpcHarness?> openHarness() {
+        final localDialect = dialect;
+        final localDsn = harnessDsn;
+        if (localDialect == null || localDsn == null) {
+          return Future<OdbcE2eRpcHarness?>.value();
+        }
+        return OdbcE2eRpcHarness.open(localDsn, localDialect);
       }
-      return OdbcE2eRpcHarness.open(localDsn, localDialect);
-    }
 
-    setUpAll(() async {
-      if (!dsnValid || !runLockContention) {
-        return;
-      }
-      final dsnValue = dsn;
-      final localDialect = detectOdbcE2eDialect(dsnValue);
-      final localSql = OdbcE2eCoverageSql(
-        localDialect,
-        tableName: 'plug_agente_e2e_cov_lock',
-      );
-      dialect = localDialect;
-      sql = localSql;
-      harnessDsn = _harnessConnectionString(dsnValue, localDialect);
-
-      final opened = await openHarness();
-      if (opened == null) {
-        return;
-      }
-      try {
-        final drop = await opened.gateway.executeNonQuery(
-          localSql.dropTableIfExists,
-          null,
+      setUpAll(() async {
+        if (!dsnValid || !runLockContention) {
+          return;
+        }
+        final dsnValue = dsn;
+        final localDialect = detectOdbcE2eDialect(dsnValue);
+        final localSql = OdbcE2eCoverageSql(
+          localDialect,
+          tableName: odbcE2eUniqueTableName(prefix: 'plug_e2e_lock'),
         );
-        expect(drop.isSuccess(), isTrue, reason: 'drop table: $drop');
+        dialect = localDialect;
+        sql = localSql;
+        harnessDsn = _harnessConnectionString(dsnValue, localDialect);
 
-        final create = await opened.gateway.executeNonQuery(localSql.createTable, null);
-        expect(create.isSuccess(), isTrue, reason: 'create table: $create');
-        schemaCreated = true;
-
-        final seed = await opened.gateway.executeNonQuery(
-          localSql.insertRow(
-            id: 1,
-            code: 'lock-row',
-            amt: 10,
-            birthDate: '2024-01-01',
-            ts: '2024-01-01 00:00:00',
-            isActive: true,
-          ),
-          null,
-        );
-        expect(seed.isSuccess(), isTrue, reason: 'seed row: $seed');
-        isReady = true;
-      } finally {
-        await opened.shutdown();
-      }
-    });
-
-    setUp(() async {
-      if (!isReady) {
-        return;
-      }
-      harness = await openHarness();
-    });
-
-    tearDown(() async {
-      final opened = harness;
-      harness = null;
-      if (opened == null) {
-        return;
-      }
-      await opened.shutdown();
-    });
-
-    tearDownAll(() async {
-      final localSql = sql;
-      if (localSql == null || (!schemaCreated && !isReady)) {
-        return;
-      }
-      final opened = await openHarness();
-      if (opened == null) {
-        return;
-      }
-      try {
-        await opened.gateway.executeNonQuery(localSql.dropTableIfExists, null);
-      } finally {
-        await opened.shutdown();
-      }
-    });
-
-    test(
-      'should handle lock contention with timeout without hanging pool',
-      () async {
-        expect(isReady, isTrue, reason: 'ODBC init failed or DSN not configured');
-        final h = harness;
-        expect(h, isNotNull, reason: 'ODBC harness did not reopen after schema setup');
-        final opened = h!;
-        final localSql = sql!;
-        final localDialect = dialect!;
-        final service = opened.locator.asyncService;
-
-        final holderConnResult = await service.connect(opened.connectionString);
-        expect(holderConnResult.isSuccess(), isTrue, reason: '$holderConnResult');
-        final holderConn = holderConnResult.getOrThrow();
-
-        final beginResult = await service.beginTransaction(holderConn.id);
-        expect(beginResult.isSuccess(), isTrue, reason: '$beginResult');
-        final txId = beginResult.getOrThrow();
-
+        final opened = await openHarness();
+        if (opened == null) {
+          return;
+        }
         try {
-          final lockResult = await service.executeQuery(
-            localSql.updateAmtById(1, 1),
-            connectionId: holderConn.id,
-          );
-          expect(lockResult.isSuccess(), isTrue, reason: '$lockResult');
+          final create = await opened.gateway.executeNonQuery(localSql.createTable, null);
+          expect(create.isSuccess(), isTrue, reason: 'create table: $create');
+          schemaCreated = true;
 
-          final contenderSql = _contendedUpdateSql(
-            dialect: localDialect,
-            sql: localSql,
-            rowId: 1,
-            delta: 2,
-            lockTimeout: _lockTimeout,
+          final seed = await opened.gateway.executeNonQuery(
+            localSql.insertRow(
+              id: 1,
+              code: 'lock-row',
+              amt: 10,
+              birthDate: '2024-01-01',
+              ts: '2024-01-01 00:00:00',
+              isActive: true,
+            ),
+            null,
           );
-          final contender = opened.gateway.executeNonQuery(
-            contenderSql,
+          expect(seed.isSuccess(), isTrue, reason: 'seed row: $seed');
+          isReady = true;
+        } finally {
+          await opened.shutdown();
+        }
+      });
+
+      setUp(() async {
+        if (!isReady) {
+          return;
+        }
+        harness = await openHarness();
+      });
+
+      tearDown(() async {
+        final opened = harness;
+        harness = null;
+        if (opened == null) {
+          return;
+        }
+        await opened.shutdown();
+      });
+
+      tearDownAll(() async {
+        final localSql = sql;
+        if (localSql == null || (!schemaCreated && !isReady)) {
+          return;
+        }
+        final opened = await openHarness();
+        if (opened == null) {
+          return;
+        }
+        try {
+          final dropped = await opened.gateway.executeNonQuery(localSql.dropTableIfExists, null);
+          expect(dropped.isSuccess(), isTrue, reason: 'fixture cleanup failed');
+        } finally {
+          await opened.shutdown();
+        }
+      });
+
+      test(
+        'should handle lock contention with timeout without hanging pool',
+        () async {
+          expect(isReady, isTrue, reason: 'ODBC init failed or DSN not configured');
+          final h = harness;
+          expect(h, isNotNull, reason: 'ODBC harness did not reopen after schema setup');
+          final opened = h!;
+          final localSql = sql!;
+          final localDialect = dialect!;
+          final service = opened.locator.asyncService;
+
+          final holderConnResult = await service.connect(opened.connectionString);
+          expect(holderConnResult.isSuccess(), isTrue, reason: '$holderConnResult');
+          final holderConn = holderConnResult.getOrThrow();
+
+          final beginResult = await service.beginTransaction(holderConn.id);
+          expect(beginResult.isSuccess(), isTrue, reason: '$beginResult');
+          final txId = beginResult.getOrThrow();
+
+          try {
+            final lockResult = await service.executeQuery(
+              localSql.updateAmtById(1, 1),
+              connectionId: holderConn.id,
+            );
+            expect(lockResult.isSuccess(), isTrue, reason: '$lockResult');
+
+            final contenderSql = _contendedUpdateSql(
+              dialect: localDialect,
+              sql: localSql,
+              rowId: 1,
+              delta: 2,
+              lockTimeout: _lockTimeout,
+            );
+            final elapsed = Stopwatch()..start();
+            final results = await Future.wait(
+              List.generate(
+                6,
+                (_) => opened.gateway.executeNonQuery(
+                  contenderSql,
+                  null,
+                  timeout: _contenderTimeout,
+                ),
+              ),
+            ).timeout(const Duration(seconds: 90));
+            // ignore: avoid_print
+            print('lock load ${entry.key}: 6 contenders in ${elapsed.elapsedMilliseconds} ms');
+            for (final result in results) {
+              expect(result.isError(), isTrue);
+              final error = result.exceptionOrNull()!;
+              expect(
+                _matchesExpectedLockFailure(error, localDialect),
+                isTrue,
+                reason: '$error',
+              );
+            }
+          } finally {
+            try {
+              expect((await service.rollbackTransaction(holderConn.id, txId)).isSuccess(), isTrue);
+            } finally {
+              expect((await service.disconnect(holderConn.id)).isSuccess(), isTrue);
+            }
+          }
+
+          final healthyQuery = QueryRequest(
+            id: 'after-contention-check',
+            agentId: 'e2e-agent',
+            query: localSql.selectIdCodeAmtById(1),
+            timestamp: DateTime.now(),
+          );
+          final healthyResult = await opened.gateway.executeQuery(healthyQuery);
+          expect(healthyResult.isSuccess(), isTrue, reason: '$healthyResult');
+          double amount(QueryResponse response) {
+            final value = response.data.single.entries.singleWhere((field) => field.key.toLowerCase() == 'amt').value;
+            return double.parse(value.toString());
+          }
+
+          expect(amount(healthyResult.getOrThrow()), 10);
+          final write = await opened.gateway.executeNonQuery(
+            _contendedUpdateSql(dialect: localDialect, sql: localSql, rowId: 1, delta: 3, lockTimeout: _lockTimeout),
             null,
             timeout: _contenderTimeout,
           );
+          expect(write.isSuccess(), isTrue, reason: 'write after rollback failed');
+          final afterWrite = await opened.gateway.executeQuery(healthyQuery);
+          expect(amount(afterWrite.getOrThrow()), 13);
+          final activeAfterContention = await opened.connectionPool.getActiveCount();
+          expect(activeAfterContention.isSuccess(), isTrue, reason: '$activeAfterContention');
+          expect(activeAfterContention.getOrThrow(), 0);
+        },
+        timeout: const Timeout(Duration(minutes: 2)),
+        skip: skipLive,
+        tags: const ['live', 'slow'],
+      );
 
-          final result = await contender.timeout(const Duration(seconds: 90));
-          expect(result.isError(), isTrue);
-          final error = result.exceptionOrNull()!;
-          expect(
-            _matchesExpectedLockFailure(error, localDialect),
-            isTrue,
-            reason: '$error',
-          );
-        } finally {
-          await service.rollbackTransaction(holderConn.id, txId);
-          await service.disconnect(holderConn.id);
-        }
+      test(
+        'should sustain parallel smoke queries without stuck leases',
+        () async {
+          expect(isReady, isTrue, reason: 'ODBC init failed or DSN not configured');
+          final h = harness;
+          expect(h, isNotNull, reason: 'ODBC harness did not reopen after schema setup');
+          final opened = h!;
+          final futures = List<Future<Result<QueryResponse>>>.generate(4, (index) {
+            final request = QueryRequest(
+              id: 'parallel-smoke-$index',
+              agentId: 'e2e-agent',
+              query: E2EEnv.odbcSmokeQuery,
+              timestamp: DateTime.now(),
+            );
+            return opened.gateway.executeQuery(request);
+          });
 
-        final healthyQuery = QueryRequest(
-          id: 'after-contention-check',
-          agentId: 'e2e-agent',
-          query: localSql.selectIdCodeAmtById(1),
-          timestamp: DateTime.now(),
-        );
-        final healthyResult = await opened.gateway.executeQuery(healthyQuery);
-        expect(healthyResult.isSuccess(), isTrue, reason: '$healthyResult');
-        final activeAfterContention = await opened.connectionPool.getActiveCount();
-        expect(activeAfterContention.isSuccess(), isTrue, reason: '$activeAfterContention');
-        expect(activeAfterContention.getOrThrow(), 0);
-      },
-      timeout: const Timeout(Duration(minutes: 2)),
-      skip: skipLive,
-      tags: const ['live', 'slow'],
-    );
-
-    test(
-      'should sustain parallel smoke queries without stuck leases',
-      () async {
-        expect(isReady, isTrue, reason: 'ODBC init failed or DSN not configured');
-        final h = harness;
-        expect(h, isNotNull, reason: 'ODBC harness did not reopen after schema setup');
-        final opened = h!;
-        final futures = List<Future<Result<QueryResponse>>>.generate(4, (index) {
-          final request = QueryRequest(
-            id: 'parallel-smoke-$index',
-            agentId: 'e2e-agent',
-            query: E2EEnv.odbcSmokeQuery,
-            timestamp: DateTime.now(),
-          );
-          return opened.gateway.executeQuery(request);
-        });
-
-        final results = await Future.wait(futures);
-        for (final result in results) {
-          expect(result.isSuccess(), isTrue, reason: '$result');
-        }
-        final activeAfterParallel = await opened.connectionPool.getActiveCount();
-        expect(activeAfterParallel.isSuccess(), isTrue, reason: '$activeAfterParallel');
-        expect(activeAfterParallel.getOrThrow(), 0);
-      },
-      timeout: const Timeout(Duration(minutes: 2)),
-      skip: skipLive,
-      tags: const ['live'],
-    );
-  });
+          final results = await Future.wait(futures);
+          for (final result in results) {
+            expect(result.isSuccess(), isTrue, reason: '$result');
+          }
+          final activeAfterParallel = await opened.connectionPool.getActiveCount();
+          expect(activeAfterParallel.isSuccess(), isTrue, reason: '$activeAfterParallel');
+          expect(activeAfterParallel.getOrThrow(), 0);
+        },
+        timeout: const Timeout(Duration(minutes: 2)),
+        skip: skipLive,
+        tags: const ['live'],
+      );
+    });
+  }
 }
 
 String _harnessConnectionString(String connectionString, OdbcE2eSqlDialect dialect) {

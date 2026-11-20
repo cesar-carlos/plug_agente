@@ -9676,10 +9676,11 @@ class $$AgentActionDefinitionTableTableTableManager
               getPrefetchedDataCallback: (items) async {
                 return [
                   if (agentActionTriggerTableRefs)
-                    await $_getPrefetchedData<
+                    await $_getPrefetchedDataByColumns<
                       AgentActionDefinitionData,
                       $AgentActionDefinitionTableTable,
-                      AgentActionTriggerData
+                      AgentActionTriggerData,
+                      $AgentActionTriggerTableTable
                     >(
                       currentTable: table,
                       referencedTable:
@@ -9691,8 +9692,8 @@ class $$AgentActionDefinitionTableTableTableManager
                             table,
                             p0,
                           ).agentActionTriggerTableRefs,
-                      referencedItemsForCurrentItem: (item, referencedItems) =>
-                          referencedItems.where((e) => e.actionId == item.id),
+                      currentColumn: 'id',
+                      referencedColumn: 'action_id',
                       typedResults: items,
                     ),
                 ];
@@ -11134,10 +11135,11 @@ class $$AgentActionExecutionTableTableTableManager
                   getPrefetchedDataCallback: (items) async {
                     return [
                       if (agentActionCapturedOutputChunkTableRefs)
-                        await $_getPrefetchedData<
+                        await $_getPrefetchedDataByColumns<
                           AgentActionExecutionData,
                           $AgentActionExecutionTableTable,
-                          AgentActionCapturedOutputChunkData
+                          AgentActionCapturedOutputChunkData,
+                          $AgentActionCapturedOutputChunkTableTable
                         >(
                           currentTable: table,
                           referencedTable:
@@ -11151,10 +11153,8 @@ class $$AgentActionExecutionTableTableTableManager
                                 table,
                                 p0,
                               ).agentActionCapturedOutputChunkTableRefs,
-                          referencedItemsForCurrentItem:
-                              (item, referencedItems) => referencedItems.where(
-                                (e) => e.executionId == item.id,
-                              ),
+                          currentColumn: 'id',
+                          referencedColumn: 'execution_id',
                           typedResults: items,
                         ),
                     ];

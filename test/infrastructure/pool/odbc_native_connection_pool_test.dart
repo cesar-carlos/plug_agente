@@ -57,6 +57,9 @@ void main() {
       () async {
         var createdPools = 0;
         var connectionCounter = 0;
+        mockSettings.poolSize = 2;
+        var outstanding = 0;
+        var peak = 0;
 
         when(
           () => mockService.poolCreate(
@@ -75,6 +78,8 @@ void main() {
           () => mockService.poolGetConnection(77),
         ).thenAnswer((_) async {
           connectionCounter++;
+          outstanding++;
+          if (outstanding > peak) peak = outstanding;
           return Success(
             Connection(
               id: 'conn-$connectionCounter',
@@ -85,10 +90,19 @@ void main() {
           );
         });
 
+        when(() => mockService.poolReleaseConnection(any())).thenAnswer((_) async {
+          outstanding--;
+          return const Success(unit);
+        });
         final results = await Future.wait(
-          List.generate(12, (_) => pool.acquire('DSN=Test')),
+          List.generate(12, (_) async {
+            final id = (await pool.acquire('DSN=Test')).getOrThrow();
+            await Future<void>.delayed(const Duration(milliseconds: 10));
+            return pool.release(id);
+          }),
         );
 
+        expect(peak, 2);
         expect(results.every((r) => r.isSuccess()), isTrue);
         expect(createdPools, 1);
         verify(
@@ -683,7 +697,8 @@ void main() {
       expect(health.isError(), isTrue);
     });
 
-    test('warmUp acquires connections in bounded parallel batches', () async {
+    test('warmUp acquires at most the native pool capacity in bounded batches', () async {
+      mockSettings.poolSize = 4;
       when(
         () => mockService.poolCreate(
           any(),
@@ -709,7 +724,7 @@ void main() {
         (_) async => const Success(unit),
       );
 
-      final result = await pool.warmUp('DSN=Warm', warmUpCount: 4);
+      final result = await pool.warmUp('DSN=Warm', warmUpCount: 8);
 
       expect(result.isSuccess(), isTrue);
       verify(() => mockService.poolGetConnection(61)).called(4);

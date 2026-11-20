@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:flutter/widgets.dart';
 import 'package:plug_agente/domain/entities/config.dart';
 import 'package:plug_agente/presentation/providers/config_provider.dart';
 

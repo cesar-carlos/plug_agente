@@ -1,5 +1,7 @@
 import 'package:fluent_ui/fluent_ui.dart';
 import 'package:flutter/foundation.dart';
+// PlutoGrid 8.1 uses SDK Material widgets and requires ancestors of those exact types.
+// ignore: deprecated_member_use
 import 'package:flutter/material.dart' as material;
 import 'package:plug_agente/core/theme/theme.dart';
 import 'package:plug_agente/l10n/app_localizations.dart';

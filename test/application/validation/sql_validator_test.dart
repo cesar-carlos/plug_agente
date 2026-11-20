@@ -192,6 +192,14 @@ void main() {
     });
 
     group('validateSqlForExecution', () {
+      test('accepts SQL whitespace after SELECT and still checks statement boundaries', () {
+        for (final separator in ['\n', '\r\n', '\t']) {
+          expect(SqlValidator.validateSqlForExecution('SELECT${separator}1').isSuccess(), isTrue);
+        }
+        expect(SqlValidator.validateSqlForExecution('SELECTED\n1').isError(), isTrue);
+        expect(SqlValidator.validateSqlForExecution('SELECT\n1; DELETE FROM users').isError(), isTrue);
+      });
+
       test('should accept UPDATE', () {
         final r = SqlValidator.validateSqlForExecution(
           "UPDATE dbo.users SET name = 'x'",

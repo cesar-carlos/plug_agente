@@ -3,7 +3,7 @@ import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:file_picker/file_picker.dart';
-import 'package:flutter/material.dart';
+import 'package:flutter/widgets.dart';
 import 'package:plug_agente/application/client_tokens/client_token_payload_parser.dart';
 import 'package:plug_agente/core/constants/app_constants.dart';
 import 'package:plug_agente/core/settings/app_settings_store.dart';
@@ -241,8 +241,6 @@ class ClientTokenSectionController {
       dialogTitle: defaultFileName,
       fileName: defaultFileName,
       bytes: bytes,
-      type: FileType.custom,
-      allowedExtensions: ['txt'],
     );
   }
 

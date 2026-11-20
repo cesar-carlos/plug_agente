@@ -21,6 +21,12 @@ void main() {
       }, (_) => fail('Expected success'));
     });
 
+    test('classifies a multiline SELECT and retains the target resource', () {
+      final result = classifier.classify('SELECT\r\n  id FROM dbo.users').getOrThrow();
+      expect(result.operation, SqlOperation.read);
+      expect(result.resources.single.normalizedName, 'dbo.users');
+    });
+
     test('should classify UPDATE as update', () {
       final result = classifier.classify(
         'UPDATE dbo.users SET name = "John" WHERE id = 1',
