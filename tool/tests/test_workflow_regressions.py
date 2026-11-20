@@ -50,7 +50,7 @@ class WorkflowRegressionTests(unittest.TestCase):
                 for step in job.get('steps', []):
                     if 'flutter-action@' in step.get('uses', ''):
                         versions.append(step['with'].get('flutter-version'))
-        self.assertEqual(set(versions), {'3.47.7'})
+        self.assertEqual(set(versions), {'3.50.0'})
 
     def test_expensive_benchmark_runs_only_in_a_separate_manual_workflow(self):
         ci = workflow('flutter_ci.yml')

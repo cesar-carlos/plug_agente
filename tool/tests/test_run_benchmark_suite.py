@@ -66,6 +66,7 @@ class RunBenchmarkSuiteTests(unittest.TestCase):
             suite = {'id': 'odbc_streaming', 'kind': 'dart_odbc_fast', 'status': 'fail',
                      'wall_ms': 1, 'exit_code': 3, 'metrics': {}, 'comparison_identity': {}}
             with patch(f'{module}.bootstrap_env'), patch(f'{module}.ensure_on_path'), \
+                 patch(f'{module}.collect_git_metadata', return_value={'commit_sha': 'a' * 40, 'branch': 'test', 'dirty': False, 'source_sha256': 'b' * 64}), \
                  patch(f'{module}.collect_machine_metadata', return_value={'platform': 'test', 'python_version': 'test', 'dart_version': 'test', 'flutter_version': 'test'}), \
                  patch(f'{module}.build_suite_plans', return_value=[
                      {'id': 'odbc_streaming', 'kind': 'dart_odbc_fast', 'enabled': True, 'package_root': temporary}]), \

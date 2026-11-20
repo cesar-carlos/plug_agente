@@ -32,7 +32,10 @@ class PersonaReleaseGateTest(unittest.TestCase):
         self.assertFalse(accepted_risk("v1.9.1", "1.9.1+1", "beta", "version: 1.9.1+1\n"))
         self.assertTrue(accepted_risk("v1.9.2", "1.9.2+1", "stable", "version: 1.9.2+1\n"))
         self.assertTrue(accepted_risk("v1.9.3", "1.9.3+1", "stable", "version: 1.9.3+1\n"))
+        self.assertTrue(accepted_risk("v1.9.4", "1.9.4+2", "stable", "version: 1.9.4+2\n"))
         for tag, build, channel, pubspec in (
+            ("v1.9.4", "1.9.4+2", "beta", "version: 1.9.4+2\n"),
+            ("v1.9.4", "1.9.4+2", "stable", "version: 1.9.4+1\n"),
             ("v1.9.4", "1.9.4+1", "stable", "version: 1.9.4+1\n"),
             ("v1.9.3", "1.9.3+2", "stable", "version: 1.9.3+2\n"),
             ("v1.9.3", "1.9.3+1", "beta", "version: 1.9.3+1\n"),

@@ -29,6 +29,15 @@ Em 17 de novembro de 2026, o responsável respondeu explicitamente "Aceitar para
 
 O instalador anterior de homologação tem SHA-256 `26fdd6cca09e3b8e326ae054bf79e216e7d6c725215db45a0982145468d5fb0f`. Use o hash correspondente à distribuição que foi baixada. [Pré-release de homologação](https://github.com/cesar-carlos/plug_agente/releases/tag/homologation/1.9.0)
 
+### Autorização da v1.9.4+2
+
+Em 20 de novembro de 2026, o responsável confirmou a publicação em produção após
+ser informado dos 13 critérios coordenados em aberto e da necessidade de publicar
+a dependência ODBC corrigida. A exceção vale apenas para `v1.9.4` / `1.9.4+2`
+no canal estável. Permanecem obrigatórios os testes, a assinatura Ed25519, o
+appcast e o rollout inicial de 5%. A homologação de pagar e receber usou dados
+sintéticos e a instalação operacional da Campo continua sem validação.
+
 ### Autorização da v1.9.3+1
 
 Em 17 de novembro de 2026, após a preparação validada do instalador e aprovação do Flutter CI, o responsável respondeu explicitamente "Aceitar para 1.9.3+1 e publicar". A exceção cobre somente `v1.9.3` / `1.9.3+1` no canal estável, incluindo seu appcast, mantendo assinaturas, testes técnicos e rollout inicial de 5%. Foram aceitos os riscos pendentes de avaliação com consumidor/dataset real, upgrade/rollback instalados e evidências coordenadas dos 13 gates. Nenhum gate é considerado concluído por esta autorização. A causa específica do acesso negado no servidor ainda requer validação no cliente com os novos diagnósticos.

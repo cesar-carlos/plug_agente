@@ -10,6 +10,21 @@ Changes after a recorded snapshot stay in Unreleased.
 
 ## Unreleased
 
+## 1.9.4 - 2026-11-20
+
+Status: prepared
+Build: 1.9.4+2
+
+- Use odbc_fast 5.0.6 to preserve SQLSTATE and native errors during async polling
+  and bind nullable prepared parameters correctly. Include both codes in SQL RPC warnings.
+- Improve connection pool and transaction handling under concurrent load.
+- Accept multiline SELECT statements in validation and authorization. Preserve
+  trailing NULL rows during keyset pagination and map explicitly projected
+  candidate keys for supplier and customer searches in CTEs.
+- Include the compatible dependency updates, generated files and static analysis fixes.
+- The owner approved stable 1.9.4+2 with the outstanding coordinated risks.
+  Production signing, release checks and the initial 5% rollout remain required.
+
 - Recognize whitespace and comments between ORDER and BY during managed pagination;
   reject duplicate output names in simple projections even for unqualified order.
   These defects have before/after regression coverage.

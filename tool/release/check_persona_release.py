@@ -21,6 +21,7 @@ ACCEPTED_RISK = {
     ("v1.9.1", "1.9.1+1", "stable"),
     ("v1.9.2", "1.9.2+1", "stable"),
     ("v1.9.3", "1.9.3+1", "stable"),
+    ("v1.9.4", "1.9.4+2", "stable"),
 }
 
 def accepted_risk(tag, build, channel, pubspec):
